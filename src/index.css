@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { font-family: 'Poppins', sans-serif; }
+
+html { scroll-behavior: smooth; }
+
+@layer components {
+  .btn-teal { @apply bg-teal-600 text-white px-7 py-3 rounded-full font-semibold hover:bg-teal-700 transition-all duration-200 inline-flex items-center gap-2; }
+  .btn-navy { @apply border-2 border-navy-700 text-navy-700 px-7 py-3 rounded-full font-semibold hover:bg-navy-700 hover:text-white transition-all duration-200 inline-flex items-center gap-2; }
+  .btn-outline { @apply border border-gray-300 text-gray-700 px-6 py-2.5 rounded-lg hover:border-teal-500 hover:text-teal-600 transition-all duration-150; }
+  .section-title { @apply text-3xl font-bold text-navy-700 text-center mb-3; }
+  .section-sub   { @apply text-gray-500 text-center mb-10 text-lg; }
+  .card          { @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6; }
+  .input-field   { @apply w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-400 text-gray-800 text-sm; }
+  .badge-pending  { @apply bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full text-xs font-medium; }
+  .badge-active   { @apply bg-teal-50 text-teal-700 border border-teal-200 px-3 py-1 rounded-full text-xs font-medium; }
+  .badge-suspended{ @apply bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-full text-xs font-medium; }
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #1BA37A; border-radius: 3px; }

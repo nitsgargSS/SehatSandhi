@@ -1,0 +1,51 @@
+import { Link } from 'react-router-dom'
+import { WA_NUMBER } from '../types'
+
+export default function Footer() {
+  return (
+    <footer className="bg-navy-700 text-white pt-12 pb-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+          {/* Brand */}
+          <div>
+            <img src="/logo.png" alt="Sehatsandhi" className="h-12 w-auto mb-3 brightness-0 invert" />
+            <p className="text-white/70 text-sm leading-relaxed">
+              स्वास्थ्य की नई साझेदारी<br />
+              <span className="text-white/50 text-xs">Health's New Partnership</span>
+            </p>
+            <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer"
+               className="mt-4 inline-flex items-center gap-2 bg-teal-600 text-white text-sm px-4 py-2 rounded-full hover:bg-teal-500 transition">
+              📱 WhatsApp us
+            </a>
+          </div>
+
+          {/* Links */}
+          <div>
+            <h4 className="font-semibold mb-4 text-white/90">Quick Links</h4>
+            <ul className="space-y-2 text-sm text-white/60">
+              <li><Link to="/" className="hover:text-white transition">Home</Link></li>
+              <li><Link to="/doctor" className="hover:text-white transition">For Doctors</Link></li>
+              <li><Link to="/privacy" className="hover:text-white transition">Privacy Policy</Link></li>
+              <li><Link to="/terms" className="hover:text-white transition">Terms of Service</Link></li>
+            </ul>
+          </div>
+
+          {/* Contact */}
+          <div>
+            <h4 className="font-semibold mb-4 text-white/90">Contact</h4>
+            <ul className="space-y-2 text-sm text-white/60">
+              <li>📍 Yamuna Nagar, Haryana</li>
+              <li>📞 <a href={`https://wa.me/${WA_NUMBER}`} className="hover:text-white transition">WhatsApp</a></li>
+              <li>✉️ <a href="mailto:hello@sehatsandhi.com" className="hover:text-white transition">hello@sehatsandhi.com</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="border-t border-white/10 pt-6 flex flex-col md:flex-row justify-between items-center gap-2">
+          <p className="text-white/40 text-xs">© 2026 Sehatsandhi. All rights reserved.</p>
+          <p className="text-white/40 text-xs">NG Technologies, Yamuna Nagar, Haryana</p>
+        </div>
+      </div>
+    </footer>
+  )
+}
