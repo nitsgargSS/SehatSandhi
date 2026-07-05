@@ -96,3 +96,15 @@ create policy "doctors_update_own" on doctors for update using (auth.jwt() ->> '
 -- Allow anon read of opt_outs for suppression check
 create policy "allow_read_optouts" on opt_outs for select using (true);
 create policy "allow_insert_optouts" on opt_outs for insert with check (true);
+
+
+Token git - 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
+
+Sb publishble key - Anon
+sb_publishable_3f7_Q4jM5jwpXT4sNltCBQ_vLGyc87n
+
+Secret keys;
+sb_secret_dqw4bWeBDNQjv3BzNiVWsg_rTbDVO62
+
+Sup abase url:
+https://ctxkkqqtasegoowuqbmi.supabase.com
