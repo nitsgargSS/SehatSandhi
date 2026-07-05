@@ -175,32 +175,6 @@ export default function Landing() {
                 Abhi Register Karein →
               </Link>
             </div>
-            {/* Pricing card */}
-            <div className="card border border-gray-200 overflow-hidden shadow-lg">
-              <div className="bg-navy-700 text-white px-6 py-4">
-                <h3 className="font-bold text-lg">Listing Fee</h3>
-                <p className="text-white/60 text-sm">₹{BASE_LISTING_FEE.toLocaleString('en-IN')} per PIN code per month</p>
-              </div>
-              <table className="w-full text-sm">
-                <thead><tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">PIN Codes</th>
-                  <th className="text-right px-6 py-3 text-gray-500 font-medium">Monthly</th>
-                  <th className="text-right px-6 py-3 text-gray-500 font-medium">Annual</th>
-                </tr></thead>
-                <tbody>
-                  {[[1, 5000], [2, 10000], [5, 25000], [10, 50000], [20, 100000]].map(([n, m]) => (
-                    <tr key={n} className="border-b border-gray-50 hover:bg-teal-50/40 transition">
-                      <td className="px-6 py-3 font-medium text-gray-700">{n === 20 ? 'All 20 PINs' : `${n} PIN${n > 1 ? 's' : ''}`}</td>
-                      <td className="px-6 py-3 text-right text-navy-700 font-semibold">₹{(m as number).toLocaleString('en-IN')}</td>
-                      <td className="px-6 py-3 text-right text-teal-600">₹{((m as number) * 12).toLocaleString('en-IN')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="px-6 py-4 bg-amber-50 border-t border-amber-100">
-                <p className="text-xs text-amber-700">🏆 Premium positions also available: ₹5,000 / ₹3,000 / ₹2,000 per week per PIN</p>
-              </div>
-            </div>
           </div>
         </div>
       </section>
