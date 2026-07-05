@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin@sehatsandhi.com'
-const ADMIN_PASS  = import.meta.env.VITE_ADMIN_PASS  || 'admin@SS2026'
+const ADMIN_EMAIL = (import.meta as any).env.VITE_ADMIN_EMAIL || 'nits.garg@gmail.com'
+const ADMIN_PASS  = (import.meta as any).env.VITE_ADMIN_PASS  || 'Ganesha@123'
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('')
