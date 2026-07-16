@@ -11,8 +11,7 @@ export default function Navbar() {
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 ${isDark ? 'bg-navy-700' : 'bg-white/95 backdrop-blur'} shadow-sm`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
+        <div className="flex items-center justify-between h-20">
           <Link to="/" className="flex items-center">
             <img src="/logo.png" alt="Sehatsandhi" className="h-20 w-auto" />
           </Link>
@@ -21,6 +20,8 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-3">
             <Link to="/" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>Home</Link>
             <Link to="/doctor" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>For Doctors</Link>
+            <Link to="/partner" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>Partners</Link>
+            <Link to="/points" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>🌟 Points</Link>
             <a href={`https://wa.me/${WA_NUMBER}?text=Namaste!%20Main%20doctor%20dhundh%20raha%20hoon.`}
                target="_blank" rel="noreferrer"
                className="btn-teal text-sm py-2 px-5">
@@ -41,6 +42,8 @@ export default function Navbar() {
         <div className="md:hidden bg-white border-t border-gray-100 px-4 py-4 flex flex-col gap-3">
           <Link to="/" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">Home</Link>
           <Link to="/doctor" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">For Doctors</Link>
+          <Link to="/partner" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">Partners</Link>
+          <Link to="/points" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">🌟 Sehat Points</Link>
           <a href={`https://wa.me/${WA_NUMBER}?text=Namaste!%20Main%20doctor%20dhundh%20raha%20hoon.`}
              target="_blank" rel="noreferrer" onClick={() => setOpen(false)}
              className="btn-teal text-sm justify-center">

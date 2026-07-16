@@ -5,8 +5,12 @@ import Landing from './pages/Landing'
 import Register from './pages/doctor/Register'
 import DoctorLogin from './pages/doctor/Login'
 import DoctorDashboard from './pages/doctor/Dashboard'
+import DoctorProfile from './pages/doctor/Profile'
+import Points from './pages/Points'
+import PartnerRegister from './pages/Partner'
 import AdminLogin from './pages/admin/Login'
 import AdminDashboard from './pages/admin/Dashboard'
+import { WA_NUMBER } from './types'
 
 const AdminGuard = ({ children }: { children: React.ReactNode }) => {
   const auth = sessionStorage.getItem('admin_auth')
@@ -27,14 +31,17 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/" element={<WithLayout><Landing /></WithLayout>} />
+        <Route path="/points" element={<WithLayout><Points /></WithLayout>} />
+        <Route path="/partner" element={<WithLayout><PartnerRegister /></WithLayout>} />
 
         {/* Doctor */}
-        <Route path="/doctor"          element={<WithLayout><Register /></WithLayout>} />
-        <Route path="/doctor/login"    element={<WithLayout><DoctorLogin /></WithLayout>} />
-        <Route path="/doctor/dashboard"element={<WithLayout><DoctorDashboard /></WithLayout>} />
+        <Route path="/doctor" element={<WithLayout><Register /></WithLayout>} />
+        <Route path="/doctor/login" element={<WithLayout><DoctorLogin /></WithLayout>} />
+        <Route path="/doctor/dashboard" element={<WithLayout><DoctorDashboard /></WithLayout>} />
+        <Route path="/doctor/:slug" element={<WithLayout><DoctorProfile /></WithLayout>} />
 
         {/* Admin */}
-        <Route path="/admin"           element={<AdminLogin />} />
+        <Route path="/admin" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
 
         {/* Fallback */}
@@ -42,7 +49,8 @@ export default function App() {
       </Routes>
 
       {/* Floating WhatsApp button */}
-      <a href="https://wa.me/91XXXXXXXXXX?text=Namaste!" target="_blank" rel="noreferrer"
+      <a href={`https://wa.me/${WA_NUMBER}?text=Namaste!`}
+         target="_blank" rel="noreferrer"
          className="fixed bottom-6 right-6 w-14 h-14 bg-[#25D366] rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-50"
          title="Book appointment on WhatsApp">
         <svg className="w-7 h-7 text-white fill-current" viewBox="0 0 24 24">
