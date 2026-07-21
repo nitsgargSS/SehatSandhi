@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Calendar } from 'lucide-react'
+import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor } from '../../types'
+import { useLanguage } from '../../i18n/LanguageContext'
+import LanguageSwitcher from '../../components/LanguageSwitcher'
 
 export default function AdminDashboard() {
+  const { t } = useLanguage()
   const [doctors, setDoctors] = useState<Doctor[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'pending' | 'all'>('pending')
@@ -21,21 +24,22 @@ export default function AdminDashboard() {
 
   const approve = async (id: string, name: string) => {
     const { error } = await supabase.from('doctors').update({ status: 'active' }).eq('id', id)
-    if (!error) { setActionMsg(`✓ ${name} approved — listing is now live!`); load(); setTimeout(() => setActionMsg(''), 3000) }
+    if (!error) { setActionMsg(`✓ ${name} ${t('adminDashboardPage.approvedMsgSuffix')}`); load(); setTimeout(() => setActionMsg(''), 3000) }
   }
 
   const reject = async (id: string, name: string) => {
-    const reason = window.prompt(`Reason for rejecting ${name}?`)
+    const reason = window.prompt(`${t('adminDashboardPage.rejectPromptPrefix')} ${name}?`)
     if (!reason) return
     await supabase.from('doctors').update({ status: 'suspended' }).eq('id', id)
-    setActionMsg(`✗ ${name} rejected.`); load(); setTimeout(() => setActionMsg(''), 3000)
+    setActionMsg(`✗ ${name} ${t('adminDashboardPage.rejectedMsgSuffix')}`); load(); setTimeout(() => setActionMsg(''), 3000)
   }
 
-  const logout = () => { sessionStorage.removeItem('admin_auth'); window.location.href = '/admin' }
+  const logout = () => { sessionStorage.removeItem('admin_auth'); window.location.href = '/ng-ctrl-2026' }
 
   const pending = doctors.filter(d => d.status === 'pending')
   const active  = doctors.filter(d => d.status === 'active')
-  const totalRevenue = active.reduce((s, d) => s + (d.pin_codes?.length || 0) * 5000, 0)
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const newThisWeek = doctors.filter(d => new Date(d.created_at) >= oneWeekAgo).length
   const filtered = doctors.filter(d => {
     const matchTab = tab === 'pending' ? d.status === 'pending' : true
     const matchSearch = !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.phone.includes(search)
@@ -44,18 +48,20 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sidebar + main */}
       <div className="flex">
         {/* Sidebar */}
         <aside className="w-56 bg-navy-700 min-h-screen fixed left-0 top-0 flex flex-col pt-6">
-          <div className="px-5 mb-8">
+          <div className="px-5 mb-4">
             <img src="/logo.png" alt="Sehatsandhi" className="h-10 brightness-0 invert" />
-            <p className="text-white/40 text-xs mt-2">Admin Panel</p>
+            <p className="text-white/40 text-xs mt-2">{t('adminDashboardPage.sidebarLabel')}</p>
+          </div>
+          <div className="px-5 mb-4">
+            <LanguageSwitcher dark />
           </div>
           <nav className="flex-1 px-3 space-y-1">
             {[
-              { id: 'pending', label: `Pending (${pending.length})`, badge: pending.length > 0 },
-              { id: 'all', label: 'All Doctors' },
+              { id: 'pending', label: `${t('adminDashboardPage.navPendingPrefix')} (${pending.length})`, badge: pending.length > 0 },
+              { id: 'all', label: t('adminDashboardPage.navAllDoctors') },
             ].map(n => (
               <button key={n.id} onClick={() => setTab(n.id as any)}
                 className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-between ${tab === n.id ? 'bg-teal-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}>
@@ -65,19 +71,19 @@ export default function AdminDashboard() {
             ))}
           </nav>
           <button onClick={logout} className="flex items-center gap-2 px-5 py-4 text-white/40 hover:text-white text-sm transition border-t border-white/10 mt-auto">
-            <LogOut className="w-4 h-4" /> Logout
+            <LogOut className="w-4 h-4" /> {t('adminDashboardPage.logout')}
           </button>
         </aside>
 
         {/* Main content */}
         <main className="ml-56 flex-1 p-8">
-          {/* Stats */}
+          {/* Stats — no fake revenue calculation */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {[
-              { label: 'Total Doctors', value: doctors.length, icon: <Users className="w-5 h-5 text-navy-600" /> },
-              { label: 'Pending Approval', value: pending.length, icon: <Clock className="w-5 h-5 text-amber-500" />, warn: pending.length > 0 },
-              { label: 'Active & Listed', value: active.length, icon: <CheckCircle2 className="w-5 h-5 text-teal-500" /> },
-              { label: 'Monthly Revenue', value: `₹${totalRevenue.toLocaleString('en-IN')}`, icon: <TrendingUp className="w-5 h-5 text-teal-500" /> },
+              { label: t('adminDashboardPage.statTotalDoctors'), value: doctors.length, icon: <Users className="w-5 h-5 text-navy-600" /> },
+              { label: t('adminDashboardPage.statPendingApproval'), value: pending.length, icon: <Clock className="w-5 h-5 text-amber-500" />, warn: pending.length > 0 },
+              { label: t('adminDashboardPage.statActiveListed'), value: active.length, icon: <CheckCircle2 className="w-5 h-5 text-teal-500" /> },
+              { label: t('adminDashboardPage.statNewThisWeek'), value: newThisWeek, icon: <TrendingUp className="w-5 h-5 text-teal-500" /> },
             ].map(s => (
               <div key={s.label} className={`card shadow-sm ${s.warn ? 'border-2 border-amber-300' : ''}`}>
                 <div className="flex items-center gap-2 mb-1">{s.icon}<span className="text-xs text-gray-500">{s.label}</span></div>
@@ -89,28 +95,28 @@ export default function AdminDashboard() {
           {/* Action message */}
           {actionMsg && <div className="mb-4 bg-teal-50 border border-teal-200 text-teal-700 px-4 py-3 rounded-xl text-sm">{actionMsg}</div>}
 
-          {/* Table */}
+          {/* Table — Fee/mo column removed, replaced with Registered date */}
           <div className="card shadow-sm">
             <div className="flex items-center gap-4 mb-5">
               <h2 className="font-bold text-navy-700 text-lg flex-1">
-                {tab === 'pending' ? '⏳ Pending Verification' : '📋 All Doctors'}
+                {tab === 'pending' ? t('adminDashboardPage.headingPending') : t('adminDashboardPage.headingAll')}
               </h2>
-              <input className="input-field w-56" placeholder="Search name or phone..."
+              <input className="input-field w-56" placeholder={t('adminDashboardPage.searchPlaceholder')}
                 value={search} onChange={e => setSearch(e.target.value)} />
             </div>
 
-            {loading ? <p className="text-gray-400 text-sm py-8 text-center">Loading...</p> :
-              filtered.length === 0 ? <p className="text-gray-400 text-sm py-12 text-center">No doctors found.</p> : (
+            {loading ? <p className="text-gray-400 text-sm py-8 text-center">{t('adminDashboardPage.loadingText')}</p> :
+              filtered.length === 0 ? <p className="text-gray-400 text-sm py-12 text-center">{t('adminDashboardPage.noDoctorsFound')}</p> : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-gray-100 text-gray-400 text-xs">
-                    <th className="text-left py-3 px-2">Doctor</th>
-                    <th className="text-left py-3 px-2">Speciality</th>
-                    <th className="text-left py-3 px-2">Reg. No.</th>
-                    <th className="text-left py-3 px-2">PINs</th>
-                    <th className="text-right py-3 px-2">Fee/mo</th>
-                    <th className="text-left py-3 px-2">Status</th>
-                    <th className="py-3 px-2">Actions</th>
+                    <th className="text-left py-3 px-2">{t('adminDashboardPage.colDoctor')}</th>
+                    <th className="text-left py-3 px-2">{t('adminDashboardPage.colSpeciality')}</th>
+                    <th className="text-left py-3 px-2">{t('adminDashboardPage.colRegNo')}</th>
+                    <th className="text-left py-3 px-2">{t('adminDashboardPage.colAreas')}</th>
+                    <th className="text-left py-3 px-2">{t('adminDashboardPage.colRegistered')}</th>
+                    <th className="text-left py-3 px-2">{t('adminDashboardPage.colStatus')}</th>
+                    <th className="py-3 px-2">{t('adminDashboardPage.colActions')}</th>
                   </tr></thead>
                   <tbody>{filtered.map(d => (
                     <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
@@ -125,8 +131,8 @@ export default function AdminDashboard() {
                       <td className="py-3 px-2">
                         <span className="text-xs text-gray-600">{d.pin_codes?.join(', ')}</span>
                       </td>
-                      <td className="py-3 px-2 text-right font-medium text-navy-700">
-                        ₹{((d.pin_codes?.length || 0) * 5000).toLocaleString('en-IN')}
+                      <td className="py-3 px-2 text-xs text-gray-500">
+                        {new Date(d.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       </td>
                       <td className="py-3 px-2">
                         <span className={d.status === 'active' ? 'badge-active' : d.status === 'suspended' ? 'badge-suspended' : 'badge-pending'}>
@@ -136,23 +142,23 @@ export default function AdminDashboard() {
                       <td className="py-3 px-2">
                         <div className="flex gap-1 justify-center">
                           {d.status === 'pending' && <>
-                            <button onClick={() => approve(d.id, d.name)} title="Approve"
+                            <button onClick={() => approve(d.id, d.name)} title={t('adminDashboardPage.titleApprove')}
                               className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition">
                               <CheckCircle2 className="w-4 h-4" />
                             </button>
-                            <button onClick={() => reject(d.id, d.name)} title="Reject"
+                            <button onClick={() => reject(d.id, d.name)} title={t('adminDashboardPage.titleReject')}
                               className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition">
                               <XCircle className="w-4 h-4" />
                             </button>
                           </>}
                           {d.status === 'active' && (
-                            <button onClick={() => reject(d.id, d.name)} title="Suspend"
+                            <button onClick={() => reject(d.id, d.name)} title={t('adminDashboardPage.titleSuspend')}
                               className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition">
                               <XCircle className="w-4 h-4" />
                             </button>
                           )}
                           {d.status === 'suspended' && (
-                            <button onClick={() => approve(d.id, d.name)} title="Reactivate"
+                            <button onClick={() => approve(d.id, d.name)} title={t('adminDashboardPage.titleReactivate')}
                               className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition">
                               <CheckCircle2 className="w-4 h-4" />
                             </button>
