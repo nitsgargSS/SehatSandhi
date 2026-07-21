@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react'
-import { SPECIALITIES, PIN_CODES } from '../../types'
+import { CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react'
+import { SPECIALITIES } from '../../types'
 import { supabase } from '../../lib/supabase'
 import CustomAreaSearch, { CustomArea } from '../../components/CustomAreaSearch'
+import { useServiceAreas, tierColor } from '../../hooks/useServiceAreas'
 import { useLanguage } from '../../i18n/LanguageContext'
 
 type FormData = {
@@ -14,9 +15,12 @@ type FormData = {
 
 const QUALIFICATIONS = ['MBBS', 'MD', 'MS', 'BDS', 'BHMS', 'BAMS', 'DNB', 'DM', 'MCh', 'Other']
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const WEEKS_PER_MONTH = 4.33
 
 export default function Register() {
   const { t, lang } = useLanguage()
+  const { areas, loading: areasLoading } = useServiceAreas()
+
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<FormData>({
     name: '', qualification: 'MBBS', speciality: '', reg_number: '',
@@ -37,10 +41,31 @@ export default function Register() {
 
   const upd = (k: keyof FormData, v: string) => setForm(f => ({ ...f, [k]: v }))
 
+  const selectedAreaObjs = selectedPins
+    .map(code => areas.find(a => a.pin_code === code))
+    .filter((a): a is NonNullable<typeof a> => !!a)
+
   const allSelectedAreaNames = [
-    ...selectedPins.map(c => PIN_CODES.find(p => p.code === c)?.area).filter(Boolean),
+    ...selectedAreaObjs.map(a => a.area_name),
     ...customAreas.map(a => a.area_name),
   ]
+
+  // ── REAL PRICING, calculated live from service_areas + pricing_tiers ──
+  const baseMonthly = selectedAreaObjs.reduce((sum, a) => sum + a.monthly_price, 0)
+
+  const premiumWeeklyPerArea = (a: typeof selectedAreaObjs[number]) =>
+    premPos === 1 ? a.premium_slot_1_weekly :
+    premPos === 2 ? a.premium_slot_2_weekly :
+    premPos === 3 ? a.premium_slot_3_weekly : 0
+
+  const premiumWeeklyTotal = wantsPremium && premPos
+    ? selectedAreaObjs.reduce((sum, a) => sum + premiumWeeklyPerArea(a), 0)
+    : 0
+  const premiumMonthlyEstimate = Math.round(premiumWeeklyTotal * WEEKS_PER_MONTH)
+
+  const grandMonthlyEstimate = baseMonthly + premiumMonthlyEstimate
+
+  const hasCustomAreas = customAreas.length > 0
 
   const handleSubmit = async () => {
     if (!selectedPins.length && !customAreas.length) {
@@ -72,9 +97,14 @@ export default function Register() {
         <h2 className="text-2xl font-bold text-navy-700 mb-3">{t('registerPage.successTitle')}</h2>
         <p className="text-gray-500 mb-2">{t('registerPage.successThanks')} {form.name.split(' ').pop()}! 🎉</p>
         <p className="text-gray-500 text-sm mb-6">{t('registerPage.successDesc')}</p>
-        <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700">
-          <p className="font-medium mb-1">{t('registerPage.selectedAreasLabel')} {allSelectedAreaNames.length}</p>
+        <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700 space-y-1">
+          <p className="font-medium">{t('registerPage.selectedAreasLabel')} {allSelectedAreaNames.length}</p>
           <p>{allSelectedAreaNames.join(', ')}</p>
+          {grandMonthlyEstimate > 0 && (
+            <p className="font-bold text-base pt-2 border-t border-teal-100 mt-2">
+              {t('registerPage.summaryEstTotal')}: ₹{grandMonthlyEstimate.toLocaleString('en-IN')}/mo
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -180,48 +210,67 @@ export default function Register() {
             </div>
           )}
 
-          {/* ── STEP 2: AREA SELECTION (no pricing shown) ── */}
+          {/* ── STEP 2: AREA SELECTION with REAL live pricing ── */}
           {step === 2 && (
             <div>
               <h2 className="text-xl font-bold text-navy-700 mb-1">{t('registerPage.step2Title')}</h2>
               <p className="text-gray-500 text-sm mb-4">{t('registerPage.step2Desc')}</p>
-              <div className="flex gap-2 mb-4">
-                <button onClick={() => setSelectedPins(PIN_CODES.map(p => p.code))} className="btn-outline text-xs py-1.5 px-4">{t('registerPage.btnSelectAll')}</button>
-                <button onClick={() => setSelectedPins([])} className="btn-outline text-xs py-1.5 px-4">{t('registerPage.btnClear')}</button>
-                <button onClick={() => setSelectedPins(['135001', '135003'])} className="btn-outline text-xs py-1.5 px-4">{t('registerPage.btnCore2')}</button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-6">
-                {PIN_CODES.map(p => (
-                  <button key={p.code} onClick={() => togglePin(p.code)}
-                    className={`flex flex-col items-start p-3 rounded-xl border-2 transition-all text-left ${selectedPins.includes(p.code) ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
-                    <span className="font-bold text-sm text-navy-700">{p.code}</span>
-                    <span className="text-xs text-gray-500">{p.area}</span>
-                    {selectedPins.includes(p.code) && <span className="text-xs text-teal-600 font-medium mt-1">✓</span>}
-                  </button>
-                ))}
-              </div>
 
-              {/* Selection count — no rupee amount */}
-              <div className={`rounded-2xl p-5 mb-6 ${selectedPins.length ? 'bg-teal-50 border border-teal-200' : 'bg-gray-50 border border-gray-200'}`}>
-                {selectedPins.length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center">{t('registerPage.selectAreaPrompt')}</p>
-                ) : (
-                  <p className="text-sm text-gray-600 text-center">
-                    <span className="font-bold text-navy-700 text-lg">{selectedPins.length}</span>{' '}
-                    {t('registerPage.areaCountSuffix')}
-                  </p>
-                )}
-              </div>
+              {areasLoading ? (
+                <div className="flex items-center justify-center gap-2 text-gray-400 text-sm py-12">
+                  <Loader2 className="w-4 h-4 animate-spin" /> {t('registerPage.loadingAreas')}
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2 mb-4">
+                    <button onClick={() => setSelectedPins(areas.map(a => a.pin_code))} className="btn-outline text-xs py-1.5 px-4">{t('registerPage.btnSelectAll')}</button>
+                    <button onClick={() => setSelectedPins([])} className="btn-outline text-xs py-1.5 px-4">{t('registerPage.btnClear')}</button>
+                    <button onClick={() => setSelectedPins(['135001', '135003'])} className="btn-outline text-xs py-1.5 px-4">{t('registerPage.btnCore2')}</button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-6">
+                    {areas.map(a => (
+                      <button key={a.pin_code} onClick={() => togglePin(a.pin_code)}
+                        className={`flex flex-col items-start p-3 rounded-xl border-2 transition-all text-left ${selectedPins.includes(a.pin_code) ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <span className="font-bold text-xs text-navy-700">{a.pin_code}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${tierColor(a.tier_number)}`}>{a.tier_name}</span>
+                        </div>
+                        <span className="text-xs text-gray-500">{a.area_name}</span>
+                        <span className="text-xs font-semibold text-teal-600 mt-1">₹{a.monthly_price.toLocaleString('en-IN')}/mo</span>
+                        {selectedPins.includes(a.pin_code) && <span className="text-xs text-teal-600 font-medium mt-0.5">✓</span>}
+                      </button>
+                    ))}
+                  </div>
 
-              {/* Custom area search — city/district/PIN not in the preset list */}
+                  {/* Live real pricing total */}
+                  <div className={`rounded-2xl p-5 mb-6 ${selectedPins.length ? 'bg-teal-50 border border-teal-200' : 'bg-gray-50 border border-gray-200'}`}>
+                    {selectedPins.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center">{t('registerPage.selectAreaPrompt')}</p>
+                    ) : (
+                      <div className="flex flex-wrap justify-between items-center gap-3">
+                        <p className="text-sm text-gray-600">
+                          <span className="font-bold text-navy-700 text-lg">{selectedPins.length}</span>{' '}
+                          {t('registerPage.areaCountSuffix')}
+                        </p>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-400">{t('registerPage.monthlyTotal')}</p>
+                          <p className="text-2xl font-bold text-teal-600">₹{baseMonthly.toLocaleString('en-IN')}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Custom area search — genuinely new areas not yet in service_areas */}
               <CustomAreaSearch
-                existingPins={PIN_CODES.map(p => p.code)}
+                existingPins={areas.map(a => a.pin_code)}
                 onAreasChange={setCustomAreas}
               />
             </div>
           )}
 
-          {/* ── STEP 3: PREMIUM (interest only, no pricing) ── */}
+          {/* ── STEP 3: PREMIUM with REAL weekly pricing ── */}
           {step === 3 && (
             <div>
               <h2 className="text-xl font-bold text-navy-700 mb-1">
@@ -235,25 +284,40 @@ export default function Register() {
                 <span className="text-sm text-gray-700">{t('registerPage.premiumCheckbox')}</span>
               </label>
 
-              {wantsPremium && (
+              {wantsPremium && selectedAreaObjs.length > 0 && (
                 <div className="space-y-3">
-                  {([
-                    { pos: 1 as const, label: t('registerPage.premiumPos1'), badge: '🥇' },
-                    { pos: 2 as const, label: t('registerPage.premiumPos2'), badge: '🥈' },
-                    { pos: 3 as const, label: t('registerPage.premiumPos3'), badge: '🥉' },
-                  ]).map(opt => (
-                    <label key={opt.pos} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${premPos === opt.pos ? 'border-teal-400 bg-teal-50' : 'border-gray-100 hover:border-gray-200'}`}>
-                      <input type="radio" name="pos" value={opt.pos} checked={premPos === opt.pos} onChange={() => setPremPos(opt.pos)} className="accent-teal-600 w-5 h-5" />
-                      <p className="font-semibold text-gray-800 text-sm">{opt.badge} — {opt.label}</p>
-                    </label>
-                  ))}
-                  <p className="text-xs text-gray-400 mt-2">{t('registerPage.premiumNote')}</p>
+                  {([1, 2, 3] as const).map(pos => {
+                    const weekly = selectedAreaObjs.reduce((sum, a) =>
+                      sum + (pos === 1 ? a.premium_slot_1_weekly : pos === 2 ? a.premium_slot_2_weekly : a.premium_slot_3_weekly), 0)
+                    const label = pos === 1 ? t('registerPage.premiumPos1') : pos === 2 ? t('registerPage.premiumPos2') : t('registerPage.premiumPos3')
+                    const badge = pos === 1 ? '🥇' : pos === 2 ? '🥈' : '🥉'
+                    return (
+                      <label key={pos} className={`flex items-center justify-between gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${premPos === pos ? 'border-teal-400 bg-teal-50' : 'border-gray-100 hover:border-gray-200'}`}>
+                        <div className="flex items-center gap-3">
+                          <input type="radio" name="pos" value={pos} checked={premPos === pos} onChange={() => setPremPos(pos)} className="accent-teal-600 w-5 h-5" />
+                          <p className="font-semibold text-gray-800 text-sm">{badge} — {label}</p>
+                        </div>
+                        <p className="text-teal-600 font-bold text-sm">₹{weekly.toLocaleString('en-IN')}<span className="text-gray-400 font-normal text-xs">/wk</span></p>
+                      </label>
+                    )
+                  })}
+                  {premPos && (
+                    <div className="bg-navy-700 rounded-xl p-4 text-white flex justify-between items-center">
+                      <span className="text-sm text-white/70">{t('registerPage.premiumWeeklyTotal')} ({t('registerPage.premiumNote')})</span>
+                      <span className="font-bold">₹{premiumWeeklyTotal.toLocaleString('en-IN')}/wk</span>
+                    </div>
+                  )}
                 </div>
+              )}
+              {wantsPremium && selectedAreaObjs.length === 0 && (
+                <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-3">
+                  {t('registerPage.selectAreaPrompt')}
+                </p>
               )}
             </div>
           )}
 
-          {/* ── STEP 4: REVIEW & SUBMIT (no payment) ── */}
+          {/* ── STEP 4: REVIEW with REAL calculated total ── */}
           {step === 4 && (
             <div>
               <h2 className="text-xl font-bold text-navy-700 mb-6">{t('registerPage.step4Title')}</h2>
@@ -266,12 +330,38 @@ export default function Register() {
                   <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryClinic')}</span> <strong>{form.clinic_name}</strong></p>
                   <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryPhone')}</span> <strong>+91 {form.phone}</strong></p>
                   <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryAreas')}</span> <strong>{allSelectedAreaNames.join(', ') || t('registerPage.summaryNoneSelected')}</strong></p>
-                  {wantsPremium && <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryPremiumInterest')}</span> <strong>Position {premPos || '—'}</strong></p>}
+                  {wantsPremium && premPos && <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryPremiumInterest')}</span> <strong>Position {premPos}</strong></p>}
                 </div>
 
                 <div className="bg-navy-700 rounded-xl p-5 text-white">
-                  <h3 className="font-bold mb-2">{t('registerPage.nextStepsTitle')}</h3>
-                  <ol className="text-sm text-white/80 space-y-1 list-decimal list-inside">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-white/70">{t('registerPage.summaryBaseFee')}</span>
+                    <span>₹{baseMonthly.toLocaleString('en-IN')}</span>
+                  </div>
+                  {premiumMonthlyEstimate > 0 && (
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-white/70">{t('registerPage.summaryPremiumFee')}</span>
+                      <span>₹{premiumMonthlyEstimate.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-white/20 pt-3 flex justify-between font-bold text-lg">
+                    <span>{t('registerPage.summaryEstTotal')}</span>
+                    <span>₹{grandMonthlyEstimate.toLocaleString('en-IN')}</span>
+                  </div>
+                  <p className="text-white/50 text-xs mt-2">{t('registerPage.summaryEstNote')}</p>
+                </div>
+
+                {hasCustomAreas && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                    <p className="text-xs text-amber-700">
+                      ⚠️ {customAreas.length} {lang === 'hi' ? 'naye areas ka pricing upar ke total mein shamil nahi hai — team confirm karegi' : "new area(s) aren't included in the total above yet — our team will confirm their pricing"}
+                    </p>
+                  </div>
+                )}
+
+                <div className="bg-navy-700/5 rounded-xl p-5">
+                  <h3 className="font-bold mb-2 text-navy-700 text-sm">{t('registerPage.nextStepsTitle')}</h3>
+                  <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
                     <li>{t('registerPage.nextStep1')}</li>
                     <li>{t('registerPage.nextStep2')}</li>
                     <li>{t('registerPage.nextStep3')}</li>

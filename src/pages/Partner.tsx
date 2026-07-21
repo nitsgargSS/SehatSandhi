@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { CheckCircle2, ChevronLeft } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { PIN_CODES } from '../types'
 import CustomAreaSearch, { CustomArea } from '../components/CustomAreaSearch'
+import { useServiceAreas, tierColor } from '../hooks/useServiceAreas'
 import { useLanguage } from '../i18n/LanguageContext'
 
 type PartnerType = 'pharmacy' | 'lab' | 'insurance' | 'ambulance' | null
 
 export default function PartnerRegister() {
   const { t, lang } = useLanguage()
+  const { areas, loading: areasLoading } = useServiceAreas()
+
   const [type, setType] = useState<PartnerType>(null)
   const [done, setDone] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -19,10 +21,16 @@ export default function PartnerRegister() {
   const togglePin = (code: string) =>
     setSelectedPins(p => p.includes(code) ? p.filter(c => c !== code) : [...p, code])
 
+  const selectedAreaObjs = selectedPins
+    .map(code => areas.find(a => a.pin_code === code))
+    .filter((a): a is NonNullable<typeof a> => !!a)
+
   const allSelectedAreaNames = [
-    ...selectedPins.map(c => PIN_CODES.find(p => p.code === c)?.area).filter(Boolean),
+    ...selectedAreaObjs.map(a => a.area_name),
     ...customAreas.map(a => a.area_name),
   ]
+
+  const monthlyTotal = selectedAreaObjs.reduce((sum, a) => sum + a.monthly_price, 0)
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -54,6 +62,11 @@ export default function PartnerRegister() {
         <CheckCircle2 className="w-16 h-16 text-teal-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-navy-700 mb-3">{t('partnerPage.successTitle')}</h2>
         <p className="text-gray-500 mb-6">{t('partnerPage.successDesc')}</p>
+        {monthlyTotal > 0 && (
+          <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700 mb-4">
+            <p className="font-bold text-base">{t('partnerPage.monthlyTotal')}: ₹{monthlyTotal.toLocaleString('en-IN')}/mo</p>
+          </div>
+        )}
         <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700">
           <p className="font-medium">{t('partnerPage.successNextTitle')}</p>
           <p className="mt-1">✅ {t('partnerPage.successNext1')}</p>
@@ -168,7 +181,7 @@ export default function PartnerRegister() {
                 </div>
               </div>
 
-              {/* Area selection — multi-select grid + custom search */}
+              {/* Area selection — real live pricing */}
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-2 block">{t('partnerPage.areaSectionLabel')}</label>
                 <p className="text-xs text-gray-400 mb-3">
@@ -178,17 +191,40 @@ export default function PartnerRegister() {
                   {type === 'ambulance' && t('partnerPage.areaNoteAmbulance')}
                   {type === 'insurance' && t('partnerPage.areaNoteInsurance')}.
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-                  {PIN_CODES.map(p => (
-                    <button key={p.code} type="button" onClick={() => togglePin(p.code)}
-                      className={`flex flex-col items-start p-2.5 rounded-xl border-2 transition-all text-left ${selectedPins.includes(p.code) ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
-                      <span className="font-bold text-xs text-navy-700">{p.code}</span>
-                      <span className="text-xs text-gray-500">{p.area}</span>
-                    </button>
-                  ))}
-                </div>
+
+                {areasLoading ? (
+                  <div className="flex items-center justify-center gap-2 text-gray-400 text-sm py-8">
+                    <Loader2 className="w-4 h-4 animate-spin" /> {t('partnerPage.loadingAreas')}
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                      {areas.map(a => (
+                        <button key={a.pin_code} type="button" onClick={() => togglePin(a.pin_code)}
+                          className={`flex flex-col items-start p-2.5 rounded-xl border-2 transition-all text-left ${selectedPins.includes(a.pin_code) ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
+                          <div className="flex items-center justify-between w-full">
+                            <span className="font-bold text-xs text-navy-700">{a.pin_code}</span>
+                            <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${tierColor(a.tier_number)}`}>{a.tier_name}</span>
+                          </div>
+                          <span className="text-xs text-gray-500">{a.area_name}</span>
+                          <span className="text-xs font-semibold text-teal-600 mt-0.5">₹{a.monthly_price.toLocaleString('en-IN')}/mo</span>
+                        </button>
+                      ))}
+                    </div>
+                    {selectedPins.length > 0 && (
+                      <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-4 flex justify-between items-center">
+                        <span className="text-sm text-gray-600">{selectedPins.length} areas selected</span>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-400">{t('partnerPage.monthlyTotal')}</p>
+                          <p className="text-xl font-bold text-teal-600">₹{monthlyTotal.toLocaleString('en-IN')}</p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
                 <CustomAreaSearch
-                  existingPins={PIN_CODES.map(p => p.code)}
+                  existingPins={areas.map(a => a.pin_code)}
                   onAreasChange={setCustomAreas}
                 />
               </div>
@@ -320,7 +356,7 @@ export default function PartnerRegister() {
                 </div>
               )}
 
-              {/* Next steps — no pricing shown */}
+              {/* Next steps */}
               <div className="bg-navy-700 rounded-xl p-5 text-white">
                 <h3 className="font-bold mb-2">{t('partnerPage.nextStepsTitle')}</h3>
                 <ol className="text-sm text-white/80 space-y-1 list-decimal list-inside">
