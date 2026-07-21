@@ -170,7 +170,7 @@ export function getTranslation(path: string, lang: Lang): string {
   const parts = path.split('.')
   let node: Entry | Tree = translations
   for (const part of parts) {
-    const next = (node as Tree)[part]
+    const next: Entry | Tree | undefined = (node as Tree)[part]
     if (next === undefined) return path
     node = next
   }
