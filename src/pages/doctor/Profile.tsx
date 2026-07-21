@@ -1,14 +1,39 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { MapPin, Clock, CheckCircle2, ArrowLeft, Share2, Copy } from 'lucide-react'
+import { MapPin, Clock, CheckCircle2, ArrowLeft, Share2, Copy, Star } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, WA_NUMBER } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
+
+interface RatingAgg {
+  avg_rating: number
+  total_reviews: number
+  is_top_rated: boolean
+}
+
+interface Review {
+  id: string
+  overall_rating: number
+  waiting_time: string | null
+  communication: string | null
+  value_for_money: string | null
+  review_text: string | null
+  created_at: string
+}
+
+const subRatingLabel = (t: (k: string) => string, v: string | null) => {
+  if (!v) return null
+  if (v === 'good') return t('profilePage.ratingGood')
+  if (v === 'ok') return t('profilePage.ratingOk')
+  return t('profilePage.ratingBad')
+}
 
 export default function DoctorProfile() {
   const { slug } = useParams()
   const { t, lang } = useLanguage()
   const [doctor, setDoctor] = useState<Doctor | null>(null)
+  const [ratingAgg, setRatingAgg] = useState<RatingAgg | null>(null)
+  const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
 
@@ -22,7 +47,20 @@ export default function DoctorProfile() {
         .ilike('name', `%${namePart.replace('Dr. ', '')}%`)
         .eq('status', 'active')
         .single()
+
       setDoctor(data)
+
+      if (data?.id) {
+        const [{ data: agg }, { data: reviewRows }] = await Promise.all([
+          supabase.from('rating_aggregate').select('*').eq('doctor_id', data.id).maybeSingle(),
+          supabase.from('ratings').select('id, overall_rating, waiting_time, communication, value_for_money, review_text, created_at')
+            .eq('doctor_id', data.id).eq('is_visible', true)
+            .order('created_at', { ascending: false }).limit(10),
+        ])
+        setRatingAgg(agg)
+        setReviews(reviewRows || [])
+      }
+
       setLoading(false)
     }
     load()
@@ -57,9 +95,9 @@ export default function DoctorProfile() {
 
   const speciality = SPECIALITIES.find(s => s.id === doctor.speciality)
 
-  // Schema.org structured data — enables Google to show this doctor
-  // as a rich result (name, speciality, address) directly in search
-  const schema = {
+  // Schema.org structured data — includes aggregateRating when
+  // real reviews exist, enabling star ratings in Google search
+  const schema: any = {
     '@context': 'https://schema.org',
     '@type': 'Physician',
     name: doctor.name,
@@ -71,10 +109,18 @@ export default function DoctorProfile() {
       addressCountry: 'IN',
     },
   }
+  if (ratingAgg && ratingAgg.total_reviews > 0) {
+    schema.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: ratingAgg.avg_rating,
+      reviewCount: ratingAgg.total_reviews,
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+
       {/* Back */}
       <div className="bg-white border-b border-gray-100">
         <div className="max-w-3xl mx-auto px-4 py-3">
@@ -108,15 +154,42 @@ export default function DoctorProfile() {
               </div>
             </div>
 
-            {/* Name + verified */}
+            {/* Name + badges */}
             <div className="flex items-start justify-between flex-wrap gap-2 mb-1">
               <div>
                 <h1 className="text-2xl font-bold text-navy-700">{doctor.name}</h1>
                 <p className="text-gray-500 text-sm">{doctor.qualification}</p>
               </div>
-              <span className="flex items-center gap-1.5 bg-teal-50 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-full text-xs font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5" /> {t('profilePage.verifiedBadge')}
-              </span>
+              <div className="flex flex-col items-end gap-1.5">
+                <span className="flex items-center gap-1.5 bg-teal-50 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-full text-xs font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> {t('profilePage.verifiedBadge')}
+                </span>
+                {/* Top Rated — auto-computed, never influenced by payment.
+                    Deliberately a separate, differently-styled badge from
+                    Verified, so patients can tell the two apart. */}
+                {ratingAgg?.is_top_rated && (
+                  <span className="flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-full text-xs font-medium">
+                    {t('profilePage.topRatedBadge')}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Rating summary */}
+            <div className="mb-3">
+              {ratingAgg && ratingAgg.total_reviews > 0 ? (
+                <div className="flex items-center gap-1.5">
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <Star key={i} className={`w-4 h-4 ${i <= Math.round(ratingAgg.avg_rating) ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} />
+                    ))}
+                  </div>
+                  <span className="text-sm font-semibold text-navy-700">{ratingAgg.avg_rating}</span>
+                  <span className="text-xs text-gray-400">({ratingAgg.total_reviews})</span>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">{t('profilePage.noRatingsYet')}</p>
+              )}
             </div>
 
             {/* Speciality */}
@@ -166,6 +239,49 @@ export default function DoctorProfile() {
             <p className="text-center text-xs text-gray-400 mt-2">{t('profilePage.bookSubtext')}</p>
           </div>
         </div>
+
+        {/* Patient Reviews — only shown when reviews actually exist */}
+        {reviews.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 className="font-bold text-navy-700 mb-4">
+              {t('profilePage.reviewsTitle')} ({ratingAgg?.total_reviews || reviews.length})
+            </h3>
+            <div className="space-y-4">
+              {reviews.map(r => (
+                <div key={r.id} className="border-b border-gray-50 last:border-0 pb-4 last:pb-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="flex">
+                      {[1, 2, 3, 4, 5].map(i => (
+                        <Star key={i} className={`w-3.5 h-3.5 ${i <= r.overall_rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} />
+                      ))}
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
+                  {r.review_text && <p className="text-sm text-gray-700 mb-2">{r.review_text}</p>}
+                  <div className="flex flex-wrap gap-1.5">
+                    {r.waiting_time && (
+                      <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                        {t('profilePage.waitingTimeLabel')}: {subRatingLabel(t, r.waiting_time)}
+                      </span>
+                    )}
+                    {r.communication && (
+                      <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                        {t('profilePage.communicationLabel')}: {subRatingLabel(t, r.communication)}
+                      </span>
+                    )}
+                    {r.value_for_money && (
+                      <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                        {t('profilePage.valueLabel')}: {subRatingLabel(t, r.value_for_money)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* How to book */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">

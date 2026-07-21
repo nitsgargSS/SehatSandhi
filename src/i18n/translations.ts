@@ -447,6 +447,15 @@ export const translations: Tree = {
     shareCardButton: { en: '🔗 Copy Profile Link', hi: '🔗 Profile Link Copy Karein' },
     findMoreText: { en: 'Looking for other doctors too?', hi: 'Doosre Doctors Bhi Dhundhen' },
     findMoreLink: { en: '← See All Doctors', hi: '← Sab Doctors Dekhen' },
+    noRatingsYet: { en: 'No ratings yet', hi: 'Abhi Koi Rating Nahi' },
+    topRatedBadge: { en: '⭐ Top Rated', hi: '⭐ Top Rated' },
+    reviewsTitle: { en: 'Patient Reviews', hi: 'Patient Reviews' },
+    waitingTimeLabel: { en: 'Waiting time', hi: 'Waiting Time' },
+    communicationLabel: { en: 'Communication', hi: 'Communication' },
+    valueLabel: { en: 'Value for money', hi: 'Value for Money' },
+    ratingGood: { en: 'Good', hi: 'Good' },
+    ratingOk: { en: 'OK', hi: 'OK' },
+    ratingBad: { en: 'Could be better', hi: 'Behtar Ho Sakta Tha' },
   },
 
   pointsPage: {

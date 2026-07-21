@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { MapPin, ArrowLeft } from 'lucide-react'
+import { MapPin, ArrowLeft, Star } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES, WA_NUMBER } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '-')
 
+interface DoctorWithRating extends Doctor {
+  avg_rating?: number
+  total_reviews?: number
+  is_top_rated?: boolean
+}
+
 export default function SpecialityLanding() {
   const { specId, areaSlug } = useParams()
   const { t, lang } = useLanguage()
-  const [doctors, setDoctors] = useState<Doctor[]>([])
+  const [doctors, setDoctors] = useState<DoctorWithRating[]>([])
   const [loading, setLoading] = useState(true)
 
   const speciality = SPECIALITIES.find(s => s.id.toLowerCase() === (specId || '').toLowerCase())
@@ -31,7 +37,28 @@ export default function SpecialityLanding() {
         .eq('speciality', speciality.id)
         .eq('status', 'active')
         .contains('pin_codes', [area.code])
-      setDoctors(data || [])
+
+      const docs = data || []
+      if (docs.length > 0) {
+        const { data: ratings } = await supabase
+          .from('rating_aggregate')
+          .select('*')
+          .in('doctor_id', docs.map(d => d.id))
+
+        const merged: DoctorWithRating[] = docs.map(d => {
+          const r = ratings?.find(rr => rr.doctor_id === d.id)
+          return { ...d, avg_rating: r?.avg_rating, total_reviews: r?.total_reviews, is_top_rated: r?.is_top_rated }
+        })
+        // Top Rated doctors first, then by rating, then newest
+        merged.sort((a, b) => {
+          if (a.is_top_rated && !b.is_top_rated) return -1
+          if (!a.is_top_rated && b.is_top_rated) return 1
+          return (b.avg_rating || 0) - (a.avg_rating || 0)
+        })
+        setDoctors(merged)
+      } else {
+        setDoctors([])
+      }
       setLoading(false)
     }
     load()
@@ -91,8 +118,25 @@ export default function SpecialityLanding() {
               {doctors.map(d => (
                 <div key={d.id} className="card flex items-center justify-between flex-wrap gap-3">
                   <div>
-                    <p className="font-bold text-navy-700">{d.name}</p>
-                    <p className="text-gray-500 text-sm">{d.qualification} · {d.clinic_name}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-bold text-navy-700">{d.name}</p>
+                      {d.is_top_rated && (
+                        <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                          ⭐ Top Rated
+                        </span>
+                      )}
+                    </div>
+                    {d.total_reviews ? (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <div className="flex">
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <Star key={i} className={`w-3 h-3 ${i <= Math.round(d.avg_rating || 0) ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`} />
+                          ))}
+                        </div>
+                        <span className="text-xs text-gray-400">{d.avg_rating} ({d.total_reviews})</span>
+                      </div>
+                    ) : null}
+                    <p className="text-gray-500 text-sm mt-1">{d.qualification} · {d.clinic_name}</p>
                     <p className="text-gray-400 text-xs">{d.address}</p>
                   </div>
                   <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Namaste! Main ${d.name} se appointment book karna chahta hoon.`)}`}
