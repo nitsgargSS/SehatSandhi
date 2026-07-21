@@ -1,15 +1,34 @@
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Users, Plus, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor, Appointment, PIN_CODES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
+
+interface StaffMember {
+  id: string
+  full_name: string
+  whatsapp_number: string
+  role: string
+  can_login_web: boolean
+  is_active: boolean
+}
 
 export default function DoctorDashboard() {
   const { t } = useLanguage()
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [staff, setStaff] = useState<StaffMember[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'overview' | 'appointments' | 'areas'>('overview')
+  const [tab, setTab] = useState<'overview' | 'appointments' | 'areas' | 'staff'>('overview')
+
+  const [showAddStaff, setShowAddStaff] = useState(false)
+  const [staffForm, setStaffForm] = useState({ full_name: '', whatsapp_number: '', role: 'receptionist', can_login_web: true })
+  const [staffSubmitting, setStaffSubmitting] = useState(false)
+
+  const loadStaff = async (doctorId: string) => {
+    const { data } = await supabase.from('clinic_users').select('*').eq('doctor_id', doctorId).order('created_at', { ascending: true })
+    setStaff(data || [])
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -20,6 +39,7 @@ export default function DoctorDashboard() {
         setDoctor(doc)
         const { data: appts } = await supabase.from('appointments').select('*').eq('doctor_id', doc.id).order('created_at', { ascending: false }).limit(20)
         setAppointments(appts || [])
+        await loadStaff(doc.id)
       }
       setLoading(false)
     }
@@ -27,6 +47,28 @@ export default function DoctorDashboard() {
   }, [])
 
   const logout = async () => { await supabase.auth.signOut(); window.location.href = '/doctor/login' }
+
+  const submitStaff = async () => {
+    if (!doctor || !staffForm.full_name || !staffForm.whatsapp_number) return
+    setStaffSubmitting(true)
+    await supabase.from('clinic_users').insert({
+      doctor_id: doctor.id,
+      full_name: staffForm.full_name,
+      whatsapp_number: staffForm.whatsapp_number,
+      role: staffForm.role,
+      can_login_web: staffForm.can_login_web,
+      is_active: true,
+    })
+    await loadStaff(doctor.id)
+    setStaffForm({ full_name: '', whatsapp_number: '', role: 'receptionist', can_login_web: true })
+    setShowAddStaff(false)
+    setStaffSubmitting(false)
+  }
+
+  const toggleStaffActive = async (member: StaffMember) => {
+    await supabase.from('clinic_users').update({ is_active: !member.is_active }).eq('id', member.id)
+    if (doctor) await loadStaff(doctor.id)
+  }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">{t('dashboardPage.loading')}</div></div>
   if (!doctor) return (
@@ -41,7 +83,10 @@ export default function DoctorDashboard() {
     { id: 'overview', label: t('dashboardPage.tabOverview'), icon: <Star className="w-4 h-4" /> },
     { id: 'appointments', label: t('dashboardPage.tabAppointments'), icon: <Calendar className="w-4 h-4" /> },
     { id: 'areas', label: t('dashboardPage.tabAreas'), icon: <MapPin className="w-4 h-4" /> },
+    { id: 'staff', label: t('dashboardPage.tabStaff'), icon: <Users className="w-4 h-4" /> },
   ]
+
+  const roleLabel = (r: string) => r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
@@ -67,7 +112,7 @@ export default function DoctorDashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Stats — no pricing shown */}
+        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
             { label: t('dashboardPage.statTotalAppointments'), value: appointments.length, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
@@ -83,7 +128,7 @@ export default function DoctorDashboard() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-gray-200 rounded-xl p-1 mb-6 w-fit">
+        <div className="flex gap-1 bg-gray-200 rounded-xl p-1 mb-6 w-fit flex-wrap">
           {tabs.map(tb => (
             <button key={tb.id} onClick={() => setTab(tb.id as any)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${tab === tb.id ? 'bg-white text-navy-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
@@ -145,7 +190,7 @@ export default function DoctorDashboard() {
           </div>
         )}
 
-        {/* Areas — no pricing shown */}
+        {/* Areas */}
         {tab === 'areas' && (
           <div className="card shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -165,6 +210,89 @@ export default function DoctorDashboard() {
             </div>
             <div className="mt-4 bg-navy-50 border border-navy-100 rounded-xl p-4">
               <p className="text-sm text-navy-700">{t('dashboardPage.contactAdminNote')}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Staff */}
+        {tab === 'staff' && (
+          <div className="card shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-navy-700">{t('dashboardPage.staffHeading')}</h3>
+              {!showAddStaff && (
+                <button onClick={() => setShowAddStaff(true)} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
+                  <Plus className="w-4 h-4" /> {t('dashboardPage.addStaffButton')}
+                </button>
+              )}
+            </div>
+
+            {showAddStaff && (
+              <div className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm font-medium text-navy-700">{t('dashboardPage.addStaffButton')}</p>
+                  <button onClick={() => setShowAddStaff(false)}><X className="w-4 h-4 text-gray-400" /></button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('dashboardPage.staffNameLabel')}</label>
+                    <input className="input-field" placeholder="Sunita Devi"
+                      value={staffForm.full_name} onChange={e => setStaffForm(f => ({ ...f, full_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('dashboardPage.staffWhatsappLabel')}</label>
+                    <input className="input-field" type="tel" maxLength={10} placeholder="9876543210"
+                      value={staffForm.whatsapp_number} onChange={e => setStaffForm(f => ({ ...f, whatsapp_number: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('dashboardPage.staffRoleLabel')}</label>
+                    <select className="input-field" value={staffForm.role} onChange={e => setStaffForm(f => ({ ...f, role: e.target.value }))}>
+                      <option value="receptionist">{t('dashboardPage.roleReceptionist')}</option>
+                      <option value="manager">{t('dashboardPage.roleManager')}</option>
+                      <option value="doctor">{t('dashboardPage.roleDoctor')}</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end pb-1">
+                    <label className="flex items-center gap-2 text-sm text-gray-600">
+                      <input type="checkbox" checked={staffForm.can_login_web}
+                        onChange={e => setStaffForm(f => ({ ...f, can_login_web: e.target.checked }))}
+                        className="w-4 h-4 accent-teal-600" />
+                      {t('dashboardPage.staffWebLoginLabel')}
+                    </label>
+                  </div>
+                </div>
+                <button onClick={submitStaff} disabled={staffSubmitting || !staffForm.full_name || !staffForm.whatsapp_number}
+                  className="btn-teal text-sm disabled:opacity-50">
+                  {t('dashboardPage.staffSubmitButton')}
+                </button>
+              </div>
+            )}
+
+            {staff.length === 0 && !showAddStaff ? (
+              <p className="text-gray-400 text-sm text-center py-8">{t('dashboardPage.staffNoneYet')}</p>
+            ) : (
+              <div className="space-y-2">
+                {staff.map(m => (
+                  <div key={m.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <div>
+                      <p className="font-medium text-gray-800 text-sm">{m.full_name}</p>
+                      <p className="text-xs text-gray-400">{roleLabel(m.role)} · {m.whatsapp_number}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={m.is_active ? 'badge-active' : 'badge-suspended'}>
+                        {m.is_active ? t('dashboardPage.staffActive') : t('dashboardPage.staffInactive')}
+                      </span>
+                      <button onClick={() => toggleStaffActive(m)}
+                        className="text-xs text-gray-400 hover:text-teal-600 underline">
+                        {m.is_active ? t('dashboardPage.staffDeactivate') : t('dashboardPage.staffReactivate')}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 bg-teal-50 border border-teal-100 rounded-xl p-3">
+              <p className="text-xs text-teal-700">💡 {t('dashboardPage.staffNote')}</p>
             </div>
           </div>
         )}
