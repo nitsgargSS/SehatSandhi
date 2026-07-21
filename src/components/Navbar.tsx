@@ -6,7 +6,7 @@ import { WA_NUMBER } from '../types'
 export default function Navbar() {
   const [open, setOpen] = useState(false)
   const { pathname } = useLocation()
-  const isDark = pathname.startsWith('/admin')
+  const isDark = pathname.startsWith('/ng-ctrl-2026')
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 ${isDark ? 'bg-navy-700' : 'bg-white/95 backdrop-blur'} shadow-sm`}>
@@ -17,10 +17,11 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2">
             <Link to="/" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>Home</Link>
+            <Link to="/how-it-works" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>How it Works</Link>
             <Link to="/doctor" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>For Doctors</Link>
-            <Link to="/partner" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>Partners</Link>
+            <Link to="/partners" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>Partners</Link>
             <Link to="/points" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>🌟 Points</Link>
             <a href={`https://wa.me/${WA_NUMBER}?text=Namaste!%20Main%20doctor%20dhundh%20raha%20hoon.`}
                target="_blank" rel="noreferrer"
@@ -41,8 +42,9 @@ export default function Navbar() {
       {open && (
         <div className="md:hidden bg-white border-t border-gray-100 px-4 py-4 flex flex-col gap-3">
           <Link to="/" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">Home</Link>
+          <Link to="/how-it-works" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">How it Works</Link>
           <Link to="/doctor" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">For Doctors</Link>
-          <Link to="/partner" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">Partners</Link>
+          <Link to="/partners" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">Partners</Link>
           <Link to="/points" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">🌟 Sehat Points</Link>
           <a href={`https://wa.me/${WA_NUMBER}?text=Namaste!%20Main%20doctor%20dhundh%20raha%20hoon.`}
              target="_blank" rel="noreferrer" onClick={() => setOpen(false)}

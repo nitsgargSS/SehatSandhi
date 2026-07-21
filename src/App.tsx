@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Landing from './pages/Landing'
+import HowItWorks from './pages/HowItWorks'
+import Partners from './pages/Partners'
 import Register from './pages/doctor/Register'
 import DoctorLogin from './pages/doctor/Login'
 import DoctorDashboard from './pages/doctor/Dashboard'
@@ -36,6 +38,8 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/" element={<WithLayout><Landing /></WithLayout>} />
+        <Route path="/how-it-works" element={<WithLayout><HowItWorks /></WithLayout>} />
+        <Route path="/partners" element={<WithLayout><Partners /></WithLayout>} />
         <Route path="/points" element={<WithLayout><Points /></WithLayout>} />
         <Route path="/partner" element={<WithLayout><PartnerRegister /></WithLayout>} />
 
