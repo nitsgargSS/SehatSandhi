@@ -8,6 +8,9 @@ import Partners from './pages/Partners'
 import ForDoctors from './pages/ForDoctors'
 import ForPharmacy from './pages/ForPharmacy'
 import ForLabs from './pages/ForLabs'
+import ForAmbulance from './pages/ForAmbulance'
+import ForInsurance from './pages/ForInsurance'
+import ForHospitals from './pages/ForHospitals'
 import Register from './pages/doctor/Register'
 import DoctorLogin from './pages/doctor/Login'
 import DoctorDashboard from './pages/doctor/Dashboard'
@@ -48,6 +51,9 @@ export default function App() {
           <Route path="/for-doctors" element={<WithLayout><ForDoctors /></WithLayout>} />
           <Route path="/for-pharmacy" element={<WithLayout><ForPharmacy /></WithLayout>} />
           <Route path="/for-labs" element={<WithLayout><ForLabs /></WithLayout>} />
+          <Route path="/for-ambulance" element={<WithLayout><ForAmbulance /></WithLayout>} />
+          <Route path="/for-insurance" element={<WithLayout><ForInsurance /></WithLayout>} />
+          <Route path="/for-hospitals" element={<WithLayout><ForHospitals /></WithLayout>} />
           <Route path="/points" element={<WithLayout><Points /></WithLayout>} />
           <Route path="/partner" element={<WithLayout><PartnerRegister /></WithLayout>} />
 

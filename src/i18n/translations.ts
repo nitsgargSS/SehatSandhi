@@ -674,6 +674,161 @@ export const translations: Tree = {
 
     ctaButton: { en: 'Become a Lab Partner →', hi: 'Lab Partner Banein →' },
   },
+
+  forAmbulancePage: {
+    heroTitle: { en: 'Every Minute Counts in an Emergency', hi: 'Emergency Mein Har Minute Zindagi Bachata Hai' },
+    heroDesc: { en: 'Join Sehatsandhi and become the trusted ambulance service in your area.', hi: 'Sehatsandhi se juden aur apne area mein trusted ambulance banein.' },
+    heroCta: { en: 'Become an Ambulance Partner →', hi: 'Ambulance Partner Banein →' },
+
+    problemTitle: { en: 'The Problem', hi: 'Problem Kya Hai' },
+    problemDesc: { en: 'An emergency in Yamuna Nagar? The patient Googles, makes calls, gets a busy line, or reaches the wrong number. Precious minutes are wasted.', hi: 'Yamuna Nagar mein emergency? Patient Google karta hai, phone karta hai, busy aata hai, ya galat number milta hai. Precious minutes waste hote hain.' },
+
+    howTitle: { en: 'How Sehatsandhi Helps', hi: 'Sehatsandhi Kaise Madad Karta Hai' },
+    howStep1: { en: 'Patient sends "Need ambulance 🚑" on WhatsApp', hi: 'Patient WhatsApp par "Ambulance chahiye 🚑" bhejta hai' },
+    howStep2: { en: 'Bot asks for address and emergency type', hi: 'Bot address aur emergency type poochta hai' },
+    howStep3: { en: "Bot checks the nearest registered ambulance in the patient's PIN code", hi: 'Bot patient ke PIN code mein nearest registered ambulance check karta hai' },
+    howStep4: { en: 'The ambulance gets an instant WhatsApp alert with the address', hi: 'Ambulance ko address ke saath instant WhatsApp alert milta hai' },
+    howStep5: { en: 'The patient gets an ETA and driver contact number', hi: 'Patient ko ETA aur driver ka contact number milta hai' },
+
+    commitmentTitle: { en: 'The Commitment', hi: 'The Commitment' },
+    commitmentDesc: {
+      en: 'The PIN codes you choose come with a commitment to respond within 15 minutes, 24/7. This is a serious public-service commitment — only choose areas where you can genuinely deliver this.',
+      hi: 'Aap jo PIN codes choose karte hain uss area mein aap 15 minute mein 24/7 respond karne ka commitment karte hain. Yeh ek serious public service commitment hai — sirf woh areas chunein jahan aap genuinely deliver kar sakein.',
+    },
+
+    typesTitle: { en: 'Ambulance Types Accepted', hi: 'Kaunse Ambulance Types Accept Hote Hain' },
+    type1: { en: '✅ Basic Life Support (BLS)', hi: '✅ Basic Life Support (BLS)' },
+    type2: { en: '✅ Advanced Life Support (ALS)', hi: '✅ Advanced Life Support (ALS)' },
+    type3: { en: '✅ Patient transport (non-emergency)', hi: '✅ Patient transport (non-emergency)' },
+    type4: { en: '✅ Hospital-to-hospital transfer', hi: '✅ Hospital-to-hospital transfer' },
+
+    earnTitle: { en: 'What You Earn', hi: 'Aap Kya Kamayenge' },
+    earnEmergency: { en: 'Emergency calls connect for FREE — no commission on emergencies', hi: 'Emergency calls FREE mein connect hote hain — emergency par koi commission nahi' },
+    earnTransport: { en: 'Non-emergency transport: 10% commission', hi: 'Non-emergency transport: 10% commission' },
+    earnListing: { en: 'Monthly listing — confirmed based on your area', hi: 'Monthly listing — aapke area ke hisaab se confirm hoti hai' },
+
+    requirementsTitle: { en: 'Requirements', hi: 'Requirements' },
+    req1: { en: '✅ Valid ambulance permit', hi: '✅ Valid ambulance permit' },
+    req2: { en: '✅ 24/7 availability in chosen areas', hi: '✅ 24/7 availability chosen areas mein' },
+    req3: { en: '✅ Driver with a mobile and WhatsApp', hi: '✅ Driver ke paas mobile aur WhatsApp' },
+    req4: { en: '✅ 15-minute response commitment', hi: '✅ 15-minute response commitment' },
+    req5: { en: '✅ Basic first-aid equipment onboard', hi: '✅ Basic first-aid equipment onboard' },
+
+    faqQ1: { en: 'Do I earn anything on emergency calls?', hi: 'Kya emergency calls par kuch kamai hoti hai?' },
+    faqA1: { en: 'No — emergency connections are free for both patient and ambulance operator. This is a public service feature, not a revenue one. You earn on non-emergency patient transport instead.', hi: 'Nahi — emergency connections patient aur ambulance operator dono ke liye free hain. Yeh ek public service feature hai, revenue wala nahi. Aap non-emergency patient transport par kamate hain.' },
+    faqQ2: { en: 'What if I cannot respond within 15 minutes sometimes?', hi: 'Agar kabhi main 15 minute mein respond nahi kar sakta?' },
+    faqA2: { en: 'Only commit to areas and hours where you can reliably meet this — your response time is shown to patients and directly builds or damages trust in the platform.', hi: 'Sirf unhi areas aur hours ka commitment karein jahan aap reliably yeh meet kar sakein — aapka response time patients ko dikhta hai aur platform mein trust seedha banata ya bigadta hai.' },
+    faqQ3: { en: 'Can I register multiple ambulances?', hi: 'Kya main multiple ambulances register kar sakta hoon?' },
+    faqA3: { en: 'Yes, a fleet can be registered under one account — contact our team for fleet pricing.', hi: 'Haan, ek fleet ek account ke neeche register ho sakta hai — fleet pricing ke liye hamari team se contact karein.' },
+
+    ctaButton: { en: 'Become an Ambulance Partner →', hi: 'Ambulance Partner Banein →' },
+  },
+
+  forInsurancePage: {
+    heroTitle: { en: 'The Right Patient, The Right Time', hi: 'Sahi Patient, Sahi Time Par' },
+    heroDesc: { en: 'Sehatsandhi gives you warm leads — not cold calling.', hi: 'Sehatsandhi aapko warm leads deta hai — cold calling nahi.' },
+    heroCta: { en: 'Become an Insurance Partner →', hi: 'Insurance Partner Banein →' },
+
+    whyDiffTitle: { en: 'Why This Is Different', hi: 'Yeh Alag Kyun Hai' },
+    traditionalIntro: { en: 'Traditional insurance selling:', hi: 'Traditional insurance selling:' },
+    traditional1: { en: '❌ Cold calls — 95% rejection', hi: '❌ Cold calls — 95% rejection' },
+    traditional2: { en: '❌ Office visits — the patient has no time', hi: '❌ Office visits — patient ke paas time nahi' },
+    traditional3: { en: '❌ Camp leads — mostly window shopping', hi: '❌ Camp leads — mostly window shopping' },
+    sehatIntro: { en: 'Sehatsandhi leads:', hi: 'Sehatsandhi leads:' },
+    sehat1: { en: '✅ The patient just visited a doctor — health is top of mind', hi: '✅ Patient abhi doctor se mila hai — health top of mind hai' },
+    sehat2: { en: '✅ The patient is already engaged on WhatsApp', hi: '✅ Patient already WhatsApp par engaged hai' },
+    sehat3: { en: '✅ The patient has already indicated interest', hi: '✅ Patient ne pehle se interest indicate kiya hai' },
+    sehat4: { en: '✅ You visit their home — the patient is expecting you', hi: '✅ Aap ghar jaate hain — patient wait karta hai' },
+
+    howTitle: { en: 'How It Works', hi: 'Kaise Kaam Karta Hai' },
+    howStep1: { en: 'After a doctor appointment, the bot asks: "Do you have health insurance?"', hi: 'Doctor appointment ke baad, bot poochta hai: "Kya aapke paas health insurance hai?"' },
+    howStep2: { en: 'The patient replies "No" or "Tell me more"', hi: 'Patient "Nahi" ya "Jankaari chahiye" reply karta hai' },
+    howStep3: { en: 'The bot offers a free home visit from a local agent', hi: 'Bot ek local agent se FREE home visit offer karta hai' },
+    howStep4: { en: 'If the patient says yes, you get notified with their details', hi: 'Patient haan kehta hai toh aapko unki details ke saath notify kiya jaata hai' },
+    howStep5: { en: 'You call, fix an appointment, and visit their home', hi: 'Aap call karte hain, appointment fix karte hain, aur ghar visit karte hain' },
+
+    commitmentTitle: { en: 'The Commitment', hi: 'The Commitment' },
+    commitmentDesc: {
+      en: 'Only choose PIN codes where you are willing to do home visits. The patient has already given their time — showing up is what makes these leads convert so much better than cold calls.',
+      hi: 'Sirf woh PIN codes choose karein jahan aap ghar visit dene ke liye taiyaar hain. Patient ne pehle se time diya hai — pahunchna hi hai jo in leads ko cold calls se kahin behtar convert karta hai.',
+    },
+
+    earnTitle: { en: 'What You Earn', hi: 'Aap Kya Kamayenge' },
+    earnLead: { en: 'Per qualified lead (patient said yes)', hi: 'Per qualified lead (patient ne haan kaha)' },
+    earnCommission: { en: 'Policy sale commission — at your normal IRDA rate, we take no cut', hi: 'Policy sale commission — aapki normal IRDA rate par, hum koi cut nahi lete' },
+    earnListing: { en: 'Monthly listing — confirmed based on your area', hi: 'Monthly listing — aapke area ke hisaab se confirm hoti hai' },
+
+    exampleTitle: { en: 'Example Calculation', hi: 'Example Calculation' },
+    exampleDesc: {
+      en: '50 leads/month × 20% conversion = 10 policies sold. Average premium ₹8,000/year, your commission ~15% = ₹1,200/policy. Monthly extra income: ₹12,000+',
+      hi: '50 leads/month × 20% conversion = 10 policies sold. Average premium ₹8,000/year, aapka commission ~15% = ₹1,200/policy. Monthly extra income: ₹12,000+',
+    },
+
+    requirementsTitle: { en: 'Requirements', hi: 'Requirements' },
+    req1: { en: '✅ Valid IRDA license', hi: '✅ Valid IRDA license' },
+    req2: { en: '✅ Represent at least one health insurer', hi: '✅ Kam se kam ek health insurer represent karein' },
+    req3: { en: '✅ Willingness to do home visits', hi: '✅ Home visits dene ki willingness' },
+    req4: { en: '✅ Respond to leads within 2 hours', hi: '✅ Leads ko 2 ghante ke andar respond karein' },
+
+    companiesTitle: { en: 'Companies We Support', hi: 'Kaunsi Companies Support Hoti Hain' },
+    companiesDesc: { en: 'Star Health, Care Health, Niva Bupa, HDFC Ergo, Bajaj Allianz, Max Bupa, and all IRDAI-registered companies', hi: 'Star Health, Care Health, Niva Bupa, HDFC Ergo, Bajaj Allianz, Max Bupa, aur sabhi IRDAI-registered companies' },
+
+    faqQ1: { en: 'Do you take a cut of my policy commission?', hi: 'Kya aap meri policy commission mein se cut lete hain?' },
+    faqA1: { en: 'No. You earn your full normal IRDA commission on any policy sold. We only charge a small per-lead fee and monthly listing fee.', hi: 'Nahi. Aap kisi bhi policy par apna pura normal IRDA commission kamate hain. Hum sirf ek chhota per-lead fee aur monthly listing fee charge karte hain.' },
+    faqQ2: { en: 'What if the patient is not actually interested when I visit?', hi: 'Agar visit karne par patient actually interested nahi hai?' },
+    faqA2: { en: 'This can happen occasionally, but since the patient explicitly said yes to a visit, conversion rates are far higher than cold leads.', hi: 'Yeh kabhi kabhi ho sakta hai, lekin patient ne explicitly visit ke liye haan kaha hai, isliye conversion rates cold leads se kahin zyada hote hain.' },
+    faqQ3: { en: 'How quickly must I respond to a lead?', hi: 'Lead ko kitni jaldi respond karna hota hai?' },
+    faqA3: { en: 'Within 2 hours — the patient is most receptive right after their doctor visit, so speed matters.', hi: '2 ghante ke andar — patient doctor visit ke turant baad sabse zyada receptive hota hai, isliye speed matter karti hai.' },
+
+    ctaButton: { en: 'Become an Insurance Partner →', hi: 'Insurance Partner Banein →' },
+  },
+
+  forHospitalsPage: {
+    heroTitle: { en: 'One Listing for Your Entire Hospital', hi: 'Aapke Poore Hospital Ke Liye Ek Listing' },
+    heroDesc: {
+      en: 'Multiple doctors, multiple specialities — patients see your hospital as one unified, trusted presence on WhatsApp.',
+      hi: 'Multiple doctors, multiple specialities — patients aapke hospital ko WhatsApp par ek unified, trusted presence ke roop mein dekhte hain.',
+    },
+    heroCta: { en: 'Talk to Our Team →', hi: 'Hamari Team Se Baat Karein →' },
+
+    problemTitle: { en: 'The Problem', hi: 'Problem Kya Hai' },
+    problemDesc: {
+      en: "If your hospital has 20 doctors, patients often don't know the full range of specialities you offer. Registering each doctor separately is a painful, disconnected process — and when a doctor leaves, that listing just dies.",
+      hi: 'Agar aapke hospital mein 20 doctors hain, toh patients ko aksar pata nahi hota ki aap kitni specialities offer karte hain. Har doctor ko alag se register karna ek painful, disconnected process hai — aur jab koi doctor chala jaata hai, toh woh listing bas khatam ho jaati hai.',
+    },
+
+    howTitle: { en: 'How It Works for Hospitals', hi: 'Hospitals Ke Liye Kaise Kaam Karta Hai' },
+    howStep1: { en: 'Your hospital registers once as an institution', hi: 'Aapka hospital ek baar institution ke roop mein register hota hai' },
+    howStep2: { en: 'Your admin adds doctors under each speciality', hi: 'Aapka admin har speciality ke neeche doctors add karta hai' },
+    howStep3: { en: 'Patients see your hospital, all specialities, together — with a featured position', hi: 'Patients aapke hospital ko, sabhi specialities ke saath, ek featured position mein dekhte hain' },
+    howStep4: { en: 'When a doctor joins or leaves, your admin just updates the listing — no new registration needed', hi: 'Jab koi doctor join ya leave karta hai, aapka admin bas listing update karta hai — koi nayi registration nahi' },
+
+    benefitsTitle: { en: 'What You Get', hi: 'Aapko Kya Milta Hai' },
+    benefit1: { en: '✅ Unlimited doctors per speciality, at no extra cost', hi: '✅ Unlimited doctors per speciality, koi extra cost nahi' },
+    benefit2: { en: '✅ Hospital branding shown on every listing', hi: '✅ Hospital branding har listing par dikhta hai' },
+    benefit3: { en: '✅ Featured position — shown above individual doctor listings', hi: '✅ Featured position — individual doctor listings ke upar dikhta hai' },
+    benefit4: { en: '✅ One unified account, one dashboard, one bill', hi: '✅ Ek unified account, ek dashboard, ek bill' },
+    benefit5: { en: '✅ Dedicated account manager', hi: '✅ Dedicated account manager' },
+    benefit6: { en: '✅ Priority verification — 24 hours', hi: '✅ Priority verification — 24 ghante' },
+    benefit7: { en: '✅ Detailed monthly analytics across all departments', hi: '✅ Detailed monthly analytics sabhi departments ke across' },
+
+    pricingTitle: { en: 'How Hospital Pricing Works', hi: 'Hospital Pricing Kaise Kaam Karti Hai' },
+    pricingDesc: {
+      en: "Hospitals are priced per speciality per PIN code — not per doctor. Adding a new doctor to an existing speciality costs nothing extra, and a doctor leaving doesn't disrupt your listing. Contact our team for a custom quote based on your specialities and coverage areas.",
+      hi: 'Hospitals ki pricing per speciality per PIN code hoti hai — per doctor nahi. Ek existing speciality mein naya doctor add karne ka koi extra cost nahi, aur ek doctor ke jaane se aapki listing disrupt nahi hoti. Apni specialities aur coverage areas ke hisaab se custom quote ke liye hamari team se contact karein.',
+    },
+
+    faqQ1: { en: 'How many doctors can we add?', hi: 'Hum kitne doctors add kar sakte hain?' },
+    faqA1: { en: 'Unlimited, across any speciality you offer.', hi: 'Unlimited, kisi bhi speciality mein jo aap offer karte hain.' },
+    faqQ2: { en: 'What happens when a doctor leaves?', hi: 'Jab koi doctor chala jaata hai toh kya hota hai?' },
+    faqA2: { en: 'Your admin simply updates the doctor list under that speciality — the listing, and its visibility, stays live without interruption.', hi: 'Aapka admin bas us speciality ke neeche doctor list update karta hai — listing, aur uski visibility, bina rukawat ke live rehti hai.' },
+    faqQ3: { en: 'How is billing structured?', hi: 'Billing kaise structured hai?' },
+    faqA3: { en: 'One consolidated monthly bill for your hospital, based on the specialities and PIN codes you select — not per individual doctor.', hi: 'Aapke hospital ke liye ek consolidated monthly bill, aapki selected specialities aur PIN codes ke hisaab se — per individual doctor nahi.' },
+    faqQ4: { en: 'Is there a minimum contract period?', hi: 'Kya koi minimum contract period hai?' },
+    faqA4: { en: 'This is discussed and agreed with our team based on your specific needs.', hi: 'Yeh aapki specific needs ke hisaab se hamari team ke saath discuss aur agree kiya jaata hai.' },
+
+    ctaButton: { en: 'Talk to Our Team on WhatsApp →', hi: 'WhatsApp Par Hamari Team Se Baat Karein →' },
+  },
 }
 
 export function getTranslation(path: string, lang: Lang): string {

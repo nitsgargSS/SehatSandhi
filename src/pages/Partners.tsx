@@ -20,9 +20,9 @@ const PARTNER_TYPES: PartnerCard[] = [
   { icon: '🏥', titleEn: 'Doctors & Clinics', titleHi: 'डॉक्टर एवं क्लिनिक', descEn: 'Grow your clinic\'s reach — patients will find you on WhatsApp', descHi: 'Apni clinic ki reach badhayein — patients WhatsApp par dhundhenge', to: '/for-doctors', ctaEn: 'Learn More', ctaHi: 'Aur Jaanein' },
   { icon: '💊', titleEn: 'Pharmacies', titleHi: 'दवाई की दुकान', descEn: 'Prescriptions come straight to you — deliver to homes', descHi: 'Prescriptions seedhi aapke paas — ghar delivery karein', to: '/for-pharmacy', ctaEn: 'Learn More', ctaHi: 'Aur Jaanein' },
   { icon: '🔬', titleEn: 'Diagnostic Labs', titleHi: 'जांच केंद्र', descEn: 'Test bookings come straight to you — offer home collection', descHi: 'Test bookings seedhe aapke paas — home collection karein', to: '/for-labs', ctaEn: 'Learn More', ctaHi: 'Aur Jaanein' },
-  { icon: '🚑', titleEn: 'Ambulance Services', titleHi: 'एम्बुलेंस सेवा', descEn: 'Emergency response — become trusted in your area', descHi: 'Emergency response — apne area mein trusted banein', to: '/partner', ctaEn: 'Become an Ambulance Partner', ctaHi: 'Ambulance Partner Banein' },
-  { icon: '🛡️', titleEn: 'Insurance Agents', titleHi: 'बीमा एजेंट', descEn: 'Warm leads, not cold calling — visit patients at home', descHi: 'Warm leads, cold calling nahi — patients ghar bulayein', to: '/partner', ctaEn: 'Become an Insurance Partner', ctaHi: 'Insurance Partner Banein' },
-  { icon: '🏨', titleEn: 'Hospitals', titleHi: 'अस्पताल', descEn: 'Multi-doctor, multi-speciality — one unified listing', descHi: 'Multi-doctor, multi-speciality — ek unified listing', to: null, ctaEn: 'Talk on WhatsApp', ctaHi: 'WhatsApp Par Baat Karein', wa: true },
+  { icon: '🚑', titleEn: 'Ambulance Services', titleHi: 'एम्बुलेंस सेवा', descEn: 'Emergency response — become trusted in your area', descHi: 'Emergency response — apne area mein trusted banein', to: '/for-ambulance', ctaEn: 'Learn More', ctaHi: 'Aur Jaanein' },
+  { icon: '🛡️', titleEn: 'Insurance Agents', titleHi: 'बीमा एजेंट', descEn: 'Warm leads, not cold calling — visit patients at home', descHi: 'Warm leads, cold calling nahi — patients ghar bulayein', to: '/for-insurance', ctaEn: 'Learn More', ctaHi: 'Aur Jaanein' },
+  { icon: '🏨', titleEn: 'Hospitals', titleHi: 'अस्पताल', descEn: 'Multi-doctor, multi-speciality — one unified listing', descHi: 'Multi-doctor, multi-speciality — ek unified listing', to: '/for-hospitals', ctaEn: 'Learn More', ctaHi: 'Aur Jaanein' },
 ]
 
 const FAQS_BY_LANG: Record<Lang, { question: string; answer: string }[]> = {
