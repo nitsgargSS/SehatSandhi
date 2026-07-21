@@ -102,6 +102,68 @@ export const translations: Tree = {
     ctaBook: { en: '📱 Book Appointment', hi: '📱 Book Appointment' },
     ctaRegister: { en: 'Register as Doctor', hi: 'Register as Doctor' },
   },
+
+  howItWorksPage: {
+    heroTitle: { en: 'What is Sehatsandhi?', hi: 'Sehatsandhi Kya Hai?' },
+    heroSubtitle: { en: "Yamuna Nagar's own health platform — on WhatsApp", hi: 'Yamuna Nagar Ka Apna Health Platform — WhatsApp Par' },
+    heroDescription: {
+      en: 'Doctors, medicines, blood tests, ambulance, and health insurance — all on one WhatsApp number. No app, no forms, completely free.',
+      hi: 'Doctors, medicines, blood tests, ambulance aur health insurance — sab kuch ek hi WhatsApp number par. Koi app nahi, koi form nahi, bilkul free.',
+    },
+    heroCta: { en: '📱 Start on WhatsApp', hi: '📱 WhatsApp Par Shuru Karein' },
+
+    howTitle: { en: 'How Does This Work?', hi: 'Yeh Kaise Kaam Karta Hai?' },
+    howSubtitle: { en: 'Get any service in just 3 steps', hi: 'Sirf 3 Steps Mein Koi Bhi Service Milegi' },
+    step1Title: { en: 'Message us on WhatsApp', hi: 'WhatsApp Par Message Karein' },
+    step1Desc: { en: 'Save our number and tell us what you need — doctor, medicine, test, ambulance, or insurance.', hi: 'Hamara number save karein aur apni zaroorat batayein — doctor, medicine, test, ambulance ya insurance.' },
+    step2Title: { en: 'Tell us your requirement', hi: 'Apni Zaroorat Batayein' },
+    step2Desc: { en: 'The bot will ask what you need — speciality, area, or service type. Just keep replying.', hi: 'Bot aapse poochega kya chahiye — speciality, area, ya service type. Bas reply karte jayein.' },
+    step3Title: { en: 'Get a verified service', hi: 'Verified Service Milegi' },
+    step3Desc: { en: 'You will be instantly connected to a verified doctor, pharmacy, lab, or partner in your area.', hi: 'Aapke area ke verified doctor, pharmacy, lab ya partner se turant connect ho jayenge.' },
+
+    servicesTitle: { en: 'What All is Available?', hi: 'Kya Kya Milta Hai?' },
+    servicesSubtitle: { en: 'Every health need, on one platform', hi: 'Ek Hi Platform Par Aapki Har Health Zaroorat' },
+    servicesAskLink: { en: 'Ask on WhatsApp →', hi: 'WhatsApp Par Poochein →' },
+
+    whyTitle: { en: 'Why Sehatsandhi?', hi: 'Kyun Sehatsandhi?' },
+    whyBenefit1: { en: 'Everyone is verified — doctors, labs, pharmacies, all checked', hi: 'Sab verified hain — doctors, labs, pharmacies, sab check kiye jaate hain' },
+    whyBenefit2: { en: 'Only service providers from your area — not far away', hi: 'Sirf aapke area ke service providers — dur ke nahi' },
+    whyBenefit3: { en: 'Right on WhatsApp — no app to install', hi: 'WhatsApp par — koi app install nahi karni' },
+    whyBenefit4: { en: 'Completely free for patients — never charged', hi: 'Bilkul free patients ke liye — kabhi charge nahi' },
+    whyBenefit5: { en: 'Door service commitment — delivery, home collection, emergency response', hi: 'Door service commitment — delivery, home collection, emergency response' },
+    whyBenefit6: { en: 'Sehat Points — book, earn points, get rewards', hi: 'Sehat Points — book karo, points kamao, rewards pao' },
+
+    pointsTitle: { en: '🌟 Sehat Points — Earn While You Heal', hi: '🌟 Sehat Points — Earn While You Heal' },
+    pointsDesc: { en: 'Earn points on every appointment and referral — redeem them for discounts and free tests.', hi: 'Har appointment, har referral par points kamayein — aur discounts, free tests ke liye redeem karein.' },
+    pointsCta: { en: 'View Sehat Points →', hi: 'Sehat Points Dekhein →' },
+
+    faqSubtitle: { en: 'Common questions from patients', hi: 'Patients Ke Liye Common Sawaal' },
+
+    finalCtaTitle: { en: 'Start Now', hi: 'Abhi Shuru Karein' },
+    finalCtaButton: { en: '📱 Message on WhatsApp', hi: '📱 WhatsApp Par Message Karein' },
+  },
+
+  partnersPage: {
+    heroTitle: { en: 'Sehatsandhi Partner Network', hi: 'Sehatsandhi Partner Network' },
+    heroSubtitle: { en: "Yamuna Nagar's own health ecosystem", hi: 'Yamuna Nagar Ka Apna Health Ecosystem' },
+    heroDescription: { en: 'Only verified partners. Only door-service providers. Only experts from your area.', hi: 'Sirf verified partners. Sirf door service providers. Sirf aapke area ke experts.' },
+
+    promiseTitle: { en: 'The Sehatsandhi Partner Promise', hi: 'The Sehatsandhi Partner Promise' },
+    promiseDesc: {
+      en: 'Every partner has made a commitment. When they choose a PIN code, patients in that area are guaranteed door service. This isn\'t just a listing — it\'s a promise of service.',
+      hi: 'Har partner ne ek commitment ki hai. Jab woh koi PIN code choose karte hain, toh us area ke patients ko door service guarantee ki jaati hai. Yeh sirf listing nahi — yeh service ka wada hai.',
+    },
+    badge1: { en: '💊 Medicine Delivery', hi: '💊 Medicine Delivery' },
+    badge2: { en: '🔬 Home Sample Collection', hi: '🔬 Home Sample Collection' },
+    badge3: { en: '🚑 Emergency Response', hi: '🚑 Emergency Response' },
+    badge4: { en: '🛡️ Home Insurance Visits', hi: '🛡️ Home Insurance Visits' },
+
+    faqSubtitle: { en: 'Know this before becoming a partner', hi: 'Partner Banne Se Pehle Jaan Lein' },
+
+    ctaTitle: { en: 'Join Sehatsandhi Today', hi: "Sehatsandhi Se Jud'ein Aaj Hi" },
+    ctaSubtitle: { en: 'Have a question? Message us directly on WhatsApp', hi: 'Koi Sawaal Hai? Humein Seedha WhatsApp Karein' },
+    ctaButton: { en: '📱 Talk on WhatsApp', hi: '📱 WhatsApp Par Baat Karein' },
+  },
 }
 
 export function getTranslation(path: string, lang: Lang): string {
