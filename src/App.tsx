@@ -12,9 +12,14 @@ import AdminLogin from './pages/admin/Login'
 import AdminDashboard from './pages/admin/Dashboard'
 import { WA_NUMBER } from './types'
 
+// ── SECURITY: Admin URL is intentionally non-obvious ──
+// Never link this path from Navbar, Footer, sitemap,
+// or any public page. Bookmark it privately.
+const ADMIN_PATH = 'ng-ctrl-2026'
+
 const AdminGuard = ({ children }: { children: React.ReactNode }) => {
   const auth = sessionStorage.getItem('admin_auth')
-  return auth ? <>{children}</> : <Navigate to="/admin" replace />
+  return auth ? <>{children}</> : <Navigate to={`/${ADMIN_PATH}`} replace />
 }
 
 const WithLayout = ({ children }: { children: React.ReactNode }) => (
@@ -40,9 +45,13 @@ export default function App() {
         <Route path="/doctor/dashboard" element={<WithLayout><DoctorDashboard /></WithLayout>} />
         <Route path="/doctor/:slug" element={<WithLayout><DoctorProfile /></WithLayout>} />
 
-        {/* Admin */}
-        <Route path="/admin" element={<AdminLogin />} />
-        <Route path="/admin/dashboard" element={<AdminGuard><AdminDashboard /></AdminGuard>} />
+        {/* Admin — hidden, never linked publicly */}
+        <Route path={`/${ADMIN_PATH}`} element={<AdminLogin />} />
+        <Route path={`/${ADMIN_PATH}/dashboard`} element={<AdminGuard><AdminDashboard /></AdminGuard>} />
+
+        {/* Legacy /admin path — redirect to home, don't reveal new path */}
+        <Route path="/admin" element={<Navigate to="/" replace />} />
+        <Route path="/admin/dashboard" element={<Navigate to="/" replace />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

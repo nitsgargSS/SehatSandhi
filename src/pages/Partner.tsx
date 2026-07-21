@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
-type PartnerType = 'pharmacy' | 'lab' | 'insurance' | null
+type PartnerType = 'pharmacy' | 'lab' | 'insurance' | 'ambulance' | null
 
 const PARTNER_PRICING = {
-  pharmacy: { basic: 2000, full: 3500, commission: '8%' },
-  lab:      { basic: 1500, full: 3000, commission: '12%' },
-  insurance:{ basic: 2000, full: 4000, commission: '₹200/lead' },
+  pharmacy:  { basic: 2000, full: 3500, commission: '8%' },
+  lab:       { basic: 1500, full: 3000, commission: '12%' },
+  insurance: { basic: 2000, full: 4000, commission: '₹200/lead' },
+  ambulance: { basic: 1000, full: 3000, commission: 'Free on emergency · 10% non-emergency' },
 }
 
 export default function PartnerRegister() {
@@ -28,7 +29,11 @@ export default function PartnerRegister() {
       pin_codes: [form.pin_code],
       phone: form.phone,
       email: form.email,
-      qualification: type === 'insurance' ? 'IRDA Licensed' : type === 'lab' ? 'Diagnostic Lab' : 'Pharmacy',
+      qualification:
+        type === 'insurance' ? 'IRDA Licensed' :
+        type === 'lab' ? 'Diagnostic Lab' :
+        type === 'ambulance' ? 'Ambulance Service' :
+        'Pharmacy',
       status: 'pending',
       consultation_fee: 0,
     })
@@ -70,17 +75,18 @@ export default function PartnerRegister() {
         {!type && (
           <div>
             <h2 className="text-lg font-semibold text-navy-700 mb-4 text-center">Aap kya hain?</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               {[
                 { id: 'pharmacy', icon: '💊', label: 'Pharmacy', hindi: 'दवाई की दुकान', desc: 'Medicine store, chemist' },
                 { id: 'lab',      icon: '🔬', label: 'Diagnostic Lab', hindi: 'जांच केंद्र', desc: 'Blood tests, reports' },
+                { id: 'ambulance',icon: '🚑', label: 'Ambulance Service', hindi: 'एम्बुलेंस सेवा', desc: 'Emergency & patient transport' },
                 { id: 'insurance',icon: '🛡️', label: 'Insurance Agent', hindi: 'बीमा एजेंट', desc: 'Health insurance' },
               ].map(p => (
                 <button key={p.id} onClick={() => setType(p.id as PartnerType)}
                   className="card hover:border-teal-400 hover:shadow-md transition-all text-center border-2 border-transparent group">
                   <div className="text-4xl mb-3">{p.icon}</div>
-                  <p className="font-bold text-navy-700 group-hover:text-teal-600">{p.label}</p>
-                  <p className="text-teal-600 text-sm">{p.hindi}</p>
+                  <p className="font-bold text-navy-700 group-hover:text-teal-600 text-sm">{p.label}</p>
+                  <p className="text-teal-600 text-xs">{p.hindi}</p>
                   <p className="text-gray-400 text-xs mt-1">{p.desc}</p>
                 </button>
               ))}
@@ -92,8 +98,8 @@ export default function PartnerRegister() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 {[
                   '✅ Sehatsandhi ki listing mein aayenge',
-                  '✅ WhatsApp par direct orders milenge',
-                  '✅ Doctor prescriptions directly milenge',
+                  '✅ WhatsApp par direct orders/calls milenge',
+                  '✅ Doctor referrals directly milenge',
                   '✅ Monthly analytics report milegi',
                   '✅ Verified partner badge milega',
                   '✅ Commission on every transaction',
@@ -104,11 +110,12 @@ export default function PartnerRegister() {
             </div>
 
             {/* Pricing preview */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { type: 'pharmacy', icon: '💊', name: 'Pharmacy' },
-                { type: 'lab',      icon: '🔬', name: 'Lab' },
-                { type: 'insurance',icon: '🛡️', name: 'Insurance' },
+                { type: 'pharmacy',  icon: '💊', name: 'Pharmacy' },
+                { type: 'lab',       icon: '🔬', name: 'Lab' },
+                { type: 'ambulance', icon: '🚑', name: 'Ambulance' },
+                { type: 'insurance', icon: '🛡️', name: 'Insurance' },
               ].map(p => {
                 const pricing = PARTNER_PRICING[p.type as keyof typeof PARTNER_PRICING]
                 return (
@@ -116,7 +123,7 @@ export default function PartnerRegister() {
                     <p className="text-2xl mb-1">{p.icon}</p>
                     <p className="font-medium text-navy-700 text-sm">{p.name}</p>
                     <p className="text-teal-600 font-bold">₹{pricing.basic}/mo</p>
-                    <p className="text-gray-400 text-xs">+ {pricing.commission} commission</p>
+                    <p className="text-gray-400 text-xs">+ {pricing.commission}</p>
                   </div>
                 )
               })}
@@ -134,9 +141,11 @@ export default function PartnerRegister() {
             </button>
 
             <div className="flex items-center gap-2 mb-6">
-              <span className="text-2xl">{type === 'pharmacy' ? '💊' : type === 'lab' ? '🔬' : '🛡️'}</span>
+              <span className="text-2xl">
+                {type === 'pharmacy' ? '💊' : type === 'lab' ? '🔬' : type === 'ambulance' ? '🚑' : '🛡️'}
+              </span>
               <h2 className="text-xl font-bold text-navy-700">
-                {type === 'pharmacy' ? 'Pharmacy' : type === 'lab' ? 'Diagnostic Lab' : 'Insurance Agent'} Registration
+                {type === 'pharmacy' ? 'Pharmacy' : type === 'lab' ? 'Diagnostic Lab' : type === 'ambulance' ? 'Ambulance Service' : 'Insurance Agent'} Registration
               </h2>
             </div>
 
@@ -145,10 +154,15 @@ export default function PartnerRegister() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">
-                    {type === 'insurance' ? 'Aapka naam *' : 'Business/Shop naam *'}
+                    {type === 'insurance' ? 'Aapka naam *' : type === 'ambulance' ? 'Service/Fleet naam *' : 'Business/Shop naam *'}
                   </label>
                   <input className="input-field"
-                    placeholder={type === 'insurance' ? 'Ramesh Kumar' : type === 'pharmacy' ? 'Sharma Medical Store' : 'City Diagnostics'}
+                    placeholder={
+                      type === 'insurance' ? 'Ramesh Kumar' :
+                      type === 'pharmacy' ? 'Sharma Medical Store' :
+                      type === 'ambulance' ? 'Quick Response Ambulance' :
+                      'City Diagnostics'
+                    }
                     value={form.business_name || ''}
                     onChange={e => upd('business_name', e.target.value)} />
                 </div>
@@ -248,6 +262,52 @@ export default function PartnerRegister() {
                 </div>
               )}
 
+              {/* Ambulance specific */}
+              {type === 'ambulance' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">Ambulance Permit/Registration *</label>
+                    <input className="input-field" placeholder="Permit number"
+                      value={form.permit || ''} onChange={e => upd('permit', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">Ambulance Type *</label>
+                    <select className="input-field" value={form.ambulance_type || ''}
+                      onChange={e => upd('ambulance_type', e.target.value)}>
+                      <option value="">Select</option>
+                      <option value="BLS">Basic Life Support (BLS)</option>
+                      <option value="ALS">Advanced Life Support (ALS)</option>
+                      <option value="transport">Patient Transport (non-emergency)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">24/7 Available?</label>
+                    <select className="input-field" value={form.available_24_7 || ''}
+                      onChange={e => upd('available_24_7', e.target.value)}>
+                      <option value="">Select</option>
+                      <option value="yes">Haan, 24/7 available</option>
+                      <option value="no">Nahi, fixed hours</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">Response Time Commitment *</label>
+                    <select className="input-field" value={form.response_time || ''}
+                      onChange={e => upd('response_time', e.target.value)}>
+                      <option value="">Select</option>
+                      <option value="15">15 minutes</option>
+                      <option value="20">20 minutes</option>
+                      <option value="30">30 minutes</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2 bg-red-50 border border-red-100 rounded-xl p-3">
+                    <p className="text-xs text-red-700">
+                      🚑 Emergency response is a serious public commitment — sirf woh
+                      response time chunein jo aap genuinely 24/7 nibha sakte hain.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Insurance specific */}
               {type === 'insurance' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -274,7 +334,7 @@ export default function PartnerRegister() {
                       <span>₹{PARTNER_PRICING[type].basic}/month</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-white/70">Commission per order</span>
+                      <span className="text-white/70">Commission</span>
                       <span>{PARTNER_PRICING[type].commission}</span>
                     </div>
                     <div className="border-t border-white/20 pt-2 flex justify-between font-bold">
