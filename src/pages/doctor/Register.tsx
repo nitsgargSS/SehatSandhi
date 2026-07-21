@@ -3,6 +3,7 @@ import { CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react'
 import { SPECIALITIES, PIN_CODES } from '../../types'
 import { supabase } from '../../lib/supabase'
 import CustomAreaSearch, { CustomArea } from '../../components/CustomAreaSearch'
+import { useLanguage } from '../../i18n/LanguageContext'
 
 type FormData = {
   name: string; qualification: string; speciality: string; reg_number: string
@@ -15,6 +16,7 @@ const QUALIFICATIONS = ['MBBS', 'MD', 'MS', 'BDS', 'BHMS', 'BAMS', 'DNB', 'DM', 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 export default function Register() {
+  const { t, lang } = useLanguage()
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<FormData>({
     name: '', qualification: 'MBBS', speciality: '', reg_number: '',
@@ -42,7 +44,7 @@ export default function Register() {
 
   const handleSubmit = async () => {
     if (!selectedPins.length && !customAreas.length) {
-      setError('Please select at least one area'); return
+      setError(t('registerPage.selectAreaPrompt')); return
     }
     setLoading(true); setError('')
     try {
@@ -67,15 +69,11 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 pt-16">
       <div className="card max-w-md w-full text-center shadow-xl">
         <CheckCircle2 className="w-16 h-16 text-teal-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-navy-700 mb-3">Registration Submitted!</h2>
-        <p className="text-gray-500 mb-2">Shukriya, Dr. {form.name.split(' ').pop()}! 🎉</p>
-        <p className="text-gray-500 text-sm mb-6">
-          Hamare team 24-48 ghante mein aapka MCI number verify karegi, aur
-          aapke selected areas ke hisaab se <strong>pricing WhatsApp par</strong> bhejegi.
-          Confirm karne ke baad listing turant activate ho jayegi.
-        </p>
+        <h2 className="text-2xl font-bold text-navy-700 mb-3">{t('registerPage.successTitle')}</h2>
+        <p className="text-gray-500 mb-2">{t('registerPage.successThanks')} {form.name.split(' ').pop()}! 🎉</p>
+        <p className="text-gray-500 text-sm mb-6">{t('registerPage.successDesc')}</p>
         <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700">
-          <p className="font-medium mb-1">Selected areas: {allSelectedAreaNames.length}</p>
+          <p className="font-medium mb-1">{t('registerPage.selectedAreasLabel')} {allSelectedAreaNames.length}</p>
           <p>{allSelectedAreaNames.join(', ')}</p>
         </div>
       </div>
@@ -89,7 +87,12 @@ export default function Register() {
         {/* Progress bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
-            {['Details', 'Areas', 'Premium', 'Review'].map((s, i) => (
+            {[
+              t('registerPage.progressDetails'),
+              t('registerPage.progressAreas'),
+              t('registerPage.progressPremium'),
+              t('registerPage.progressReview'),
+            ].map((s, i) => (
               <div key={s} className="flex items-center gap-1">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${step > i + 1 ? 'bg-teal-500 text-white' : step === i + 1 ? 'bg-navy-700 text-white' : 'bg-gray-200 text-gray-500'}`}>
                   {step > i + 1 ? '✓' : i + 1}
@@ -106,51 +109,55 @@ export default function Register() {
           {/* ── STEP 1 ── */}
           {step === 1 && (
             <div className="space-y-5">
-              <h2 className="text-xl font-bold text-navy-700">Apni Details Bharein</h2>
+              <h2 className="text-xl font-bold text-navy-700">{t('registerPage.step1Title')}</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Full Name *</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelFullName')}</label>
                   <input className="input-field" placeholder="Dr. Priya Sharma" value={form.name} onChange={e => upd('name', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Qualification *</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelQualification')}</label>
                   <select className="input-field" value={form.qualification} onChange={e => upd('qualification', e.target.value)}>
                     {QUALIFICATIONS.map(q => <option key={q}>{q}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Speciality *</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelSpeciality')}</label>
                   <select className="input-field" value={form.speciality} onChange={e => upd('speciality', e.target.value)}>
-                    <option value="">Select speciality...</option>
-                    {SPECIALITIES.map(s => <option key={s.id} value={s.id}>{s.en} — {s.hi}</option>)}
+                    <option value="">{t('registerPage.selectSpecialityOption')}</option>
+                    {SPECIALITIES.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {lang === 'hi' ? `${s.hi} — ${s.en}` : `${s.en} — ${s.hi}`}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">MCI/NMC Reg. Number *</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelRegNumber')}</label>
                   <input className="input-field" placeholder="e.g. DMC/R/2018/45231" value={form.reg_number} onChange={e => upd('reg_number', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Clinic Name *</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelClinicName')}</label>
                   <input className="input-field" placeholder="ABC Clinic" value={form.clinic_name} onChange={e => upd('clinic_name', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Consultation Fee (₹)</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelConsultFee')}</label>
                   <input className="input-field" type="number" placeholder="400" value={form.consultation_fee} onChange={e => upd('consultation_fee', e.target.value)} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Clinic Address *</label>
-                  <textarea className="input-field" rows={2} placeholder="Full address with landmark" value={form.address} onChange={e => upd('address', e.target.value)} />
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelAddress')}</label>
+                  <textarea className="input-field" rows={2} placeholder={t('registerPage.placeholderAddress')} value={form.address} onChange={e => upd('address', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Phone (+91) *</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelPhone')}</label>
                   <input className="input-field" type="tel" placeholder="9876543210" maxLength={10} value={form.phone} onChange={e => upd('phone', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Email</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelEmail')}</label>
                   <input className="input-field" type="email" placeholder="doctor@clinic.com" value={form.email} onChange={e => upd('email', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-2 block">Working Days</label>
+                  <label className="text-xs font-medium text-gray-600 mb-2 block">{t('registerPage.labelWorkingDays')}</label>
                   <div className="flex flex-wrap gap-2">
                     {DAYS.map(d => (
                       <button key={d} type="button"
@@ -162,7 +169,7 @@ export default function Register() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-2 block">Working Hours</label>
+                  <label className="text-xs font-medium text-gray-600 mb-2 block">{t('registerPage.labelWorkingHours')}</label>
                   <div className="flex items-center gap-2">
                     <input type="time" className="input-field" value={form.from_time} onChange={e => upd('from_time', e.target.value)} />
                     <span className="text-gray-400 text-sm">to</span>
@@ -176,15 +183,12 @@ export default function Register() {
           {/* ── STEP 2: AREA SELECTION (no pricing shown) ── */}
           {step === 2 && (
             <div>
-              <h2 className="text-xl font-bold text-navy-700 mb-1">Apne Areas Chunein</h2>
-              <p className="text-gray-500 text-sm mb-4">
-                Un areas ko select karein jahan aap patients tak pahunchna chahte hain.
-                Pricing aapke selected areas ke hisaab se hamari team confirm karegi.
-              </p>
+              <h2 className="text-xl font-bold text-navy-700 mb-1">{t('registerPage.step2Title')}</h2>
+              <p className="text-gray-500 text-sm mb-4">{t('registerPage.step2Desc')}</p>
               <div className="flex gap-2 mb-4">
-                <button onClick={() => setSelectedPins(PIN_CODES.map(p => p.code))} className="btn-outline text-xs py-1.5 px-4">Select All 20</button>
-                <button onClick={() => setSelectedPins([])} className="btn-outline text-xs py-1.5 px-4">Clear</button>
-                <button onClick={() => setSelectedPins(['135001', '135003'])} className="btn-outline text-xs py-1.5 px-4">Core 2 Areas</button>
+                <button onClick={() => setSelectedPins(PIN_CODES.map(p => p.code))} className="btn-outline text-xs py-1.5 px-4">{t('registerPage.btnSelectAll')}</button>
+                <button onClick={() => setSelectedPins([])} className="btn-outline text-xs py-1.5 px-4">{t('registerPage.btnClear')}</button>
+                <button onClick={() => setSelectedPins(['135001', '135003'])} className="btn-outline text-xs py-1.5 px-4">{t('registerPage.btnCore2')}</button>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-6">
                 {PIN_CODES.map(p => (
@@ -192,7 +196,7 @@ export default function Register() {
                     className={`flex flex-col items-start p-3 rounded-xl border-2 transition-all text-left ${selectedPins.includes(p.code) ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
                     <span className="font-bold text-sm text-navy-700">{p.code}</span>
                     <span className="text-xs text-gray-500">{p.area}</span>
-                    {selectedPins.includes(p.code) && <span className="text-xs text-teal-600 font-medium mt-1">✓ Selected</span>}
+                    {selectedPins.includes(p.code) && <span className="text-xs text-teal-600 font-medium mt-1">✓</span>}
                   </button>
                 ))}
               </div>
@@ -200,11 +204,11 @@ export default function Register() {
               {/* Selection count — no rupee amount */}
               <div className={`rounded-2xl p-5 mb-6 ${selectedPins.length ? 'bg-teal-50 border border-teal-200' : 'bg-gray-50 border border-gray-200'}`}>
                 {selectedPins.length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center">Select at least one area to continue</p>
+                  <p className="text-gray-400 text-sm text-center">{t('registerPage.selectAreaPrompt')}</p>
                 ) : (
                   <p className="text-sm text-gray-600 text-center">
-                    <span className="font-bold text-navy-700 text-lg">{selectedPins.length}</span> area{selectedPins.length > 1 ? 's' : ''} selected —
-                    pricing team se WhatsApp par milegi
+                    <span className="font-bold text-navy-700 text-lg">{selectedPins.length}</span>{' '}
+                    {t('registerPage.areaCountSuffix')}
                   </p>
                 )}
               </div>
@@ -220,33 +224,30 @@ export default function Register() {
           {/* ── STEP 3: PREMIUM (interest only, no pricing) ── */}
           {step === 3 && (
             <div>
-              <h2 className="text-xl font-bold text-navy-700 mb-1">Premium Positioning <span className="text-gray-400 font-normal text-base">(Optional)</span></h2>
-              <p className="text-gray-500 text-sm mb-6">
-                Apni speciality mein sabse upar dikhna chahte hain? Interest batayein —
-                pricing team confirm karegi.
-              </p>
+              <h2 className="text-xl font-bold text-navy-700 mb-1">
+                {t('registerPage.step3Title')} <span className="text-gray-400 font-normal text-base">{t('registerPage.step3Optional')}</span>
+              </h2>
+              <p className="text-gray-500 text-sm mb-6">{t('registerPage.step3Desc')}</p>
               <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-gray-100 hover:border-teal-200 cursor-pointer mb-4">
                 <input type="checkbox" checked={wantsPremium}
                   onChange={e => { setWantsPremium(e.target.checked); if (!e.target.checked) setPremPos(null) }}
                   className="w-5 h-5 accent-teal-600" />
-                <span className="text-sm text-gray-700">Haan, mujhe premium position mein interest hai</span>
+                <span className="text-sm text-gray-700">{t('registerPage.premiumCheckbox')}</span>
               </label>
 
               {wantsPremium && (
                 <div className="space-y-3">
                   {([
-                    { pos: 1 as const, label: 'Position 1 — Top of List', badge: '🥇 Gold' },
-                    { pos: 2 as const, label: 'Position 2 — Second Spot', badge: '🥈 Silver' },
-                    { pos: 3 as const, label: 'Position 3 — Third Spot', badge: '🥉 Bronze' },
+                    { pos: 1 as const, label: t('registerPage.premiumPos1'), badge: '🥇' },
+                    { pos: 2 as const, label: t('registerPage.premiumPos2'), badge: '🥈' },
+                    { pos: 3 as const, label: t('registerPage.premiumPos3'), badge: '🥉' },
                   ]).map(opt => (
                     <label key={opt.pos} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${premPos === opt.pos ? 'border-teal-400 bg-teal-50' : 'border-gray-100 hover:border-gray-200'}`}>
                       <input type="radio" name="pos" value={opt.pos} checked={premPos === opt.pos} onChange={() => setPremPos(opt.pos)} className="accent-teal-600 w-5 h-5" />
                       <p className="font-semibold text-gray-800 text-sm">{opt.badge} — {opt.label}</p>
                     </label>
                   ))}
-                  <p className="text-xs text-gray-400 mt-2">
-                    Pricing aapke selected areas ke hisaab se WhatsApp par confirm ki jayegi.
-                  </p>
+                  <p className="text-xs text-gray-400 mt-2">{t('registerPage.premiumNote')}</p>
                 </div>
               )}
             </div>
@@ -255,25 +256,25 @@ export default function Register() {
           {/* ── STEP 4: REVIEW & SUBMIT (no payment) ── */}
           {step === 4 && (
             <div>
-              <h2 className="text-xl font-bold text-navy-700 mb-6">Review & Submit</h2>
+              <h2 className="text-xl font-bold text-navy-700 mb-6">{t('registerPage.step4Title')}</h2>
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
-                  <p><span className="text-gray-500 w-40 inline-block">Name</span> <strong>{form.name}</strong></p>
-                  <p><span className="text-gray-500 w-40 inline-block">Qualification</span> <strong>{form.qualification}</strong></p>
-                  <p><span className="text-gray-500 w-40 inline-block">Speciality</span> <strong>{SPECIALITIES.find(s => s.id === form.speciality)?.en || form.speciality}</strong></p>
-                  <p><span className="text-gray-500 w-40 inline-block">Reg. Number</span> <strong>{form.reg_number}</strong></p>
-                  <p><span className="text-gray-500 w-40 inline-block">Clinic</span> <strong>{form.clinic_name}</strong></p>
-                  <p><span className="text-gray-500 w-40 inline-block">Phone</span> <strong>+91 {form.phone}</strong></p>
-                  <p><span className="text-gray-500 w-40 inline-block">Areas</span> <strong>{allSelectedAreaNames.join(', ') || 'None selected'}</strong></p>
-                  {wantsPremium && <p><span className="text-gray-500 w-40 inline-block">Premium interest</span> <strong>Position {premPos || '—'}</strong></p>}
+                  <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryName')}</span> <strong>{form.name}</strong></p>
+                  <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryQualification')}</span> <strong>{form.qualification}</strong></p>
+                  <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summarySpeciality')}</span> <strong>{SPECIALITIES.find(s => s.id === form.speciality)?.en || form.speciality}</strong></p>
+                  <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryReg')}</span> <strong>{form.reg_number}</strong></p>
+                  <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryClinic')}</span> <strong>{form.clinic_name}</strong></p>
+                  <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryPhone')}</span> <strong>+91 {form.phone}</strong></p>
+                  <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryAreas')}</span> <strong>{allSelectedAreaNames.join(', ') || t('registerPage.summaryNoneSelected')}</strong></p>
+                  {wantsPremium && <p><span className="text-gray-500 w-40 inline-block">{t('registerPage.summaryPremiumInterest')}</span> <strong>Position {premPos || '—'}</strong></p>}
                 </div>
 
                 <div className="bg-navy-700 rounded-xl p-5 text-white">
-                  <h3 className="font-bold mb-2">Aage Kya Hoga?</h3>
+                  <h3 className="font-bold mb-2">{t('registerPage.nextStepsTitle')}</h3>
                   <ol className="text-sm text-white/80 space-y-1 list-decimal list-inside">
-                    <li>Hamari team aapka MCI/NMC number verify karegi (24-48 ghante)</li>
-                    <li>Aapke selected areas ke hisaab se pricing WhatsApp par bhejenge</li>
-                    <li>Confirm karne par listing turant activate ho jayegi</li>
+                    <li>{t('registerPage.nextStep1')}</li>
+                    <li>{t('registerPage.nextStep2')}</li>
+                    <li>{t('registerPage.nextStep3')}</li>
                   </ol>
                 </div>
 
@@ -286,7 +287,7 @@ export default function Register() {
           <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-100">
             {step > 1 ? (
               <button onClick={() => setStep(s => s - 1)} className="btn-outline flex items-center gap-1">
-                <ChevronLeft className="w-4 h-4" /> Back
+                <ChevronLeft className="w-4 h-4" /> {t('registerPage.btnBack')}
               </button>
             ) : <div />}
             {step < 4 ? (
@@ -296,11 +297,11 @@ export default function Register() {
                   (step === 2 && selectedPins.length === 0 && customAreas.length === 0)
                 }
                 className="btn-teal disabled:opacity-50 disabled:cursor-not-allowed">
-                Next <ChevronRight className="w-4 h-4" />
+                {t('registerPage.btnNext')} <ChevronRight className="w-4 h-4" />
               </button>
             ) : (
               <button onClick={handleSubmit} disabled={loading} className="btn-teal px-10 disabled:opacity-60">
-                {loading ? 'Submitting...' : '✓ Submit Registration'}
+                {loading ? t('registerPage.btnSubmitting') : t('registerPage.btnSubmit')}
               </button>
             )}
           </div>
@@ -308,7 +309,7 @@ export default function Register() {
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          Already registered? <a href="/doctor/login" className="text-teal-600 hover:underline font-medium">Login here →</a>
+          {t('registerPage.alreadyRegistered')} <a href="/doctor/login" className="text-teal-600 hover:underline font-medium">{t('registerPage.loginHere')}</a>
         </p>
       </div>
     </div>

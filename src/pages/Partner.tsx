@@ -3,10 +3,12 @@ import { CheckCircle2, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { PIN_CODES } from '../types'
 import CustomAreaSearch, { CustomArea } from '../components/CustomAreaSearch'
+import { useLanguage } from '../i18n/LanguageContext'
 
 type PartnerType = 'pharmacy' | 'lab' | 'insurance' | 'ambulance' | null
 
 export default function PartnerRegister() {
+  const { t, lang } = useLanguage()
   const [type, setType] = useState<PartnerType>(null)
   const [done, setDone] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -44,22 +46,20 @@ export default function PartnerRegister() {
     setLoading(false)
   }
 
+  const typeLabel = (en: string, hi: string) => (lang === 'hi' ? hi : en)
+
   if (done) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 pt-16">
       <div className="card max-w-md w-full text-center shadow-xl">
         <CheckCircle2 className="w-16 h-16 text-teal-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-navy-700 mb-3">Registration Submitted! 🎉</h2>
-        <p className="text-gray-500 mb-6">
-          Shukriya! Hamare team 24-48 ghante mein aapki details verify karengi,
-          aapke selected areas ke hisaab se <strong>pricing WhatsApp par</strong> bhejegi,
-          aur agreement share karegi.
-        </p>
+        <h2 className="text-2xl font-bold text-navy-700 mb-3">{t('partnerPage.successTitle')}</h2>
+        <p className="text-gray-500 mb-6">{t('partnerPage.successDesc')}</p>
         <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700">
-          <p className="font-medium">Aage kya hoga:</p>
-          <p className="mt-1">✅ Team call karegi verification ke liye</p>
-          <p>✅ Aapke areas ke hisaab se pricing confirm hogi</p>
-          <p>✅ Agreement share kiya jayega</p>
-          <p>✅ Listing activate ho jayegi</p>
+          <p className="font-medium">{t('partnerPage.successNextTitle')}</p>
+          <p className="mt-1">✅ {t('partnerPage.successNext1')}</p>
+          <p>✅ {t('partnerPage.successNext2')}</p>
+          <p>✅ {t('partnerPage.successNext3')}</p>
+          <p>✅ {t('partnerPage.successNext4')}</p>
         </div>
       </div>
     </div>
@@ -71,44 +71,44 @@ export default function PartnerRegister() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-navy-700">Sehatsandhi Partner Banein</h1>
-          <p className="text-gray-500 mt-2">Yamuna Nagar ke hazaron patients tak pahunchein</p>
+          <h1 className="text-3xl font-bold text-navy-700">{t('partnerPage.heading')}</h1>
+          <p className="text-gray-500 mt-2">{t('partnerPage.subheading')}</p>
         </div>
 
         {/* Partner type selection */}
         {!type && (
           <div>
-            <h2 className="text-lg font-semibold text-navy-700 mb-4 text-center">Aap kya hain?</h2>
+            <h2 className="text-lg font-semibold text-navy-700 mb-4 text-center">{t('partnerPage.typeQuestionTitle')}</h2>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               {[
-                { id: 'pharmacy', icon: '💊', label: 'Pharmacy', hindi: 'दवाई की दुकान', desc: 'Medicine store, chemist' },
-                { id: 'lab',      icon: '🔬', label: 'Diagnostic Lab', hindi: 'जांच केंद्र', desc: 'Blood tests, reports' },
-                { id: 'ambulance',icon: '🚑', label: 'Ambulance Service', hindi: 'एम्बुलेंस सेवा', desc: 'Emergency & patient transport' },
-                { id: 'insurance',icon: '🛡️', label: 'Insurance Agent', hindi: 'बीमा एजेंट', desc: 'Health insurance' },
+                { id: 'pharmacy', icon: '💊', title: typeLabel(t('partnerPage.typePharmacy'), t('partnerPage.typePharmacyHindi')), sub: typeLabel(t('partnerPage.typePharmacyHindi'), t('partnerPage.typePharmacy')), desc: t('partnerPage.typePharmacyDesc') },
+                { id: 'lab',      icon: '🔬', title: typeLabel(t('partnerPage.typeLab'), t('partnerPage.typeLabHindi')), sub: typeLabel(t('partnerPage.typeLabHindi'), t('partnerPage.typeLab')), desc: t('partnerPage.typeLabDesc') },
+                { id: 'ambulance',icon: '🚑', title: typeLabel(t('partnerPage.typeAmbulance'), t('partnerPage.typeAmbulanceHindi')), sub: typeLabel(t('partnerPage.typeAmbulanceHindi'), t('partnerPage.typeAmbulance')), desc: t('partnerPage.typeAmbulanceDesc') },
+                { id: 'insurance',icon: '🛡️', title: typeLabel(t('partnerPage.typeInsurance'), t('partnerPage.typeInsuranceHindi')), sub: typeLabel(t('partnerPage.typeInsuranceHindi'), t('partnerPage.typeInsurance')), desc: t('partnerPage.typeInsuranceDesc') },
               ].map(p => (
                 <button key={p.id} onClick={() => setType(p.id as PartnerType)}
                   className="card hover:border-teal-400 hover:shadow-md transition-all text-center border-2 border-transparent group">
                   <div className="text-4xl mb-3">{p.icon}</div>
-                  <p className="font-bold text-navy-700 group-hover:text-teal-600 text-sm">{p.label}</p>
-                  <p className="text-teal-600 text-xs">{p.hindi}</p>
+                  <p className="font-bold text-navy-700 group-hover:text-teal-600 text-sm">{p.title}</p>
+                  <p className="text-teal-600 text-xs">{p.sub}</p>
                   <p className="text-gray-400 text-xs mt-1">{p.desc}</p>
                 </button>
               ))}
             </div>
 
-            {/* Benefits — no pricing numbers */}
+            {/* Benefits */}
             <div className="card shadow-sm">
-              <h3 className="font-bold text-navy-700 mb-4">Partner banne ke fayde</h3>
+              <h3 className="font-bold text-navy-700 mb-4">{t('partnerPage.benefitsTitle')}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 {[
-                  '✅ Sehatsandhi ki listing mein aayenge',
-                  '✅ WhatsApp par direct orders/calls milenge',
-                  '✅ Doctor referrals directly milenge',
-                  '✅ Monthly analytics report milegi',
-                  '✅ Verified partner badge milega',
-                  '✅ Pricing aapke area ke hisaab se — team confirm karegi',
+                  t('partnerPage.benefit1'),
+                  t('partnerPage.benefit2'),
+                  t('partnerPage.benefit3'),
+                  t('partnerPage.benefit4'),
+                  t('partnerPage.benefit5'),
+                  t('partnerPage.benefit6'),
                 ].map(b => (
-                  <p key={b} className="text-gray-600">{b}</p>
+                  <p key={b} className="text-gray-600">✅ {b}</p>
                 ))}
               </div>
             </div>
@@ -121,7 +121,7 @@ export default function PartnerRegister() {
             {/* Back */}
             <button onClick={() => { setType(null); setForm({}); setSelectedPins([]); setCustomAreas([]) }}
               className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 mb-6">
-              <ChevronLeft className="w-4 h-4" /> Partner type badlein
+              <ChevronLeft className="w-4 h-4" /> {t('partnerPage.changeType')}
             </button>
 
             <div className="flex items-center gap-2 mb-6">
@@ -129,7 +129,7 @@ export default function PartnerRegister() {
                 {type === 'pharmacy' ? '💊' : type === 'lab' ? '🔬' : type === 'ambulance' ? '🚑' : '🛡️'}
               </span>
               <h2 className="text-xl font-bold text-navy-700">
-                {type === 'pharmacy' ? 'Pharmacy' : type === 'lab' ? 'Diagnostic Lab' : type === 'ambulance' ? 'Ambulance Service' : 'Insurance Agent'} Registration
+                {type === 'pharmacy' ? t('partnerPage.typePharmacy') : type === 'lab' ? t('partnerPage.typeLab') : type === 'ambulance' ? t('partnerPage.typeAmbulance') : t('partnerPage.typeInsurance')} {t('partnerPage.registrationSuffix')}
               </h2>
             </div>
 
@@ -138,7 +138,7 @@ export default function PartnerRegister() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">
-                    {type === 'insurance' ? 'Aapka naam *' : type === 'ambulance' ? 'Service/Fleet naam *' : 'Business/Shop naam *'}
+                    {type === 'insurance' ? t('partnerPage.labelAgentName') : type === 'ambulance' ? t('partnerPage.labelFleetName') : t('partnerPage.labelBusinessName')}
                   </label>
                   <input className="input-field"
                     placeholder={
@@ -151,34 +151,32 @@ export default function PartnerRegister() {
                     onChange={e => upd('business_name', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Phone number *</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelPhone')}</label>
                   <input className="input-field" type="tel" maxLength={10} placeholder="10 digit number"
                     value={form.phone || ''} onChange={e => upd('phone', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Email</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelEmail')}</label>
                   <input className="input-field" type="email" placeholder="email@example.com"
                     value={form.email || ''} onChange={e => upd('email', e.target.value)} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Address *</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelAddress')}</label>
                   <textarea className="input-field" rows={2}
-                    placeholder="Full address with landmark"
+                    placeholder={t('partnerPage.placeholderAddress')}
                     value={form.address || ''} onChange={e => upd('address', e.target.value)} />
                 </div>
               </div>
 
-              {/* Area selection — multi-select grid + custom search, matches doctor flow */}
+              {/* Area selection — multi-select grid + custom search */}
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-2 block">
-                  Kaun se areas mein service dete hain? *
-                </label>
+                <label className="text-xs font-medium text-gray-600 mb-2 block">{t('partnerPage.areaSectionLabel')}</label>
                 <p className="text-xs text-gray-400 mb-3">
-                  Sirf woh areas chunein jahan aap genuinely service commit kar sakte hain
-                  {type === 'pharmacy' && ' (delivery)'}
-                  {type === 'lab' && ' (home collection)'}
-                  {type === 'ambulance' && ' (24/7 response)'}
-                  {type === 'insurance' && ' (home visit)'}.
+                  {t('partnerPage.areaSectionNoteBase')}
+                  {type === 'pharmacy' && t('partnerPage.areaNotePharmacy')}
+                  {type === 'lab' && t('partnerPage.areaNoteLab')}
+                  {type === 'ambulance' && t('partnerPage.areaNoteAmbulance')}
+                  {type === 'insurance' && t('partnerPage.areaNoteInsurance')}.
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                   {PIN_CODES.map(p => (
@@ -192,7 +190,6 @@ export default function PartnerRegister() {
                 <CustomAreaSearch
                   existingPins={PIN_CODES.map(p => p.code)}
                   onAreasChange={setCustomAreas}
-                  label="Yeh list mein nahi hai? Aur area add karein"
                 />
               </div>
 
@@ -200,31 +197,31 @@ export default function PartnerRegister() {
               {type === 'pharmacy' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Drug License Number *</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelLicense')}</label>
                     <input className="input-field" placeholder="DL-HR-XXXXX"
                       value={form.license || ''} onChange={e => upd('license', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Home Delivery?</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelDelivery')}</label>
                     <select className="input-field" value={form.delivery || ''}
                       onChange={e => upd('delivery', e.target.value)}>
-                      <option value="">Select</option>
-                      <option value="yes">Haan, delivery available</option>
-                      <option value="no">Nahi, sirf pickup</option>
+                      <option value="">—</option>
+                      <option value="yes">{t('partnerPage.yes')}</option>
+                      <option value="no">{t('partnerPage.no')}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Opening Hours</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelHours')}</label>
                     <input className="input-field" placeholder="8am-10pm"
                       value={form.hours || ''} onChange={e => upd('hours', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">24 hours open?</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.label24Open')}</label>
                     <select className="input-field" value={form.open24 || ''}
                       onChange={e => upd('open24', e.target.value)}>
-                      <option value="">Select</option>
-                      <option value="yes">Haan, 24/7</option>
-                      <option value="no">Nahi</option>
+                      <option value="">—</option>
+                      <option value="yes">{t('partnerPage.yes247')}</option>
+                      <option value="no">{t('partnerPage.noFixed')}</option>
                     </select>
                   </div>
                 </div>
@@ -234,30 +231,30 @@ export default function PartnerRegister() {
               {type === 'lab' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Lab License/Registration</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelLabLicense')}</label>
                     <input className="input-field" placeholder="Lab registration number"
                       value={form.license || ''} onChange={e => upd('license', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">NABL Certified?</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelNABL')}</label>
                     <select className="input-field" value={form.nabl || ''}
                       onChange={e => upd('nabl', e.target.value)}>
-                      <option value="">Select</option>
-                      <option value="yes">Haan, NABL certified</option>
-                      <option value="no">Nahi</option>
+                      <option value="">—</option>
+                      <option value="yes">{t('partnerPage.nablYes')}</option>
+                      <option value="no">{t('partnerPage.nablNo')}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Home Collection?</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelHomeCollection')}</label>
                     <select className="input-field" value={form.home_collection || ''}
                       onChange={e => upd('home_collection', e.target.value)}>
-                      <option value="">Select</option>
-                      <option value="yes">Haan, ghar par aate hain</option>
-                      <option value="no">Nahi, sirf lab mein</option>
+                      <option value="">—</option>
+                      <option value="yes">{t('partnerPage.collectionYes')}</option>
+                      <option value="no">{t('partnerPage.collectionNo')}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Collection Timing</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelCollectionTiming')}</label>
                     <input className="input-field" placeholder="6am-10am"
                       value={form.collection_time || ''} onChange={e => upd('collection_time', e.target.value)} />
                   </div>
@@ -268,44 +265,41 @@ export default function PartnerRegister() {
               {type === 'ambulance' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Ambulance Permit/Registration *</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelPermit')}</label>
                     <input className="input-field" placeholder="Permit number"
                       value={form.permit || ''} onChange={e => upd('permit', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Ambulance Type *</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelAmbulanceType')}</label>
                     <select className="input-field" value={form.ambulance_type || ''}
                       onChange={e => upd('ambulance_type', e.target.value)}>
-                      <option value="">Select</option>
-                      <option value="BLS">Basic Life Support (BLS)</option>
-                      <option value="ALS">Advanced Life Support (ALS)</option>
-                      <option value="transport">Patient Transport (non-emergency)</option>
+                      <option value="">—</option>
+                      <option value="BLS">{t('partnerPage.typeBLS')}</option>
+                      <option value="ALS">{t('partnerPage.typeALS')}</option>
+                      <option value="transport">{t('partnerPage.typeTransport')}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">24/7 Available?</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.label247')}</label>
                     <select className="input-field" value={form.available_24_7 || ''}
                       onChange={e => upd('available_24_7', e.target.value)}>
-                      <option value="">Select</option>
-                      <option value="yes">Haan, 24/7 available</option>
-                      <option value="no">Nahi, fixed hours</option>
+                      <option value="">—</option>
+                      <option value="yes">{t('partnerPage.available247Yes')}</option>
+                      <option value="no">{t('partnerPage.available247No')}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Response Time Commitment *</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelResponseTime')}</label>
                     <select className="input-field" value={form.response_time || ''}
                       onChange={e => upd('response_time', e.target.value)}>
-                      <option value="">Select</option>
-                      <option value="15">15 minutes</option>
-                      <option value="20">20 minutes</option>
-                      <option value="30">30 minutes</option>
+                      <option value="">—</option>
+                      <option value="15">{t('partnerPage.response15')}</option>
+                      <option value="20">{t('partnerPage.response20')}</option>
+                      <option value="30">{t('partnerPage.response30')}</option>
                     </select>
                   </div>
                   <div className="sm:col-span-2 bg-red-50 border border-red-100 rounded-xl p-3">
-                    <p className="text-xs text-red-700">
-                      🚑 Emergency response is a serious public commitment — sirf woh
-                      response time chunein jo aap genuinely 24/7 nibha sakte hain.
-                    </p>
+                    <p className="text-xs text-red-700">{t('partnerPage.ambulanceWarning')}</p>
                   </div>
                 </div>
               )}
@@ -314,12 +308,12 @@ export default function PartnerRegister() {
               {type === 'insurance' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">IRDA License Number *</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelIRDA')}</label>
                     <input className="input-field" placeholder="IRDA/XXXXX"
                       value={form.irda || ''} onChange={e => upd('irda', e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Company represented</label>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('partnerPage.labelCompany')}</label>
                     <input className="input-field" placeholder="Star Health, Niva Bupa..."
                       value={form.company || ''} onChange={e => upd('company', e.target.value)} />
                   </div>
@@ -328,21 +322,21 @@ export default function PartnerRegister() {
 
               {/* Next steps — no pricing shown */}
               <div className="bg-navy-700 rounded-xl p-5 text-white">
-                <h3 className="font-bold mb-2">Aage Kya Hoga?</h3>
+                <h3 className="font-bold mb-2">{t('partnerPage.nextStepsTitle')}</h3>
                 <ol className="text-sm text-white/80 space-y-1 list-decimal list-inside">
-                  <li>Hamari team aapki details 24-48 ghante mein verify karegi</li>
-                  <li>Aapke selected areas ke hisaab se pricing WhatsApp par bhejenge</li>
-                  <li>Confirm karne par agreement + listing activate ho jayegi</li>
+                  <li>{t('partnerPage.nextStep1')}</li>
+                  <li>{t('partnerPage.nextStep2')}</li>
+                  <li>{t('partnerPage.nextStep3')}</li>
                 </ol>
               </div>
 
               <button onClick={handleSubmit}
                 disabled={loading || !form.business_name || !form.phone || (selectedPins.length === 0 && customAreas.length === 0)}
                 className="btn-teal w-full justify-center py-3 text-base disabled:opacity-50">
-                {loading ? 'Submit ho raha hai...' : '✓ Registration Submit Karein'}
+                {loading ? t('partnerPage.btnSubmitting') : t('partnerPage.btnSubmit')}
               </button>
               <p className="text-xs text-gray-400 text-center">
-                Selected areas: {allSelectedAreaNames.join(', ') || 'None yet'}
+                {t('partnerPage.selectedAreasPrefix')} {allSelectedAreaNames.join(', ') || t('partnerPage.noneYet')}
               </p>
             </div>
           </div>

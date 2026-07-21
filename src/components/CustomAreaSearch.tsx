@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, Plus, X, Loader2, MapPin, AlertCircle } from 'lucide-react'
+import { useLanguage } from '../i18n/LanguageContext'
 
 export interface CustomArea {
   pin_code: string
@@ -27,6 +28,7 @@ interface Props {
 const MAX_RESULTS_SHOWN = 15
 
 export default function CustomAreaSearch({ existingPins = [], onAreasChange, label }: Props) {
+  const { t } = useLanguage()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PostOffice[]>([])
   const [added, setAdded] = useState<CustomArea[]>([])
@@ -64,14 +66,10 @@ export default function CustomAreaSearch({ existingPins = [], onAreasChange, lab
         } else {
           setResults([])
           setTotalFound(0)
-          setError(
-            isPin
-              ? 'Yeh PIN code nahi mila. Sahi 6-digit PIN check karein.'
-              : `"${q}" ke liye koi area nahi mila. Poora ya sahi naam try karein.`
-          )
+          setError(isPin ? t('customAreaSearch.errorPinNotFound') : t('customAreaSearch.errorNoResults'))
         }
       } catch {
-        setError('Search mein problem aa rahi hai. Dobara try karein.')
+        setError(t('customAreaSearch.errorGeneric'))
         setResults([])
       } finally {
         setLoading(false)
@@ -79,7 +77,7 @@ export default function CustomAreaSearch({ existingPins = [], onAreasChange, lab
     }, 400)
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [query])
+  }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isAlreadyKnown = (pin: string) => existingPins.includes(pin)
   const isAlreadyAdded = (pin: string) => added.some(a => a.pin_code === pin)
@@ -109,17 +107,15 @@ export default function CustomAreaSearch({ existingPins = [], onAreasChange, lab
   return (
     <div>
       <label className="text-sm font-semibold text-gray-700 mb-1 block">
-        {label || 'Aapka area list mein nahi hai?'}
+        {label || t('customAreaSearch.defaultLabel')}
       </label>
       <p className="text-xs text-gray-500 leading-relaxed mb-2">
-        Is box mein <strong className="text-gray-600">city ka naam</strong>,{' '}
-        <strong className="text-gray-600">district ka naam</strong>, ya{' '}
-        <strong className="text-gray-600">seedha PIN code</strong> likh sakte hain.
+        {t('customAreaSearch.hint')}
       </p>
       <div className="flex flex-wrap gap-1.5 mb-2">
-        <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">🏙️ City — e.g. Saharanpur</span>
-        <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">🗺️ District — e.g. Sirmaur</span>
-        <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">🔢 PIN — e.g. 135001</span>
+        <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{t('customAreaSearch.chipCity')}</span>
+        <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{t('customAreaSearch.chipDistrict')}</span>
+        <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{t('customAreaSearch.chipPin')}</span>
       </div>
 
       {/* Search input */}
@@ -127,7 +123,7 @@ export default function CustomAreaSearch({ existingPins = [], onAreasChange, lab
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           className="input-field pl-9"
-          placeholder="City, district ya PIN likhein — Saharanpur / Ambala / 135001"
+          placeholder={t('customAreaSearch.placeholder')}
           value={query}
           onChange={e => setQuery(e.target.value)}
         />
@@ -170,15 +166,15 @@ export default function CustomAreaSearch({ existingPins = [], onAreasChange, lab
                       : 'bg-teal-50 text-teal-700 hover:bg-teal-100'
                   }`}
                 >
-                  {already ? '✓ Added' : <><Plus className="w-3.5 h-3.5" /> Add</>}
+                  {already ? t('customAreaSearch.added') : <><Plus className="w-3.5 h-3.5" /> {t('customAreaSearch.add')}</>}
                 </button>
               </div>
             )
           })}
           {totalFound > MAX_RESULTS_SHOWN && (
             <p className="text-xs text-gray-400 text-center py-2 px-3">
-              {totalFound - MAX_RESULTS_SHOWN} aur results mile — search ko
-              zyada specific karein (jaise poora area/PIN)
+              {totalFound - MAX_RESULTS_SHOWN} {t('customAreaSearch.moreResultsPrefix')}{' '}
+              {t('customAreaSearch.moreResultsSuffix')}
             </p>
           )}
         </div>
@@ -188,7 +184,7 @@ export default function CustomAreaSearch({ existingPins = [], onAreasChange, lab
       {added.length > 0 && (
         <div>
           <p className="text-xs font-medium text-gray-500 mb-2">
-            Naye areas jo aapne add kiye ({added.length}):
+            {t('customAreaSearch.addedAreasLabel')} ({added.length}):
           </p>
           <div className="flex flex-wrap gap-2 mb-3">
             {added.map(a => (
@@ -203,11 +199,7 @@ export default function CustomAreaSearch({ existingPins = [], onAreasChange, lab
           </div>
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
             <p className="text-xs text-amber-700">
-              ⚠️ Yeh naye areas hain jo abhi hamari list mein nahi hain.
-              Registration submit karne ke baad hamari team{' '}
-              <strong>24 ghante mein pricing confirm</strong> karke aapko
-              WhatsApp par bata degi. Baaki selected areas ki pricing
-              upar turant dikh rahi hai.
+              ⚠️ {t('customAreaSearch.pendingPricingNote')}
             </p>
           </div>
         </div>
