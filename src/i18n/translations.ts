@@ -829,6 +829,24 @@ export const translations: Tree = {
 
     ctaButton: { en: 'Talk to Our Team on WhatsApp →', hi: 'WhatsApp Par Hamari Team Se Baat Karein →' },
   },
+
+  specialityLandingPage: {
+    notFoundSpeciality: { en: 'Speciality not found', hi: 'Speciality Nahi Mili' },
+    backToHome: { en: '← Back to Home', hi: '← Home Par Wapas' },
+    noDoctorsYetTitle: { en: 'No verified doctors listed here yet', hi: 'Abhi Yahan Koi Verified Doctor Listed Nahi Hai' },
+    noDoctorsYetDesc: {
+      en: "We're actively adding doctors in this area. Message us on WhatsApp and we'll notify you the moment one joins.",
+      hi: 'Hum is area mein actively doctors add kar rahe hain. WhatsApp par message karein aur jaise hi koi join karega hum aapko batayenge.',
+    },
+    notifyMeButton: { en: '📱 Notify Me on WhatsApp', hi: '📱 WhatsApp Par Mujhe Batayein' },
+    areYouADoctor: { en: 'Are you a doctor in this area?', hi: 'Kya Aap Is Area Ke Doctor Hain?' },
+    beFirstToJoin: { en: 'Be the first to join and reach these patients', hi: 'Pehle join karein aur in patients tak pahunchein' },
+    registerLink: { en: 'Register here →', hi: 'Yahan Register Karein →' },
+    foundDoctorsIntro: { en: 'Verified doctors available:', hi: 'Available Verified Doctors:' },
+    bookOnWhatsapp: { en: '📱 Book on WhatsApp', hi: '📱 WhatsApp Par Book Karein' },
+    otherSpecialities: { en: 'Looking for a different speciality?', hi: 'Koi Aur Speciality Dhundh Rahe Hain?' },
+    viewAllLink: { en: 'View all specialities →', hi: 'Sabhi Specialities Dekhein →' },
+  },
 }
 
 export function getTranslation(path: string, lang: Lang): string {

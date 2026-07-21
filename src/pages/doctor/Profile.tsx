@@ -57,8 +57,24 @@ export default function DoctorProfile() {
 
   const speciality = SPECIALITIES.find(s => s.id === doctor.speciality)
 
+  // Schema.org structured data — enables Google to show this doctor
+  // as a rich result (name, speciality, address) directly in search
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'Physician',
+    name: doctor.name,
+    medicalSpecialty: speciality?.en || doctor.speciality,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: doctor.address,
+      addressRegion: 'Haryana',
+      addressCountry: 'IN',
+    },
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       {/* Back */}
       <div className="bg-white border-b border-gray-100">
         <div className="max-w-3xl mx-auto px-4 py-3">

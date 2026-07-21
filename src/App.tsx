@@ -11,6 +11,7 @@ import ForLabs from './pages/ForLabs'
 import ForAmbulance from './pages/ForAmbulance'
 import ForInsurance from './pages/ForInsurance'
 import ForHospitals from './pages/ForHospitals'
+import SpecialityLanding from './pages/SpecialityLanding'
 import Register from './pages/doctor/Register'
 import DoctorLogin from './pages/doctor/Login'
 import DoctorDashboard from './pages/doctor/Dashboard'
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/for-ambulance" element={<WithLayout><ForAmbulance /></WithLayout>} />
           <Route path="/for-insurance" element={<WithLayout><ForInsurance /></WithLayout>} />
           <Route path="/for-hospitals" element={<WithLayout><ForHospitals /></WithLayout>} />
+          <Route path="/speciality/:specId/:areaSlug" element={<WithLayout><SpecialityLanding /></WithLayout>} />
           <Route path="/points" element={<WithLayout><Points /></WithLayout>} />
           <Route path="/partner" element={<WithLayout><PartnerRegister /></WithLayout>} />
 
