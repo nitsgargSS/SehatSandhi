@@ -1,23 +1,26 @@
 import { useState } from 'react'
-import { CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react'
+import { CheckCircle2, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { PIN_CODES } from '../types'
+import CustomAreaSearch, { CustomArea } from '../components/CustomAreaSearch'
 
 type PartnerType = 'pharmacy' | 'lab' | 'insurance' | 'ambulance' | null
 
-const PARTNER_PRICING = {
-  pharmacy:  { basic: 2000, full: 3500, commission: '8%' },
-  lab:       { basic: 1500, full: 3000, commission: '12%' },
-  insurance: { basic: 2000, full: 4000, commission: '₹200/lead' },
-  ambulance: { basic: 1000, full: 3000, commission: 'Free on emergency · 10% non-emergency' },
-}
-
 export default function PartnerRegister() {
   const [type, setType] = useState<PartnerType>(null)
-  const [step, setStep] = useState(1)
   const [done, setDone] = useState(false)
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState<Record<string, string>>({})
+  const [selectedPins, setSelectedPins] = useState<string[]>([])
+  const [customAreas, setCustomAreas] = useState<CustomArea[]>([])
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+  const togglePin = (code: string) =>
+    setSelectedPins(p => p.includes(code) ? p.filter(c => c !== code) : [...p, code])
+
+  const allSelectedAreaNames = [
+    ...selectedPins.map(c => PIN_CODES.find(p => p.code === c)?.area).filter(Boolean),
+    ...customAreas.map(a => a.area_name),
+  ]
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -26,7 +29,7 @@ export default function PartnerRegister() {
       speciality: type?.toUpperCase(),
       clinic_name: form.business_name || form.agent_name,
       address: form.address,
-      pin_codes: [form.pin_code],
+      pin_codes: [...selectedPins, ...customAreas.map(a => a.pin_code)],
       phone: form.phone,
       email: form.email,
       qualification:
@@ -45,16 +48,17 @@ export default function PartnerRegister() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 pt-16">
       <div className="card max-w-md w-full text-center shadow-xl">
         <CheckCircle2 className="w-16 h-16 text-teal-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-navy-700 mb-3">Registration Done! 🎉</h2>
+        <h2 className="text-2xl font-bold text-navy-700 mb-3">Registration Submitted! 🎉</h2>
         <p className="text-gray-500 mb-6">
-          Shukriya! Hamare team 24-48 ghante mein aapki details verify karengi
-          aur WhatsApp par confirm karenge.
+          Shukriya! Hamare team 24-48 ghante mein aapki details verify karengi,
+          aapke selected areas ke hisaab se <strong>pricing WhatsApp par</strong> bhejegi,
+          aur agreement share karegi.
         </p>
         <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700">
           <p className="font-medium">Aage kya hoga:</p>
           <p className="mt-1">✅ Team call karegi verification ke liye</p>
+          <p>✅ Aapke areas ke hisaab se pricing confirm hogi</p>
           <p>✅ Agreement share kiya jayega</p>
-          <p>✅ Payment link bheja jayega</p>
           <p>✅ Listing activate ho jayegi</p>
         </div>
       </div>
@@ -92,8 +96,8 @@ export default function PartnerRegister() {
               ))}
             </div>
 
-            {/* Benefits */}
-            <div className="card shadow-sm mb-6">
+            {/* Benefits — no pricing numbers */}
+            <div className="card shadow-sm">
               <h3 className="font-bold text-navy-700 mb-4">Partner banne ke fayde</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 {[
@@ -102,31 +106,11 @@ export default function PartnerRegister() {
                   '✅ Doctor referrals directly milenge',
                   '✅ Monthly analytics report milegi',
                   '✅ Verified partner badge milega',
-                  '✅ Commission on every transaction',
+                  '✅ Pricing aapke area ke hisaab se — team confirm karegi',
                 ].map(b => (
                   <p key={b} className="text-gray-600">{b}</p>
                 ))}
               </div>
-            </div>
-
-            {/* Pricing preview */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { type: 'pharmacy',  icon: '💊', name: 'Pharmacy' },
-                { type: 'lab',       icon: '🔬', name: 'Lab' },
-                { type: 'ambulance', icon: '🚑', name: 'Ambulance' },
-                { type: 'insurance', icon: '🛡️', name: 'Insurance' },
-              ].map(p => {
-                const pricing = PARTNER_PRICING[p.type as keyof typeof PARTNER_PRICING]
-                return (
-                  <div key={p.type} className="bg-navy-50 rounded-xl p-4 text-center">
-                    <p className="text-2xl mb-1">{p.icon}</p>
-                    <p className="font-medium text-navy-700 text-sm">{p.name}</p>
-                    <p className="text-teal-600 font-bold">₹{pricing.basic}/mo</p>
-                    <p className="text-gray-400 text-xs">+ {pricing.commission}</p>
-                  </div>
-                )
-              })}
             </div>
           </div>
         )}
@@ -135,7 +119,7 @@ export default function PartnerRegister() {
         {type && (
           <div className="card shadow-md">
             {/* Back */}
-            <button onClick={() => { setType(null); setStep(1); setForm({}) }}
+            <button onClick={() => { setType(null); setForm({}); setSelectedPins([]); setCustomAreas([]) }}
               className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 mb-6">
               <ChevronLeft className="w-4 h-4" /> Partner type badlein
             </button>
@@ -176,22 +160,40 @@ export default function PartnerRegister() {
                   <input className="input-field" type="email" placeholder="email@example.com"
                     value={form.email || ''} onChange={e => upd('email', e.target.value)} />
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">PIN code *</label>
-                  <select className="input-field" value={form.pin_code || ''}
-                    onChange={e => upd('pin_code', e.target.value)}>
-                    <option value="">Select PIN code</option>
-                    {['135001-Yamuna Nagar','135003-Jagadhri','135002-Radaur','135004-Bilaspur'].map(p => (
-                      <option key={p} value={p.split('-')[0]}>{p}</option>
-                    ))}
-                  </select>
-                </div>
                 <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Address *</label>
                   <textarea className="input-field" rows={2}
                     placeholder="Full address with landmark"
                     value={form.address || ''} onChange={e => upd('address', e.target.value)} />
                 </div>
+              </div>
+
+              {/* Area selection — multi-select grid + custom search, matches doctor flow */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-2 block">
+                  Kaun se areas mein service dete hain? *
+                </label>
+                <p className="text-xs text-gray-400 mb-3">
+                  Sirf woh areas chunein jahan aap genuinely service commit kar sakte hain
+                  {type === 'pharmacy' && ' (delivery)'}
+                  {type === 'lab' && ' (home collection)'}
+                  {type === 'ambulance' && ' (24/7 response)'}
+                  {type === 'insurance' && ' (home visit)'}.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                  {PIN_CODES.map(p => (
+                    <button key={p.code} type="button" onClick={() => togglePin(p.code)}
+                      className={`flex flex-col items-start p-2.5 rounded-xl border-2 transition-all text-left ${selectedPins.includes(p.code) ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
+                      <span className="font-bold text-xs text-navy-700">{p.code}</span>
+                      <span className="text-xs text-gray-500">{p.area}</span>
+                    </button>
+                  ))}
+                </div>
+                <CustomAreaSearch
+                  existingPins={PIN_CODES.map(p => p.code)}
+                  onAreasChange={setCustomAreas}
+                  label="Yeh list mein nahi hai? Aur area add karein"
+                />
               </div>
 
               {/* Pharmacy specific */}
@@ -324,37 +326,23 @@ export default function PartnerRegister() {
                 </div>
               )}
 
-              {/* Pricing summary */}
-              {type && (
-                <div className="bg-navy-700 rounded-xl p-5 text-white">
-                  <h3 className="font-bold mb-3">Partnership Plan</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-white/70">Monthly listing fee</span>
-                      <span>₹{PARTNER_PRICING[type].basic}/month</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/70">Commission</span>
-                      <span>{PARTNER_PRICING[type].commission}</span>
-                    </div>
-                    <div className="border-t border-white/20 pt-2 flex justify-between font-bold">
-                      <span>Monthly investment</span>
-                      <span>₹{PARTNER_PRICING[type].basic}</span>
-                    </div>
-                  </div>
-                  <p className="text-white/50 text-xs mt-2">
-                    Payment verification ke baad request hogi
-                  </p>
-                </div>
-              )}
+              {/* Next steps — no pricing shown */}
+              <div className="bg-navy-700 rounded-xl p-5 text-white">
+                <h3 className="font-bold mb-2">Aage Kya Hoga?</h3>
+                <ol className="text-sm text-white/80 space-y-1 list-decimal list-inside">
+                  <li>Hamari team aapki details 24-48 ghante mein verify karegi</li>
+                  <li>Aapke selected areas ke hisaab se pricing WhatsApp par bhejenge</li>
+                  <li>Confirm karne par agreement + listing activate ho jayegi</li>
+                </ol>
+              </div>
 
               <button onClick={handleSubmit}
-                disabled={loading || !form.business_name || !form.phone || !form.pin_code}
+                disabled={loading || !form.business_name || !form.phone || (selectedPins.length === 0 && customAreas.length === 0)}
                 className="btn-teal w-full justify-center py-3 text-base disabled:opacity-50">
                 {loading ? 'Submit ho raha hai...' : '✓ Registration Submit Karein'}
               </button>
               <p className="text-xs text-gray-400 text-center">
-                Submit karne ke baad hamare team 24 ghante mein contact karegi
+                Selected areas: {allSelectedAreaNames.join(', ') || 'None yet'}
               </p>
             </div>
           </div>

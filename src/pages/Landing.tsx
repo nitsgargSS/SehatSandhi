@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronDown, ChevronUp, CheckCircle2, MapPin, MessageSquare, Calendar } from 'lucide-react'
-import { SPECIALITIES, WA_NUMBER, BASE_LISTING_FEE, PIN_CODES } from '../types'
+import { ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react'
+import { SPECIALITIES, WA_NUMBER } from '../types'
 
 const SPEC_ICONS: Record<string, string> = {
   GEN:'🏥', SKIN:'🌿', DENT:'🦷', EYE:'👁️', PAED:'👶',
@@ -12,7 +12,7 @@ const SPEC_ICONS: Record<string, string> = {
 
 const faqs = [
   { q: 'Kya patient ke liye free hai?', a: 'Haan, bilkul free. Patients ko koi charge nahi lagta. WhatsApp par message karein aur appointment book karein.' },
-  { q: 'Doctors kaise listed hote hain?', a: 'Doctors monthly subscription lete hain (₹5,000/month per PIN code) aur apni speciality ke anusaar listed hote hain.' },
+  { q: 'Doctors kaise listed hote hain?', a: 'Doctors registration karte hain, apni speciality aur area batate hain — hamari team verify karke listing activate karti hai.' },
   { q: 'Appointment kaise book hoti hai?', a: 'WhatsApp par message karein → speciality choose karein → doctor select karein → slot confirm karein. Sirf 2-3 minute lagte hain.' },
   { q: 'Kya app download karni padegi?', a: 'Nahi! Sirf WhatsApp chahiye jo aapke phone mein pehle se hai. Koi nayi app install karne ki zaroorat nahi.' },
   { q: "Doctor ki verification hoti hai?", a: "Haan, hamare team har doctor ka MCI/NMC registration number verify karti hai. Tab hi listing activate hoti hai." },
@@ -40,7 +40,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
           <div>
             <span className="inline-flex items-center gap-2 bg-teal-50 text-teal-700 text-xs font-semibold px-4 py-1.5 rounded-full mb-6 border border-teal-100">
-              <MapPin className="w-3.5 h-3.5" /> Yamuna Nagar & Jagadhri — 20 PIN codes
+              📍 Yamuna Nagar & Jagadhri
             </span>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-navy-700 leading-tight mb-4">
               सही डॉक्टर,<br />अभी मिलें
@@ -61,7 +61,6 @@ export default function Landing() {
             </div>
             <p className="text-gray-400 text-xs mt-5">✓ No registration needed for patients &nbsp;✓ Free forever &nbsp;✓ Verified doctors only</p>
           </div>
-          {/* Mock WhatsApp card */}
           <div className="hidden lg:flex justify-center">
             <div className="w-72 bg-white rounded-3xl shadow-2xl border border-gray-100 p-5 space-y-3">
               <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
@@ -81,8 +80,8 @@ export default function Landing() {
               </div>
               <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-gray-700">
                 <p className="font-medium mb-1">Yamuna Nagar mein:</p>
-                <p>1. Dr. Priya Sharma — ₹400</p>
-                <p>2. Dr. Rahul Verma — ₹350</p>
+                <p>1. Dr. Priya Sharma</p>
+                <p>2. Dr. Rahul Verma</p>
                 <p className="text-teal-600 mt-1 text-xs">Reply number to book →</p>
               </div>
             </div>
@@ -109,12 +108,11 @@ export default function Landing() {
           <p className="section-sub">Sirf 3 steps mein doctor book karein</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { icon: <MessageSquare className="w-8 h-8 text-teal-600" />, step: '01', title: 'WhatsApp par message karein', desc: 'Hamara WhatsApp number save karein aur "Hi" message bhejein — koi form nahi, koi wait nahi.' },
-              { icon: <CheckCircle2 className="w-8 h-8 text-teal-600" />, step: '02', title: 'Speciality choose karein', desc: 'Skin, dental, eye, ortho, child specialist — apni zaroorat ke anusaar speciality select karein.' },
-              { icon: <Calendar className="w-8 h-8 text-teal-600" />, step: '03', title: 'Doctor book karein', desc: 'Nearby verified doctors ki list dekhein, doctor select karein, aur appointment confirm karein.' },
+              { step: '01', title: 'WhatsApp par message karein', desc: 'Hamara WhatsApp number save karein aur "Hi" message bhejein — koi form nahi, koi wait nahi.' },
+              { step: '02', title: 'Speciality choose karein', desc: 'Skin, dental, eye, ortho, child specialist — apni zaroorat ke anusaar speciality select karein.' },
+              { step: '03', title: 'Doctor book karein', desc: 'Nearby verified doctors ki list dekhein, doctor select karein, aur appointment confirm karein.' },
             ].map(s => (
               <div key={s.step} className="card text-center hover:shadow-md transition-shadow group">
-                <div className="w-14 h-14 rounded-2xl bg-teal-50 flex items-center justify-center mx-auto mb-4 group-hover:bg-teal-100 transition">{s.icon}</div>
                 <span className="text-xs font-bold text-teal-400 tracking-widest">STEP {s.step}</span>
                 <h3 className="text-lg font-bold text-navy-700 mt-1 mb-2">{s.title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{s.desc}</p>
@@ -149,7 +147,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── FOR DOCTORS ── */}
+      {/* ── FOR DOCTORS ── (pricing table removed — model is being redesigned) */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
@@ -159,11 +157,11 @@ export default function Landing() {
               <ul className="space-y-4">
                 {[
                   'Yamuna Nagar ke patients tak pahunchein — apne PIN codes choose karein',
-                  '₹5,000/month per PIN code — cancel anytime, no lock-in',
-                  'Premium top position weekly mein available',
+                  'Affordable listing — apni area ke hisaab se pricing',
+                  'Premium top position bhi available',
                   'MCI/NMC verified badge aapke listing par',
                   'Appointment dashboard — dekho kaunse patients aaye',
-                  'Registration free — sirf listing fee lagti hai',
+                  'Registration free — pricing details team confirm karegi',
                 ].map(b => (
                   <li key={b} className="flex items-start gap-3">
                     <CheckCircle2 className="text-teal-500 w-5 h-5 shrink-0 mt-0.5" />
@@ -175,30 +173,33 @@ export default function Landing() {
                 Abhi Register Karein →
               </Link>
             </div>
-            {/* Pricing card */}
+            {/* Value card — no pricing numbers shown */}
             <div className="card border border-gray-200 overflow-hidden shadow-lg">
-              <div className="bg-navy-700 text-white px-6 py-4">
-                <h3 className="font-bold text-lg">Listing Fee</h3>
-                <p className="text-white/60 text-sm">₹{BASE_LISTING_FEE.toLocaleString('en-IN')} per PIN code per month</p>
+              <div className="bg-navy-700 text-white px-6 py-6">
+                <h3 className="font-bold text-lg mb-2">Pricing Apke Area Ke Hisaab Se</h3>
+                <p className="text-white/70 text-sm leading-relaxed">
+                  Har area ki apni zaroorat hai — isliye pricing fixed nahi hai.
+                  Registration submit karne ke baad hamari team aapke area,
+                  selected PIN codes, aur speciality ke hisaab se
+                  <strong className="text-white"> personalised pricing</strong> WhatsApp
+                  par bhejegi.
+                </p>
               </div>
-              <table className="w-full text-sm">
-                <thead><tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-6 py-3 text-gray-500 font-medium">PIN Codes</th>
-                  <th className="text-right px-6 py-3 text-gray-500 font-medium">Monthly</th>
-                  <th className="text-right px-6 py-3 text-gray-500 font-medium">Annual</th>
-                </tr></thead>
-                <tbody>
-                  {[[1, 5000], [2, 10000], [5, 25000], [10, 50000], [20, 100000]].map(([n, m]) => (
-                    <tr key={n} className="border-b border-gray-50 hover:bg-teal-50/40 transition">
-                      <td className="px-6 py-3 font-medium text-gray-700">{n === 20 ? 'All 20 PINs' : `${n} PIN${n > 1 ? 's' : ''}`}</td>
-                      <td className="px-6 py-3 text-right text-navy-700 font-semibold">₹{(m as number).toLocaleString('en-IN')}</td>
-                      <td className="px-6 py-3 text-right text-teal-600">₹{((m as number) * 12).toLocaleString('en-IN')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="p-6 space-y-3">
+                {[
+                  'Apni details aur PIN codes register karein',
+                  'Team 24-48 ghante mein verify karegi',
+                  'Personalised pricing WhatsApp par milegi',
+                  'Confirm karein aur listing activate ho jayegi',
+                ].map((s, i) => (
+                  <div key={s} className="flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-full bg-teal-100 text-teal-700 text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                    <span className="text-gray-600 text-sm">{s}</span>
+                  </div>
+                ))}
+              </div>
               <div className="px-6 py-4 bg-amber-50 border-t border-amber-100">
-                <p className="text-xs text-amber-700">🏆 Premium positions also available: ₹5,000 / ₹3,000 / ₹2,000 per week per PIN</p>
+                <p className="text-xs text-amber-700">💡 No lock-in — cancel anytime, koi hidden charges nahi</p>
               </div>
             </div>
           </div>

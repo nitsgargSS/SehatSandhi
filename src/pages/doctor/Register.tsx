@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react'
-import { SPECIALITIES, PIN_CODES, BASE_LISTING_FEE } from '../../types'
+import { SPECIALITIES, PIN_CODES } from '../../types'
 import { supabase } from '../../lib/supabase'
+import CustomAreaSearch, { CustomArea } from '../../components/CustomAreaSearch'
 
 type FormData = {
   name: string; qualification: string; speciality: string; reg_number: string
@@ -22,30 +23,35 @@ export default function Register() {
     from_time: '10:00', to_time: '18:00', phone: '', email: ''
   })
   const [selectedPins, setSelectedPins] = useState<string[]>([])
-  const [premPos, setPremPos] = useState<1|2|3|null>(null)
+  const [customAreas, setCustomAreas] = useState<CustomArea[]>([])
+  const [wantsPremium, setWantsPremium] = useState(false)
+  const [premPos, setPremPos] = useState<1 | 2 | 3 | null>(null)
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
-
-  const monthly = selectedPins.length * BASE_LISTING_FEE
-  const premWeeklyFee = premPos === 1 ? 5000 : premPos === 2 ? 3000 : premPos === 3 ? 2000 : 0
-  const premMonthly  = Math.round(premWeeklyFee * selectedPins.length * 4.33)
-  const total = monthly + premMonthly
 
   const togglePin = (code: string) =>
     setSelectedPins(p => p.includes(code) ? p.filter(c => c !== code) : [...p, code])
 
   const upd = (k: keyof FormData, v: string) => setForm(f => ({ ...f, [k]: v }))
 
+  const allSelectedAreaNames = [
+    ...selectedPins.map(c => PIN_CODES.find(p => p.code === c)?.area).filter(Boolean),
+    ...customAreas.map(a => a.area_name),
+  ]
+
   const handleSubmit = async () => {
-    if (!selectedPins.length) { setError('Please select at least one PIN code'); return }
+    if (!selectedPins.length && !customAreas.length) {
+      setError('Please select at least one area'); return
+    }
     setLoading(true); setError('')
     try {
       const { error: err } = await supabase.from('doctors').insert({
         name: form.name, qualification: form.qualification,
         reg_number: form.reg_number, speciality: form.speciality,
         clinic_name: form.clinic_name, address: form.address,
-        pin_codes: selectedPins, phone: form.phone, email: form.email,
+        pin_codes: [...selectedPins, ...customAreas.map(a => a.pin_code)],
+        phone: form.phone, email: form.email,
         consultation_fee: parseInt(form.consultation_fee) || 0,
         working_hours: `${DAYS.filter(d => form.working_days.includes(d)).join(',')} ${form.from_time}-${form.to_time}`,
         status: 'pending'
@@ -58,17 +64,20 @@ export default function Register() {
   }
 
   if (done) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 pt-16">
       <div className="card max-w-md w-full text-center shadow-xl">
         <CheckCircle2 className="w-16 h-16 text-teal-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-navy-700 mb-3">Registration Successful!</h2>
-        <p className="text-gray-500 mb-2">Registration ho gayi, Dr. {form.name.split(' ').pop()}! 🎉</p>
-        <p className="text-gray-500 text-sm mb-6">Hamare team 24-48 ghante mein aapka MCI number verify karegi aur listing activate karegi. WhatsApp par confirm karenge.</p>
+        <h2 className="text-2xl font-bold text-navy-700 mb-3">Registration Submitted!</h2>
+        <p className="text-gray-500 mb-2">Shukriya, Dr. {form.name.split(' ').pop()}! 🎉</p>
+        <p className="text-gray-500 text-sm mb-6">
+          Hamare team 24-48 ghante mein aapka MCI number verify karegi, aur
+          aapke selected areas ke hisaab se <strong>pricing WhatsApp par</strong> bhejegi.
+          Confirm karne ke baad listing turant activate ho jayegi.
+        </p>
         <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700">
-          <p className="font-medium mb-1">Selected: {selectedPins.length} PIN code{selectedPins.length > 1 ? 's' : ''}</p>
-          <p>Monthly fee: ₹{total.toLocaleString('en-IN')}</p>
+          <p className="font-medium mb-1">Selected areas: {allSelectedAreaNames.length}</p>
+          <p>{allSelectedAreaNames.join(', ')}</p>
         </div>
-        <p className="text-xs text-gray-400 mt-4">Payment link aapke WhatsApp par bheja jayega verification ke baad</p>
       </div>
     </div>
   )
@@ -80,7 +89,7 @@ export default function Register() {
         {/* Progress bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
-            {['Details', 'PIN Codes', 'Premium', 'Review & Pay'].map((s, i) => (
+            {['Details', 'Areas', 'Premium', 'Review'].map((s, i) => (
               <div key={s} className="flex items-center gap-1">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${step > i + 1 ? 'bg-teal-500 text-white' : step === i + 1 ? 'bg-navy-700 text-white' : 'bg-gray-200 text-gray-500'}`}>
                   {step > i + 1 ? '✓' : i + 1}
@@ -164,15 +173,18 @@ export default function Register() {
             </div>
           )}
 
-          {/* ── STEP 2: PIN SELECTOR ── */}
+          {/* ── STEP 2: AREA SELECTION (no pricing shown) ── */}
           {step === 2 && (
             <div>
-              <h2 className="text-xl font-bold text-navy-700 mb-1">PIN Code Selection</h2>
-              <p className="text-gray-500 text-sm mb-4">Select the areas where you want to appear. Each PIN code costs ₹{BASE_LISTING_FEE.toLocaleString('en-IN')}/month.</p>
+              <h2 className="text-xl font-bold text-navy-700 mb-1">Apne Areas Chunein</h2>
+              <p className="text-gray-500 text-sm mb-4">
+                Un areas ko select karein jahan aap patients tak pahunchna chahte hain.
+                Pricing aapke selected areas ke hisaab se hamari team confirm karegi.
+              </p>
               <div className="flex gap-2 mb-4">
                 <button onClick={() => setSelectedPins(PIN_CODES.map(p => p.code))} className="btn-outline text-xs py-1.5 px-4">Select All 20</button>
                 <button onClick={() => setSelectedPins([])} className="btn-outline text-xs py-1.5 px-4">Clear</button>
-                <button onClick={() => setSelectedPins(['135001', '135003'])} className="btn-outline text-xs py-1.5 px-4">Core 2 PINs</button>
+                <button onClick={() => setSelectedPins(['135001', '135003'])} className="btn-outline text-xs py-1.5 px-4">Core 2 Areas</button>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-6">
                 {PIN_CODES.map(p => (
@@ -184,61 +196,66 @@ export default function Register() {
                   </button>
                 ))}
               </div>
-              {/* Pricing bar */}
-              <div className={`rounded-2xl p-5 ${selectedPins.length ? 'bg-teal-50 border border-teal-200' : 'bg-gray-50 border border-gray-200'}`}>
+
+              {/* Selection count — no rupee amount */}
+              <div className={`rounded-2xl p-5 mb-6 ${selectedPins.length ? 'bg-teal-50 border border-teal-200' : 'bg-gray-50 border border-gray-200'}`}>
                 {selectedPins.length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center">Select at least one PIN code to see pricing</p>
+                  <p className="text-gray-400 text-sm text-center">Select at least one area to continue</p>
                 ) : (
-                  <div className="flex flex-wrap gap-4 justify-between items-center">
-                    <div>
-                      <p className="text-sm text-gray-600"><span className="font-bold text-navy-700 text-lg">{selectedPins.length}</span> PIN code{selectedPins.length > 1 ? 's' : ''} selected</p>
-                      <p className="text-xs text-gray-400">{selectedPins.map(c => PIN_CODES.find(p => p.code === c)?.area).join(', ')}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-teal-600">₹{monthly.toLocaleString('en-IN')}<span className="text-sm text-gray-400 font-normal">/month</span></p>
-                      <p className="text-xs text-gray-400">Annual: ₹{(monthly * 12).toLocaleString('en-IN')}</p>
-                    </div>
-                  </div>
+                  <p className="text-sm text-gray-600 text-center">
+                    <span className="font-bold text-navy-700 text-lg">{selectedPins.length}</span> area{selectedPins.length > 1 ? 's' : ''} selected —
+                    pricing team se WhatsApp par milegi
+                  </p>
                 )}
               </div>
+
+              {/* Custom area search — city/district/PIN not in the preset list */}
+              <CustomAreaSearch
+                existingPins={PIN_CODES.map(p => p.code)}
+                onAreasChange={setCustomAreas}
+              />
             </div>
           )}
 
-          {/* ── STEP 3: PREMIUM ── */}
+          {/* ── STEP 3: PREMIUM (interest only, no pricing) ── */}
           {step === 3 && (
             <div>
               <h2 className="text-xl font-bold text-navy-700 mb-1">Premium Positioning <span className="text-gray-400 font-normal text-base">(Optional)</span></h2>
-              <p className="text-gray-500 text-sm mb-6">Appear at the top of your speciality listing for the selected PINs. Skip if you want the standard listing only.</p>
-              <div className="space-y-3 mb-6">
-                {([
-                  { pos: 1 as 1|2|3, label: 'Position 1 — Top of List', fee: 5000, color: 'border-amber-400 bg-amber-50', badge: '🥇 Gold' },
-                  { pos: 2 as 1|2|3, label: 'Position 2 — Second Spot', fee: 3000, color: 'border-gray-400 bg-gray-50', badge: '🥈 Silver' },
-                  { pos: 3 as 1|2|3, label: 'Position 3 — Third Spot',  fee: 2000, color: 'border-amber-700 bg-orange-50', badge: '🥉 Bronze' },
-                ]).map(opt => (
-                  <label key={opt.pos} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${premPos === opt.pos ? opt.color : 'border-gray-100 hover:border-gray-200'}`}>
-                    <input type="radio" name="pos" value={opt.pos} checked={premPos === opt.pos} onChange={() => setPremPos(opt.pos)} className="accent-teal-600 w-5 h-5" />
-                    <div className="flex-1">
+              <p className="text-gray-500 text-sm mb-6">
+                Apni speciality mein sabse upar dikhna chahte hain? Interest batayein —
+                pricing team confirm karegi.
+              </p>
+              <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-gray-100 hover:border-teal-200 cursor-pointer mb-4">
+                <input type="checkbox" checked={wantsPremium}
+                  onChange={e => { setWantsPremium(e.target.checked); if (!e.target.checked) setPremPos(null) }}
+                  className="w-5 h-5 accent-teal-600" />
+                <span className="text-sm text-gray-700">Haan, mujhe premium position mein interest hai</span>
+              </label>
+
+              {wantsPremium && (
+                <div className="space-y-3">
+                  {([
+                    { pos: 1 as const, label: 'Position 1 — Top of List', badge: '🥇 Gold' },
+                    { pos: 2 as const, label: 'Position 2 — Second Spot', badge: '🥈 Silver' },
+                    { pos: 3 as const, label: 'Position 3 — Third Spot', badge: '🥉 Bronze' },
+                  ]).map(opt => (
+                    <label key={opt.pos} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${premPos === opt.pos ? 'border-teal-400 bg-teal-50' : 'border-gray-100 hover:border-gray-200'}`}>
+                      <input type="radio" name="pos" value={opt.pos} checked={premPos === opt.pos} onChange={() => setPremPos(opt.pos)} className="accent-teal-600 w-5 h-5" />
                       <p className="font-semibold text-gray-800 text-sm">{opt.badge} — {opt.label}</p>
-                      <p className="text-xs text-gray-500">₹{opt.fee.toLocaleString('en-IN')}/week per PIN × {selectedPins.length} PIN{selectedPins.length > 1 ? 's' : ''} = ₹{(opt.fee * selectedPins.length).toLocaleString('en-IN')}/week</p>
-                    </div>
-                    <p className="font-bold text-navy-700 text-sm">~₹{Math.round(opt.fee * selectedPins.length * 4.33).toLocaleString('en-IN')}/mo</p>
-                  </label>
-                ))}
-              </div>
-              {premPos && (
-                <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700 border border-teal-200">
-                  <p>✓ Position {premPos} selected across <strong>{selectedPins.length} PIN code{selectedPins.length > 1 ? 's' : ''}</strong></p>
-                  <p>Monthly premium add-on: <strong>₹{premMonthly.toLocaleString('en-IN')}</strong></p>
+                    </label>
+                  ))}
+                  <p className="text-xs text-gray-400 mt-2">
+                    Pricing aapke selected areas ke hisaab se WhatsApp par confirm ki jayegi.
+                  </p>
                 </div>
               )}
-              <button onClick={() => { setPremPos(null); setStep(4) }} className="mt-4 text-sm text-gray-400 hover:text-gray-600 underline">Skip premium — use standard listing</button>
             </div>
           )}
 
-          {/* ── STEP 4: REVIEW ── */}
+          {/* ── STEP 4: REVIEW & SUBMIT (no payment) ── */}
           {step === 4 && (
             <div>
-              <h2 className="text-xl font-bold text-navy-700 mb-6">Review & Confirm</h2>
+              <h2 className="text-xl font-bold text-navy-700 mb-6">Review & Submit</h2>
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
                   <p><span className="text-gray-500 w-40 inline-block">Name</span> <strong>{form.name}</strong></p>
@@ -246,29 +263,21 @@ export default function Register() {
                   <p><span className="text-gray-500 w-40 inline-block">Speciality</span> <strong>{SPECIALITIES.find(s => s.id === form.speciality)?.en || form.speciality}</strong></p>
                   <p><span className="text-gray-500 w-40 inline-block">Reg. Number</span> <strong>{form.reg_number}</strong></p>
                   <p><span className="text-gray-500 w-40 inline-block">Clinic</span> <strong>{form.clinic_name}</strong></p>
-                  <p><span className="text-gray-500 w-40 inline-block">Consultation Fee</span> <strong>₹{form.consultation_fee}</strong></p>
                   <p><span className="text-gray-500 w-40 inline-block">Phone</span> <strong>+91 {form.phone}</strong></p>
-                  <p><span className="text-gray-500 w-40 inline-block">PIN Codes</span> <strong>{selectedPins.join(', ')}</strong></p>
+                  <p><span className="text-gray-500 w-40 inline-block">Areas</span> <strong>{allSelectedAreaNames.join(', ') || 'None selected'}</strong></p>
+                  {wantsPremium && <p><span className="text-gray-500 w-40 inline-block">Premium interest</span> <strong>Position {premPos || '—'}</strong></p>}
                 </div>
+
                 <div className="bg-navy-700 rounded-xl p-5 text-white">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-white/70">Base listing ({selectedPins.length} PINs × ₹{BASE_LISTING_FEE.toLocaleString('en-IN')})</span>
-                    <span>₹{monthly.toLocaleString('en-IN')}/mo</span>
-                  </div>
-                  {premPos && <div className="flex justify-between text-sm mb-2">
-                    <span className="text-white/70">Premium Position {premPos}</span>
-                    <span>₹{premMonthly.toLocaleString('en-IN')}/mo</span>
-                  </div>}
-                  <div className="border-t border-white/20 pt-3 flex justify-between font-bold text-lg">
-                    <span>Monthly Total</span>
-                    <span>₹{total.toLocaleString('en-IN')}</span>
-                  </div>
-                  <p className="text-white/50 text-xs mt-2">Annual: ₹{(total * 12).toLocaleString('en-IN')}</p>
+                  <h3 className="font-bold mb-2">Aage Kya Hoga?</h3>
+                  <ol className="text-sm text-white/80 space-y-1 list-decimal list-inside">
+                    <li>Hamari team aapka MCI/NMC number verify karegi (24-48 ghante)</li>
+                    <li>Aapke selected areas ke hisaab se pricing WhatsApp par bhejenge</li>
+                    <li>Confirm karne par listing turant activate ho jayegi</li>
+                  </ol>
                 </div>
+
                 {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">
-                  ⚠️ Payment will be requested after MCI/NMC verification (24-48 hrs). You will receive a WhatsApp message with the payment link.
-                </div>
               </div>
             </div>
           )}
@@ -282,20 +291,22 @@ export default function Register() {
             ) : <div />}
             {step < 4 ? (
               <button onClick={() => setStep(s => s + 1)}
-                disabled={step === 1 && (!form.name || !form.speciality || !form.reg_number || !form.clinic_name || !form.phone)}
+                disabled={
+                  (step === 1 && (!form.name || !form.speciality || !form.reg_number || !form.clinic_name || !form.phone)) ||
+                  (step === 2 && selectedPins.length === 0 && customAreas.length === 0)
+                }
                 className="btn-teal disabled:opacity-50 disabled:cursor-not-allowed">
                 Next <ChevronRight className="w-4 h-4" />
               </button>
             ) : (
               <button onClick={handleSubmit} disabled={loading} className="btn-teal px-10 disabled:opacity-60">
-                {loading ? 'Submitting...' : '✓ Confirm Registration'}
+                {loading ? 'Submitting...' : '✓ Submit Registration'}
               </button>
             )}
           </div>
 
         </div>
 
-        {/* Already registered link */}
         <p className="text-center text-sm text-gray-500 mt-6">
           Already registered? <a href="/doctor/login" className="text-teal-600 hover:underline font-medium">Login here →</a>
         </p>
