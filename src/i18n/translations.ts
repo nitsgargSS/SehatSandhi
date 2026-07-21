@@ -528,6 +528,152 @@ export const translations: Tree = {
     titleSuspend: { en: 'Suspend', hi: 'Suspend' },
     titleReactivate: { en: 'Reactivate', hi: 'Reactivate' },
   },
+
+  forDoctorsPage: {
+    heroTitle: { en: "Grow Your Clinic's Reach", hi: 'Apni Clinic Ki Reach Badhayein' },
+    heroDesc: {
+      en: 'Patients in Yamuna Nagar are looking for doctors like you — right now, on WhatsApp. Sehatsandhi puts your clinic directly in their inbox.',
+      hi: 'Yamuna Nagar mein patients aap jaise doctors ko dhundh rahe hain — abhi, WhatsApp par. Sehatsandhi aapki clinic seedhi unke inbox mein pahunchata hai.',
+    },
+    heroCta: { en: 'Register Now →', hi: 'Abhi Register Karein →' },
+
+    problemTitle: { en: 'The Problem We Solve', hi: 'Hum Kaunsi Problem Solve Karte Hain' },
+    problemIntro: { en: "Today, getting a patient to your clinic means:", hi: 'Aaj ek doctor ko patient lana ho toh:' },
+    problem1: { en: '❌ JustDial — fake leads, poor experience', hi: '❌ JustDial — fake leads, bura experience' },
+    problem2: { en: '❌ Practo — metro-focused, tier-2 towns ignored', hi: '❌ Practo — metro focus, tier-2 ignored' },
+    problem3: { en: '❌ Pamphlets — local area only, one-time', hi: '❌ Pamphlets — sirf local area, ek baar' },
+    problem4: { en: '❌ Word of mouth — slow, uncertain', hi: '❌ Word of mouth — slow, uncertain' },
+    solutionIntro: { en: 'What Sehatsandhi does instead:', hi: 'Sehatsandhi kya karta hai:' },
+    solution1: { en: "✅ Active outreach — your listing lands in the patient's WhatsApp inbox", hi: '✅ Active outreach — patient ke WhatsApp inbox mein aapki listing' },
+    solution2: { en: '✅ Only your PIN codes — no irrelevant reach', hi: '✅ Only your PIN codes — no irrelevant reach' },
+    solution3: { en: '✅ Appointment booking, automated', hi: '✅ Appointment booking automated' },
+    solution4: { en: '✅ Analytics — see exactly how many patients came', hi: '✅ Analytics — dekhein kitne patients aaye' },
+
+    howTitle: { en: 'How It Works for Doctors', hi: 'Doctors Ke Liye Kaise Kaam Karta Hai' },
+    howStep1: { en: 'Register + select your PIN codes', hi: 'Register karein + apne PIN codes select karein' },
+    howStep2: { en: 'Choose your speciality + set your slots', hi: 'Apni speciality choose karein + slots set karein' },
+    howStep3: { en: "Patients see your listing on WhatsApp", hi: 'Patients ko WhatsApp par aapki listing milti hai' },
+    howStep4: { en: 'The bot books the appointment automatically', hi: 'Bot automatically appointment book karta hai' },
+    howStep5: { en: 'You get notified — the patient visits', hi: 'Aapko notification milta hai — patient visit karta hai' },
+
+    compareTitle: { en: 'What You Get', hi: 'Aapko Kya Milta Hai' },
+    compareFeature: { en: 'Feature', hi: 'Feature' },
+    compareActive: { en: 'Active WhatsApp outreach', hi: 'Active WhatsApp outreach' },
+    comparePin: { en: 'Local PIN targeting', hi: 'Local PIN targeting' },
+    compareBooking: { en: 'Automated booking', hi: 'Automated booking' },
+    compareAnalytics: { en: 'Monthly analytics', hi: 'Monthly analytics' },
+    compareVerified: { en: 'Verified badge', hi: 'Verified badge' },
+    compareLocal: { en: 'Hindi/local language', hi: 'Hindi/local language' },
+
+    pricingTitle: { en: 'Pricing', hi: 'Pricing' },
+    pricingDesc: {
+      en: "Pricing is based on your area's population and reach — no flat fee. Register and our team will confirm your exact pricing on WhatsApp within 24-48 hours. No lock-in, cancel anytime.",
+      hi: 'Pricing aapke area ki population aur reach ke hisaab se hoti hai — koi flat fee nahi. Register karein aur hamari team 24-48 ghante mein WhatsApp par exact pricing confirm kar degi. No lock-in, cancel anytime.',
+    },
+
+    faqQ1: { en: 'Do I need to download an app?', hi: 'Kya mujhe app download karni hogi?' },
+    faqA1: { en: 'No. Everything happens on WhatsApp and this website — no app needed for you or your patients.', hi: 'Nahi. Sab kuch WhatsApp aur is website par hota hai — na aapko na patients ko koi app chahiye.' },
+    faqQ2: { en: 'How is an appointment confirmed?', hi: 'Appointment kaise confirm hoti hai?' },
+    faqA2: { en: 'The bot books it directly with your patient and notifies you on WhatsApp instantly.', hi: 'Bot seedhe patient ke saath book karta hai aur aapko turant WhatsApp par notify karta hai.' },
+    faqQ3: { en: 'Can I manage my own slots?', hi: 'Kya main apne slots manage kar sakta hoon?' },
+    faqA3: { en: 'Yes, from your dashboard or by messaging our team directly.', hi: 'Haan, apni dashboard se ya hamari team ko WhatsApp karke.' },
+    faqQ4: { en: 'How does payment work?', hi: 'Payment kaise hoti hai?' },
+    faqA4: { en: 'Once your pricing is confirmed, you get a simple monthly payment link — no complicated setup.', hi: 'Pricing confirm hone ke baad, aapko ek simple monthly payment link milta hai — koi complicated setup nahi.' },
+    faqQ5: { en: 'Is MCI/NMC verification mandatory?', hi: 'Kya MCI/NMC verification mandatory hai?' },
+    faqA5: { en: 'Yes — every doctor is verified before their listing goes live. This protects patient trust and your credibility.', hi: 'Haan — har doctor verify hote hain listing live hone se pehle. Yeh patient trust aur aapki credibility dono ke liye zaroori hai.' },
+    faqQ6: { en: "What's the founding member offer?", hi: 'Founding member offer kya hai?' },
+    faqA6: { en: 'Early doctors who join get a limited-time discounted rate — ask our team for current availability.', hi: 'Jaldi join karne wale doctors ko limited-time discounted rate milta hai — current availability ke liye team se poochein.' },
+
+    ctaTitle: { en: 'Become a Founding Member', hi: 'Founding Member Bano' },
+    ctaButton: { en: 'Register Now →', hi: 'Abhi Register Karein →' },
+  },
+
+  forPharmacyPage: {
+    heroTitle: { en: "Prescriptions, Delivered", hi: 'Prescription Seedhi Aapke Paas' },
+    heroDesc: {
+      en: "Doctor prescriptions come straight to you. Deliver medicines home and earn on every order.",
+      hi: 'Doctor ki prescription seedhi aapke paas. Medicines ghar tak pahunchayein aur har order par kamayein.',
+    },
+    heroCta: { en: 'Become a Pharmacy Partner →', hi: 'Pharmacy Partner Banein →' },
+
+    howTitle: { en: 'How It Works', hi: 'Kaise Kaam Karta Hai' },
+    howStep1: { en: 'Register and choose the areas you can deliver to', hi: 'Register karein aur woh areas chunein jahan aap deliver kar sakein' },
+    howStep2: { en: 'A doctor prescribes medicine to a patient', hi: 'Doctor patient ko medicine prescribe karta hai' },
+    howStep3: { en: 'The patient is asked on WhatsApp: "Want home delivery?"', hi: 'Patient se WhatsApp par poocha jaata hai: "Ghar par delivery chahiye?"' },
+    howStep4: { en: 'If yes, the order comes to you', hi: 'Haan kehne par order aapke paas aata hai' },
+    howStep5: { en: 'You deliver and confirm — commission is paid to you', hi: 'Aap deliver karte hain aur confirm karte hain — commission aapko milti hai' },
+
+    commitmentTitle: { en: 'The Commitment', hi: 'The Commitment' },
+    commitmentDesc: {
+      en: 'Only choose PIN codes where you can genuinely guarantee delivery. If you choose a PIN code, patients in that area are promised home delivery — this commitment is your credibility on Sehatsandhi.',
+      hi: 'Sirf woh PIN codes choose karein jahan aap delivery guarantee kar sakein. Agar aap ek PIN code choose karte hain toh us area ke patients ko ghar delivery ka commitment milta hai — yeh commitment aapki credibility hai.',
+    },
+
+    earnTitle: { en: 'What You Earn', hi: 'Aap Kya Kamayenge' },
+    earnCommission: { en: 'Commission per prescription order', hi: 'Per prescription order commission' },
+    earnDelivery: { en: 'You set your own home delivery charge', hi: 'Home delivery charge aap khud set karte hain' },
+    earnListing: { en: 'Monthly listing fee — confirmed based on your area', hi: 'Monthly listing fee — aapke area ke hisaab se confirm hoti hai' },
+
+    requirementsTitle: { en: 'Requirements', hi: 'Requirements' },
+    req1: { en: '✅ Valid drug license', hi: '✅ Valid drug license' },
+    req2: { en: '✅ Home delivery capability in chosen areas', hi: '✅ Home delivery capability chosen areas mein' },
+    req3: { en: '✅ WhatsApp number for order notifications', hi: '✅ WhatsApp number order notifications ke liye' },
+    req4: { en: '✅ Ability to confirm orders within 30 minutes', hi: '✅ 30 minute mein orders confirm karne ki capability' },
+
+    faqQ1: { en: 'How is a prescription verified?', hi: 'Doctor prescription verify kaise hogi?' },
+    faqA1: { en: "The prescribing doctor is already verified on Sehatsandhi, so the prescription comes from a trusted source.", hi: 'Prescribe karne wale doctor already Sehatsandhi par verified hain, isliye prescription trusted source se aati hai.' },
+    faqQ2: { en: 'When do I get paid?', hi: 'Payment kab milega?' },
+    faqA2: { en: 'Commission settlements happen on a regular cycle — details are shared once your partnership is confirmed.', hi: 'Commission settlement regular cycle mein hota hai — details partnership confirm hone ke baad share ki jaati hain.' },
+    faqQ3: { en: 'Can I choose multiple PIN codes?', hi: 'Kya main multiple PIN codes le sakta hoon?' },
+    faqA3: { en: 'Yes, as many as you can genuinely serve with home delivery.', hi: 'Haan, jitne aap genuinely home delivery de sakein.' },
+    faqQ4: { en: 'Is there a time limit to deliver?', hi: 'Delivery karne ka koi time limit hai?' },
+    faqA4: { en: "Yes, patients expect delivery within a reasonable window — this is part of your service commitment.", hi: 'Haan, patients ek reasonable time ke andar delivery expect karte hain — yeh aapke service commitment ka hissa hai.' },
+
+    ctaButton: { en: 'Become a Pharmacy Partner →', hi: 'Pharmacy Partner Banein →' },
+  },
+
+  forLabsPage: {
+    heroTitle: { en: "Test Bookings, Delivered", hi: 'Test Bookings Seedhe Aapke Paas' },
+    heroDesc: {
+      en: "Doctor test prescriptions come straight to your lab. Offer home sample collection and grow your bookings.",
+      hi: 'Doctor ki test prescription seedhi aapke lab tak. Ghar par sample collection karein aur bookings badhayein.',
+    },
+    heroCta: { en: 'Become a Lab Partner →', hi: 'Lab Partner Banein →' },
+
+    howTitle: { en: 'How It Works', hi: 'Kaise Kaam Karta Hai' },
+    howStep1: { en: 'Register and choose the areas you serve', hi: 'Register karein aur woh areas chunein jahan aap service dete hain' },
+    howStep2: { en: 'A doctor prescribes a test', hi: 'Doctor test prescribe karta hai' },
+    howStep3: { en: 'The patient is asked: "Want home sample collection?"', hi: 'Patient se poocha jaata hai: "Ghar par sample collection chahiye?"' },
+    howStep4: { en: 'The patient books a time slot', hi: 'Patient time slot book karta hai' },
+    howStep5: { en: 'Your technician visits, and the digital report goes to the doctor too', hi: 'Aapka technician jaata hai, aur digital report doctor ko bhi jaati hai' },
+
+    commitmentTitle: { en: 'The Commitment', hi: 'The Commitment' },
+    commitmentDesc: {
+      en: 'Only choose PIN codes where you can genuinely offer home collection within your stated time window. This commitment builds patient trust in Sehatsandhi.',
+      hi: 'Sirf woh PIN codes choose karein jahan aap apni stated time window mein home collection genuinely de sakein. Yeh commitment Sehatsandhi mein patient trust banata hai.',
+    },
+
+    earnTitle: { en: 'What You Earn', hi: 'Aap Kya Kamayenge' },
+    earnCommission: { en: 'Commission per test order', hi: 'Per test order commission' },
+    earnCollection: { en: 'You set your own home collection charge', hi: 'Home collection charge aap khud set karte hain' },
+    earnListing: { en: 'Monthly listing fee — confirmed based on your area', hi: 'Monthly listing fee — aapke area ke hisaab se confirm hoti hai' },
+    earnCamps: { en: 'Special opportunity: run health camps through Sehatsandhi for mass bookings', hi: 'Special opportunity: Sehatsandhi ke through health camps chalayein mass bookings ke liye' },
+
+    requirementsTitle: { en: 'Requirements', hi: 'Requirements' },
+    req1: { en: '✅ NABL certification preferred', hi: '✅ NABL certification preferred' },
+    req2: { en: '✅ Home collection capability', hi: '✅ Home collection capability' },
+    req3: { en: '✅ Digital report delivery', hi: '✅ Digital report delivery' },
+    req4: { en: '✅ Response within 2 hours of booking', hi: '✅ 2 ghante ke andar booking response' },
+
+    faqQ1: { en: 'How are test prescriptions verified?', hi: 'Test prescription verify kaise hogi?' },
+    faqA1: { en: 'The prescribing doctor is already verified on Sehatsandhi.', hi: 'Prescribe karne wale doctor already Sehatsandhi par verified hain.' },
+    faqQ2: { en: 'Can I run health camps through Sehatsandhi?', hi: 'Kya main Sehatsandhi ke through health camps chala sakta hoon?' },
+    faqA2: { en: 'Yes — this is a great way to get mass bookings. Ask our team about setting one up.', hi: 'Haan — yeh mass bookings ke liye ek accha tarika hai. Setup ke liye hamari team se poochein.' },
+    faqQ3: { en: 'What if I cannot collect within my stated window?', hi: 'Agar main apni stated window mein collect nahi kar sakta?' },
+    faqA3: { en: 'Only commit to windows you can reliably meet — this protects your reputation on the platform.', hi: 'Sirf unhi windows ka commitment karein jo aap reliably meet kar sakein — yeh platform par aapki reputation protect karta hai.' },
+
+    ctaButton: { en: 'Become a Lab Partner →', hi: 'Lab Partner Banein →' },
+  },
 }
 
 export function getTranslation(path: string, lang: Lang): string {

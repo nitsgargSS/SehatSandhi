@@ -5,6 +5,9 @@ import Footer from './components/Footer'
 import Landing from './pages/Landing'
 import HowItWorks from './pages/HowItWorks'
 import Partners from './pages/Partners'
+import ForDoctors from './pages/ForDoctors'
+import ForPharmacy from './pages/ForPharmacy'
+import ForLabs from './pages/ForLabs'
 import Register from './pages/doctor/Register'
 import DoctorLogin from './pages/doctor/Login'
 import DoctorDashboard from './pages/doctor/Dashboard'
@@ -42,6 +45,9 @@ export default function App() {
           <Route path="/" element={<WithLayout><Landing /></WithLayout>} />
           <Route path="/how-it-works" element={<WithLayout><HowItWorks /></WithLayout>} />
           <Route path="/partners" element={<WithLayout><Partners /></WithLayout>} />
+          <Route path="/for-doctors" element={<WithLayout><ForDoctors /></WithLayout>} />
+          <Route path="/for-pharmacy" element={<WithLayout><ForPharmacy /></WithLayout>} />
+          <Route path="/for-labs" element={<WithLayout><ForLabs /></WithLayout>} />
           <Route path="/points" element={<WithLayout><Points /></WithLayout>} />
           <Route path="/partner" element={<WithLayout><PartnerRegister /></WithLayout>} />
 
