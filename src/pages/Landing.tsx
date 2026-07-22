@@ -193,6 +193,12 @@ export default function Landing() {
               <Link to="/doctor" className="btn-teal mt-8 px-10 py-4 text-base shadow-lg shadow-teal-100">
                 {t('landing.forDocCta')}
               </Link>
+              <p className="text-gray-400 text-sm mt-4">
+                {t('landing.forDocAlreadyRegistered')}{' '}
+                <Link to="/doctor/login" className="text-teal-600 hover:underline font-medium">
+                  {t('landing.forDocLoginLink')}
+                </Link>
+              </p>
             </div>
             <div className="card border border-gray-200 overflow-hidden shadow-lg">
               <div className="bg-navy-700 text-white px-6 py-6">

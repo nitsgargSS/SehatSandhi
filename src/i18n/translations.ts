@@ -12,6 +12,7 @@ export const translations: Tree = {
     points: { en: '🌟 Points', hi: '🌟 Points' },
     bookWhatsapp: { en: '📱 Book on WhatsApp', hi: '📱 WhatsApp Par Book Karein' },
     registerClinic: { en: 'Register Clinic', hi: 'Clinic Register Karein' },
+    login: { en: 'Doctor / Staff Login', hi: 'Doctor / Staff Login' },
   },
 
   footer: {
@@ -26,7 +27,7 @@ export const translations: Tree = {
     partnerOverview: { en: 'Partner Overview', hi: 'Partner Overview' },
     registerAsDoctor: { en: 'Register as Doctor', hi: 'Doctor Ke Roop Mein Register Karein' },
     pharmacyLabAmbulance: { en: 'Pharmacy / Lab / Ambulance', hi: 'Pharmacy / Lab / Ambulance' },
-    partnerLogin: { en: 'Partner Login', hi: 'Partner Login' },
+    partnerLogin: { en: 'Doctor / Staff Login', hi: 'Doctor / Staff Login' },
     contactHeading: { en: 'Contact', hi: 'Contact' },
     address: { en: '📍 Yamuna Nagar, Haryana', hi: '📍 Yamuna Nagar, Haryana' },
     rights: { en: '© 2026 Sehatsandhi. All rights reserved.', hi: '© 2026 Sehatsandhi. Sabhi adhikar surakshit.' },
@@ -83,6 +84,8 @@ export const translations: Tree = {
     forDocBenefit5: { en: 'Appointment dashboard — see who booked with you', hi: 'Appointment dashboard — dekho kaunse patients aaye' },
     forDocBenefit6: { en: 'See your exact price live while registering — no hidden fees', hi: 'Register karte samay hi exact price live dikhta hai — koi hidden fees nahi' },
     forDocCta: { en: 'Register Now →', hi: 'Abhi Register Karein →' },
+    forDocAlreadyRegistered: { en: 'Already registered?', hi: 'Pehle Se Registered Hain?' },
+    forDocLoginLink: { en: 'Login here →', hi: 'Yahan Login Karein →' },
     forDocCardTitle: { en: 'Transparent, Area-Based Pricing', hi: 'Transparent, Area Ke Hisaab Se Pricing' },
     forDocCardDesc: {
       en: 'Pricing depends on your area\'s population and reach — so it\'s never a flat, one-size-fits-all fee. Select your areas during registration and see your exact monthly price instantly, before you even submit.',
@@ -636,6 +639,18 @@ export const translations: Tree = {
     noDoctorsLinkedYet: { en: 'No doctors linked yet.', hi: 'No doctors linked yet.' },
     orgApprove: { en: 'Approve', hi: 'Approve' },
     orgSuspend: { en: 'Suspend', hi: 'Suspend' },
+    verifyButton: { en: 'Verify', hi: 'Verify' },
+    verificationChecklistTitle: { en: 'Verification Checklist', hi: 'Verification Checklist' },
+    checkNmcLink: { en: 'Check on NMC Registry →', hi: 'NMC Registry Par Check Karein →' },
+    nonNmcNote: { en: 'This qualification is not covered by NMC — check the respective state Dental/AYUSH council instead.', hi: 'Yeh qualification NMC ke under nahi aati — respective state Dental/AYUSH council check karein.' },
+    checklistItem1: { en: 'Name matches the registry', hi: 'Name registry se match karta hai' },
+    checklistItem2: { en: 'Qualification matches', hi: 'Qualification match karti hai' },
+    checklistItem3: { en: 'Registration status is active', hi: 'Registration status active hai' },
+    checklistItem4: { en: 'Clinic address is findable online (Google Maps/listing)', hi: 'Clinic address online findable hai (Google Maps/listing)' },
+    verificationNotesLabel: { en: 'Verification Notes', hi: 'Verification Notes' },
+    verificationNotesPlaceholder: { en: 'e.g. Verified on NMC registry — name and reg number match. Google listing confirmed.', hi: 'e.g. NMC registry par verify kiya — name aur reg number match karte hain.' },
+    saveNotesButton: { en: 'Save Notes', hi: 'Save Notes' },
+    notesSaved: { en: 'Notes saved ✓', hi: 'Notes saved ✓' },
   },
 
   forDoctorsPage: {
