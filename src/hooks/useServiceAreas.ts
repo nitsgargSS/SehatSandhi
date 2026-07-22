@@ -41,36 +41,57 @@ export function useServiceAreas() {
 
   useEffect(() => {
     const fetchAreas = async () => {
-      const { data, error: err } = await supabase
-        .from('service_areas')
-        .select(`
-          pin_code, area_name, district, state, tier_number,
-          pricing_tiers ( tier_name, monthly_price, premium_slot_1_weekly, premium_slot_2_weekly, premium_slot_3_weekly )
-        `)
-        .eq('is_active', true)
-        .order('tier_number', { ascending: false })
-        .order('area_name', { ascending: true })
+      // Two independent queries, merged in JS — avoids relying on
+      // PostgREST's embedded-join schema cache, which can lag
+      // behind when tables are created via raw SQL rather than
+      // Supabase's dashboard UI (exactly what happened here).
+      const [areasRes, tiersRes] = await Promise.all([
+        supabase
+          .from('service_areas')
+          .select('pin_code, area_name, district, state, tier_number')
+          .eq('is_active', true)
+          .order('area_name', { ascending: true }),
+        supabase
+          .from('pricing_tiers')
+          .select('tier_number, tier_name, monthly_price, premium_slot_1_weekly, premium_slot_2_weekly, premium_slot_3_weekly')
+          .eq('is_active', true),
+      ])
 
-      if (err) {
-        setError(err.message)
+      if (areasRes.error) {
+        setError(`service_areas: ${areasRes.error.message}`)
+        setLoading(false)
+        return
+      }
+      if (tiersRes.error) {
+        setError(`pricing_tiers: ${tiersRes.error.message}`)
         setLoading(false)
         return
       }
 
-      const flattened: ServiceArea[] = (data || []).map((row: any) => ({
-        pin_code: row.pin_code,
-        area_name: row.area_name,
-        district: row.district,
-        state: row.state,
-        tier_number: row.tier_number,
-        tier_name: row.pricing_tiers?.tier_name || '',
-        monthly_price: row.pricing_tiers?.monthly_price || 0,
-        premium_slot_1_weekly: row.pricing_tiers?.premium_slot_1_weekly || 0,
-        premium_slot_2_weekly: row.pricing_tiers?.premium_slot_2_weekly || 0,
-        premium_slot_3_weekly: row.pricing_tiers?.premium_slot_3_weekly || 0,
-      }))
+      const tiersByNumber = new Map(
+        (tiersRes.data || []).map(t => [t.tier_number, t])
+      )
 
-      setAreas(flattened)
+      const merged: ServiceArea[] = (areasRes.data || [])
+        .map(a => {
+          const tier = tiersByNumber.get(a.tier_number)
+          return {
+            pin_code: a.pin_code,
+            area_name: a.area_name,
+            district: a.district,
+            state: a.state,
+            tier_number: a.tier_number,
+            tier_name: tier?.tier_name || '',
+            monthly_price: tier?.monthly_price || 0,
+            premium_slot_1_weekly: tier?.premium_slot_1_weekly || 0,
+            premium_slot_2_weekly: tier?.premium_slot_2_weekly || 0,
+            premium_slot_3_weekly: tier?.premium_slot_3_weekly || 0,
+          }
+        })
+        // highest tier first, matching the original sort order
+        .sort((a, b) => b.tier_number - a.tier_number || a.area_name.localeCompare(b.area_name))
+
+      setAreas(merged)
       setLoading(false)
     }
     fetchAreas()

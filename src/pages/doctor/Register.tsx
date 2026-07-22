@@ -19,7 +19,7 @@ const WEEKS_PER_MONTH = 4.33
 
 export default function Register() {
   const { t, lang } = useLanguage()
-  const { areas, loading: areasLoading } = useServiceAreas()
+  const { areas, loading: areasLoading, error: areasError } = useServiceAreas()
 
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<FormData>({
@@ -219,6 +219,10 @@ export default function Register() {
               {areasLoading ? (
                 <div className="flex items-center justify-center gap-2 text-gray-400 text-sm py-12">
                   <Loader2 className="w-4 h-4 animate-spin" /> {t('registerPage.loadingAreas')}
+                </div>
+              ) : areasError ? (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-600 mb-4">
+                  ⚠️ Could not load areas: {areasError}
                 </div>
               ) : (
                 <>

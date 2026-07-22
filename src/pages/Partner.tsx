@@ -9,7 +9,7 @@ type PartnerType = 'pharmacy' | 'lab' | 'insurance' | 'ambulance' | null
 
 export default function PartnerRegister() {
   const { t, lang } = useLanguage()
-  const { areas, loading: areasLoading } = useServiceAreas()
+  const { areas, loading: areasLoading, error: areasError } = useServiceAreas()
 
   const [type, setType] = useState<PartnerType>(null)
   const [done, setDone] = useState(false)
@@ -195,6 +195,10 @@ export default function PartnerRegister() {
                 {areasLoading ? (
                   <div className="flex items-center justify-center gap-2 text-gray-400 text-sm py-8">
                     <Loader2 className="w-4 h-4 animate-spin" /> {t('partnerPage.loadingAreas')}
+                  </div>
+                ) : areasError ? (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-600 mb-4">
+                    ⚠️ Could not load areas: {areasError}
                   </div>
                 ) : (
                   <>
