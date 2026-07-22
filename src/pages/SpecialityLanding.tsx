@@ -58,11 +58,33 @@ export default function SpecialityLanding() {
         setDoctors(merged)
       } else {
         setDoctors([])
+        // Auto-log: a patient landed here and found nothing —
+        // this alone is a useful expansion signal even if they
+        // never click "Notify Me"
+        supabase.from('unmet_demand_log').insert({
+          source: 'website',
+          pin_code: area.code,
+          speciality: speciality.id,
+          patient_wants_notification: false,
+        })
       }
       setLoading(false)
     }
     load()
   }, [specId, areaSlug]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const logNotifyMeClick = () => {
+    if (!area || !speciality) return
+    // Explicit "yes, tell me" signal — separate row from the
+    // passive page-view log above, since this one carries
+    // real patient intent
+    supabase.from('unmet_demand_log').insert({
+      source: 'website',
+      pin_code: area.code,
+      speciality: speciality.id,
+      patient_wants_notification: true,
+    })
+  }
 
   if (!speciality || !area) {
     return (
@@ -153,7 +175,7 @@ export default function SpecialityLanding() {
             <h2 className="font-bold text-navy-700 mb-2">{t('specialityLandingPage.noDoctorsYetTitle')}</h2>
             <p className="text-gray-500 text-sm max-w-md mx-auto mb-6">{t('specialityLandingPage.noDoctorsYetDesc')}</p>
             <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Namaste! Mujhe ${area.area} mein ${speciality.en} chahiye — koi available hone par batayein.`)}`}
-               target="_blank" rel="noreferrer" className="btn-teal inline-flex mb-8">
+               target="_blank" rel="noreferrer" onClick={logNotifyMeClick} className="btn-teal inline-flex mb-8">
               {t('specialityLandingPage.notifyMeButton')}
             </a>
 
