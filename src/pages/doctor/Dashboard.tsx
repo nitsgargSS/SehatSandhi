@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Users, Plus, X } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Users, Plus, X, Tent } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor, Appointment, PIN_CODES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
@@ -13,21 +13,49 @@ interface StaffMember {
   is_active: boolean
 }
 
+interface CampOffer {
+  id: string
+  camp_type: 'free_camp' | 'special_offer'
+  title: string
+  description: string
+  services_offered: string | null
+  date_from: string
+  date_to: string
+  time_slot: string | null
+  pin_codes: string[]
+  status: string
+  created_at: string
+}
+
 export default function DoctorDashboard() {
   const { t } = useLanguage()
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [staff, setStaff] = useState<StaffMember[]>([])
+  const [camps, setCamps] = useState<CampOffer[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'overview' | 'appointments' | 'areas' | 'staff'>('overview')
+  const [tab, setTab] = useState<'overview' | 'appointments' | 'areas' | 'staff' | 'camps'>('overview')
 
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [staffForm, setStaffForm] = useState({ full_name: '', whatsapp_number: '', role: 'receptionist', can_login_web: true })
   const [staffSubmitting, setStaffSubmitting] = useState(false)
 
+  const [showAddCamp, setShowAddCamp] = useState(false)
+  const [campForm, setCampForm] = useState({
+    camp_type: 'free_camp' as 'free_camp' | 'special_offer',
+    title: '', description: '', services_offered: '',
+    date_from: '', date_to: '', time_slot: '', pin_codes: [] as string[],
+  })
+  const [campSubmitting, setCampSubmitting] = useState(false)
+
   const loadStaff = async (doctorId: string) => {
     const { data } = await supabase.from('clinic_users').select('*').eq('doctor_id', doctorId).order('created_at', { ascending: true })
     setStaff(data || [])
+  }
+
+  const loadCamps = async (doctorId: string) => {
+    const { data } = await supabase.from('camps_offers').select('*').eq('doctor_id', doctorId).order('created_at', { ascending: false })
+    setCamps(data || [])
   }
 
   useEffect(() => {
@@ -40,6 +68,7 @@ export default function DoctorDashboard() {
         const { data: appts } = await supabase.from('appointments').select('*').eq('doctor_id', doc.id).order('created_at', { ascending: false }).limit(20)
         setAppointments(appts || [])
         await loadStaff(doc.id)
+        await loadCamps(doc.id)
       }
       setLoading(false)
     }
@@ -70,6 +99,57 @@ export default function DoctorDashboard() {
     if (doctor) await loadStaff(doctor.id)
   }
 
+  const toggleCampArea = (code: string) =>
+    setCampForm(f => ({ ...f, pin_codes: f.pin_codes.includes(code) ? f.pin_codes.filter(c => c !== code) : [...f.pin_codes, code] }))
+
+  const submitCamp = async () => {
+    if (!doctor || !campForm.title || !campForm.date_from || !campForm.date_to || campForm.pin_codes.length === 0) return
+    setCampSubmitting(true)
+    await supabase.from('camps_offers').insert({
+      doctor_id: doctor.id,
+      camp_type: campForm.camp_type,
+      title: campForm.title,
+      description: campForm.description,
+      services_offered: campForm.services_offered || null,
+      date_from: campForm.date_from,
+      date_to: campForm.date_to,
+      time_slot: campForm.time_slot || null,
+      pin_codes: campForm.pin_codes,
+      status: 'pending_approval',
+    })
+    await loadCamps(doctor.id)
+    setCampForm({ camp_type: 'free_camp', title: '', description: '', services_offered: '', date_from: '', date_to: '', time_slot: '', pin_codes: [] })
+    setShowAddCamp(false)
+    setCampSubmitting(false)
+  }
+
+  // Soft, informational quota — not a hard block, just a guideline
+  // shown to the doctor (admin uses judgment during approval)
+  const now = new Date()
+  const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const freeCampsThisQuarter = camps.filter(c =>
+    c.camp_type === 'free_camp' && ['approved', 'completed'].includes(c.status) && new Date(c.date_from) >= quarterStart
+  ).length
+  const offersThisMonth = camps.filter(c =>
+    c.camp_type === 'special_offer' && ['approved', 'completed'].includes(c.status) && new Date(c.date_from) >= monthStart
+  ).length
+
+  const campStatusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      pending_approval: 'badge-pending', approved: 'badge-active', completed: 'badge-active',
+      rejected: 'badge-suspended', cancelled: 'badge-suspended',
+    }
+    return map[status] || 'badge-pending'
+  }
+  const campStatusLabel = (status: string, t: (k: string) => string) => {
+    const map: Record<string, string> = {
+      pending_approval: t('dashboardPage.statusPendingApproval'), approved: t('dashboardPage.statusApproved'),
+      completed: t('dashboardPage.statusCompleted'), rejected: t('dashboardPage.statusRejected'), cancelled: t('dashboardPage.statusCancelled'),
+    }
+    return map[status] || status
+  }
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">{t('dashboardPage.loading')}</div></div>
   if (!doctor) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -84,6 +164,7 @@ export default function DoctorDashboard() {
     { id: 'appointments', label: t('dashboardPage.tabAppointments'), icon: <Calendar className="w-4 h-4" /> },
     { id: 'areas', label: t('dashboardPage.tabAreas'), icon: <MapPin className="w-4 h-4" /> },
     { id: 'staff', label: t('dashboardPage.tabStaff'), icon: <Users className="w-4 h-4" /> },
+    { id: 'camps', label: t('dashboardPage.tabCamps'), icon: <Tent className="w-4 h-4" /> },
   ]
 
   const roleLabel = (r: string) => r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
@@ -294,6 +375,127 @@ export default function DoctorDashboard() {
             <div className="mt-4 bg-teal-50 border border-teal-100 rounded-xl p-3">
               <p className="text-xs text-teal-700">💡 {t('dashboardPage.staffNote')}</p>
             </div>
+          </div>
+        )}
+
+        {/* Camps & Offers */}
+        {tab === 'camps' && (
+          <div className="card shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-navy-700">{t('dashboardPage.campsHeading')}</h3>
+              {!showAddCamp && (
+                <button onClick={() => setShowAddCamp(true)} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
+                  <Plus className="w-4 h-4" /> {t('dashboardPage.addCampButton')}
+                </button>
+              )}
+            </div>
+
+            {/* Quota guidance — informational only */}
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-500">{t('dashboardPage.campQuotaFreeNote')}</p>
+                <p className="text-lg font-bold text-navy-700">{freeCampsThisQuarter}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-500">{t('dashboardPage.campQuotaOfferNote')}</p>
+                <p className="text-lg font-bold text-navy-700">{offersThisMonth}</p>
+              </div>
+            </div>
+
+            {showAddCamp && (
+              <div className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm font-medium text-navy-700">{t('dashboardPage.campsHeading')}</p>
+                  <button onClick={() => setShowAddCamp(false)}><X className="w-4 h-4 text-gray-400" /></button>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('dashboardPage.campTypeLabel')}</label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setCampForm(f => ({ ...f, camp_type: 'free_camp' }))}
+                      className={`flex-1 text-sm py-2 rounded-lg border-2 transition ${campForm.camp_type === 'free_camp' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-gray-200 text-gray-500'}`}>
+                      {t('dashboardPage.campTypeFree')}
+                    </button>
+                    <button type="button" onClick={() => setCampForm(f => ({ ...f, camp_type: 'special_offer' }))}
+                      className={`flex-1 text-sm py-2 rounded-lg border-2 transition ${campForm.camp_type === 'special_offer' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-gray-200 text-gray-500'}`}>
+                      {t('dashboardPage.campTypeOffer')}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('dashboardPage.campTitleLabel')}</label>
+                  <input className="input-field" placeholder="Free Skin Checkup Camp"
+                    value={campForm.title} onChange={e => setCampForm(f => ({ ...f, title: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('dashboardPage.campDescLabel')}</label>
+                  <textarea className="input-field" rows={2}
+                    value={campForm.description} onChange={e => setCampForm(f => ({ ...f, description: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('dashboardPage.campServicesLabel')}</label>
+                  <input className="input-field" placeholder="Free BP check, sugar test, eye screening"
+                    value={campForm.services_offered} onChange={e => setCampForm(f => ({ ...f, services_offered: e.target.value }))} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('dashboardPage.campDateFromLabel')}</label>
+                    <input className="input-field" type="date" value={campForm.date_from} onChange={e => setCampForm(f => ({ ...f, date_from: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('dashboardPage.campDateToLabel')}</label>
+                    <input className="input-field" type="date" value={campForm.date_to} onChange={e => setCampForm(f => ({ ...f, date_to: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('dashboardPage.campTimeLabel')}</label>
+                  <input className="input-field" placeholder="10am-1pm"
+                    value={campForm.time_slot} onChange={e => setCampForm(f => ({ ...f, time_slot: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-2 block">{t('dashboardPage.campAreasLabel')}</label>
+                  <div className="flex flex-wrap gap-2">
+                    {(doctor?.pin_codes || []).map(code => {
+                      const pin = PIN_CODES.find(p => p.code === code)
+                      return (
+                        <button key={code} type="button" onClick={() => toggleCampArea(code)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${campForm.pin_codes.includes(code) ? 'bg-teal-600 text-white border-teal-600' : 'border-gray-300 text-gray-500 hover:border-teal-400'}`}>
+                          {pin?.area || code}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <button onClick={submitCamp}
+                  disabled={campSubmitting || !campForm.title || !campForm.date_from || !campForm.date_to || campForm.pin_codes.length === 0}
+                  className="btn-teal text-sm disabled:opacity-50">
+                  {t('dashboardPage.campSubmitButton')}
+                </button>
+              </div>
+            )}
+
+            <h4 className="text-sm font-medium text-navy-700 mb-3">{t('dashboardPage.campHistoryTitle')}</h4>
+            {camps.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-8">{t('dashboardPage.campNoneYet')}</p>
+            ) : (
+              <div className="space-y-2">
+                {camps.map(c => (
+                  <div key={c.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl flex-wrap gap-2">
+                    <div>
+                      <p className="font-medium text-gray-800 text-sm">
+                        {c.camp_type === 'free_camp' ? '🆓' : '💰'} {c.title}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(c.date_from).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – {new Date(c.date_to).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        {' · '}{c.pin_codes.join(', ')}
+                      </p>
+                    </div>
+                    <span className={campStatusBadge(c.status)}>{campStatusLabel(c.status, t)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
