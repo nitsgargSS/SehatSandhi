@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Users, Plus, X, Tent } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Users, Plus, X, Tent, Clock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor, Appointment, PIN_CODES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
+import { generateSlotsForDate, DAYS_OF_WEEK, AvailabilityTemplate } from '../../lib/availability'
 
 interface StaffMember {
   id: string
@@ -34,7 +35,10 @@ export default function DoctorDashboard() {
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [camps, setCamps] = useState<CampOffer[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'overview' | 'appointments' | 'areas' | 'staff' | 'camps'>('overview')
+  const [tab, setTab] = useState<'overview' | 'appointments' | 'areas' | 'staff' | 'camps' | 'availability'>('overview')
+  const [availability, setAvailability] = useState<AvailabilityTemplate[]>([])
+  const [availSaving, setAvailSaving] = useState(false)
+  const [availSaved, setAvailSaved] = useState(false)
 
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [staffForm, setStaffForm] = useState({ full_name: '', whatsapp_number: '', role: 'receptionist', can_login_web: true })
@@ -58,6 +62,11 @@ export default function DoctorDashboard() {
     setCamps(data || [])
   }
 
+  const loadAvailability = async (doctorId: string) => {
+    const { data } = await supabase.from('doctor_availability').select('*').eq('doctor_id', doctorId).eq('is_active', true)
+    setAvailability((data as AvailabilityTemplate[]) || [])
+  }
+
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -69,6 +78,7 @@ export default function DoctorDashboard() {
         setAppointments(appts || [])
         await loadStaff(doc.id)
         await loadCamps(doc.id)
+        await loadAvailability(doc.id)
       }
       setLoading(false)
     }
@@ -150,6 +160,59 @@ export default function DoctorDashboard() {
     return map[status] || status
   }
 
+  // ── Availability management ──
+  // One row per working day in local state; toggling "working
+  // this day" adds/removes a row, editing fields just mutates
+  // it directly. Nothing hits the database until Save.
+  const getDayRow = (dow: number) => availability.find(a => a.day_of_week === dow)
+
+  const toggleWorkingDay = (dow: number) => {
+    const existing = getDayRow(dow)
+    if (existing) {
+      setAvailability(prev => prev.filter(a => a.day_of_week !== dow))
+    } else {
+      setAvailability(prev => [...prev, {
+        id: `new-${dow}`, doctor_id: doctor?.id || '', day_of_week: dow,
+        start_time: '10:00:00', end_time: '18:00:00', slot_duration_minutes: 15, is_active: true,
+      }])
+    }
+  }
+
+  const updateDayRow = (dow: number, field: 'start_time' | 'end_time' | 'slot_duration_minutes', value: string | number) => {
+    setAvailability(prev => prev.map(a => a.day_of_week === dow ? { ...a, [field]: value } : a))
+  }
+
+  const saveAvailability = async () => {
+    if (!doctor) return
+    setAvailSaving(true)
+    // Simplest reliable approach: clear this doctor's existing
+    // template, then insert the current state fresh — avoids
+    // having to diff old vs new rows individually
+    await supabase.from('doctor_availability').delete().eq('doctor_id', doctor.id)
+    if (availability.length > 0) {
+      await supabase.from('doctor_availability').insert(
+        availability.map(a => ({
+          doctor_id: doctor.id,
+          day_of_week: a.day_of_week,
+          start_time: a.start_time,
+          end_time: a.end_time,
+          slot_duration_minutes: a.slot_duration_minutes,
+          is_active: true,
+        }))
+      )
+    }
+    await loadAvailability(doctor.id)
+    setAvailSaving(false)
+    setAvailSaved(true)
+    setTimeout(() => setAvailSaved(false), 2000)
+  }
+
+  // Preview: today's actual slots, minus already-booked ones
+  const todaysBookedTimes = appointments
+    .filter(a => a.status !== 'cancelled')
+    .map(a => a.slot_datetime)
+  const todaysSlots = generateSlotsForDate(availability, new Date(), todaysBookedTimes)
+
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">{t('dashboardPage.loading')}</div></div>
   if (!doctor) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -165,6 +228,7 @@ export default function DoctorDashboard() {
     { id: 'areas', label: t('dashboardPage.tabAreas'), icon: <MapPin className="w-4 h-4" /> },
     { id: 'staff', label: t('dashboardPage.tabStaff'), icon: <Users className="w-4 h-4" /> },
     { id: 'camps', label: t('dashboardPage.tabCamps'), icon: <Tent className="w-4 h-4" /> },
+    { id: 'availability', label: t('dashboardPage.tabAvailability'), icon: <Clock className="w-4 h-4" /> },
   ]
 
   const roleLabel = (r: string) => r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
@@ -496,6 +560,70 @@ export default function DoctorDashboard() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Availability */}
+        {tab === 'availability' && (
+          <div className="card shadow-sm">
+            <h3 className="font-bold text-navy-700 mb-1">{t('dashboardPage.availabilityHeading')}</h3>
+            <p className="text-gray-500 text-sm mb-5">{t('dashboardPage.availabilityDesc')}</p>
+
+            <div className="space-y-2 mb-6">
+              {DAYS_OF_WEEK.map(day => {
+                const row = getDayRow(day.value)
+                const isWorking = !!row
+                return (
+                  <div key={day.value} className={`rounded-xl border-2 p-3 transition-all ${isWorking ? 'border-teal-200 bg-teal-50/30' : 'border-gray-100'}`}>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 min-w-[110px]">
+                        <input type="checkbox" checked={isWorking} onChange={() => toggleWorkingDay(day.value)} className="w-4 h-4 accent-teal-600" />
+                        {day.labelEn}
+                      </label>
+                      {isWorking && row && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <input type="time" className="input-field w-auto text-sm py-1.5"
+                            value={row.start_time.slice(0, 5)}
+                            onChange={e => updateDayRow(day.value, 'start_time', `${e.target.value}:00`)} />
+                          <span className="text-gray-400 text-sm">–</span>
+                          <input type="time" className="input-field w-auto text-sm py-1.5"
+                            value={row.end_time.slice(0, 5)}
+                            onChange={e => updateDayRow(day.value, 'end_time', `${e.target.value}:00`)} />
+                          <select className="input-field w-auto text-sm py-1.5"
+                            value={row.slot_duration_minutes}
+                            onChange={e => updateDayRow(day.value, 'slot_duration_minutes', parseInt(e.target.value))}>
+                            {[10, 15, 20, 30].map(m => <option key={m} value={m}>{m} {t('dashboardPage.minutesSuffix')}</option>)}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="flex items-center gap-3 mb-8">
+              <button onClick={saveAvailability} disabled={availSaving} className="btn-teal text-sm px-6 disabled:opacity-60">
+                {t('dashboardPage.saveAvailabilityButton')}
+              </button>
+              {availSaved && <span className="text-teal-600 text-sm font-medium">{t('dashboardPage.availabilitySaved')}</span>}
+            </div>
+
+            <div className="border-t border-gray-100 pt-5">
+              <h4 className="text-sm font-medium text-navy-700 mb-3">{t('dashboardPage.previewTitle')}</h4>
+              {todaysSlots.length === 0 ? (
+                <p className="text-gray-400 text-sm">{t('dashboardPage.noSlotsToday')}</p>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                  {todaysSlots.map(s => (
+                    <div key={s.datetime}
+                      className={`text-center text-xs py-2 rounded-lg border ${s.available ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-gray-200 bg-gray-100 text-gray-400 line-through'}`}>
+                      {s.time}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
