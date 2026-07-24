@@ -45,17 +45,25 @@ export default function Points() {
   const verifyOTP = async () => {
     if (otp.length < 4) { setError(t('pointsPage.errorOtp')); return }
     setLoading(true); setError('')
-    const { error: err } = await supabase.auth.verifyOtp({
+    const { data: verifyData, error: err } = await supabase.auth.verifyOtp({
       phone: `+91${phone}`, token: otp, type: 'sms'
     })
-    if (err) { setError(t('pointsPage.errorOtpWrong')); setLoading(false); return }
-    // Load patient data
-    const phoneHash = btoa(`+91${phone}`)
+    if (err || !verifyData.user) { setError(t('pointsPage.errorOtpWrong')); setLoading(false); return }
+
+    // Use the REAL authenticated identity from the verified phone
+    // session — not a reversible btoa() encoding of the phone
+    // number. This is what actually makes RLS work correctly:
+    // each patient can only ever see their own row, enforced by
+    // the database itself, not just by the app trusting a
+    // decodable string.
+    const userId = verifyData.user.id
+
     const { data: profile } = await supabase
       .from('patient_profiles')
       .select('*')
-      .eq('phone_hash', phoneHash)
-      .single()
+      .eq('supabase_user_id', userId)
+      .maybeSingle()
+
     if (profile) {
       const { data: pointsData } = await supabase
         .from('sehat_points')
@@ -73,9 +81,19 @@ export default function Points() {
       })
       setStep('dashboard')
     } else {
-      // New patient
+      // New patient — create their profile linked to the real
+      // authenticated user ID, not a phone hash
+      const { data: newProfile } = await supabase
+        .from('patient_profiles')
+        .insert({
+          supabase_user_id: userId,
+          referral_code: `SEHAT-${phone.slice(-4)}`,
+        })
+        .select()
+        .single()
+
       setPatient({
-        id: '', name: t('pointsPage.patientDefaultName'), referral_code: `SEHAT-${phone.slice(-4)}`,
+        id: newProfile?.id || '', name: t('pointsPage.patientDefaultName'), referral_code: `SEHAT-${phone.slice(-4)}`,
         badge: t('pointsPage.badgeStarter'), total_points: 50,
         history: [{ description: t('pointsPage.welcomeBonus'), points: 50, created_at: new Date().toISOString() }]
       })
