@@ -65,7 +65,7 @@ export default function AdminDashboard() {
   const [doctors, setDoctors] = useState<DoctorWithOrg[]>([])
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs'>('pending')
+  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs' | 'coupons'>('pending')
   const [search, setSearch] = useState('')
   const [actionMsg, setActionMsg] = useState('')
   const [expandedDoctorId, setExpandedDoctorId] = useState<string | null>(null)
@@ -84,6 +84,16 @@ export default function AdminDashboard() {
   const [subForm, setSubForm] = useState({ speciality: '', pin_code: '', monthly_price: '' })
   const [doctorSearch, setDoctorSearch] = useState('')
 
+  // ── Coupons state ──
+  const [coupons, setCoupons] = useState<any[]>([])
+  const [showAddCoupon, setShowAddCoupon] = useState(false)
+  const [couponForm, setCouponForm] = useState({
+    code: '', discount_type: 'percentage', discount_value: '',
+    applies_to: 'first_payment', duration_months: '',
+    max_uses: '', valid_from: new Date().toISOString().split('T')[0], valid_until: '',
+    show_on_banner: false, banner_text_en: '', banner_text_hi: '', notes: '',
+  })
+
   const load = async () => {
     setLoading(true)
     const { data } = await supabase.from('doctors').select('*').order('created_at', { ascending: false })
@@ -95,6 +105,8 @@ export default function AdminDashboard() {
     setCamps((campData as any) || [])
     const { data: orgData } = await supabase.from('organizations').select('*').order('created_at', { ascending: false })
     setOrganizations(orgData || [])
+    const { data: couponData } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false })
+    setCoupons(couponData || [])
     setLoading(false)
   }
 
@@ -168,6 +180,55 @@ export default function AdminDashboard() {
     setOrgForm({ name: '', type: 'hospital', registration_number: '', address: '', phone: '', email: '' })
     setShowAddOrg(false)
     load()
+  }
+
+  // ── Coupon actions ──
+  const createCoupon = async () => {
+    if (!couponForm.code || !couponForm.discount_value) return
+    await supabase.from('discount_codes').insert({
+      code: couponForm.code.trim().toUpperCase(),
+      discount_type: couponForm.discount_type,
+      discount_value: parseInt(couponForm.discount_value),
+      applies_to: couponForm.applies_to,
+      duration_months: couponForm.duration_months ? parseInt(couponForm.duration_months) : null,
+      max_uses: couponForm.max_uses ? parseInt(couponForm.max_uses) : null,
+      valid_from: couponForm.valid_from || null,
+      valid_until: couponForm.valid_until || null,
+      show_on_banner: couponForm.show_on_banner,
+      banner_text_en: couponForm.banner_text_en || null,
+      banner_text_hi: couponForm.banner_text_hi || null,
+      notes: couponForm.notes || null,
+      created_by: 'admin',
+      is_active: true,
+    })
+    setCouponForm({
+      code: '', discount_type: 'percentage', discount_value: '',
+      applies_to: 'first_payment', duration_months: '',
+      max_uses: '', valid_from: new Date().toISOString().split('T')[0], valid_until: '',
+      show_on_banner: false, banner_text_en: '', banner_text_hi: '', notes: '',
+    })
+    setShowAddCoupon(false)
+    load()
+  }
+
+  const toggleCouponActive = async (id: string, current: boolean) => {
+    await supabase.from('discount_codes').update({ is_active: !current }).eq('id', id)
+    load()
+  }
+
+  const deleteCoupon = async (id: string, code: string) => {
+    if (!window.confirm(`${t('adminDashboardPage.deleteCouponConfirm')} ${code}?`)) return
+    await supabase.from('discount_codes').delete().eq('id', id)
+    load()
+  }
+
+  const couponStatusLabel = (c: any) => {
+    const today = new Date().toISOString().split('T')[0]
+    if (!c.is_active) return { label: t('adminDashboardPage.couponInactive'), cls: 'badge-suspended' }
+    if (c.valid_until && c.valid_until < today) return { label: t('adminDashboardPage.couponExpired'), cls: 'badge-suspended' }
+    if (c.valid_from && c.valid_from > today) return { label: t('adminDashboardPage.couponScheduled'), cls: 'badge-pending' }
+    if (c.max_uses !== null && (c.current_uses || 0) >= c.max_uses) return { label: t('adminDashboardPage.couponExhausted2'), cls: 'badge-suspended' }
+    return { label: t('adminDashboardPage.couponLive'), cls: 'badge-active' }
   }
 
   const approveOrg = async (id: string) => {
@@ -257,6 +318,7 @@ export default function AdminDashboard() {
               { id: 'all', label: t('adminDashboardPage.navAllDoctors'), count: 0, badge: false },
               { id: 'camps', label: t('adminDashboardPage.navCamps'), count: pendingCamps.length, badge: pendingCamps.length > 0 },
               { id: 'orgs', label: t('adminDashboardPage.navOrgs'), count: 0, badge: false },
+              { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
             ].map(n => (
               <button key={n.id} onClick={() => { setTab(n.id as any); setSelectedOrgId(null) }}
                 className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-between ${tab === n.id ? 'bg-teal-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}>
@@ -663,6 +725,157 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* ── COUPONS ── */}
+          {tab === 'coupons' && (
+            <div className="card shadow-sm">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="font-bold text-navy-700 text-lg">{t('adminDashboardPage.couponsHeading')}</h2>
+                {!showAddCoupon && (
+                  <button onClick={() => setShowAddCoupon(true)} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
+                    <Plus className="w-4 h-4" /> {t('adminDashboardPage.addCouponButton')}
+                  </button>
+                )}
+              </div>
+
+              {showAddCoupon && (
+                <div className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.couponCodeLabel')}</label>
+                      <input className="input-field uppercase" placeholder="DIWALI30"
+                        value={couponForm.code} onChange={e => setCouponForm(f => ({ ...f, code: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.couponTypeLabel')}</label>
+                      <select className="input-field" value={couponForm.discount_type}
+                        onChange={e => setCouponForm(f => ({ ...f, discount_type: e.target.value }))}>
+                        <option value="percentage">{t('adminDashboardPage.couponTypePercentage')}</option>
+                        <option value="fixed_amount">{t('adminDashboardPage.couponTypeFixed')}</option>
+                        <option value="free_months">{t('adminDashboardPage.couponTypeFreeMonths')}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">
+                        {couponForm.discount_type === 'percentage' ? t('adminDashboardPage.couponValuePercent')
+                          : couponForm.discount_type === 'fixed_amount' ? t('adminDashboardPage.couponValueAmount')
+                          : t('adminDashboardPage.couponValueMonths')}
+                      </label>
+                      <input className="input-field" type="number" placeholder={couponForm.discount_type === 'percentage' ? '30' : '1000'}
+                        value={couponForm.discount_value} onChange={e => setCouponForm(f => ({ ...f, discount_value: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.couponDurationLabel')}</label>
+                      <input className="input-field" type="number" placeholder="3"
+                        value={couponForm.duration_months} onChange={e => setCouponForm(f => ({ ...f, duration_months: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.couponMaxUsesLabel')}</label>
+                      <input className="input-field" type="number" placeholder={t('adminDashboardPage.couponUnlimitedPlaceholder')}
+                        value={couponForm.max_uses} onChange={e => setCouponForm(f => ({ ...f, max_uses: e.target.value }))} />
+                    </div>
+                    <div />
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.couponValidFromLabel')}</label>
+                      <input className="input-field" type="date"
+                        value={couponForm.valid_from} onChange={e => setCouponForm(f => ({ ...f, valid_from: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.couponValidUntilLabel')}</label>
+                      <input className="input-field" type="date"
+                        value={couponForm.valid_until} onChange={e => setCouponForm(f => ({ ...f, valid_until: e.target.value }))} />
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm text-gray-700 pt-1">
+                    <input type="checkbox" checked={couponForm.show_on_banner}
+                      onChange={e => setCouponForm(f => ({ ...f, show_on_banner: e.target.checked }))}
+                      className="w-4 h-4 accent-amber-500" />
+                    {t('adminDashboardPage.couponShowBannerLabel')}
+                  </label>
+
+                  {couponForm.show_on_banner && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-amber-50 border border-amber-100 rounded-lg p-3">
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.couponBannerEnLabel')}</label>
+                        <input className="input-field" placeholder="Diwali Offer — 30% off for 3 months. Use code DIWALI30"
+                          value={couponForm.banner_text_en} onChange={e => setCouponForm(f => ({ ...f, banner_text_en: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.couponBannerHiLabel')}</label>
+                        <input className="input-field" placeholder="दिवाली ऑफर — 3 महीने 30% छूट। कोड DIWALI30"
+                          value={couponForm.banner_text_hi} onChange={e => setCouponForm(f => ({ ...f, banner_text_hi: e.target.value }))} />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.couponNotesLabel')}</label>
+                    <input className="input-field" placeholder={t('adminDashboardPage.couponNotesPlaceholder')}
+                      value={couponForm.notes} onChange={e => setCouponForm(f => ({ ...f, notes: e.target.value }))} />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={createCoupon} disabled={!couponForm.code || !couponForm.discount_value}
+                      className="btn-teal text-sm disabled:opacity-50">{t('adminDashboardPage.couponCreateButton')}</button>
+                    <button onClick={() => setShowAddCoupon(false)} className="btn-outline text-sm">✕</button>
+                  </div>
+                </div>
+              )}
+
+              {coupons.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-12">{t('adminDashboardPage.couponNoneYet')}</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-gray-100 text-gray-400 text-xs">
+                      <th className="text-left py-3 px-2">{t('adminDashboardPage.couponCodeLabel')}</th>
+                      <th className="text-left py-3 px-2">{t('adminDashboardPage.couponColDiscount')}</th>
+                      <th className="text-left py-3 px-2">{t('adminDashboardPage.couponColValidity')}</th>
+                      <th className="text-left py-3 px-2">{t('adminDashboardPage.couponColUsage')}</th>
+                      <th className="text-left py-3 px-2">🏷️</th>
+                      <th className="text-left py-3 px-2">{t('adminDashboardPage.colStatus')}</th>
+                      <th className="py-3 px-2">{t('adminDashboardPage.colActions')}</th>
+                    </tr></thead>
+                    <tbody>{coupons.map(c => {
+                      const status = couponStatusLabel(c)
+                      return (
+                        <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                          <td className="py-3 px-2 font-mono font-bold text-navy-700">{c.code}</td>
+                          <td className="py-3 px-2 text-gray-600">
+                            {c.discount_type === 'percentage' && `${c.discount_value}%`}
+                            {c.discount_type === 'fixed_amount' && `₹${c.discount_value}`}
+                            {c.discount_type === 'free_months' && `${t('adminDashboardPage.couponFreeMonthsShort')}`}
+                            {c.duration_months && <span className="text-xs text-gray-400"> · {c.duration_months}mo</span>}
+                          </td>
+                          <td className="py-3 px-2 text-xs text-gray-500">
+                            {c.valid_from ? new Date(c.valid_from).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
+                            {' → '}
+                            {c.valid_until ? new Date(c.valid_until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : t('adminDashboardPage.couponNoExpiry')}
+                          </td>
+                          <td className="py-3 px-2 text-gray-600">{c.current_uses || 0}{c.max_uses !== null ? ` / ${c.max_uses}` : ''}</td>
+                          <td className="py-3 px-2">{c.show_on_banner && <span title="Shown on homepage banner">🏷️</span>}</td>
+                          <td className="py-3 px-2"><span className={status.cls}>{status.label}</span></td>
+                          <td className="py-3 px-2">
+                            <div className="flex gap-1 justify-center">
+                              <button onClick={() => toggleCouponActive(c.id, c.is_active)}
+                                className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition text-xs font-medium">
+                                {c.is_active ? t('adminDashboardPage.couponPause') : t('adminDashboardPage.couponResume')}
+                              </button>
+                              <button onClick={() => deleteCoupon(c.id, c.code)}
+                                className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}</tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </main>

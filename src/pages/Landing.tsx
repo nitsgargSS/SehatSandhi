@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react'
 import { SPECIALITIES, WA_NUMBER } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
 import type { Lang } from '../i18n/translations'
+import OfferBanner from '../components/OfferBanner'
 
 const SPEC_ICONS: Record<string, string> = {
   GEN:'🏥', SKIN:'🌿', DENT:'🦷', EYE:'👁️', PAED:'👶',
@@ -48,6 +49,7 @@ export default function Landing() {
 
   return (
     <div className="pt-16">
+      <OfferBanner />
 
       {/* ── HERO ── */}
       <section className="min-h-[90vh] flex items-center bg-gradient-to-br from-white via-teal-50/30 to-white">
