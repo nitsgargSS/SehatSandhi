@@ -10,7 +10,7 @@ type FormData = {
   name: string; qualification: string; speciality: string; reg_number: string
   clinic_name: string; address: string; consultation_fee: string
   working_days: string[]; from_time: string; to_time: string
-  phone: string; email: string
+  phone: string; email: string; password: string
 }
 
 const QUALIFICATIONS = ['MBBS', 'MD', 'MS', 'BDS', 'BHMS', 'BAMS', 'DNB', 'DM', 'MCh', 'Other']
@@ -26,7 +26,7 @@ export default function Register() {
     name: '', qualification: 'MBBS', speciality: '', reg_number: '',
     clinic_name: '', address: '', consultation_fee: '',
     working_days: ['Mon','Tue','Wed','Thu','Fri','Sat'],
-    from_time: '10:00', to_time: '18:00', phone: '', email: ''
+    from_time: '10:00', to_time: '18:00', phone: '', email: '', password: ''
   })
   const [selectedPins, setSelectedPins] = useState<string[]>([])
   const [customAreas, setCustomAreas] = useState<CustomArea[]>([])
@@ -73,6 +73,17 @@ export default function Register() {
     }
     setLoading(true); setError('')
     try {
+      // Create the actual login account FIRST. Without this, the
+      // doctor would have a business profile row but no way to
+      // ever log in — Login.tsx and every doctor-facing RLS
+      // policy depend on a real Supabase Auth session existing.
+      const { data: authData, error: authErr } = await supabase.auth.signUp({
+        email: form.email,
+        password: form.password,
+      })
+      if (authErr) throw authErr
+      if (!authData.user) throw new Error('Account creation failed. Please try again.')
+
       const { error: err } = await supabase.from('doctors').insert({
         name: form.name, qualification: form.qualification,
         reg_number: form.reg_number, speciality: form.speciality,
@@ -183,8 +194,13 @@ export default function Register() {
                   <input className="input-field" type="tel" placeholder="9876543210" maxLength={10} value={form.phone} onChange={e => upd('phone', e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelEmail')}</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelEmail')} *</label>
                   <input className="input-field" type="email" placeholder="doctor@clinic.com" value={form.email} onChange={e => upd('email', e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">{t('registerPage.labelPassword')} *</label>
+                  <input className="input-field" type="password" placeholder="••••••••" minLength={6} value={form.password} onChange={e => upd('password', e.target.value)} />
+                  <p className="text-xs text-gray-400 mt-1">{t('registerPage.passwordHint')}</p>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-2 block">{t('registerPage.labelWorkingDays')}</label>
@@ -387,7 +403,7 @@ export default function Register() {
             {step < 4 ? (
               <button onClick={() => setStep(s => s + 1)}
                 disabled={
-                  (step === 1 && (!form.name || !form.speciality || !form.reg_number || !form.clinic_name || !form.phone)) ||
+                  (step === 1 && (!form.name || !form.speciality || !form.reg_number || !form.clinic_name || !form.phone || !form.email || form.password.length < 6)) ||
                   (step === 2 && selectedPins.length === 0 && customAreas.length === 0)
                 }
                 className="btn-teal disabled:opacity-50 disabled:cursor-not-allowed">

@@ -208,7 +208,8 @@ export const translations: Tree = {
     placeholderAddress: { en: 'Full address with landmark', hi: 'पूरा पता लैंडमार्क सहित' },
     labelPhone: { en: 'Phone (+91) *', hi: 'फ़ोन (+91) *' },
     labelEmail: { en: 'Email', hi: 'ईमेल' },
-    labelWorkingDays: { en: 'Working Days', hi: 'काम के दिन' },
+    labelPassword: { en: 'Password (for your dashboard login)', hi: 'पासवर्ड (डैशबोर्ड लॉगिन के लिए)' },
+    passwordHint: { en: 'Minimum 6 characters — you\'ll use this to log in later', hi: 'कम से कम 6 कैरेक्टर — बाद में Login के लिए यही यूज़ करेंगे' },
     labelWorkingHours: { en: 'Working Hours', hi: 'काम के घंटे' },
 
     step2Title: { en: 'Choose Your Areas', hi: 'अपने एरिया चुनें' },
