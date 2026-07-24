@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Building2, Plus, Trash2, ChevronLeft } from 'lucide-react'
+import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Building2, Plus, Trash2, ChevronLeft, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
@@ -12,7 +12,13 @@ import LanguageSwitcher from '../../components/LanguageSwitcher'
 interface DoctorWithOrg extends Doctor {
   organization_id?: string | null
   is_hospital_doctor?: boolean
+  verification_notes?: string | null
 }
+
+// Qualifications actually covered by NMC's Indian Medical
+// Register — dental/homeopathy/ayurveda have their own
+// separate councils, so the NMC link isn't relevant for them
+const NMC_QUALIFICATIONS = ['MBBS', 'MD', 'MS', 'DNB', 'DM', 'MCh']
 
 interface CampOfferRow {
   id: string
@@ -62,6 +68,11 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs'>('pending')
   const [search, setSearch] = useState('')
   const [actionMsg, setActionMsg] = useState('')
+  const [expandedDoctorId, setExpandedDoctorId] = useState<string | null>(null)
+  const [notesDraft, setNotesDraft] = useState('')
+  const [notesSavedId, setNotesSavedId] = useState<string | null>(null)
+  const [rejectModal, setRejectModal] = useState<{ type: 'doctor' | 'camp'; id: string; name: string } | null>(null)
+  const [rejectReasonInput, setRejectReasonInput] = useState('')
 
   // ── Organizations state ──
   const [organizations, setOrganizations] = useState<Organization[]>([])
@@ -106,11 +117,41 @@ export default function AdminDashboard() {
     if (!error) { setActionMsg(`✓ ${name} ${t('adminDashboardPage.approvedMsgSuffix')}`); load(); setTimeout(() => setActionMsg(''), 3000) }
   }
 
-  const reject = async (id: string, name: string) => {
-    const reason = window.prompt(`${t('adminDashboardPage.rejectPromptPrefix')} ${name}?`)
-    if (!reason) return
-    await supabase.from('doctors').update({ status: 'suspended' }).eq('id', id)
-    setActionMsg(`✗ ${name} ${t('adminDashboardPage.rejectedMsgSuffix')}`); load(); setTimeout(() => setActionMsg(''), 3000)
+  const openRejectModal = (type: 'doctor' | 'camp', id: string, name: string) => {
+    setRejectModal({ type, id, name })
+    setRejectReasonInput('')
+  }
+
+  const confirmReject = async () => {
+    if (!rejectModal || !rejectReasonInput.trim()) return
+    if (rejectModal.type === 'doctor') {
+      await supabase.from('doctors').update({ status: 'suspended' }).eq('id', rejectModal.id)
+      setActionMsg(`✗ ${rejectModal.name} ${t('adminDashboardPage.rejectedMsgSuffix')}`)
+    } else {
+      await supabase.from('camps_offers').update({
+        status: 'rejected', admin_notes: rejectReasonInput, reviewed_by: 'admin', reviewed_at: new Date().toISOString(),
+      }).eq('id', rejectModal.id)
+      setActionMsg(`✗ "${rejectModal.name}" ${t('adminDashboardPage.campRejectedMsg')}`)
+    }
+    setRejectModal(null)
+    load()
+    setTimeout(() => setActionMsg(''), 3000)
+  }
+
+  const toggleVerify = (doctor: DoctorWithOrg) => {
+    if (expandedDoctorId === doctor.id) {
+      setExpandedDoctorId(null)
+    } else {
+      setExpandedDoctorId(doctor.id)
+      setNotesDraft(doctor.verification_notes || '')
+    }
+  }
+
+  const saveVerificationNotes = async (id: string) => {
+    await supabase.from('doctors').update({ verification_notes: notesDraft }).eq('id', id)
+    setNotesSavedId(id)
+    load()
+    setTimeout(() => setNotesSavedId(null), 2000)
   }
 
   const approveCamp = async (id: string, title: string) => {
@@ -118,15 +159,6 @@ export default function AdminDashboard() {
       status: 'approved', reviewed_by: 'admin', reviewed_at: new Date().toISOString(),
     }).eq('id', id)
     setActionMsg(`✓ "${title}" ${t('adminDashboardPage.campApprovedMsg')}`); load(); setTimeout(() => setActionMsg(''), 3000)
-  }
-
-  const rejectCamp = async (id: string, title: string) => {
-    const reason = window.prompt(t('adminDashboardPage.rejectCampPrompt'))
-    if (!reason) return
-    await supabase.from('camps_offers').update({
-      status: 'rejected', admin_notes: reason, reviewed_by: 'admin', reviewed_at: new Date().toISOString(),
-    }).eq('id', id)
-    setActionMsg(`✗ "${title}" ${t('adminDashboardPage.campRejectedMsg')}`); load(); setTimeout(() => setActionMsg(''), 3000)
   }
 
   // ── Organization actions ──
@@ -304,32 +336,71 @@ export default function AdminDashboard() {
                         </span>
                       </td>
                       <td className="py-3 px-2">
-                        <div className="flex gap-1 justify-center">
+                        <div className="flex gap-1 justify-center flex-wrap">
+                          <button onClick={() => toggleVerify(d)}
+                            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition ${expandedDoctorId === d.id ? 'bg-navy-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-500'}`}>
+                            <Search className="w-3.5 h-3.5" /> {t('adminDashboardPage.verifyButton')}
+                          </button>
                           {d.status === 'pending' && <>
-                            <button onClick={() => approve(d.id, d.name)} title={t('adminDashboardPage.titleApprove')}
-                              className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition">
-                              <CheckCircle2 className="w-4 h-4" />
+                            <button onClick={() => approve(d.id, d.name)}
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleApprove')}
                             </button>
-                            <button onClick={() => reject(d.id, d.name)} title={t('adminDashboardPage.titleReject')}
-                              className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition">
-                              <XCircle className="w-4 h-4" />
+                            <button onClick={() => openRejectModal('doctor', d.id, d.name)}
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
+                              <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleReject')}
                             </button>
                           </>}
                           {d.status === 'active' && (
-                            <button onClick={() => reject(d.id, d.name)} title={t('adminDashboardPage.titleSuspend')}
-                              className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition">
-                              <XCircle className="w-4 h-4" />
+                            <button onClick={() => openRejectModal('doctor', d.id, d.name)}
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
+                              <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleSuspend')}
                             </button>
                           )}
                           {d.status === 'suspended' && (
-                            <button onClick={() => approve(d.id, d.name)} title={t('adminDashboardPage.titleReactivate')}
-                              className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition">
-                              <CheckCircle2 className="w-4 h-4" />
+                            <button onClick={() => approve(d.id, d.name)}
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleReactivate')}
                             </button>
                           )}
                         </div>
                       </td>
                     </tr>
+                    {expandedDoctorId === d.id && (
+                      <tr>
+                        <td colSpan={7} className="bg-navy-50 border-b border-gray-100 px-4 py-4">
+                          <div className="max-w-xl">
+                            <p className="font-bold text-navy-700 text-sm mb-2">{t('adminDashboardPage.verificationChecklistTitle')}</p>
+                            {NMC_QUALIFICATIONS.includes(d.qualification) ? (
+                              <a href="https://www.nmc.org.in/information-desk/indian-medical-register/" target="_blank" rel="noreferrer"
+                                className="text-teal-600 hover:underline text-sm font-medium inline-block mb-3">
+                                {t('adminDashboardPage.checkNmcLink')}
+                              </a>
+                            ) : (
+                              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3">
+                                ⚠️ {t('adminDashboardPage.nonNmcNote')}
+                              </p>
+                            )}
+                            <ul className="text-xs text-gray-600 space-y-1 mb-3 list-disc list-inside">
+                              <li>{t('adminDashboardPage.checklistItem1')}</li>
+                              <li>{t('adminDashboardPage.checklistItem2')}</li>
+                              <li>{t('adminDashboardPage.checklistItem3')}</li>
+                              <li>{t('adminDashboardPage.checklistItem4')}</li>
+                            </ul>
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.verificationNotesLabel')}</label>
+                            <textarea className="input-field text-sm mb-2" rows={2}
+                              placeholder={t('adminDashboardPage.verificationNotesPlaceholder')}
+                              value={notesDraft} onChange={e => setNotesDraft(e.target.value)} />
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => saveVerificationNotes(d.id)} className="btn-teal text-xs py-1.5 px-3">
+                                {t('adminDashboardPage.saveNotesButton')}
+                              </button>
+                              {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   ))}</tbody>
                 </table>
               </div>
@@ -369,13 +440,13 @@ export default function AdminDashboard() {
                       </td>
                       <td className="py-3 px-2">
                         <div className="flex gap-1 justify-center">
-                          <button onClick={() => approveCamp(c.id, c.title)} title={t('adminDashboardPage.titleApprove')}
-                            className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition">
-                            <CheckCircle2 className="w-4 h-4" />
+                          <button onClick={() => approveCamp(c.id, c.title)}
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleApprove')}
                           </button>
-                          <button onClick={() => rejectCamp(c.id, c.title)} title={t('adminDashboardPage.titleReject')}
-                            className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition">
-                            <XCircle className="w-4 h-4" />
+                          <button onClick={() => openRejectModal('camp', c.id, c.title)}
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
+                            <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleReject')}
                           </button>
                         </div>
                       </td>
@@ -466,12 +537,12 @@ export default function AdminDashboard() {
                           <div className="flex gap-1 justify-center items-center">
                             <button onClick={() => openOrgDetail(o.id)} className="text-xs text-teal-600 hover:underline font-medium mr-2">{t('adminDashboardPage.viewDetailsButton')}</button>
                             {o.status !== 'active' ? (
-                              <button onClick={() => approveOrg(o.id)} title={t('adminDashboardPage.orgApprove')} className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition">
-                                <CheckCircle2 className="w-4 h-4" />
+                              <button onClick={() => approveOrg(o.id)} className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.orgApprove')}
                               </button>
                             ) : (
-                              <button onClick={() => suspendOrg(o.id)} title={t('adminDashboardPage.orgSuspend')} className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition">
-                                <XCircle className="w-4 h-4" />
+                              <button onClick={() => suspendOrg(o.id)} className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
+                                <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.orgSuspend')}
                               </button>
                             )}
                           </div>
@@ -594,6 +665,30 @@ export default function AdminDashboard() {
           )}
         </main>
       </div>
+
+      {/* Styled modal replacing window.prompt() — used for both
+          doctor suspend/reject and camp/offer rejection */}
+      {rejectModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setRejectModal(null)}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-navy-700 mb-1">{t('adminDashboardPage.rejectModalTitle')}</h3>
+            <p className="text-sm text-gray-500 mb-4">{rejectModal.name}</p>
+            <label className="text-xs font-medium text-gray-600 mb-1 block">{t('adminDashboardPage.rejectReasonLabel')}</label>
+            <textarea className="input-field text-sm mb-4" rows={3} autoFocus
+              placeholder={t('adminDashboardPage.rejectReasonPlaceholder')}
+              value={rejectReasonInput} onChange={e => setRejectReasonInput(e.target.value)} />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setRejectModal(null)} className="btn-outline text-sm px-4">
+                {t('adminDashboardPage.modalCancel')}
+              </button>
+              <button onClick={confirmReject} disabled={!rejectReasonInput.trim()}
+                className="bg-red-500 hover:bg-red-600 text-white text-sm font-medium px-4 py-2 rounded-full disabled:opacity-50 transition">
+                {t('adminDashboardPage.modalConfirmReject')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
