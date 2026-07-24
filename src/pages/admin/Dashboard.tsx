@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Building2, Plus, Trash2, ChevronLeft, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
@@ -315,7 +315,8 @@ export default function AdminDashboard() {
                     <th className="py-3 px-2">{t('adminDashboardPage.colActions')}</th>
                   </tr></thead>
                   <tbody>{filtered.map(d => (
-                    <tr key={d.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                    <Fragment key={d.id}>
+                    <tr className="border-b border-gray-50 hover:bg-gray-50 transition">
                       <td className="py-3 px-2">
                         <p className="font-medium text-gray-800">{d.name} {d.is_hospital_doctor && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}</p>
                         <p className="text-xs text-gray-400">{d.qualification} · {d.phone}</p>
@@ -401,6 +402,7 @@ export default function AdminDashboard() {
                         </td>
                       </tr>
                     )}
+                    </Fragment>
                   ))}</tbody>
                 </table>
               </div>
