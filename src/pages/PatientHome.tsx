@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
 import { WA_NUMBER } from '../types'
 
@@ -22,6 +23,7 @@ interface Strings {
   doctors: string; hospitals: string; pharmacy: string; labs: string; insurance: string; ambulance: string
   doc_teaser_title: string; doc_teaser_sub: string; how: string; step1: string; step2: string; step3: string
   trust_verified: string; trust_free: string; trust_wa: string
+  biz_cta: string; biz_title: string; biz_sub: string
 }
 
 const DICT: Record<'en' | 'hi', Strings> = {
@@ -38,6 +40,9 @@ const DICT: Record<'en' | 'hi', Strings> = {
     doc_teaser_title: 'Find the right doctor', doc_teaser_sub: 'Eye, ENT, Skin, Heart & 16 more',
     how: 'How it works', step1: 'Pick a service', step2: 'Chat on WhatsApp', step3: 'Booking confirmed',
     trust_verified: 'Verified providers', trust_free: 'Free for you', trust_wa: 'All on WhatsApp',
+    biz_cta: 'Register your business',
+    biz_title: 'Are you a healthcare provider?',
+    biz_sub: 'Doctors, hospitals, pharmacies, labs, insurance & ambulance — get found by families near you.',
   },
   hi: {
     brand: 'सेहतसंधि', area_label: 'आपका इलाका',
@@ -52,6 +57,9 @@ const DICT: Record<'en' | 'hi', Strings> = {
     doc_teaser_title: 'सही डॉक्टर चुनें', doc_teaser_sub: 'आँख, नाक-कान-गला, त्वचा, हृदय और 16 अन्य',
     how: 'यह कैसे काम करता है', step1: 'सेवा चुनें', step2: 'व्हाट्सएप पर बात करें', step3: 'बुकिंग पक्की',
     trust_verified: 'सत्यापित प्रोवाइडर', trust_free: 'आपके लिए मुफ़्त', trust_wa: 'सब कुछ व्हाट्सएप पर',
+    biz_cta: 'अपना बिज़नेस रजिस्टर करें',
+    biz_title: 'आप हेल्थकेयर प्रोवाइडर हैं?',
+    biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब, बीमा और एम्बुलेंस — आपके इलाके के परिवार आपको ढूँढ पाएंगे।',
   },
 }
 
@@ -115,6 +123,42 @@ function BookCta({ t, link, fullWidth }: { t: Strings; link: string; fullWidth?:
     }}>
       <WaGlyph /> {t.book}
     </a>
+  )
+}
+
+// Provider-side entry point. Filled brand green (#0E9F6E) — the outlined
+// version washed out against the cream page and the white cards.
+function BusinessCta({ t, compact, fullWidth }: { t: Strings; compact?: boolean; fullWidth?: boolean }) {
+  return (
+    <Link to="/business" style={{
+      display: fullWidth ? 'flex' : 'inline-flex', width: fullWidth ? '100%' : 'auto',
+      alignItems: 'center', justifyContent: 'center', gap: 7,
+      background: '#0E9F6E', color: '#fff',
+      fontWeight: 800, fontSize: compact ? 13 : 14.5,
+      padding: compact ? '8px 15px' : '13px 22px', borderRadius: 999, whiteSpace: 'nowrap',
+      boxShadow: '0 8px 18px -8px rgba(14,159,110,.7)',
+    }}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" style={{ width: compact ? 15 : 17, height: compact ? 15 : 17, flex: '0 0 auto' }}>
+        <path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5h16V20H4z" /><path d="M9.5 20v-5h5v5" />
+      </svg>
+      {t.biz_cta}
+    </Link>
+  )
+}
+
+function BusinessCard({ t, row }: { t: Strings; row?: boolean }) {
+  return (
+    <div style={{
+      background: '#fff', border: '1px solid #eee6d8', borderRadius: row ? 18 : 16,
+      padding: row ? '22px 26px' : '15px 16px',
+      display: 'flex', flexDirection: row ? 'row' : 'column', alignItems: row ? 'center' : 'stretch', gap: row ? 24 : 0,
+    }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: row ? 17 : 14.5, fontWeight: 800, color: '#14201c' }}>{t.biz_title}</div>
+        <div style={{ fontSize: row ? 14 : 12.5, color: '#7b8781', margin: row ? '4px 0 0' : '3px 0 12px', lineHeight: 1.5 }}>{t.biz_sub}</div>
+      </div>
+      <BusinessCta t={t} fullWidth={!row} />
+    </div>
   )
 }
 
@@ -233,6 +277,7 @@ export default function PatientHome() {
           </div>
           <div style={{ padding: '16px 20px 4px' }}><DoctorTeaser t={t} /></div>
           <div style={{ padding: '18px 22px 8px' }}><HowItWorksCard t={t} /></div>
+          <div style={{ padding: '14px 20px 18px' }}><BusinessCard t={t} /></div>
           <div style={{ marginTop: 'auto' }}><TrustRow t={t} /></div>
         </div>
       </div>
@@ -243,6 +288,7 @@ export default function PatientHome() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '28px 0 8px' }}>
           <Brand size={22} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <BusinessCta t={t} compact />
             <div style={{ width: 240 }}><AreaSelect t={t} area={area} setArea={setArea} compact /></div>
             <LangButton label={langBtn} onClick={toggleLang} />
           </div>
@@ -272,6 +318,9 @@ export default function PatientHome() {
 
         {/* full-width doctor teaser band */}
         <div style={{ padding: '20px 0 0' }}><DoctorTeaser t={t} /></div>
+
+        {/* provider band — second entry point for the header CTA */}
+        <div style={{ padding: '16px 0 0' }}><BusinessCard t={t} row /></div>
       </div>
     </div>
   )

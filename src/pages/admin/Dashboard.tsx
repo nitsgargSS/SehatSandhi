@@ -60,12 +60,23 @@ interface OrgSubscription {
   status: string
 }
 
+// supabase vertical_billing — how each vertical pays. The edge functions read
+// this same table when pricing, so it is the authority, not a display copy.
+interface VerticalBillingRow {
+  vertical: string
+  db_speciality: string
+  billing_model: 'pincode_monthly' | 'commission'
+  commission_percent: number | null
+  commission_basis: string | null
+  is_active: boolean
+}
+
 export default function AdminDashboard() {
   const { t } = useLanguage()
   const [doctors, setDoctors] = useState<DoctorWithOrg[]>([])
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs' | 'coupons'>('pending')
+  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs' | 'coupons' | 'billing'>('pending')
   const [search, setSearch] = useState('')
   const [actionMsg, setActionMsg] = useState('')
   const [expandedDoctorId, setExpandedDoctorId] = useState<string | null>(null)
@@ -83,6 +94,9 @@ export default function AdminDashboard() {
   const [orgForm, setOrgForm] = useState({ name: '', type: 'hospital', registration_number: '', address: '', phone: '', email: '' })
   const [subForm, setSubForm] = useState({ speciality: '', pin_code: '', monthly_price: '' })
   const [doctorSearch, setDoctorSearch] = useState('')
+
+  // ── Per-vertical billing plans (read-only) ──
+  const [billingPlans, setBillingPlans] = useState<VerticalBillingRow[]>([])
 
   // ── Coupons state ──
   const [coupons, setCoupons] = useState<any[]>([])
@@ -107,6 +121,11 @@ export default function AdminDashboard() {
     setOrganizations(orgData || [])
     const { data: couponData } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false })
     setCoupons(couponData || [])
+    // Per-vertical billing plans. Read-only here: rates are the authority the
+    // edge functions price against, so they change in the SQL editor, not
+    // behind an admin password.
+    const { data: billingData } = await supabase.from('vertical_billing').select('*')
+    setBillingPlans((billingData as VerticalBillingRow[]) || [])
     setLoading(false)
   }
 
@@ -319,6 +338,7 @@ export default function AdminDashboard() {
               { id: 'camps', label: t('adminDashboardPage.navCamps'), count: pendingCamps.length, badge: pendingCamps.length > 0 },
               { id: 'orgs', label: t('adminDashboardPage.navOrgs'), count: 0, badge: false },
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
+              { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
             ].map(n => (
               <button key={n.id} onClick={() => { setTab(n.id as any); setSelectedOrgId(null) }}
                 className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-between ${tab === n.id ? 'bg-teal-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}>
@@ -873,6 +893,53 @@ export default function AdminDashboard() {
                         </tr>
                       )
                     })}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'billing' && (
+            <div className="card shadow-sm">
+              <div className="mb-1">
+                <h2 className="font-bold text-navy-700 text-lg">{t('adminDashboardPage.billingHeading')}</h2>
+              </div>
+              <p className="text-sm text-gray-500 mb-5">{t('adminDashboardPage.billingSubtitle')}</p>
+
+              {billingPlans.length === 0 ? (
+                <p className="text-sm text-gray-400 py-6 text-center">{t('adminDashboardPage.billingEmpty')}</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-gray-500 border-b">
+                        <th className="pb-2 px-2">{t('adminDashboardPage.billingColVertical')}</th>
+                        <th className="pb-2 px-2">{t('adminDashboardPage.billingColSpeciality')}</th>
+                        <th className="pb-2 px-2">{t('adminDashboardPage.billingColModel')}</th>
+                        <th className="pb-2 px-2">{t('adminDashboardPage.billingColRate')}</th>
+                        <th className="pb-2 px-2">{t('adminDashboardPage.billingColBasis')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billingPlans.map(p => {
+                        const commission = p.billing_model === 'commission'
+                        return (
+                          <tr key={p.vertical} className="border-b last:border-0">
+                            <td className="py-3 px-2 font-semibold text-navy-700 capitalize">{p.vertical}</td>
+                            <td className="py-3 px-2 text-gray-500 font-mono text-xs">{p.db_speciality}</td>
+                            <td className="py-3 px-2">
+                              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${commission ? 'bg-teal-50 text-teal-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {commission ? t('adminDashboardPage.billingModelCommission') : t('adminDashboardPage.billingModelMonthly')}
+                              </span>
+                            </td>
+                            <td className="py-3 px-2 font-bold text-navy-700">
+                              {commission ? `${Number(p.commission_percent ?? 0)}%` : t('adminDashboardPage.billingRateByPincode')}
+                            </td>
+                            <td className="py-3 px-2 text-gray-500 text-xs max-w-xs">{p.commission_basis || '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
                   </table>
                 </div>
               )}

@@ -87,14 +87,16 @@ export default function WhatsAppBotMock({ area = 'Yamunanagar' }: { area?: strin
     chips = [{ label: 'Book another', onClick: reset }]
   }
 
+  // The frame caps at the 390px design width but shrinks with the viewport, so
+  // it never forces the page to scroll sideways on a small handset.
   return (
-    <div style={{ width: 390, background: '#0b0f14', borderRadius: 48, padding: 13, boxShadow: '0 40px 90px -30px rgba(2,6,23,.6)', fontFamily: "'Manrope','Noto Sans Devanagari',system-ui,sans-serif" }}>
-      <div style={{ position: 'relative', background: '#ECE4DC', borderRadius: 38, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ width: '100%', maxWidth: 390, background: '#0b0f14', borderRadius: 'clamp(34px,9vw,48px)', padding: 'clamp(9px,2.5vw,13px)', boxShadow: '0 40px 90px -30px rgba(2,6,23,.6)', fontFamily: "'Manrope','Noto Sans Devanagari',system-ui,sans-serif" }}>
+      <div style={{ position: 'relative', background: '#ECE4DC', borderRadius: 'clamp(26px,7vw,38px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {/* header */}
         <div style={{ background: '#075E54', paddingTop: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 26px 2px', fontSize: 13, fontWeight: 700, color: '#fff' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px clamp(16px,5vw,26px) 2px', fontSize: 13, fontWeight: 700, color: '#fff' }}>
             <span>9:41</span>
-            <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: 11, width: 112, height: 26, background: '#0b0f14', borderRadius: '0 0 16px 16px' }} />
+            <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', top: 11, width: 'clamp(84px,28vw,112px)', height: 26, background: '#0b0f14', borderRadius: '0 0 16px 16px' }} />
             <span style={{ letterSpacing: 2 }}>●●●● ▮</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 14px 12px' }}>

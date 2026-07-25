@@ -19,6 +19,11 @@ export const BIZ = {
 export type VerticalKey =
   | 'doctors' | 'hospital' | 'pharmacy' | 'lab' | 'insurance' | 'ambulance'
 
+// How a vertical pays. Doctors, hospitals and labs buy pincodes monthly (see
+// PRICING_TIERS below); pharmacies, insurance agents and ambulance services list
+// free and pay a percentage of what they bill instead.
+export type BillingModel = 'pincode_monthly' | 'commission'
+
 export interface Vertical {
   key: VerticalKey
   label: string
@@ -27,18 +32,41 @@ export interface Vertical {
   /** maps to doctors.speciality / qualification for the DB insert */
   dbSpeciality: string
   qualification: string
+  billing: BillingModel
+  /** commission plan only — % of billing we take */
+  commissionPercent?: number
+  /** commission plan only — short phrase for "10% of ___" */
+  commissionBasis?: string
+  /** commission plan only — the fine print under the headline */
+  commissionNote?: string
 }
 
 // The six service categories patients can find a business under, matching
 // the design's "Who can list" grid and the wizard's step-1 cards.
+// `billing` mirrors the supabase vertical_billing table, which is what the edge
+// functions actually price against — this copy is for display and offline dev.
 export const VERTICALS: Vertical[] = [
-  { key: 'doctors',   label: 'Doctors / Clinic',           sub: '20 specialities',        color: '#0E9F6E', dbSpeciality: 'GEN',       qualification: 'Clinic' },
-  { key: 'hospital',  label: 'Hospital',                   sub: 'Multi-speciality',       color: '#2563EB', dbSpeciality: 'HOSPITAL',  qualification: 'Hospital' },
-  { key: 'pharmacy',  label: 'Pharmacy / Medical Store',   sub: 'Medicine delivery',      color: '#DB2777', dbSpeciality: 'PHARMACY',  qualification: 'Pharmacy' },
-  { key: 'lab',       label: 'Diagnostic Lab',             sub: 'Tests & sample pickup',  color: '#7C3AED', dbSpeciality: 'LAB',       qualification: 'Diagnostic Lab' },
-  { key: 'insurance', label: 'Health Insurance',           sub: 'Plans & agents',         color: '#0891B2', dbSpeciality: 'INSURANCE', qualification: 'IRDA Licensed' },
-  { key: 'ambulance', label: 'Ambulance Service',          sub: 'Emergency response',     color: '#DC2626', dbSpeciality: 'AMBULANCE', qualification: 'Ambulance Service' },
+  { key: 'doctors',   label: 'Doctors / Clinic',           sub: '20 specialities',        color: '#0E9F6E', dbSpeciality: 'GEN',       qualification: 'Clinic',            billing: 'pincode_monthly' },
+  { key: 'hospital',  label: 'Hospital',                   sub: 'Multi-speciality',       color: '#2563EB', dbSpeciality: 'HOSPITAL',  qualification: 'Hospital',          billing: 'pincode_monthly' },
+  { key: 'pharmacy',  label: 'Pharmacy / Medical Store',   sub: 'Medicine delivery',      color: '#DB2777', dbSpeciality: 'PHARMACY',  qualification: 'Pharmacy',          billing: 'commission', commissionPercent: 10,
+    commissionBasis: 'order value',
+    commissionNote: 'Applies to prescription orders that reach you through Sehatsandhi. No monthly listing fee, whatever pincodes you pick.' },
+  { key: 'lab',       label: 'Diagnostic Lab',             sub: 'Tests & sample pickup',  color: '#7C3AED', dbSpeciality: 'LAB',       qualification: 'Diagnostic Lab',    billing: 'pincode_monthly' },
+  { key: 'insurance', label: 'Health Insurance',           sub: 'Plans & agents',         color: '#0891B2', dbSpeciality: 'INSURANCE', qualification: 'IRDA Licensed',     billing: 'commission', commissionPercent: 10,
+    commissionBasis: 'your commission',
+    commissionNote: 'We take 10% of the IRDA commission you earn on policies sold through us — you keep 90%. Your commission rate with the insurer is untouched. No monthly listing fee.' },
+  { key: 'ambulance', label: 'Ambulance Service',          sub: 'Emergency response',     color: '#DC2626', dbSpeciality: 'AMBULANCE', qualification: 'Ambulance Service', billing: 'commission', commissionPercent: 10,
+    commissionBasis: 'non-emergency billing',
+    commissionNote: 'Emergency calls are always commission-free — we take nothing on them. The 10% applies only to scheduled, non-emergency transport. No monthly listing fee.' },
 ]
+
+export const verticalFor = (key: VerticalKey): Vertical =>
+  VERTICALS.find(v => v.key === key) ?? VERTICALS[0]
+
+export const isCommissionVertical = (key: VerticalKey): boolean =>
+  verticalFor(key).billing === 'commission'
+
+export const COMMISSION_VERTICALS = VERTICALS.filter(v => v.billing === 'commission')
 
 // The four population tiers, matching supabase pricing_tiers and the landing's
 // pricing section. Kept here so the landing renders the same numbers the wizard

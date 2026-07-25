@@ -14,6 +14,8 @@ export interface PriceLine {
   monthly_price: number
 }
 
+export type BillingModel = 'pincode_monthly' | 'commission'
+
 export interface PriceResult {
   pincodes: string[]
   count: number
@@ -21,6 +23,10 @@ export interface PriceResult {
   residents: number
   topTier: { tier_number: number; tier_name: string } | null
   breakdown: PriceLine[]
+  /** Commission verticals are never charged upfront: monthlyTotal is always 0. */
+  model: BillingModel
+  commissionPercent: number
+  commissionBasis: string | null
 }
 
 const FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL
@@ -42,8 +48,11 @@ async function callFn<T>(name: string, payload: unknown): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export const computePrice = (pincodes: string[], doctorId?: string | null) =>
-  callFn<PriceResult>('compute-price', { pincodes, doctorId })
+// `vertical` is a quote-time hint so a pharmacy sees its commission terms before
+// its listing row exists. Once doctorId is known the server reads the vertical
+// off that row instead, so the hint can never change what's charged.
+export const computePrice = (pincodes: string[], doctorId?: string | null, vertical?: string | null) =>
+  callFn<PriceResult>('compute-price', { pincodes, doctorId, vertical })
 
 export interface RazorpayOrder {
   orderId: string
