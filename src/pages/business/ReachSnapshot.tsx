@@ -52,11 +52,11 @@ export default function ReachSnapshot() {
   const active = pins.find(p => p.pin_code === hoveredPin) || null
 
   return (
-    <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 22, padding: 26, boxShadow: '0 30px 60px -35px rgba(20,32,28,.35)' }}>
+    <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 22, padding: 'clamp(18px,5vw,26px)', boxShadow: '0 30px 60px -35px rgba(20,32,28,.35)' }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#8a8172', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 18 }}>Your reach snapshot</div>
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-        <span style={{ fontSize: 44, fontWeight: 800, color: '#0E9F6E', letterSpacing: '-.02em' }}>{inShort(totalPop)}</span>
+        <span style={{ fontSize: 'clamp(34px,9vw,44px)', fontWeight: 800, color: '#0E9F6E', letterSpacing: '-.02em' }}>{inShort(totalPop)}</span>
         <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.muted }}>residents</span>
       </div>
       <div style={{ fontSize: 13, color: '#8a8172', marginBottom: 20 }}>across {pins.length} pincodes in {district} district</div>
@@ -84,7 +84,8 @@ export default function ReachSnapshot() {
               onPointerDown={() => { preActiveRef.current = hoveredPin === p.pin_code }}
               onClick={() => setHoveredPin(preActiveRef.current ? null : p.pin_code)}
               style={{
-                aspectRatio: '1', borderRadius: 10, border: 'none', padding: 0, cursor: 'pointer',
+                // min 44px keeps each tile a comfortable touch target on phones
+                aspectRatio: '1', minHeight: 44, borderRadius: 10, border: 'none', padding: 0, cursor: 'pointer',
                 background: `rgba(14, 159, 110, ${alpha})`,
                 transform: on ? 'scale(1.09)' : 'scale(1)',
                 boxShadow: on ? '0 6px 16px -6px rgba(14,159,110,.65)' : 'none',
@@ -109,7 +110,7 @@ export default function ReachSnapshot() {
           </>
         ) : (
           <>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#14201c' }}>Hover a pincode</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#14201c' }}>Tap a pincode</div>
             <div style={{ fontSize: 12.5, color: '#5f6b64', marginTop: 4 }}>Darker = more residents</div>
             <div style={{ fontSize: 12, color: '#8a8172', marginTop: 2 }}>{pins.length} pincodes live in {district} district</div>
           </>
