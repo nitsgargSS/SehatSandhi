@@ -18,6 +18,9 @@ import DoctorDashboard from './pages/doctor/Dashboard'
 import DoctorProfile from './pages/doctor/Profile'
 import Points from './pages/Points'
 import PartnerRegister from './pages/Partner'
+import PatientHome from './pages/PatientHome'
+import BusinessLanding from './pages/business/BusinessLanding'
+import BusinessRegister from './pages/business/BusinessRegister'
 import AdminLogin from './pages/admin/Login'
 import AdminDashboard from './pages/admin/Dashboard'
 import { WA_NUMBER } from './types'
@@ -45,8 +48,12 @@ export default function App() {
     <LanguageProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public */}
-          <Route path="/" element={<WithLayout><Landing /></WithLayout>} />
+          {/* Public — new Warm Care customer homepage (Sehatsandhi.dc.html).
+              No site nav/footer: patients land here from a WhatsApp/SMS link
+              and need one clean, full-screen mobile page. */}
+          <Route path="/" element={<PatientHome />} />
+          {/* Previous landing, kept and reachable (not deleted) */}
+          <Route path="/landing-old" element={<WithLayout><Landing /></WithLayout>} />
           <Route path="/how-it-works" element={<WithLayout><HowItWorks /></WithLayout>} />
           <Route path="/partners" element={<WithLayout><Partners /></WithLayout>} />
           <Route path="/for-doctors" element={<WithLayout><ForDoctors /></WithLayout>} />
@@ -58,6 +65,11 @@ export default function App() {
           <Route path="/speciality/:specId/:areaSlug" element={<WithLayout><SpecialityLanding /></WithLayout>} />
           <Route path="/points" element={<WithLayout><Points /></WithLayout>} />
           <Route path="/partner" element={<WithLayout><PartnerRegister /></WithLayout>} />
+
+          {/* New design (Sehatsandhi.dc.html) — Warm Care look, own palette. */}
+          <Route path="/home-v2" element={<Navigate to="/" replace />} />
+          <Route path="/business" element={<BusinessLanding />} />
+          <Route path="/business/register" element={<BusinessRegister />} />
 
           {/* Doctor */}
           <Route path="/doctor" element={<WithLayout><Register /></WithLayout>} />
