@@ -126,18 +126,19 @@ function BookCta({ t, link, fullWidth }: { t: Strings; link: string; fullWidth?:
   )
 }
 
-// Provider-side entry point. Outlined (not green-filled) so it never competes
-// with the patient "Book on WhatsApp" primary CTA.
+// Provider-side entry point. Filled brand green (#0E9F6E) — the outlined
+// version washed out against the cream page and the white cards.
 function BusinessCta({ t, compact, fullWidth }: { t: Strings; compact?: boolean; fullWidth?: boolean }) {
   return (
     <Link to="/business" style={{
       display: fullWidth ? 'flex' : 'inline-flex', width: fullWidth ? '100%' : 'auto',
       alignItems: 'center', justifyContent: 'center', gap: 7,
-      border: '1.5px solid #0E9F6E', background: '#fff', color: '#0b7d57',
-      fontWeight: 700, fontSize: compact ? 13 : 14.5,
-      padding: compact ? '6px 13px' : '12px 20px', borderRadius: 999, whiteSpace: 'nowrap',
+      background: '#0E9F6E', color: '#fff',
+      fontWeight: 800, fontSize: compact ? 13 : 14.5,
+      padding: compact ? '8px 15px' : '13px 22px', borderRadius: 999, whiteSpace: 'nowrap',
+      boxShadow: '0 8px 18px -8px rgba(14,159,110,.7)',
     }}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ width: compact ? 15 : 17, height: compact ? 15 : 17, flex: '0 0 auto' }}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" style={{ width: compact ? 15 : 17, height: compact ? 15 : 17, flex: '0 0 auto' }}>
         <path d="M3 9.5 5 4h14l2 5.5" /><path d="M4 9.5h16V20H4z" /><path d="M9.5 20v-5h5v5" />
       </svg>
       {t.biz_cta}
