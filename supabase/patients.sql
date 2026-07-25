@@ -564,10 +564,13 @@ revoke all on patient_import_summary from anon, authenticated;
 --          consent_at = now()
 --    where id = '<patient id>';
 --
--- If the register carries no consent line, the clean route is a one-time
--- opt-in: send a service message asking them to reply YES, and record consent
--- only for those who do. That reply is itself the evidence, and it is what
--- keeps the WhatsApp sender quality rating and the DLT registration safe.
+-- The register carries no consent line, and there is no way to invent one after
+-- the fact. The resolved approach is inbound-only: this backlog is never
+-- messaged, it exists so the bot recognises a patient who writes to US first.
+-- New opt-ins come from QR posters at reception and on OPD slips, where the
+-- patient's own message is the evidence. See supabase/whatsapp.sql, which
+-- implements that path and grants consent automatically for the QR entry points
+-- whose pre-filled text is an explicit agreement.
 --
 -- Withdrawal needs no special handling: insert into opt_outs (phone, channel,
 -- reason) and the trigger flips consent_status to 'withdrawn', logs it, and the
