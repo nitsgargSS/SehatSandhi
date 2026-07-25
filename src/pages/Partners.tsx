@@ -29,14 +29,14 @@ const FAQS_BY_LANG: Record<Lang, { question: string; answer: string }[]> = {
   hi: [
     { question: 'Partner banne ke liye kya zaroori hai?', answer: 'Aapke paas valid license/registration hona chahiye (drug license for pharmacy, NABL/lab registration for labs, ambulance permit, ya IRDA license for insurance). Doctors ke liye MCI/NMC registration zaroori hai.' },
     { question: 'Sirf woh PIN codes kyun choose karein jahan service de sakein?', answer: 'Jab aap ek PIN code choose karte hain, toh patients ko commitment milta hai ki aap us area mein service denge — chahe woh delivery ho, home collection ho, ya emergency response. Yeh commitment hi Sehatsandhi ki credibility hai.' },
-    { question: 'Payment kab aur kaise hota hai?', answer: 'Monthly listing fee + per-transaction commission ka structure hai, jo partner type par depend karta hai. Poori details registration ke baad hamari team confirm karegi.' },
+    { question: 'Payment kab aur kaise hota hai?', answer: 'Partner type par depend karta hai. Doctors, hospitals aur labs monthly listing fee dete hain — jo aapke chune hue PIN codes ki population par set hoti hai. Pharmacy, insurance agents aur ambulance services ke liye koi monthly fee nahi hai — sirf 10% commission us business par jo Sehatsandhi se aata hai (ambulance emergencies par bilkul commission nahi). Settlement cycle ki poori details registration ke baad hamari team confirm karegi.' },
     { question: 'Kya main baad mein apne PIN codes badal sakta hoon?', answer: 'Haan, apni dashboard se ya humein WhatsApp/call karke PIN codes add ya remove kar sakte hain.' },
     { question: 'Verification mein kitna time lagta hai?', answer: '24-48 ghante mein hamari team aapki details verify kar leti hai aur WhatsApp par confirm kar deti hai.' },
   ],
   en: [
     { question: 'What do I need to become a partner?', answer: 'You need a valid license/registration (drug license for pharmacy, NABL/lab registration for labs, ambulance permit, or IRDA license for insurance). Doctors need MCI/NMC registration.' },
     { question: 'Why should I only choose PIN codes I can actually serve?', answer: 'When you choose a PIN code, patients get a commitment that you will serve that area — whether it\'s delivery, home collection, or emergency response. This commitment is the credibility of Sehatsandhi.' },
-    { question: 'When and how does payment work?', answer: 'There\'s a monthly listing fee plus a per-transaction commission, depending on partner type. Full details will be confirmed by our team after registration.' },
+    { question: 'When and how does payment work?', answer: 'It depends on your partner type. Doctors, hospitals and labs pay a monthly listing fee, set by the population of the PIN codes they pick. Pharmacies, insurance agents and ambulance services pay no monthly fee at all — just 10% of the business Sehatsandhi brings them (and never anything on ambulance emergencies). Our team confirms the settlement cycle after registration.' },
     { question: 'Can I change my PIN codes later?', answer: 'Yes, you can add or remove PIN codes from your dashboard, or by contacting us on WhatsApp/call.' },
     { question: 'How long does verification take?', answer: 'Our team verifies your details within 24-48 hours and confirms on WhatsApp.' },
   ],

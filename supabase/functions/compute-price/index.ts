@@ -7,7 +7,11 @@
 // reach, and top tier. razorpay-order shares the same computePrice(), so the
 // amount charged always matches what the wizard displays.
 //
-// Request:  { pincodes: string[], doctorId?: string }
+// The response also carries the billing model. Pharmacies, insurance agents and
+// ambulance services list free and pay a percentage of what they bill, so for
+// them monthlyTotal is 0 and commissionPercent is what the wizard shows.
+//
+// Request:  { pincodes: string[], doctorId?: string, vertical?: string }
 // Response: PriceResult (see _shared/pricing.ts)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -18,7 +22,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
-  let body: { pincodes?: unknown; doctorId?: unknown }
+  let body: { pincodes?: unknown; doctorId?: unknown; vertical?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -27,6 +31,9 @@ Deno.serve(async (req) => {
 
   const pincodes = Array.isArray(body.pincodes) ? body.pincodes.map(String) : []
   const doctorId = typeof body.doctorId === 'string' ? body.doctorId : null
+  // Quote-time hint only: pre-signup there's no row to read the vertical from.
+  // Ignored whenever doctorId resolves, and it never decides an amount charged.
+  const vertical = typeof body.vertical === 'string' ? body.vertical : null
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -34,7 +41,7 @@ Deno.serve(async (req) => {
   )
 
   try {
-    const result = await computePrice(supabase, pincodes, doctorId)
+    const result = await computePrice(supabase, pincodes, doctorId, vertical)
     return json(result)
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)

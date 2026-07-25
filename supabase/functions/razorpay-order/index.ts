@@ -5,6 +5,10 @@
 // Razorpay order for `monthlyTotal * periodMonths`, then hand the order back to
 // the browser to open Razorpay Checkout. Verification happens in razorpay-verify.
 //
+// Verticals on the commission plan (pharmacy, insurance, ambulance) are rejected
+// here — they list free and pay a percentage of billing, so there is no upfront
+// amount. The plan is read from the listing's speciality, never from the client.
+//
 // Request:  { pincodes: string[], doctorId: string, periodMonths?: number }
 // Response: { orderId, amount, currency, keyId, paymentRowId, monthlyTotal }
 //
@@ -49,6 +53,19 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)
   }
+
+  // Commission verticals (pharmacy, insurance, ambulance) list free and pay a
+  // percentage of what they bill — there is nothing to charge upfront. Refuse
+  // before writing a payments row so no half-finished order can exist. The
+  // vertical here comes from doctors.speciality, not from the request body.
+  if (priced.model === 'commission') {
+    return json({
+      error: 'commission_vertical',
+      message: `This listing is on the ${priced.commissionPercent}% commission plan — no upfront payment is taken.`,
+      commissionPercent: priced.commissionPercent,
+    }, 400)
+  }
+
   if (priced.monthlyTotal <= 0) return json({ error: 'selected pincodes have no billable price' }, 400)
 
   const amountPaise = priced.monthlyTotal * periodMonths * 100 // Razorpay works in paise

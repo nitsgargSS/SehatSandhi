@@ -137,6 +137,43 @@ on conflict (tier_number) do update
   set tier_name = excluded.tier_name, monthly_price = excluded.monthly_price;
 
 -- ============================================================================
+-- Per-vertical billing model. Not every vertical pays for reach: doctors,
+-- hospitals and labs buy pincodes monthly (pricing_tiers above), while
+-- pharmacies, insurance agents and ambulance services list free and pay a
+-- percentage of what they bill instead. This table is the authority the edge
+-- functions read — src/pages/business/shared.ts mirrors it for display only.
+--
+-- A listing's vertical is inferred from doctors.speciality (there is no
+-- vertical column), so db_speciality is the join key back to a listing.
+-- ============================================================================
+
+create table if not exists vertical_billing (
+  vertical text primary key,                 -- doctors|hospital|pharmacy|lab|insurance|ambulance
+  db_speciality text not null,               -- doctors.speciality written by the wizard
+  billing_model text not null default 'pincode_monthly'
+    check (billing_model in ('pincode_monthly','commission')),
+  commission_percent numeric(5,2) default 0, -- only meaningful when model = 'commission'
+  commission_basis text,                     -- what the % is taken of, shown to the business
+  is_active boolean default true
+);
+
+create unique index if not exists vertical_billing_speciality_idx
+  on vertical_billing (db_speciality);
+
+insert into vertical_billing (vertical, db_speciality, billing_model, commission_percent, commission_basis) values
+  ('doctors',   'GEN',       'pincode_monthly',  0, null),
+  ('hospital',  'HOSPITAL',  'pincode_monthly',  0, null),
+  ('lab',       'LAB',       'pincode_monthly',  0, null),
+  ('pharmacy',  'PHARMACY',  'commission',      10, 'order value on prescriptions filled through Sehatsandhi'),
+  ('insurance', 'INSURANCE', 'commission',      10, 'your IRDA commission on policies sold through Sehatsandhi — you keep 90%'),
+  ('ambulance', 'AMBULANCE', 'commission',      10, 'non-emergency transport billing — emergency calls are always commission-free')
+on conflict (vertical) do update
+  set db_speciality      = excluded.db_speciality,
+      billing_model      = excluded.billing_model,
+      commission_percent = excluded.commission_percent,
+      commission_basis   = excluded.commission_basis;
+
+-- ============================================================================
 -- Business auth: a login per registered business (used by /doctor/login and
 -- the future business dashboard). Kept minimal; passwords live in Supabase Auth.
 -- ============================================================================
@@ -222,5 +259,8 @@ alter table appointments add column if not exists discount_code text;
 -- RLS for the new public-read reference tables
 alter table service_areas enable row level security;
 alter table pricing_tiers enable row level security;
+alter table vertical_billing enable row level security;
 create policy "read_service_areas" on service_areas for select using (is_active = true);
 create policy "read_pricing_tiers" on pricing_tiers for select using (is_active = true);
+-- Read-only to the world: rates change in the SQL editor, never from the client.
+create policy "read_vertical_billing" on vertical_billing for select using (is_active = true);

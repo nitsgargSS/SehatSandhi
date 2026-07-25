@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import CustomAreaSearch, { CustomArea } from '../components/CustomAreaSearch'
 import { useServiceAreas, tierColor } from '../hooks/useServiceAreas'
 import { useLanguage } from '../i18n/LanguageContext'
+import { isCommissionVertical } from './business/shared'
 
 type PartnerType = 'pharmacy' | 'lab' | 'insurance' | 'ambulance' | null
 
@@ -30,7 +31,16 @@ export default function PartnerRegister() {
     ...customAreas.map(a => a.area_name),
   ]
 
-  const monthlyTotal = selectedAreaObjs.reduce((sum, a) => sum + a.monthly_price, 0)
+  // Pharmacies, insurance agents and ambulance services list free and pay a
+  // percentage of billing instead of a monthly fee (see business/shared.ts and
+  // the vertical_billing table) — so no per-area price is quoted to them. Labs
+  // remain on the per-pincode monthly plan.
+  const onCommission = type ? isCommissionVertical(type) : false
+  const commissionBasis =
+    type === 'insurance' ? t('partnerPage.commissionBasisInsurance')
+      : type === 'ambulance' ? t('partnerPage.commissionBasisAmbulance')
+        : t('partnerPage.commissionBasisPharmacy')
+  const monthlyTotal = onCommission ? 0 : selectedAreaObjs.reduce((sum, a) => sum + a.monthly_price, 0)
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -62,7 +72,12 @@ export default function PartnerRegister() {
         <CheckCircle2 className="w-16 h-16 text-teal-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-navy-700 mb-3">{t('partnerPage.successTitle')}</h2>
         <p className="text-gray-500 mb-6">{t('partnerPage.successDesc')}</p>
-        {monthlyTotal > 0 && (
+        {onCommission ? (
+          <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700 mb-4">
+            <p className="font-bold text-base">{t('partnerPage.noMonthlyFee')}</p>
+            <p className="mt-1">10% {commissionBasis}</p>
+          </div>
+        ) : monthlyTotal > 0 && (
           <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700 mb-4">
             <p className="font-bold text-base">{t('partnerPage.monthlyTotal')}: ₹{monthlyTotal.toLocaleString('en-IN')}/mo</p>
           </div>
@@ -185,7 +200,7 @@ export default function PartnerRegister() {
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-2 block">{t('partnerPage.areaSectionLabel')}</label>
                 <p className="text-xs text-gray-400 mb-3">
-                  {t('partnerPage.areaSectionNoteBase')}
+                  {onCommission ? t('partnerPage.areaSectionNoteFree') : t('partnerPage.areaSectionNoteBase')}
                   {type === 'pharmacy' && t('partnerPage.areaNotePharmacy')}
                   {type === 'lab' && t('partnerPage.areaNoteLab')}
                   {type === 'ambulance' && t('partnerPage.areaNoteAmbulance')}
@@ -211,16 +226,27 @@ export default function PartnerRegister() {
                             <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${tierColor(a.tier_number)}`}>{a.tier_name}</span>
                           </div>
                           <span className="text-xs text-gray-500">{a.area_name}</span>
-                          <span className="text-xs font-semibold text-teal-600 mt-0.5">₹{a.monthly_price.toLocaleString('en-IN')}/mo</span>
+                          <span className="text-xs font-semibold text-teal-600 mt-0.5">
+                            {onCommission ? t('partnerPage.noMonthlyFeeShort') : `₹${a.monthly_price.toLocaleString('en-IN')}/mo`}
+                          </span>
                         </button>
                       ))}
                     </div>
                     {selectedPins.length > 0 && (
-                      <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-4 flex justify-between items-center">
+                      <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-4 flex justify-between items-center gap-3">
                         <span className="text-sm text-gray-600">{selectedPins.length} areas selected</span>
                         <div className="text-right">
-                          <p className="text-xs text-gray-400">{t('partnerPage.monthlyTotal')}</p>
-                          <p className="text-xl font-bold text-teal-600">₹{monthlyTotal.toLocaleString('en-IN')}</p>
+                          {onCommission ? (
+                            <>
+                              <p className="text-xs text-gray-400">{t('partnerPage.noMonthlyFee')}</p>
+                              <p className="text-base font-bold text-teal-600">10% {commissionBasis}</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-xs text-gray-400">{t('partnerPage.monthlyTotal')}</p>
+                              <p className="text-xl font-bold text-teal-600">₹{monthlyTotal.toLocaleString('en-IN')}</p>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}

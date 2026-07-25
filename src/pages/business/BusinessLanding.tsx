@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { BIZ, VERTICALS, PRICING_TIERS } from './shared'
+import { BIZ, VERTICALS, PRICING_TIERS, COMMISSION_VERTICALS } from './shared'
 import VerticalIcon from './VerticalIcon'
 import WhatsAppBotMock from './WhatsAppBotMock'
 import ReachSnapshot from './ReachSnapshot'
@@ -31,7 +31,7 @@ export default function BusinessLanding() {
         <div>
           <div style={{ display: 'inline-block', background: BIZ.chipBg, color: BIZ.chipText, fontSize: 13, fontWeight: 700, padding: '6px 12px', borderRadius: 999, marginBottom: 18 }}>Now live in Yamunanagar · rolling out across India</div>
           <h1 style={{ fontSize: 'clamp(30px,7.5vw,46px)', lineHeight: 1.1, fontWeight: 800, color: BIZ.ink, margin: '0 0 18px', letterSpacing: '-.03em' }}>Reach every patient in your pincodes.</h1>
-          <p style={{ fontSize: 'clamp(16px,4vw,18px)', color: BIZ.muted, lineHeight: 1.55, margin: '0 0 28px', maxWidth: 520 }}>Doctors, hospitals, pharmacies, labs, insurers and ambulance services get discovered by families nearby — over WhatsApp &amp; SMS. Choose your pincodes, pay only for the audience you reach.</p>
+          <p style={{ fontSize: 'clamp(16px,4vw,18px)', color: BIZ.muted, lineHeight: 1.55, margin: '0 0 28px', maxWidth: 520 }}>Doctors, hospitals, pharmacies, labs, insurers and ambulance services get discovered by families nearby — over WhatsApp &amp; SMS. Choose your pincodes and pay for the audience you reach — or, if you're a pharmacy, insurance agent or ambulance service, list free and pay 10% of what you bill.</p>
           {/* on phones the CTA goes full-width so it's an easy thumb target */}
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
             <Link to="/business/register" className="max-sm:w-full max-sm:justify-center max-sm:flex" style={{ background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 16, padding: '15px 26px', borderRadius: 14, textAlign: 'center' }}>List your business — free to start</Link>
@@ -43,7 +43,7 @@ export default function BusinessLanding() {
 
       {/* trust strip */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: 'clamp(16px,5vw,48px)', padding: '20px clamp(16px,4vw,40px)', background: BIZ.creamAlt, borderTop: `1px solid ${BIZ.border}`, borderBottom: `1px solid ${BIZ.border}`, flexWrap: 'wrap', textAlign: 'center' }}>
-        {['6 service categories', 'Pay by audience, not per click', 'WhatsApp & SMS delivery', 'Villages to tier-1 cities'].map(s => (
+        {['6 service categories', 'Monthly by pincode — or 10% of billing', 'WhatsApp & SMS delivery', 'Villages to tier-1 cities'].map(s => (
           <span key={s} style={{ fontSize: 14, fontWeight: 700, color: '#3f4a44' }}>{s}</span>
         ))}
       </div>
@@ -80,10 +80,17 @@ export default function BusinessLanding() {
         </div>
       </div>
 
-      {/* pricing — four population tiers */}
+      {/* pricing — two models: per-pincode monthly, or commission on billing */}
       <div id="pricing" className="max-w-7xl mx-auto pb-14" style={{ paddingLeft: 'clamp(16px,4vw,40px)', paddingRight: 'clamp(16px,4vw,40px)' }}>
-        <h2 style={{ fontSize: 'clamp(23px,5.5vw,28px)', fontWeight: 800, color: BIZ.ink, textAlign: 'center', margin: '0 0 8px', letterSpacing: '-.02em' }}>Pay for reach, not clicks</h2>
-        <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 0 36px' }}>Every pincode has a monthly price set by its population tier. Your total is the sum of the pincodes you pick.</p>
+        <h2 style={{ fontSize: 'clamp(23px,5.5vw,28px)', fontWeight: 800, color: BIZ.ink, textAlign: 'center', margin: '0 0 8px', letterSpacing: '-.02em' }}>Two ways to pay — pick the one that fits you</h2>
+        <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 0 36px' }}>
+          Doctors, hospitals and labs pay a monthly price per pincode.
+          Pharmacies, insurance agents and ambulance services list free and pay a share of what they bill.
+        </p>
+
+        <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: '#4f7a68', textAlign: 'center', marginBottom: 14 }}>
+          Doctors · Hospitals · Labs — monthly by pincode
+        </div>
         <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           {PRICING_TIERS.map(tier => {
             const hot = tier.mostPicked
@@ -105,6 +112,35 @@ export default function BusinessLanding() {
         </div>
         <p style={{ fontSize: 13.5, color: BIZ.mutedWarm, textAlign: 'center', marginTop: 22 }}>
           Your total is the sum of every pincode you pick. <strong style={{ color: BIZ.ink }}>Premium placement slots</strong> (top of your category in a pincode) are an optional weekly add-on.
+        </p>
+
+        {/* Commission plan — pharmacies, insurance agents, ambulance services */}
+        <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: '#4f7a68', textAlign: 'center', margin: '48px 0 8px' }}>
+          Pharmacy · Insurance · Ambulance — no monthly fee
+        </div>
+        <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 0 24px' }}>
+          List free in as many pincodes as you like. You pay only when Sehatsandhi brings you business.
+        </p>
+        <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
+          {COMMISSION_VERTICALS.map(v => (
+            <div key={v.key} style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: 'clamp(22px,5vw,28px)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <span style={{ color: v.color, display: 'inline-flex' }}><VerticalIcon vertical={v.key} /></span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink }}>
+                  {v.key === 'pharmacy' ? 'Pharmacies' : v.key === 'insurance' ? 'Insurance agents' : 'Ambulance services'}
+                </span>
+              </div>
+              <div style={{ fontSize: 34, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>
+                {v.commissionPercent}%<span style={{ fontSize: 15, fontWeight: 600, color: BIZ.mutedWarm }}> of {v.commissionBasis}</span>
+              </div>
+              <div style={{ fontSize: 13, color: BIZ.chipText, fontWeight: 800, background: BIZ.chipBg, display: 'inline-block', padding: '4px 10px', borderRadius: 999, marginTop: 12 }}>₹0 monthly listing fee</div>
+              <div style={{ fontSize: 13.5, color: BIZ.muted, marginTop: 14, lineHeight: 1.6 }}>{v.commissionNote}</div>
+            </div>
+          ))}
+        </div>
+        <p style={{ fontSize: 13.5, color: BIZ.mutedWarm, textAlign: 'center', marginTop: 22, maxWidth: 720, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
+          <strong style={{ color: BIZ.ink }}>Insurance example:</strong> a policy with a ₹1,200 IRDA commission means ₹120 to Sehatsandhi
+          and ₹1,080 to you. Nothing is charged upfront and no card is needed to list.
         </p>
       </div>
 

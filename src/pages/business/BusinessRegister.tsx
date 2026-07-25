@@ -3,7 +3,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER } from '../../types'
-import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS } from './shared'
+import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, isCommissionVertical } from './shared'
 import VerticalIcon from './VerticalIcon'
 import {
   computePrice, createRazorpayOrder, verifyRazorpayPayment,
@@ -19,6 +19,13 @@ import {
 // to the compute-price Edge Function and shows what it returns. If the backend
 // isn't configured (fresh dev), it falls back to summing the local list so the
 // UI still works. Step 4 pays via Razorpay, whose amount the server recomputes.
+//
+// Two billing models, decided by the step-1 vertical (see shared.ts):
+//   • pincode_monthly (doctors, hospitals, labs) — pay per pincode per month,
+//     Razorpay at step 4.
+//   • commission (pharmacy, insurance, ambulance) — free to list, 10% of
+//     billing. Step 3 shows reach without a price, step 4 takes no payment and
+//     asks the business to accept the commission term instead.
 
 const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 
@@ -47,9 +54,12 @@ export default function BusinessRegister() {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [paid, setPaid] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
-  const verticalObj = VERTICALS.find(v => v.key === vertical)!
+  const verticalObj = verticalFor(vertical)
+  const onCommission = isCommissionVertical(vertical)
+  const commissionPct = verticalObj.commissionPercent ?? 10
 
   const coverage: CoverageArea[] = useMemo(() => {
     if (areas.length) {
@@ -69,15 +79,21 @@ export default function BusinessRegister() {
   //    sum when the backend isn't configured or is unreachable. ──
   const localPrice: PriceResult = useMemo(() => {
     const chosen = coverage.filter(z => zips.includes(z.pin_code))
-    const monthlyTotal = chosen.reduce((a, z) => a + z.monthly_price, 0)
+    // Commission verticals owe nothing for coverage — only reach is summed.
+    const monthlyTotal = onCommission ? 0 : chosen.reduce((a, z) => a + z.monthly_price, 0)
     const residents = chosen.reduce((a, z) => a + z.population, 0)
-    const top = chosen.reduce<CoverageArea | null>((a, z) => (!a || z.monthly_price > a.monthly_price ? z : a), null)
+    const top = onCommission
+      ? null
+      : chosen.reduce<CoverageArea | null>((a, z) => (!a || z.monthly_price > a.monthly_price ? z : a), null)
     return {
       pincodes: chosen.map(z => z.pin_code), count: chosen.length, monthlyTotal, residents,
       topTier: top ? { tier_number: top.tier_number, tier_name: top.tier_name } : null,
       breakdown: [],
+      model: onCommission ? 'commission' : 'pincode_monthly',
+      commissionPercent: onCommission ? commissionPct : 0,
+      commissionBasis: onCommission ? verticalObj.commissionBasis ?? null : null,
     }
-  }, [coverage, zips])
+  }, [coverage, zips, onCommission, commissionPct, verticalObj])
 
   const [serverPrice, setServerPrice] = useState<PriceResult | null>(null)
   const [pricing, setPricing] = useState(false)
@@ -88,7 +104,9 @@ export default function BusinessRegister() {
     setPricing(true)
     const t = setTimeout(async () => {
       try {
-        const res = await computePrice(zips)
+        // Vertical is a display hint here (no listing row yet); the server still
+        // decides the model, and re-derives it from the row before charging.
+        const res = await computePrice(zips, null, vertical)
         if (id === priceReq.current) setServerPrice(res)
       } catch {
         if (id === priceReq.current) setServerPrice(null) // fall back to localPrice
@@ -97,7 +115,7 @@ export default function BusinessRegister() {
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [zips])
+  }, [zips, vertical])
 
   // What the summary shows: server total when we have one, else the local sum.
   const price = serverPrice ?? localPrice
@@ -155,6 +173,12 @@ export default function BusinessRegister() {
 
   // "Activate on WhatsApp" — save the listing, then hand off to WhatsApp.
   const activateOnWhatsApp = async () => {
+    // On the commission plan nothing is charged, so this click is the only place
+    // the business assents to the 10% term — don't let it through without it.
+    if (onCommission && !acceptedTerms) {
+      setError(`Please accept the ${commissionPct}% commission terms to continue.`)
+      return
+    }
     setSubmitting(true); setError('')
     const id = await ensureDoctorRow()
     setSubmitting(false)
@@ -199,8 +223,8 @@ export default function BusinessRegister() {
   const RAIL_STEPS = [
     { n: 1, label: 'Service type' },
     { n: 2, label: 'Business details' },
-    { n: 3, label: 'Coverage & pricing' },
-    { n: 4, label: 'Review & pay' },
+    { n: 3, label: onCommission ? 'Coverage' : 'Coverage & pricing' },
+    { n: 4, label: onCommission ? 'Review & activate' : 'Review & pay' },
   ]
 
   // Full-bleed at every width — the wizard IS the page, so it gets no outer
@@ -340,7 +364,11 @@ export default function BusinessRegister() {
                     <div style={{ flex: 1 }}>
                       <StepKicker n={3} />
                       <h3 style={h3Style}>Choose your coverage</h3>
-                      <p style={pStyle}>Tap the pincodes you want to reach. Price updates as you go.</p>
+                      <p style={pStyle}>
+                        {onCommission
+                          ? `Tap the pincodes you want to reach. Coverage is free on your plan — you only pay ${commissionPct}% of ${verticalObj.commissionBasis}.`
+                          : 'Tap the pincodes you want to reach. Price updates as you go.'}
+                      </p>
                       {/* desktop: grid + sticky summary side by side; tablet: summary below */}
                       <div className="grid gap-6 items-start lg:grid-cols-[1fr_300px]">
                         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
@@ -360,7 +388,9 @@ export default function BusinessRegister() {
                                     <span style={{ fontSize: 12, color: BIZ.mutedWarm, fontWeight: 600 }}>{z.pin_code}</span>
                                     <span style={{ fontSize: 12, color: BIZ.green, fontWeight: 700 }}>{z.population.toLocaleString('en-IN')} residents</span>
                                   </div>
-                                  <div style={{ fontSize: 11, color: '#a89e8a', fontWeight: 600, marginTop: 4 }}>{z.tier_name} · ₹{z.monthly_price.toLocaleString('en-IN')}/mo</div>
+                                  <div style={{ fontSize: 11, color: '#a89e8a', fontWeight: 600, marginTop: 4 }}>
+                                    {onCommission ? `${z.tier_name} · no monthly fee` : `${z.tier_name} · ₹${z.monthly_price.toLocaleString('en-IN')}/mo`}
+                                  </div>
                                 </div>
                               </button>
                             )
@@ -373,14 +403,27 @@ export default function BusinessRegister() {
                           </div>
                           <SummaryRow label="Pincodes" value={String(price.count)} />
                           <SummaryRow label="Residents reached" value={price.residents.toLocaleString('en-IN')} />
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <span style={{ fontSize: 14, color: BIZ.muted }}>Plan tier</span>
-                            <span style={{ background: BIZ.chipBg, color: BIZ.chipText, fontSize: 13, fontWeight: 800, padding: '4px 10px', borderRadius: 999 }}>{price.topTier?.tier_name ?? '—'}</span>
-                          </div>
-                          <div style={{ borderTop: `1px dashed ${BIZ.inputBorder}`, paddingTop: 16 }}>
-                            <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 2 }}>Estimated monthly</div>
-                            <div style={{ fontSize: 32, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>₹{price.monthlyTotal.toLocaleString('en-IN')}<span style={{ fontSize: 15, color: BIZ.mutedWarm, fontWeight: 600 }}>/mo</span></div>
-                          </div>
+                          {onCommission ? (
+                            <div style={{ borderTop: `1px dashed ${BIZ.inputBorder}`, paddingTop: 16 }}>
+                              <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 2 }}>Monthly listing fee</div>
+                              <div style={{ fontSize: 32, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>₹0</div>
+                              <div style={{ fontSize: 13.5, fontWeight: 800, color: BIZ.ink, marginTop: 12 }}>
+                                {commissionPct}% of {verticalObj.commissionBasis}
+                              </div>
+                              <div style={{ fontSize: 12, color: BIZ.mutedWarm, lineHeight: 1.5, marginTop: 4 }}>{verticalObj.commissionNote}</div>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <span style={{ fontSize: 14, color: BIZ.muted }}>Plan tier</span>
+                                <span style={{ background: BIZ.chipBg, color: BIZ.chipText, fontSize: 13, fontWeight: 800, padding: '4px 10px', borderRadius: 999 }}>{price.topTier?.tier_name ?? '—'}</span>
+                              </div>
+                              <div style={{ borderTop: `1px dashed ${BIZ.inputBorder}`, paddingTop: 16 }}>
+                                <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 2 }}>Estimated monthly</div>
+                                <div style={{ fontSize: 32, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>₹{price.monthlyTotal.toLocaleString('en-IN')}<span style={{ fontSize: 15, color: BIZ.mutedWarm, fontWeight: 600 }}>/mo</span></div>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -395,30 +438,64 @@ export default function BusinessRegister() {
                   <>
                     <div style={{ flex: 1 }}>
                       <StepKicker n={4} />
-                      <h3 style={h3Style}>Review &amp; pay</h3>
+                      <h3 style={h3Style}>{onCommission ? 'Review & activate' : 'Review & pay'}</h3>
                       <p style={pStyle}>Confirm your listing. You can change coverage anytime.</p>
                       <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, overflow: 'hidden' }}>
                         <ReviewRow label="Service type" value={verticalObj.label} />
                         <ReviewRow label="Business name" value={form.business_name || form.owner_name || '—'} />
                         <ReviewRow label="Pincodes selected" value={String(price.count)} />
                         <ReviewRow label="Total reach" value={`${price.residents.toLocaleString('en-IN')} residents`} />
-                        <ReviewRow label="Plan tier" value={price.topTier?.tier_name ?? '—'} />
+                        {onCommission
+                          ? <ReviewRow label="Plan" value={`${commissionPct}% of ${verticalObj.commissionBasis}`} />
+                          : <ReviewRow label="Plan tier" value={price.topTier?.tier_name ?? '—'} />}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 22px', background: '#f7f3ea' }}>
-                          <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>Monthly total</span>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>{onCommission ? 'Due today' : 'Monthly total'}</span>
                           <span style={{ fontSize: 26, fontWeight: 800, color: BIZ.green }}>₹{price.monthlyTotal.toLocaleString('en-IN')}</span>
                         </div>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-2" style={{ marginTop: 20 }}>
-                        <button onClick={activateOnWhatsApp} disabled={submitting} style={{ ...btnWhatsApp, opacity: submitting ? 0.6 : 1 }}>
-                          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <WaGlyph />} Activate on WhatsApp
-                        </button>
-                        <button onClick={payWithRazorpay} disabled={submitting || !businessBackendConfigured} style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: submitting || !businessBackendConfigured ? 0.6 : 1 }}>
-                          {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Pay with Razorpay
-                        </button>
-                      </div>
-                      {!businessBackendConfigured && (
-                        <p style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 10 }}>Razorpay checkout activates once the Supabase Edge Functions are deployed. Until then, use “Activate on WhatsApp”.</p>
+                      {onCommission ? (
+                        <>
+                          {/* No payment on this plan — so this card and its checkbox
+                              are where the commission term is stated and accepted. */}
+                          <div style={{ marginTop: 20, background: BIZ.chipBg, border: `1px solid #cfe8dc`, borderRadius: 18, padding: '20px 22px' }}>
+                            <div style={{ fontSize: 17, fontWeight: 800, color: BIZ.ink }}>
+                              No monthly fee · {commissionPct}% of {verticalObj.commissionBasis}
+                            </div>
+                            <p style={{ fontSize: 14, color: BIZ.muted, lineHeight: 1.6, margin: '8px 0 0' }}>{verticalObj.commissionNote}</p>
+                            <p style={{ fontSize: 13, color: BIZ.mutedWarm, lineHeight: 1.6, margin: '10px 0 0' }}>
+                              Nothing is charged now and no card is needed. Our team confirms the settlement cycle on WhatsApp once your listing is verified.
+                            </p>
+                            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 16, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={acceptedTerms}
+                                onChange={e => { setAcceptedTerms(e.target.checked); if (e.target.checked) setError('') }}
+                                style={{ width: 18, height: 18, accentColor: BIZ.green, marginTop: 1, flex: '0 0 auto', cursor: 'pointer' }} />
+                              <span style={{ fontSize: 13.5, color: BIZ.ink, fontWeight: 600, lineHeight: 1.5 }}>
+                                I agree to pay {commissionPct}% of {verticalObj.commissionBasis} on business that comes through Sehatsandhi.
+                              </span>
+                            </label>
+                          </div>
+                          <div style={{ marginTop: 20 }}>
+                            <button onClick={activateOnWhatsApp} disabled={submitting || !acceptedTerms}
+                              style={{ ...btnWhatsApp, opacity: submitting || !acceptedTerms ? 0.6 : 1, cursor: submitting || !acceptedTerms ? 'not-allowed' : 'pointer' }}>
+                              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <WaGlyph />} Activate on WhatsApp
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="grid gap-3 sm:grid-cols-2" style={{ marginTop: 20 }}>
+                            <button onClick={activateOnWhatsApp} disabled={submitting} style={{ ...btnWhatsApp, opacity: submitting ? 0.6 : 1 }}>
+                              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <WaGlyph />} Activate on WhatsApp
+                            </button>
+                            <button onClick={payWithRazorpay} disabled={submitting || !businessBackendConfigured} style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: submitting || !businessBackendConfigured ? 0.6 : 1 }}>
+                              {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Pay with Razorpay
+                            </button>
+                          </div>
+                          {!businessBackendConfigured && (
+                            <p style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 10 }}>Razorpay checkout activates once the Supabase Edge Functions are deployed. Until then, use “Activate on WhatsApp”.</p>
+                          )}
+                        </>
                       )}
                     </div>
                     <FooterBar error={error}>
