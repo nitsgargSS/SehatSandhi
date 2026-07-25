@@ -6,6 +6,7 @@ export interface ServiceArea {
   area_name: string
   district: string
   state: string
+  population: number
   tier_number: number
   tier_name: string
   monthly_price: number
@@ -13,6 +14,10 @@ export interface ServiceArea {
   premium_slot_2_weekly: number
   premium_slot_3_weekly: number
 }
+
+// Per-tier residents estimate, used only when a service_areas row has no
+// population value yet (pre-migration DBs).
+const TIER_POP: Record<number, number> = { 1: 150000, 2: 70000, 3: 25000, 4: 12000 }
 
 const TIER_COLORS: Record<number, string> = {
   1: 'bg-gray-100 text-gray-600',
@@ -45,12 +50,26 @@ export function useServiceAreas() {
       // PostgREST's embedded-join schema cache, which can lag
       // behind when tables are created via raw SQL rather than
       // Supabase's dashboard UI (exactly what happened here).
-      const [areasRes, tiersRes] = await Promise.all([
-        supabase
+      //
+      // `population` was added later; if this DB hasn't run that migration yet,
+      // the select 400s on the missing column, so we retry without it and fall
+      // back to a per-tier estimate. Keeps the wizard working pre-migration.
+      const fetchAreasRes = async () => {
+        const withPop = await supabase
+          .from('service_areas')
+          .select('pin_code, area_name, district, state, population, tier_number')
+          .eq('is_active', true)
+          .order('area_name', { ascending: true })
+        if (!withPop.error) return withPop
+        return supabase
           .from('service_areas')
           .select('pin_code, area_name, district, state, tier_number')
           .eq('is_active', true)
-          .order('area_name', { ascending: true }),
+          .order('area_name', { ascending: true })
+      }
+
+      const [areasRes, tiersRes] = await Promise.all([
+        fetchAreasRes(),
         supabase
           .from('pricing_tiers')
           .select('tier_number, tier_name, monthly_price, premium_slot_1_weekly, premium_slot_2_weekly, premium_slot_3_weekly')
@@ -73,13 +92,14 @@ export function useServiceAreas() {
       )
 
       const merged: ServiceArea[] = (areasRes.data || [])
-        .map(a => {
+        .map((a: { pin_code: string; area_name: string; district: string; state: string; tier_number: number; population?: number }) => {
           const tier = tiersByNumber.get(a.tier_number)
           return {
             pin_code: a.pin_code,
             area_name: a.area_name,
             district: a.district,
             state: a.state,
+            population: a.population ?? TIER_POP[a.tier_number] ?? 20000,
             tier_number: a.tier_number,
             tier_name: tier?.tier_name || '',
             monthly_price: tier?.monthly_price || 0,

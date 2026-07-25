@@ -97,14 +97,130 @@ create policy "doctors_update_own" on doctors for update using (auth.jwt() ->> '
 create policy "allow_read_optouts" on opt_outs for select using (true);
 create policy "allow_insert_optouts" on opt_outs for insert with check (true);
 
+-- ============================================================================
+-- Business coverage & pricing (Task 1: landing + onboarding wizard)
+-- service_areas + pricing_tiers already exist in the live DB and are read by
+-- src/hooks/useServiceAreas.ts. Defined here so the schema is the source of
+-- truth and a fresh project matches production. `population` is added so the
+-- wizard can show true "residents reached" instead of a tier estimate.
+-- ============================================================================
 
-Token git - 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
+create table if not exists pricing_tiers (
+  tier_number integer primary key,
+  tier_name text not null,
+  monthly_price integer not null,          -- ₹ / pincode / month
+  premium_slot_1_weekly integer default 0,
+  premium_slot_2_weekly integer default 0,
+  premium_slot_3_weekly integer default 0,
+  is_active boolean default true
+);
 
-Sb publishble key - Anon
-sb_publishable_3f7_Q4jM5jwpXT4sNltCBQ_vLGyc87n
+create table if not exists service_areas (
+  pin_code text primary key,
+  area_name text not null,
+  district text,
+  state text,
+  population integer default 0,            -- true residents in the pincode
+  tier_number integer references pricing_tiers(tier_number),
+  is_active boolean default true,
+  created_at timestamptz default now()
+);
 
-Secret keys;
-sb_secret_dqw4bWeBDNQjv3BzNiVWsg_rTbDVO62
+-- Seed the four population tiers from the pricing spec. Village < 15k (₹400),
+-- Town 15-50k (₹1,000), Large town 50-100k (₹2,000), City 100k+ (₹3,000).
+insert into pricing_tiers (tier_number, tier_name, monthly_price) values
+  (4, 'Village',    400),
+  (3, 'Town',       1000),
+  (2, 'Large town', 2000),
+  (1, 'City',       3000)
+on conflict (tier_number) do update
+  set tier_name = excluded.tier_name, monthly_price = excluded.monthly_price;
 
-Sup abase url:
-https://ctxkkqqtasegoowuqbmi.supabase.com
+-- ============================================================================
+-- Business auth: a login per registered business (used by /doctor/login and
+-- the future business dashboard). Kept minimal; passwords live in Supabase Auth.
+-- ============================================================================
+
+create table if not exists clinic_users (
+  id uuid primary key default gen_random_uuid(),
+  auth_uid uuid unique,                    -- Supabase auth.users id
+  doctor_id uuid references doctors(id) on delete cascade,
+  email text,
+  role text default 'owner' check (role in ('owner','staff')),
+  created_at timestamptz default now()
+);
+
+-- ============================================================================
+-- Payments: extend to cover the onboarding "listing" charge and carry the
+-- coverage the payment was for, so the server can reconcile against tiers.
+-- ============================================================================
+
+alter table payments add column if not exists pin_codes text[];
+alter table payments add column if not exists razorpay_order_id text;
+alter table payments add column if not exists period_months integer default 1;
+-- widen the allowed payment types to include the onboarding listing fee
+alter table payments drop constraint if exists payments_type_check;
+alter table payments add constraint payments_type_check
+  check (type in ('subscription','premium_slot','listing'));
+
+-- ============================================================================
+-- Booking-side tables the WhatsApp bot will use (bot backend is a SEPARATE
+-- effort — see README). Defined now so the schema is complete and the wizard/
+-- pricing logic can reference discounts/overrides.
+-- ============================================================================
+
+create table if not exists patients (
+  id uuid primary key default gen_random_uuid(),
+  phone text unique not null,              -- WhatsApp number, country code, no +
+  name text,
+  area text,
+  pin_code text,
+  lang text default 'hi' check (lang in ('en','hi')),
+  created_at timestamptz default now()
+);
+
+-- Per-doctor pricing overrides (custom / discounted listing price).
+create table if not exists doctor_pricing_overrides (
+  id uuid primary key default gen_random_uuid(),
+  doctor_id uuid references doctors(id) on delete cascade,
+  tier_number integer references pricing_tiers(tier_number),
+  monthly_price integer not null,          -- overrides pricing_tiers.monthly_price
+  reason text,
+  created_at timestamptz default now()
+);
+
+-- Discount codes applied at booking / onboarding.
+create table if not exists discount_codes (
+  code text primary key,
+  percent_off integer check (percent_off between 0 and 100),
+  amount_off integer,                      -- flat ₹ off (alternative to percent)
+  applies_to text default 'booking' check (applies_to in ('booking','listing')),
+  active boolean default true,
+  expires_at timestamptz,
+  created_at timestamptz default now()
+);
+
+-- Post-visit ratings (patient phone stored hashed for privacy).
+create table if not exists ratings (
+  id uuid primary key default gen_random_uuid(),
+  appointment_id uuid references appointments(id) on delete set null,
+  doctor_id uuid references doctors(id) on delete cascade,
+  patient_phone_hash text,
+  overall_rating integer check (overall_rating between 1 and 5),
+  waiting_time integer check (waiting_time between 1 and 5),
+  communication integer check (communication between 1 and 5),
+  value_for_money integer check (value_for_money between 1 and 5),
+  review_text text,
+  created_at timestamptz default now()
+);
+
+-- Snapshot the fee & any discount on the appointment at booking time, so later
+-- price/override changes don't rewrite history.
+alter table appointments add column if not exists consultation_fee integer;
+alter table appointments add column if not exists discount_code text;
+
+-- RLS for the new public-read reference tables
+alter table service_areas enable row level security;
+alter table pricing_tiers enable row level security;
+create policy "read_service_areas" on service_areas for select using (is_active = true);
+create policy "read_pricing_tiers" on pricing_tiers for select using (is_active = true);
