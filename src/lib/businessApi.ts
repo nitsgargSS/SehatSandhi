@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { activeConfig } from './env'
 
 // Client wrappers for the business Edge Functions. Pricing is always fetched
 // from the server (compute-price) — the wizard uses the returned total for
@@ -29,22 +29,34 @@ export interface PriceResult {
   commissionBasis: string | null
 }
 
-const FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL
-  ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
-  : ''
-const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string
-
+// Resolved per call from env.ts, not captured at module load, so these requests
+// always hit the same backend the Supabase client is writing to. Reading
+// import.meta.env directly here would let the two drift apart — creating
+// listing rows in one project while charging through another's Razorpay keys.
 async function callFn<T>(name: string, payload: unknown): Promise<T> {
-  const res = await fetch(`${FUNCTIONS_URL}/${name}`, {
+  const { url, anon } = activeConfig()
+  if (!url || !anon) throw new Error(`${name} unavailable: Supabase is not configured`)
+
+  const res = await fetch(`${url}/functions/v1/${name}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${ANON}`,
-      apikey: ANON,
+      Authorization: `Bearer ${anon}`,
+      apikey: anon,
     },
     body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error(`${name} failed: ${res.status}`)
+  if (!res.ok) {
+    // The edge functions return a JSON body explaining the refusal (e.g.
+    // commission_vertical, or no billable price). Surfacing it turns an opaque
+    // "failed: 400" into something a tester can act on.
+    let detail = ''
+    try {
+      const body = await res.json()
+      detail = body?.message || body?.error || ''
+    } catch { /* non-JSON error body */ }
+    throw new Error(detail ? `${name} failed: ${detail}` : `${name} failed: ${res.status}`)
+  }
   return res.json() as Promise<T>
 }
 
@@ -91,4 +103,22 @@ export function loadRazorpayCheckout(): Promise<void> {
 
 // Are the business/payment Edge Functions reachable? Used to gracefully hide
 // the "Pay with Razorpay" path in a dev setup with no Supabase configured.
-export const businessBackendConfigured = Boolean(FUNCTIONS_URL && ANON)
+// A function, not a constant: the answer depends on which backend is active,
+// and that is only known at render time.
+export const businessBackendConfigured = (): boolean => {
+  const { url, anon } = activeConfig()
+  return Boolean(url && anon)
+}
+
+/**
+ * Wipe all user-generated data from the sandbox database.
+ *
+ * Only ever reaches the sandbox project — the function is deployed there and
+ * stays inert anywhere SANDBOX_PURGE_ENABLED is unset. Reference data
+ * (pricing, service areas) is preserved; see supabase/tables.config.yaml.
+ */
+export const purgeSandbox = (token: string) =>
+  callFn<{ ok: boolean; results: Record<string, string>; authUsersDeleted?: number }>(
+    'sandbox-purge',
+    { token, confirm: 'PURGE SANDBOX' },
+  )

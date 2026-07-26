@@ -5,6 +5,8 @@ import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER } from '../../types'
 import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, isCommissionVertical } from './shared'
 import VerticalIcon from './VerticalIcon'
+import SandboxAutofill from '../../components/SandboxAutofill'
+import { generateBusiness } from '../../lib/sandboxData'
 import {
   computePrice, createRazorpayOrder, verifyRazorpayPayment,
   loadRazorpayCheckout, businessBackendConfigured, PriceResult,
@@ -57,6 +59,9 @@ export default function BusinessRegister() {
   const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+  // Depends on which backend is active, so it is resolved here rather than
+  // being a module constant.
+  const backendReady = businessBackendConfigured()
   const verticalObj = verticalFor(vertical)
   const onCommission = isCommissionVertical(vertical)
   const commissionPct = verticalObj.commissionPercent ?? 10
@@ -99,7 +104,7 @@ export default function BusinessRegister() {
   const [pricing, setPricing] = useState(false)
   const priceReq = useRef(0)
   useEffect(() => {
-    if (!businessBackendConfigured || !zips.length) { setServerPrice(null); return }
+    if (!backendReady || !zips.length) { setServerPrice(null); return }
     const id = ++priceReq.current
     setPricing(true)
     const t = setTimeout(async () => {
@@ -142,6 +147,29 @@ export default function BusinessRegister() {
     if (n <= step || [1, 2, 3].slice(0, n - 1).every(stepValid)) { setError(''); setStep(n) }
   }
 
+  // ── Sandbox autofill ──
+  // Keeps the tester's chosen `vertical`: it decides whether step 4 ends at
+  // Razorpay or at the WhatsApp commission path, so overwriting it would take
+  // away control of which branch is under test.
+  //
+  // Pincodes come from `coverage` (live service_areas when available) rather
+  // than a hardcoded list, because compute-price only prices pincodes the
+  // server knows. Picking the two most expensive makes the charge clearly
+  // non-zero, so a ₹0 total is unambiguous evidence that seeding failed rather
+  // than a plausible-looking result.
+  const fillSandbox = () => {
+    const { form: generated } = generateBusiness(vertical)
+    setForm(generated)
+    setZips(
+      [...coverage]
+        .sort((a, b) => b.monthly_price - a.monthly_price)
+        .slice(0, 2)
+        .map(z => z.pin_code),
+    )
+    setAcceptedTerms(true)
+    setError('')
+  }
+
   const navCircle = (n: number): React.CSSProperties => ({
     width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
     fontWeight: 800, fontSize: 14, flex: '0 0 auto',
@@ -152,21 +180,27 @@ export default function BusinessRegister() {
   const doctorIdRef = useRef<string | null>(null)
   const ensureDoctorRow = async (): Promise<string | null> => {
     if (doctorIdRef.current) return doctorIdRef.current
-    const { data, error: insErr } = await supabase.from('doctors').insert({
-      name: form.business_name || form.owner_name || 'Business',
-      speciality: verticalObj.dbSpeciality,
-      clinic_name: form.business_name || form.owner_name,
-      address: form.address || '',
-      pin_codes: zips,
-      phone: form.phone || '',
-      email: form.email || '',
-      qualification: verticalObj.qualification,
-      status: 'pending',
-      consultation_fee: 0,
-    }).select('id').single()
+    // Via RPC, not a direct insert. `.insert(...).select('id')` asks PostgREST
+    // to read the row back, and that read is filtered by
+    // allow_read_active_doctors (status = 'active') — so a just-created
+    // 'pending' listing is invisible to its own creator and the whole call
+    // fails as an RLS violation. create_listing is SECURITY DEFINER and
+    // returns only the new id; it also forces status server-side, so a caller
+    // cannot self-activate a listing. See migration 0002.
+    const { data, error: insErr } = await supabase.rpc('create_listing', {
+      p_name: form.business_name || form.owner_name || 'Business',
+      p_speciality: verticalObj.dbSpeciality,
+      p_clinic_name: form.business_name || form.owner_name,
+      p_address: form.address || '',
+      p_pin_codes: zips,
+      p_phone: form.phone || '',
+      p_email: form.email || '',
+      p_qualification: verticalObj.qualification,
+      p_consultation_fee: 0,
+    })
     if (insErr) { setError(`Could not save listing: ${insErr.message}`); return null }
-    doctorIdRef.current = data.id
-    return data.id
+    doctorIdRef.current = data as string
+    return data as string
   }
 
   const waLink = `https://wa.me/${WA_NUMBER.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Business signup: ' + verticalObj.label + ' — ' + (form.business_name || ''))}`
@@ -233,6 +267,7 @@ export default function BusinessRegister() {
   // edge-to-edge sections rather than floating a card on a cream backdrop.
   return (
     <div style={{ background: BIZ.cream, fontFamily: font, minHeight: '100vh' }}>
+      <SandboxAutofill onFill={fillSandbox} hint={verticalObj.label} />
       <div>
         {/* Tablet/mobile stepper (hidden on desktop, where the rail shows).
             Dots rather than numbered circles: numbers duplicated the "STEP n OF 4"
@@ -488,11 +523,11 @@ export default function BusinessRegister() {
                             <button onClick={activateOnWhatsApp} disabled={submitting} style={{ ...btnWhatsApp, opacity: submitting ? 0.6 : 1 }}>
                               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <WaGlyph />} Activate on WhatsApp
                             </button>
-                            <button onClick={payWithRazorpay} disabled={submitting || !businessBackendConfigured} style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: submitting || !businessBackendConfigured ? 0.6 : 1 }}>
+                            <button onClick={payWithRazorpay} disabled={submitting || !backendReady} style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: submitting || !backendReady ? 0.6 : 1 }}>
                               {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Pay with Razorpay
                             </button>
                           </div>
-                          {!businessBackendConfigured && (
+                          {!backendReady && (
                             <p style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 10 }}>Razorpay checkout activates once the Supabase Edge Functions are deployed. Until then, use “Activate on WhatsApp”.</p>
                           )}
                         </>

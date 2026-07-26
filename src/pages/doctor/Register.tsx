@@ -3,6 +3,8 @@ import { CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react'
 import { SPECIALITIES } from '../../types'
 import { supabase } from '../../lib/supabase'
 import CustomAreaSearch, { CustomArea } from '../../components/CustomAreaSearch'
+import SandboxAutofill from '../../components/SandboxAutofill'
+import { generateDoctor } from '../../lib/sandboxData'
 import { useServiceAreas, tierColor } from '../../hooks/useServiceAreas'
 import { useLanguage } from '../../i18n/LanguageContext'
 
@@ -127,19 +129,29 @@ export default function Register() {
       if (authErr) throw authErr
       if (!authData.user) throw new Error('Account creation failed. Please try again.')
 
-      const { data: newDoctor, error: err } = await supabase.from('doctors').insert({
-        name: form.name, qualification: form.qualification,
-        reg_number: form.reg_number, speciality: form.speciality,
-        clinic_name: form.clinic_name, address: form.address,
-        pin_codes: [...selectedPins, ...customAreas.map(a => a.pin_code)],
-        phone: form.phone, email: form.email,
-        consultation_fee: parseInt(form.consultation_fee) || 0,
-        working_hours: `${DAYS.filter(d => form.working_days.includes(d)).join(',')} ${form.from_time}-${form.to_time}`,
-        status: 'pending',
-        discount_code: appliedCoupon?.code || null,
-        discount_applied: appliedCoupon ? discountAmount : null,
-      }).select().single()
+      // Via RPC, not a direct insert: `.insert(...).select()` asks PostgREST to
+      // read the row back, and that read is filtered by
+      // allow_read_active_doctors (status = 'active'), so a just-created
+      // 'pending' listing is invisible to its own creator and the call fails as
+      // an RLS violation. create_listing returns only the new id and forces
+      // status server-side. See migrations 0002/0003.
+      const { data: newDoctorId, error: err } = await supabase.rpc('create_listing', {
+        p_name: form.name,
+        p_qualification: form.qualification,
+        p_reg_number: form.reg_number,
+        p_speciality: form.speciality,
+        p_clinic_name: form.clinic_name,
+        p_address: form.address,
+        p_pin_codes: [...selectedPins, ...customAreas.map(a => a.pin_code)],
+        p_phone: form.phone,
+        p_email: form.email,
+        p_consultation_fee: parseInt(form.consultation_fee) || 0,
+        p_working_hours: `${DAYS.filter(d => form.working_days.includes(d)).join(',')} ${form.from_time}-${form.to_time}`,
+        p_discount_code: appliedCoupon?.code || null,
+        p_discount_applied: appliedCoupon ? discountAmount : null,
+      })
       if (err) throw err
+      const newDoctor = newDoctorId ? { id: newDoctorId as string } : null
 
       // Record usage so the code's counter increments (handled by
       // a database trigger) and admin can see who used what
@@ -154,6 +166,22 @@ export default function Register() {
     } catch (e: any) {
       setError(e.message || 'Something went wrong. Please try again.')
     } finally { setLoading(false) }
+  }
+
+  // ── Sandbox autofill ──
+  // Merged into the existing form rather than replacing it, so the valid
+  // defaults for working_days / from_time / to_time survive — they need no
+  // generating, and overwriting them would only add noise.
+  //
+  // Pincodes come from live `areas`; falling back to nothing when the list is
+  // empty is deliberate, since a sandbox with unseeded service_areas should
+  // fail the step-2 gate visibly rather than proceed with pincodes the server
+  // cannot price.
+  const fillSandbox = () => {
+    const { form: generated } = generateDoctor()
+    setForm(f => ({ ...f, ...generated }))
+    setSelectedPins(areas.slice(0, 2).map(a => a.pin_code))
+    setError('')
   }
 
   if (done) return (
@@ -178,6 +206,7 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20 pb-12">
+      <SandboxAutofill onFill={fillSandbox} />
       <div className="max-w-3xl mx-auto px-4 sm:px-6">
 
         {/* Progress bar */}

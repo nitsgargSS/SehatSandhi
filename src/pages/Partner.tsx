@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import CustomAreaSearch, { CustomArea } from '../components/CustomAreaSearch'
+import SandboxAutofill from '../components/SandboxAutofill'
+import { generatePartner } from '../lib/sandboxData'
 import { useServiceAreas, tierColor } from '../hooks/useServiceAreas'
 import { useLanguage } from '../i18n/LanguageContext'
 import { isCommissionVertical } from './business/shared'
@@ -66,6 +68,19 @@ export default function PartnerRegister() {
 
   const typeLabel = (en: string, hi: string) => (lang === 'hi' ? hi : en)
 
+  // ── Sandbox autofill ──
+  // Unlike the other two forms this one may have to choose the category: the
+  // type picker is a hard gate, and with `type` still null there is no form to
+  // fill. Defaults to 'lab' only when nothing has been picked, so a tester who
+  // chose a type keeps it.
+  const fillSandbox = () => {
+    const t = type ?? 'lab'
+    const { form: generated } = generatePartner(t)
+    setType(t)
+    setForm(generated)
+    setSelectedPins(areas.slice(0, 2).map(a => a.pin_code))
+  }
+
   if (done) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 pt-16">
       <div className="card max-w-md w-full text-center shadow-xl">
@@ -95,6 +110,7 @@ export default function PartnerRegister() {
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20 pb-12">
+      <SandboxAutofill onFill={fillSandbox} hint={type ?? 'lab'} />
       <div className="max-w-2xl mx-auto px-4">
 
         {/* Header */}

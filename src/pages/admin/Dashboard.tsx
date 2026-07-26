@@ -4,6 +4,9 @@ import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
+import EnvSwitcher from '../../components/EnvSwitcher'
+import SandboxPanel from './SandboxPanel'
+import { isSandbox, SANDBOX_AVAILABLE } from '../../lib/env'
 
 // Local type extension — organization_id / is_hospital_doctor were
 // added to the doctors table via ALTER TABLE, but the shared Doctor
@@ -76,7 +79,7 @@ export default function AdminDashboard() {
   const [doctors, setDoctors] = useState<DoctorWithOrg[]>([])
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs' | 'coupons' | 'billing'>('pending')
+  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs' | 'coupons' | 'billing' | 'sandbox'>('pending')
   const [search, setSearch] = useState('')
   const [actionMsg, setActionMsg] = useState('')
   const [expandedDoctorId, setExpandedDoctorId] = useState<string | null>(null)
@@ -110,21 +113,34 @@ export default function AdminDashboard() {
 
   const load = async () => {
     setLoading(true)
-    const { data } = await supabase.from('doctors').select('*').order('created_at', { ascending: false })
+    // Every query below falls back to [] on error, which renders an empty tab
+    // that looks identical to "no data yet". That is exactly how a database
+    // missing a table (a half-applied migration, an incomplete sandbox clone)
+    // passes for healthy. Log it so the difference is visible in the console.
+    const warn = (table: string, err: { message: string } | null) => {
+      if (err) console.warn(`[admin] ${table} query failed — tab will render empty:`, err.message)
+    }
+
+    const { data, error: docErr } = await supabase.from('doctors').select('*').order('created_at', { ascending: false })
+    warn('doctors', docErr)
     setDoctors((data as DoctorWithOrg[]) || [])
-    const { data: campData } = await supabase
+    const { data: campData, error: campErr } = await supabase
       .from('camps_offers')
       .select('*, doctors(name, clinic_name)')
       .order('created_at', { ascending: false })
+    warn('camps_offers', campErr)
     setCamps((campData as any) || [])
-    const { data: orgData } = await supabase.from('organizations').select('*').order('created_at', { ascending: false })
+    const { data: orgData, error: orgErr } = await supabase.from('organizations').select('*').order('created_at', { ascending: false })
+    warn('organizations', orgErr)
     setOrganizations(orgData || [])
-    const { data: couponData } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false })
+    const { data: couponData, error: coupErr } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false })
+    warn('discount_codes', coupErr)
     setCoupons(couponData || [])
     // Per-vertical billing plans. Read-only here: rates are the authority the
     // edge functions price against, so they change in the SQL editor, not
     // behind an admin password.
-    const { data: billingData } = await supabase.from('vertical_billing').select('*')
+    const { data: billingData, error: billErr } = await supabase.from('vertical_billing').select('*')
+    warn('vertical_billing', billErr)
     setBillingPlans((billingData as VerticalBillingRow[]) || [])
     setLoading(false)
   }
@@ -331,6 +347,11 @@ export default function AdminDashboard() {
           <div className="px-5 mb-4">
             <LanguageSwitcher dark />
           </div>
+          {SANDBOX_AVAILABLE && (
+            <div className="px-5 mb-4">
+              <EnvSwitcher compact />
+            </div>
+          )}
           <nav className="flex-1 px-3 space-y-1">
             {[
               { id: 'pending', label: t('adminDashboardPage.navPendingPrefix'), count: pending.length, badge: pending.length > 0 },
@@ -339,6 +360,9 @@ export default function AdminDashboard() {
               { id: 'orgs', label: t('adminDashboardPage.navOrgs'), count: 0, badge: false },
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
               { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
+              // Only reachable while pointed at the sandbox backend — the purge
+              // it exposes must never be one click away from production data.
+              ...(isSandbox() ? [{ id: 'sandbox', label: '🧪 Sandbox', count: 0, badge: false }] : []),
             ].map(n => (
               <button key={n.id} onClick={() => { setTab(n.id as any); setSelectedOrgId(null) }}
                 className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-between ${tab === n.id ? 'bg-teal-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}>
@@ -945,6 +969,8 @@ export default function AdminDashboard() {
               )}
             </div>
           )}
+
+          {tab === 'sandbox' && isSandbox() && <SandboxPanel onPurged={load} />}
         </main>
       </div>
 
