@@ -23,6 +23,7 @@ import BusinessLanding from './pages/business/BusinessLanding'
 import BusinessRegister from './pages/business/BusinessRegister'
 import AdminLogin from './pages/admin/Login'
 import AdminDashboard from './pages/admin/Dashboard'
+import EnvBanner from './components/EnvBanner'
 import { WA_NUMBER } from './types'
 
 // ── SECURITY: Admin URL is intentionally non-obvious ──
@@ -67,6 +68,9 @@ export default function App() {
   return (
     <LanguageProvider>
       <BrowserRouter>
+        {/* Outside <Routes> so the sandbox warning is present on every page,
+            including the full-bleed ones that opt out of Navbar/Footer. */}
+        <EnvBanner />
         <Routes>
           {/* Public — new Warm Care customer homepage (Sehatsandhi.dc.html).
               No site nav/footer: patients land here from a WhatsApp/SMS link

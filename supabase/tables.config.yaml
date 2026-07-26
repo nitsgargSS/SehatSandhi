@@ -1,0 +1,239 @@
+# Classification for every table and view in the database.
+#
+# This is schema metadata, so it lives next to the schema rather than inside any
+# one script. Nothing in Supabase reads this file — it is ours.
+#
+# Three consumers:
+#   scripts/sync-reference.mjs        class 'sync' tables, using `key` as the upsert conflict target
+#   supabase/functions/sandbox-purge  class 'isolated' tables, in ascending purgeOrder
+#   scripts/check-table-config.mjs    fails if a table in the schema is unclassified
+#
+# Classes:
+#   sync         Reference/config data pulled prod -> sandbox. Never purged.
+#   isolated     User-generated. Never copied between databases. Purged in sandbox.
+#   view         Not a table; skipped by both sync and purge.
+#   never_purge  Infrastructure that must survive a purge.
+#
+# purgeOrder deletes children before parents and uses gaps of 10 so a table can
+# be slotted in without renumbering.
+#
+# Verified against the production dump (migrations/0001_baseline.sql, taken
+# 2026-07-26): every table and view below exists in production, and the
+# purgeOrder values reflect its real foreign keys.
+#
+# The `sync` block still lists vertical_billing and the wa_*/patient_* tables,
+# which production does NOT have — legacy/patients.sql and legacy/whatsapp.sql
+# were never applied there. They are kept classified so that if those
+# migrations are applied later the behaviour is already decided; sync and purge
+# both skip a table that is absent.
+
+tables:
+
+  # ── Reference data: synced prod -> sandbox ──────────────────────────────
+  # Pricing inputs. Sandbox is useless without these: empty service_areas makes
+  # monthlyTotal 0, and razorpay-order then rejects the payment with
+  # 'selected pincodes have no billable price'.
+
+  # syncOrder inserts parents first: service_areas.tier_number references
+  # pricing_tiers, so the tiers must land before the areas that cite them.
+  pricing_tiers:
+    class: sync
+    key: [tier_number]
+    syncOrder: 10
+
+  service_areas:
+    class: sync
+    key: [pin_code]
+    syncOrder: 20
+
+  # Not present in production — legacy/whatsapp.sql was never applied there.
+  # Classified so the behaviour is already decided if it ever is; sync skips
+  # any table that is absent.
+  wa_entry_points:
+    class: sync
+    key: [code]
+    syncOrder: 30
+
+  # Also absent from production. The pricing edge function reads this table and
+  # silently falls back to FALLBACK_RULES in _shared/pricing.ts when it is
+  # missing — so commission rates are currently driven by that hardcoded map,
+  # not by the database.
+  vertical_billing:
+    class: sync
+    key: [vertical]
+    syncOrder: 40
+
+  discount_codes:
+    class: sync
+    syncOrder: 50
+    # CONFIRMED against the production dump: the live table has a uuid `id`
+    # primary key plus discount_type/current_uses/show_on_banner — none of
+    # which appear in legacy/schema.sql. That file describes a table that does
+    # not exist.
+    key: [id]
+
+  # ── User-generated data: isolated, purgeable ────────────────────────────
+  # Ordered children-first. payments MUST precede doctors — payments.doctor_id
+  # has no ON DELETE clause, so it is NO ACTION and deleting a doctor that still
+  # has payments raises an FK violation. check-table-config.mjs asserts this.
+
+  discount_code_usage:
+    class: isolated
+    purgeOrder: 10
+
+  # Children of `ratings`, so they must be deleted before it.
+  rating_responses:
+    class: isolated
+    purgeOrder: 12
+
+  review_flags:
+    class: isolated
+    purgeOrder: 14
+
+  ratings:
+    class: isolated
+    purgeOrder: 20
+
+  appointments:
+    class: isolated
+    purgeOrder: 30
+
+  payments:
+    class: isolated
+    purgeOrder: 40
+
+  premium_slots:
+    class: isolated
+    purgeOrder: 50
+
+  subscriptions:
+    class: isolated
+    purgeOrder: 60
+
+  doctor_pricing_overrides:
+    class: isolated
+    purgeOrder: 70
+
+  doctor_availability:
+    class: isolated
+    purgeOrder: 80
+
+  camps_offers:
+    class: isolated
+    purgeOrder: 90
+
+  clinic_users:
+    class: isolated
+    purgeOrder: 100
+
+  org_subscriptions:
+    class: isolated
+    purgeOrder: 110
+
+  org_specialities:
+    class: isolated
+    purgeOrder: 120
+
+  doctors:
+    class: isolated
+    purgeOrder: 130
+
+  organizations:
+    class: isolated
+    purgeOrder: 140
+
+  unmet_demand_log:
+    class: isolated
+    purgeOrder: 150
+
+  patient_visits:
+    class: isolated
+    purgeOrder: 160
+
+  patient_consents:
+    class: isolated
+    purgeOrder: 170
+
+  patient_import_rows:
+    class: isolated
+    purgeOrder: 180
+
+  patient_imports:
+    class: isolated
+    purgeOrder: 190
+
+  message_log:
+    class: isolated
+    purgeOrder: 200
+    pk: id
+
+  patient_profiles:
+    class: isolated
+    purgeOrder: 218
+
+  # Rewards ledger — spends points, so it goes before sehat_points.
+  rewards_redemptions:
+    class: isolated
+    purgeOrder: 205
+
+  sehat_points:
+    class: isolated
+    purgeOrder: 210
+
+  # References patient_profiles via referrer_id.
+  referrals:
+    class: isolated
+    purgeOrder: 212
+
+  # Anonymous pageview telemetry; no FKs, so ordering is unconstrained.
+  site_visits:
+    class: isolated
+    purgeOrder: 255
+
+  patients:
+    class: isolated
+    purgeOrder: 220
+
+  wa_session_messages:
+    class: isolated
+    purgeOrder: 230
+
+  wa_sessions:
+    class: isolated
+    purgeOrder: 240
+
+  wa_contacts:
+    class: isolated
+    purgeOrder: 250
+    # Primary key is `phone`, not `id` — the purge filter must use it.
+    pk: phone
+
+  opt_outs:
+    class: isolated
+    purgeOrder: 260
+
+  # ── Views: neither synced nor purged ────────────────────────────────────
+
+  rating_aggregate:
+    class: view
+
+  # Discovered in the production dump; none were in any committed SQL.
+  doctor_effective_pricing: { class: view }
+  admin_revenue_summary:    { class: view }
+  free_camp_quota:          { class: view }
+  offer_quota:              { class: view }
+  unmet_demand_summary:     { class: view }
+
+  messageable_patients:   { class: view }
+  messageable_whatsapp:   { class: view }
+  messageable_sms:        { class: view }
+  patient_import_summary: { class: view }
+  inbound_patient_context: { class: view }
+  wa_service_window_open: { class: view }
+  wa_entry_point_stats:   { class: view }
+
+  # ── Infrastructure ──────────────────────────────────────────────────────
+
+  schema_migrations:
+    class: never_purge
+    # The migration ledger. Purging it would make the runner re-apply everything.

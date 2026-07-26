@@ -4,3 +4,16 @@ dist
 .env.local
 *.local
 .DS_Store
+
+# Migration/sync connection strings (contain DB passwords)
+.env.migrate
+supabase/.temp/
+
+# Editor swap/backup files — these mirror the buffer contents, so a swap file
+# next to .env.migrate contains the credentials in plaintext even though the
+# env file itself is ignored.
+*.swp
+*.swo
+*.swn
+*~
+.*.sw?

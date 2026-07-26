@@ -6,7 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+
+    "migrate:status": "node scripts/migrate.mjs status --env sandbox",
+    "migrate:sandbox": "node scripts/migrate.mjs up --env sandbox",
+    "migrate:prod": "node scripts/migrate.mjs up --env prod",
+
+    "sync:reference": "node scripts/sync-reference.mjs",
+    "sync:reference:dry": "node scripts/sync-reference.mjs --dry-run",
+
+    "schema:check": "node scripts/check-table-config.mjs && node scripts/gen-purge-manifest.mjs --check",
+    "schema:gen": "node scripts/gen-purge-manifest.mjs",
+    "schema:diff": "node scripts/schema-diff.mjs --env prod"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.43.4",
@@ -20,6 +31,9 @@
     "@types/react-dom": "^18.2.22",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
+    "dotenv": "^17.4.2",
+    "js-yaml": "^5.2.2",
+    "pg": "^8.22.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
     "typescript": "^5.2.2",
