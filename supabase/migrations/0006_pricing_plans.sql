@@ -93,7 +93,7 @@ exception when duplicate_object then null; end $$;
 
 create index if not exists pricing_plans_sequence_idx on pricing_plans (sequence) where is_enabled;
 
--- Also defined in patients.sql; repeated so this file stands alone.
+-- Also defined in 0004; repeated so this migration stands alone.
 create or replace function sehat_touch_updated_at()
 returns trigger language plpgsql as $$
 begin new.updated_at := now(); return new; end $$;
@@ -170,7 +170,42 @@ on conflict (code) do update
       -- is_enabled deliberately NOT overwritten
 
 -- ============================================================================
--- vertical_billing — split the either/or enum into two independent dimensions.
+-- vertical_billing — how each category is billed.
+--
+-- schema.sql declares this table but was never applied to production (the 0001
+-- baseline dump has no vertical_billing), so create it here before altering it.
+-- The definition and seed match schema.sql; the split into two independent
+-- dimensions follows immediately below.
+-- ============================================================================
+
+create table if not exists vertical_billing (
+  vertical text primary key,                 -- doctors|hospital|pharmacy|lab|insurance|ambulance
+  db_speciality text not null,               -- doctors.speciality written by the wizard
+  billing_model text not null default 'pincode_monthly'
+    check (billing_model in ('pincode_monthly','commission')),
+  commission_percent numeric(5,2) default 0,
+  commission_basis text,
+  is_active boolean default true
+);
+
+create unique index if not exists vertical_billing_speciality_idx
+  on vertical_billing (db_speciality);
+
+insert into vertical_billing (vertical, db_speciality, billing_model, commission_percent, commission_basis) values
+  ('doctors',   'GEN',       'pincode_monthly',  0, null),
+  ('hospital',  'HOSPITAL',  'pincode_monthly',  0, null),
+  ('lab',       'LAB',       'pincode_monthly',  0, null),
+  ('pharmacy',  'PHARMACY',  'commission',      10, 'order value on prescriptions filled through Sehatsandhi'),
+  ('insurance', 'INSURANCE', 'commission',      10, 'your IRDA commission on policies sold through Sehatsandhi — you keep 90%'),
+  ('ambulance', 'AMBULANCE', 'commission',      10, 'non-emergency transport billing — emergency calls are always commission-free')
+on conflict (vertical) do nothing;
+
+alter table vertical_billing enable row level security;
+drop policy if exists "read_vertical_billing" on vertical_billing;
+create policy "read_vertical_billing" on vertical_billing for select using (is_active = true);
+
+-- ============================================================================
+-- Split the either/or enum into two independent dimensions.
 --
 -- monthly_enabled     : does this vertical pay the plan's monthly price?
 -- commission_percent  : what we take of their billing; 0 means none.
@@ -219,7 +254,23 @@ create index if not exists doctors_term_end_idx on doctors (term_end);
 -- ============================================================================
 -- payments — what was actually sold, so a charge can be reconciled later even
 -- if the plan has since changed.
+--
+-- The first block here is a PRODUCTION FIX, not new work. razorpay-order has
+-- always inserted type='listing' with pin_codes, razorpay_order_id and
+-- period_months, but the 0001 baseline shows production has none of those
+-- columns and a type check allowing only 'subscription'/'premium_slot' — so
+-- every business payment would fail its insert. schema.sql widened this, but
+-- schema.sql was never applied. Doing it here means the paid signup path
+-- actually works once migrated.
 -- ============================================================================
+
+alter table payments add column if not exists pin_codes text[];
+alter table payments add column if not exists razorpay_order_id text;
+alter table payments add column if not exists period_months integer default 1;
+
+alter table payments drop constraint if exists payments_type_check;
+alter table payments add constraint payments_type_check
+  check (type in ('subscription', 'premium_slot', 'listing'));
 
 alter table payments add column if not exists pricing_plan_code text;
 alter table payments add column if not exists monthly_price integer;

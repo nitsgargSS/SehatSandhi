@@ -70,10 +70,24 @@ returns text language sql immutable as $$
 $$;
 
 -- ============================================================================
--- patients — one row per person. Created in schema.sql; extended here.
--- Keyed by phone (already unique there), because the phone is what both the
--- WhatsApp bot and the SMS sender address.
+-- patients — one row per person, keyed by phone, because the phone is what both
+-- the WhatsApp bot and the SMS sender address.
+--
+-- schema.sql declares this table but was never applied to production (the
+-- 0001 baseline dump has no `patients`), so it is created here rather than
+-- assumed. The definition matches schema.sql exactly; the ALTERs below then add
+-- what register imports, consent and messaging need.
 -- ============================================================================
+
+create table if not exists patients (
+  id uuid primary key default gen_random_uuid(),
+  phone text unique not null,              -- WhatsApp number, country code, no +
+  name text,
+  area text,
+  pin_code text,
+  lang text default 'hi' check (lang in ('en','hi')),
+  created_at timestamptz default now()
+);
 
 -- identity & demographics
 alter table patients add column if not exists phone_raw text;      -- exactly as written in the register
@@ -568,7 +582,7 @@ revoke all on patient_import_summary from anon, authenticated;
 -- the fact. The resolved approach is inbound-only: this backlog is never
 -- messaged, it exists so the bot recognises a patient who writes to US first.
 -- New opt-ins come from QR posters at reception and on OPD slips, where the
--- patient's own message is the evidence. See supabase/whatsapp.sql, which
+-- patient's own message is the evidence. See migration 0005, which
 -- implements that path and grants consent automatically for the QR entry points
 -- whose pre-filled text is an explicit agreement.
 --

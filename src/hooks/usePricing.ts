@@ -34,7 +34,7 @@ export interface VerticalBillingRow {
   commission_basis: string | null
 }
 
-// Matches the pincode_tiers seed in supabase/pricing_plans.sql, used only when
+// Matches the pincode_tiers seed in supabase/migrations/0006_pricing_plans.sql, used only when
 // the DB is unreachable.
 const FALLBACK_PLAN: ActivePlan = {
   code: 'pincode_tiers',

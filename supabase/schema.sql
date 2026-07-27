@@ -206,7 +206,7 @@ alter table payments add constraint payments_type_check
 -- pricing logic can reference discounts/overrides.
 -- ============================================================================
 
--- NOTE: patients is extended substantially by supabase/patients.sql (register
+-- NOTE: patients is extended substantially by supabase/migrations/0004_patient_register_import.sql (register
 -- imports, consent, visits, messaging views for AISensy/MSG91). Run that file
 -- after this one; it also enables RLS on this table.
 create table if not exists patients (

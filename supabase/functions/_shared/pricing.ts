@@ -246,17 +246,24 @@ export async function computePrice(
     (tiers ?? []).map((t: { tier_number: number; tier_name: string; monthly_price: number }) => [t.tier_number, t]),
   )
 
-  // Per-business tier overrides still apply, but only in tier mode — a flat
-  // plan is a flat plan.
-  const overrideByTier = new Map<number, number>()
-  if (doctorId && plan.mode === 'pincode_tiers') {
+  // Per-business negotiated price. Production's doctor_pricing_overrides is a
+  // flat custom_monthly_price per doctor (not the per-tier shape schema.sql
+  // describes — that version was never applied), so this overrides the whole
+  // monthly total rather than individual tier prices. Applies under any mode: a
+  // negotiated price is negotiated regardless of how the list price is derived.
+  let customMonthly: number | null = null
+  if (doctorId) {
     const { data: ov } = await supabase
       .from('doctor_pricing_overrides')
-      .select('tier_number, monthly_price')
+      .select('custom_monthly_price, valid_from, valid_until')
       .eq('doctor_id', doctorId)
-    ov?.forEach((o: { tier_number: number; monthly_price: number }) =>
-      overrideByTier.set(o.tier_number, o.monthly_price)
-    )
+      .eq('is_active', true)
+    const today = new Date().toISOString().slice(0, 10)
+    const live = (ov ?? []).find((o: { custom_monthly_price: number | null; valid_from: string | null; valid_until: string | null }) =>
+      o.custom_monthly_price != null
+      && (!o.valid_from || o.valid_from <= today)
+      && (!o.valid_until || o.valid_until >= today))
+    if (live) customMonthly = Number((live as { custom_monthly_price: number }).custom_monthly_price)
   }
 
   const flatPerPincode = plan.mode === 'flat_per_pincode' ? (plan.monthly_price ?? 0) : null
@@ -268,7 +275,7 @@ export async function computePrice(
   const breakdown: PriceLine[] = (areas ?? []).map(
     (a: { pin_code: string; area_name: string; population: number | null; tier_number: number }) => {
       const tier = tierByNum.get(a.tier_number)
-      const tierPrice = overrideByTier.get(a.tier_number) ?? tier?.monthly_price ?? 0
+      const tierPrice = tier?.monthly_price ?? 0
 
       // What this single line costs under the active mode. Under
       // flat_all_pincodes coverage is free per line — the listing is one price —
@@ -304,7 +311,8 @@ export async function computePrice(
 
   let monthlyTotal = 0
   if (monthlyApplies) {
-    if (plan.mode === 'flat_all_pincodes') monthlyTotal = plan.monthly_price ?? 0
+    if (customMonthly !== null) monthlyTotal = customMonthly
+    else if (plan.mode === 'flat_all_pincodes') monthlyTotal = plan.monthly_price ?? 0
     else if (plan.mode === 'flat_per_pincode') monthlyTotal = (plan.monthly_price ?? 0) * breakdown.length
     else monthlyTotal = tierSum
   }

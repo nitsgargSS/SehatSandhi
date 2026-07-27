@@ -1056,7 +1056,7 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <p className="text-sm text-gray-400 py-4">
-                    No active plan found — run <code className="font-mono">supabase/pricing_plans.sql</code>.
+                    No active plan found — run <code className="font-mono">npm run migrate</code>.
                   </p>
                 )}
               </div>
