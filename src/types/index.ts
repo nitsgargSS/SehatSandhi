@@ -25,9 +25,15 @@ export interface Appointment {
   patient_age: number
   doctor_id: string
   slot_datetime: string
-  status: 'booked' | 'confirmed' | 'completed' | 'cancelled'
+  // 'no_show' is distinct from 'cancelled': nobody cancelled, the patient just
+  // didn't arrive. Conflating them hides the thing worth measuring.
+  status: 'booked' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
   booked_via: string
   created_at: string
+  cancelled_by?: 'patient' | 'clinic' | 'admin' | 'system' | null
+  cancel_reason?: string | null
+  previous_slot_datetime?: string | null
+  reschedule_count?: number | null
 }
 
 export interface Payment {
