@@ -1,22 +1,34 @@
-// razorpay-order — create a Razorpay order for a business's chosen pincodes.
+// razorpay-order — create a Razorpay order for a business's chosen coverage.
 //
-// The amount is computed HERE from the pincodes (via the shared computePrice),
-// never taken from the client. We create a pending `payments` row and a
-// Razorpay order for `monthlyTotal * periodMonths`, then hand the order back to
-// the browser to open Razorpay Checkout. Verification happens in razorpay-verify.
+// The amount is computed HERE from the active pricing plan (via the shared
+// computePrice), never taken from the client. A business may pay several months
+// upfront, so the charge is monthlyTotal × months, with months clamped to what
+// the plan allows. We create a pending `payments` row stamped with the plan and
+// the term it covers, then hand the order back to the browser to open Razorpay
+// Checkout. Verification happens in razorpay-verify, which is where the price
+// gets locked onto the listing.
 //
-// Verticals on the commission plan (pharmacy, insurance, ambulance) are rejected
-// here — they list free and pay a percentage of billing, so there is no upfront
-// amount. The plan is read from the listing's speciality, never from the client.
+// Verticals with no monthly fee (a commission-only vertical, when no flat plan
+// covers it) are rejected here — there is nothing to charge upfront. The plan
+// and the vertical both come from the server, never from the request body.
 //
 // Request:  { pincodes: string[], doctorId: string, periodMonths?: number }
-// Response: { orderId, amount, currency, keyId, paymentRowId, monthlyTotal }
+// Response: { orderId, amount, currency, keyId, paymentRowId, monthlyTotal,
+//             periodMonths, total, planCode, termStart, termEnd }
 //
 // Env: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { computePrice } from '../_shared/pricing.ts'
+
+// Term dates are whole calendar months from the start date.
+function addMonths(from: Date, months: number): Date {
+  const d = new Date(from.getTime())
+  d.setUTCMonth(d.getUTCMonth() + months)
+  return d
+}
+const isoDate = (d: Date) => d.toISOString().slice(0, 10)
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -35,9 +47,7 @@ Deno.serve(async (req) => {
 
   const pincodes = Array.isArray(body.pincodes) ? body.pincodes.map(String) : []
   const doctorId = typeof body.doctorId === 'string' ? body.doctorId : null
-  const periodMonths = Number.isInteger(body.periodMonths) && (body.periodMonths as number) > 0
-    ? (body.periodMonths as number)
-    : 1
+  const requestedMonths = Number.isFinite(body.periodMonths) ? Number(body.periodMonths) : null
 
   if (!pincodes.length) return json({ error: 'no pincodes selected' }, 400)
 
@@ -47,40 +57,66 @@ Deno.serve(async (req) => {
   )
 
   // Authoritative amount — server computes it, client cannot influence it.
+  // computePrice clamps the requested months to the plan's min/max.
   let priced
   try {
-    priced = await computePrice(supabase, pincodes, doctorId)
+    priced = await computePrice(supabase, pincodes, doctorId, null, requestedMonths)
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)
   }
 
-  // Commission verticals (pharmacy, insurance, ambulance) list free and pay a
-  // percentage of what they bill — there is nothing to charge upfront. Refuse
-  // before writing a payments row so no half-finished order can exist. The
-  // vertical here comes from doctors.speciality, not from the request body.
-  if (priced.model === 'commission') {
+  // Nothing to charge: a commission-only vertical with no flat plan covering it.
+  // Refuse before writing a payments row so no half-finished order can exist.
+  if (!priced.monthlyApplies) {
     return json({
       error: 'commission_vertical',
-      message: `This listing is on the ${priced.commissionPercent}% commission plan — no upfront payment is taken.`,
+      message: priced.commissionPercent > 0
+        ? `This listing is on the ${priced.commissionPercent}% commission plan — no upfront payment is taken.`
+        : 'This listing has no monthly fee, so there is nothing to pay upfront.',
       commissionPercent: priced.commissionPercent,
     }, 400)
   }
 
-  if (priced.monthlyTotal <= 0) return json({ error: 'selected pincodes have no billable price' }, 400)
+  if (priced.monthlyTotal <= 0) {
+    return json({ error: 'selected pincodes have no billable price' }, 400)
+  }
 
-  const amountPaise = priced.monthlyTotal * periodMonths * 100 // Razorpay works in paise
+  const months = priced.months
+  const amountPaise = priced.total * 100   // total = monthlyTotal × months
+
+  // The term this payment buys. A renewal continues from the existing term_end
+  // rather than from today, so paying late costs no extra days and paying early
+  // loses none.
+  const today = new Date()
+  let termStart = today
+  if (doctorId) {
+    const { data: doc } = await supabase
+      .from('doctors').select('term_end').eq('id', doctorId).maybeSingle()
+    const existingEnd = (doc as { term_end?: string } | null)?.term_end
+    if (existingEnd) {
+      const end = new Date(`${existingEnd}T00:00:00Z`)
+      if (end.getTime() > today.getTime()) termStart = end
+    }
+  }
+  const termEnd = addMonths(termStart, months)
 
   // Record a pending payment first, so every order is traceable even if the
-  // browser never returns from Checkout.
+  // browser never returns from Checkout. The plan is stamped here so the charge
+  // can be reconciled after prices change.
   const { data: pay, error: pErr } = await supabase
     .from('payments')
     .insert({
       doctor_id: doctorId,
-      amount: priced.monthlyTotal * periodMonths,
+      amount: priced.total,
       type: 'listing',
       status: 'pending',
       pin_codes: priced.pincodes,
-      period_months: periodMonths,
+      period_months: months,
+      pricing_plan_code: priced.planCode,
+      pricing_mode: priced.mode,
+      monthly_price: priced.monthlyTotal,
+      term_start: isoDate(termStart),
+      term_end: isoDate(termEnd),
     })
     .select('id')
     .single()
@@ -95,7 +131,13 @@ Deno.serve(async (req) => {
       amount: amountPaise,
       currency: 'INR',
       receipt: pay.id,
-      notes: { payment_row_id: pay.id, doctor_id: doctorId ?? '', pincodes: priced.pincodes.join(',') },
+      notes: {
+        payment_row_id: pay.id,
+        doctor_id: doctorId ?? '',
+        pincodes: priced.pincodes.join(','),
+        plan: priced.planCode ?? '',
+        months: String(months),
+      },
     }),
   })
   const order = await rzpRes.json()
@@ -113,6 +155,11 @@ Deno.serve(async (req) => {
     keyId,
     paymentRowId: pay.id,
     monthlyTotal: priced.monthlyTotal,
-    periodMonths,
+    periodMonths: months,
+    total: priced.total,
+    planCode: priced.planCode,
+    planLabel: priced.planLabel,
+    termStart: isoDate(termStart),
+    termEnd: isoDate(termEnd),
   })
 })

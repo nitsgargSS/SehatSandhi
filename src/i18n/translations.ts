@@ -328,6 +328,7 @@ export const translations: Tree = {
     areaSectionNoteFree: { en: 'Coverage is free on your plan — pick as many areas as you like. Only choose areas where you can genuinely commit to service', hi: 'आपके प्लान में एरिया कवरेज फ्री है — जितने चाहें चुनें। सिर्फ वो एरिया चुनें जहां आप जेन्युइनली सर्विस कमिट कर सकते हैं' },
     noMonthlyFee: { en: 'No monthly listing fee', hi: 'कोई मंथली लिस्टिंग फीस नहीं' },
     noMonthlyFeeShort: { en: 'No monthly fee', hi: 'कोई मंथली फीस नहीं' },
+    pincodeIncluded: { en: 'Included', hi: 'शामिल है' },
     commissionBasisPharmacy: { en: 'of order value', hi: 'ऑर्डर वैल्यू का' },
     commissionBasisInsurance: { en: 'of your IRDA commission — you keep 90%', hi: 'आपके IRDA कमीशन का — 90% आपका' },
     commissionBasisAmbulance: { en: 'of non-emergency transport — emergencies are always free', hi: 'नॉन-इमरजेंसी ट्रांसपोर्ट का — इमरजेंसी हमेशा फ्री' },

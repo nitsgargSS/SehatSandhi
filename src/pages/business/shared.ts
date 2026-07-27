@@ -66,7 +66,6 @@ export const verticalFor = (key: VerticalKey): Vertical =>
 export const isCommissionVertical = (key: VerticalKey): boolean =>
   verticalFor(key).billing === 'commission'
 
-export const COMMISSION_VERTICALS = VERTICALS.filter(v => v.billing === 'commission')
 
 // The four population tiers, matching supabase pricing_tiers and the landing's
 // pricing section. Kept here so the landing renders the same numbers the wizard

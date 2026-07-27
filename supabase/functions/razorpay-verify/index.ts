@@ -71,14 +71,39 @@ Deno.serve(async (req) => {
 
   if (!valid) return json({ ok: false, error: 'signature mismatch' }, 400)
 
-  // On success, activate the listing (doctor row moves pending → active).
+  // On success, activate the listing and LOCK IN what was sold.
+  //
+  // The price lock is the reason a later plan toggle is safe: the plan code,
+  // monthly price, mode and term dates are copied from the payment onto the
+  // listing, so re-pricing the platform never re-prices a business mid-term.
+  // At term_end they are quoted whatever plan is active then — see the
+  // subscription_renewals_due view.
   const { data: pay } = await supabase
     .from('payments')
-    .select('doctor_id')
+    .select('doctor_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end')
     .eq('razorpay_order_id', orderId)
     .maybeSingle()
+
   if (pay?.doctor_id) {
-    await supabase.from('doctors').update({ status: 'active' }).eq('id', pay.doctor_id)
+    const p = pay as {
+      doctor_id: string
+      pricing_plan_code: string | null
+      pricing_mode: string | null
+      monthly_price: number | null
+      period_months: number | null
+      term_start: string | null
+      term_end: string | null
+    }
+    await supabase.from('doctors').update({
+      status: 'active',
+      pricing_plan_code: p.pricing_plan_code,
+      locked_monthly_price: p.monthly_price,
+      locked_mode: p.pricing_mode,
+      months_paid: p.period_months,
+      term_start: p.term_start,
+      term_end: p.term_end,
+      locked_at: new Date().toISOString(),
+    }).eq('id', p.doctor_id)
   }
 
   return json({ ok: true, status: 'paid' })

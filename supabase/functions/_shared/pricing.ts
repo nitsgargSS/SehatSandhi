@@ -2,7 +2,24 @@
 // razorpay-order (for the amount actually charged) call this, so the price the
 // business sees and the price they pay can never diverge, and neither is ever
 // taken from the client.
+//
+// Two independent questions get answered here:
+//
+//   1. What do they pay per month?  → the ACTIVE PLAN decides the shape:
+//        flat_all_pincodes — one price, however many pincodes they pick
+//        flat_per_pincode  — that price for each pincode
+//        pincode_tiers     — each pincode priced by its population tier
+//      multiplied by the number of months they choose to pay upfront.
+//
+//   2. Do we also take a commission?  → vertical_billing decides, per vertical,
+//      independently of the above. A vertical can pay monthly, a commission,
+//      both, or neither. The active plan can suspend commission while it runs.
+//
+// The vertical is read from the listing's speciality whenever a doctorId is
+// known. The client's hint is only trusted before that row exists, for a quote.
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+export type PricingMode = 'flat_all_pincodes' | 'flat_per_pincode' | 'pincode_tiers'
 
 export interface PriceLine {
   pin_code: string
@@ -13,38 +30,64 @@ export interface PriceLine {
   monthly_price: number
 }
 
-export type BillingModel = 'pincode_monthly' | 'commission'
-
-export interface BillingRule {
-  vertical: string
-  model: BillingModel
-  commissionPercent: number
-  commissionBasis: string | null
+export interface PricingPlan {
+  code: string
+  label: string
+  description: string | null
+  mode: PricingMode
+  monthly_price: number | null
+  default_months: number
+  min_months: number
+  max_months: number
+  applies_to_verticals: string[] | null
+  suspend_commission: boolean
 }
 
 export interface PriceResult {
+  // coverage
   pincodes: string[]
   count: number
-  monthlyTotal: number
   residents: number
   topTier: { tier_number: number; tier_name: string } | null
   breakdown: PriceLine[]
-  /** How this listing pays. 'commission' verticals are never charged upfront. */
-  model: BillingModel
+
+  // which plan produced this quote
+  planCode: string | null
+  planLabel: string | null
+  mode: PricingMode
+
+  // money — always a monthly rate times a number of months
+  monthlyTotal: number
+  months: number
+  total: number
+  defaultMonths: number
+  minMonths: number
+  maxMonths: number
+
+  // commission, independent of the monthly fee above
+  monthlyApplies: boolean
+  commissionPercent: number
+  commissionBasis: string | null
+  commissionSuspended: boolean
+}
+
+export interface VerticalBilling {
+  vertical: string
+  monthlyEnabled: boolean
+  commissionEnabled: boolean
   commissionPercent: number
   commissionBasis: string | null
 }
 
-// Fallback rules, used only if vertical_billing is missing or empty (a DB that
-// hasn't had the table applied yet). Deliberately fails SAFE: a commission
-// vertical must never fall back to being charged a monthly fee.
-const FALLBACK_RULES: Record<string, BillingRule> = {
-  doctors:   { vertical: 'doctors',   model: 'pincode_monthly', commissionPercent: 0,  commissionBasis: null },
-  hospital:  { vertical: 'hospital',  model: 'pincode_monthly', commissionPercent: 0,  commissionBasis: null },
-  lab:       { vertical: 'lab',       model: 'pincode_monthly', commissionPercent: 0,  commissionBasis: null },
-  pharmacy:  { vertical: 'pharmacy',  model: 'commission',      commissionPercent: 10, commissionBasis: 'order value' },
-  insurance: { vertical: 'insurance', model: 'commission',      commissionPercent: 10, commissionBasis: 'your IRDA commission' },
-  ambulance: { vertical: 'ambulance', model: 'commission',      commissionPercent: 10, commissionBasis: 'non-emergency transport billing' },
+// Used only when the DB has not been set up yet, so a fresh project still
+// prices sanely. Errs toward NOT charging a commission vertical a monthly fee.
+const FALLBACK_VERTICALS: Record<string, VerticalBilling> = {
+  doctors:   { vertical: 'doctors',   monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
+  hospital:  { vertical: 'hospital',  monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
+  lab:       { vertical: 'lab',       monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
+  pharmacy:  { vertical: 'pharmacy',  monthlyEnabled: false, commissionEnabled: true,  commissionPercent: 10, commissionBasis: 'order value' },
+  insurance: { vertical: 'insurance', monthlyEnabled: false, commissionEnabled: true,  commissionPercent: 10, commissionBasis: 'your IRDA commission' },
+  ambulance: { vertical: 'ambulance', monthlyEnabled: false, commissionEnabled: true,  commissionPercent: 10, commissionBasis: 'non-emergency transport billing' },
 }
 
 const SPECIALITY_TO_VERTICAL: Record<string, string> = {
@@ -52,57 +95,87 @@ const SPECIALITY_TO_VERTICAL: Record<string, string> = {
   PHARMACY: 'pharmacy', INSURANCE: 'insurance', AMBULANCE: 'ambulance',
 }
 
-const DEFAULT_RULE: BillingRule = {
-  vertical: 'doctors', model: 'pincode_monthly', commissionPercent: 0, commissionBasis: null,
+const FALLBACK_PLAN: PricingPlan = {
+  code: 'pincode_tiers', label: 'Pay for reach — priced by pincode', description: null,
+  mode: 'pincode_tiers', monthly_price: null,
+  default_months: 1, min_months: 1, max_months: 12,
+  applies_to_verticals: null, suspend_commission: false,
+}
+
+/** The plan in force right now: manual override, else the first open plan in the queue. */
+export async function resolveActivePlan(supabase: SupabaseClient): Promise<PricingPlan> {
+  const { data } = await supabase.from('active_pricing_plan').select('*').maybeSingle()
+  const p = data as Record<string, unknown> | null
+  if (!p || !p.code) return FALLBACK_PLAN
+  return {
+    code: String(p.code),
+    label: String(p.label ?? p.code),
+    description: (p.description as string) ?? null,
+    mode: (p.mode as PricingMode) ?? 'pincode_tiers',
+    monthly_price: p.monthly_price === null || p.monthly_price === undefined ? null : Number(p.monthly_price),
+    default_months: Number(p.default_months ?? 1),
+    min_months: Number(p.min_months ?? 1),
+    max_months: Number(p.max_months ?? 12),
+    applies_to_verticals: (p.applies_to_verticals as string[]) ?? null,
+    suspend_commission: Boolean(p.suspend_commission),
+  }
 }
 
 /**
- * Which billing rule applies to this request.
+ * Which vertical this request is for, and how that vertical is billed.
  *
- * When a doctorId is given the vertical comes from that row's speciality — the
- * client's hint is ignored, so nobody can talk their way onto (or off of) the
- * commission model. The hint is only trusted pre-signup, for the live quote,
- * where no money moves.
+ * With a doctorId the vertical comes from that row's speciality — the client's
+ * hint is ignored, so nobody can talk their way onto a cheaper plan. The hint is
+ * only used pre-signup, where no money moves.
  */
-export async function resolveBillingRule(
+export async function resolveVerticalBilling(
   supabase: SupabaseClient,
   doctorId?: string | null,
   verticalHint?: string | null,
-): Promise<BillingRule> {
+): Promise<VerticalBilling> {
   let vertical: string | null = null
 
   if (doctorId) {
     const { data: doc } = await supabase
-      .from('doctors')
-      .select('speciality')
-      .eq('id', doctorId)
-      .maybeSingle()
+      .from('doctors').select('speciality').eq('id', doctorId).maybeSingle()
     const spec = (doc as { speciality?: string } | null)?.speciality
     if (spec) vertical = SPECIALITY_TO_VERTICAL[spec.toUpperCase()] ?? null
   }
   if (!vertical && verticalHint) vertical = String(verticalHint)
-  if (!vertical) return DEFAULT_RULE
+  if (!vertical) vertical = 'doctors'
 
   const { data: row } = await supabase
     .from('vertical_billing')
-    .select('vertical, billing_model, commission_percent, commission_basis')
+    .select('vertical, monthly_enabled, commission_enabled, commission_percent, commission_basis')
     .eq('vertical', vertical)
     .eq('is_active', true)
     .maybeSingle()
 
   if (row) {
     const r = row as {
-      vertical: string; billing_model: string
-      commission_percent: number | string | null; commission_basis: string | null
+      vertical: string
+      monthly_enabled: boolean | null
+      commission_enabled: boolean | null
+      commission_percent: number | string | null
+      commission_basis: string | null
     }
     return {
       vertical: r.vertical,
-      model: r.billing_model === 'commission' ? 'commission' : 'pincode_monthly',
+      monthlyEnabled: r.monthly_enabled !== false,
+      commissionEnabled: Boolean(r.commission_enabled),
       commissionPercent: Number(r.commission_percent ?? 0),
       commissionBasis: r.commission_basis,
     }
   }
-  return FALLBACK_RULES[vertical] ?? DEFAULT_RULE
+  return FALLBACK_VERTICALS[vertical] ?? FALLBACK_VERTICALS.doctors
+}
+
+/** Clamp a requested term to what the plan allows. Never trust the client's months. */
+export function clampMonths(plan: PricingPlan, requested?: number | null): number {
+  const n = Number.isFinite(requested) && (requested as number) > 0
+    ? Math.floor(requested as number)
+    : plan.default_months
+  return Math.min(plan.max_months, Math.max(plan.min_months, n))
 }
 
 export async function computePrice(
@@ -110,19 +183,50 @@ export async function computePrice(
   rawPincodes: string[],
   doctorId?: string | null,
   verticalHint?: string | null,
+  requestedMonths?: number | null,
 ): Promise<PriceResult> {
-  const rule = await resolveBillingRule(supabase, doctorId, verticalHint)
-  const ruleFields = {
-    model: rule.model,
-    commissionPercent: rule.model === 'commission' ? rule.commissionPercent : 0,
-    commissionBasis: rule.model === 'commission' ? rule.commissionBasis : null,
+  const [plan, vb] = await Promise.all([
+    resolveActivePlan(supabase),
+    resolveVerticalBilling(supabase, doctorId, verticalHint),
+  ])
+
+  const months = clampMonths(plan, requestedMonths)
+
+  // Does the monthly fee apply to this vertical at all? Two gates: the plan must
+  // cover the vertical, and the vertical must be on monthly billing — unless the
+  // plan is a flat offer that explicitly suspends commission, which is what
+  // "₹1,000 for everyone" means.
+  const planCoversVertical = !plan.applies_to_verticals
+    || plan.applies_to_verticals.includes(vb.vertical)
+  const flatPlan = plan.mode !== 'pincode_tiers'
+  const monthlyApplies = planCoversVertical
+    && (vb.monthlyEnabled || (flatPlan && plan.suspend_commission))
+
+  const commissionSuspended = plan.suspend_commission && planCoversVertical
+  const commissionPercent = vb.commissionEnabled && !commissionSuspended ? vb.commissionPercent : 0
+  const commissionBasis = commissionPercent > 0 ? vb.commissionBasis : null
+
+  const planFields = {
+    planCode: plan.code,
+    planLabel: plan.label,
+    mode: plan.mode,
+    months,
+    defaultMonths: plan.default_months,
+    minMonths: plan.min_months,
+    maxMonths: plan.max_months,
+    monthlyApplies,
+    commissionPercent,
+    commissionBasis,
+    commissionSuspended,
   }
 
   const pincodes = [...new Set(rawPincodes.map(String))]
-  const empty: PriceResult = {
-    pincodes: [], count: 0, monthlyTotal: 0, residents: 0, topTier: null, breakdown: [], ...ruleFields,
+  if (!pincodes.length) {
+    return {
+      pincodes: [], count: 0, residents: 0, topTier: null, breakdown: [],
+      monthlyTotal: 0, total: 0, ...planFields,
+    }
   }
-  if (!pincodes.length) return empty
 
   const { data: areas, error: aErr } = await supabase
     .from('service_areas')
@@ -142,8 +246,10 @@ export async function computePrice(
     (tiers ?? []).map((t: { tier_number: number; tier_name: string; monthly_price: number }) => [t.tier_number, t]),
   )
 
+  // Per-business tier overrides still apply, but only in tier mode — a flat
+  // plan is a flat plan.
   const overrideByTier = new Map<number, number>()
-  if (doctorId) {
+  if (doctorId && plan.mode === 'pincode_tiers') {
     const { data: ov } = await supabase
       .from('doctor_pricing_overrides')
       .select('tier_number, monthly_price')
@@ -153,42 +259,64 @@ export async function computePrice(
     )
   }
 
-  let monthlyTotal = 0
-  let residents = 0
-  let topTier: { tier_number: number; tier_name: string; monthly_price: number } | null = null
+  const flatPerPincode = plan.mode === 'flat_per_pincode' ? (plan.monthly_price ?? 0) : null
 
-  // Commission verticals pay nothing for coverage, so every line prices at ₹0 —
-  // but we still walk the areas, because reach (residents) is what they're
-  // choosing and what the summary shows them.
-  const commission = rule.model === 'commission'
+  let residents = 0
+  let tierSum = 0
+  let topTier: { tier_number: number; tier_name: string; monthly_price: number } | null = null
 
   const breakdown: PriceLine[] = (areas ?? []).map(
     (a: { pin_code: string; area_name: string; population: number | null; tier_number: number }) => {
       const tier = tierByNum.get(a.tier_number)
-      const price = commission ? 0 : (overrideByTier.get(a.tier_number) ?? tier?.monthly_price ?? 0)
-      monthlyTotal += price
-      residents += a.population ?? 0
-      if (!commission && (!topTier || price > topTier.monthly_price)) {
-        topTier = { tier_number: a.tier_number, tier_name: tier?.tier_name ?? `Tier ${a.tier_number}`, monthly_price: price }
+      const tierPrice = overrideByTier.get(a.tier_number) ?? tier?.monthly_price ?? 0
+
+      // What this single line costs under the active mode. Under
+      // flat_all_pincodes coverage is free per line — the listing is one price —
+      // so the line shows ₹0 rather than a number nobody is charged.
+      let linePrice = 0
+      if (monthlyApplies) {
+        if (plan.mode === 'pincode_tiers') linePrice = tierPrice
+        else if (flatPerPincode !== null) linePrice = flatPerPincode
       }
+
+      if (monthlyApplies && plan.mode === 'pincode_tiers') tierSum += tierPrice
+      residents += a.population ?? 0
+
+      if (plan.mode === 'pincode_tiers' && monthlyApplies
+          && (!topTier || tierPrice > topTier.monthly_price)) {
+        topTier = {
+          tier_number: a.tier_number,
+          tier_name: tier?.tier_name ?? `Tier ${a.tier_number}`,
+          monthly_price: tierPrice,
+        }
+      }
+
       return {
         pin_code: a.pin_code,
         area_name: a.area_name,
         population: a.population ?? 0,
         tier_number: a.tier_number,
         tier_name: tier?.tier_name ?? `Tier ${a.tier_number}`,
-        monthly_price: price,
+        monthly_price: linePrice,
       }
     },
   )
 
+  let monthlyTotal = 0
+  if (monthlyApplies) {
+    if (plan.mode === 'flat_all_pincodes') monthlyTotal = plan.monthly_price ?? 0
+    else if (plan.mode === 'flat_per_pincode') monthlyTotal = (plan.monthly_price ?? 0) * breakdown.length
+    else monthlyTotal = tierSum
+  }
+
   return {
     pincodes: breakdown.map((b) => b.pin_code),
     count: breakdown.length,
-    monthlyTotal,
     residents,
     topTier: topTier ? { tier_number: topTier.tier_number, tier_name: topTier.tier_name } : null,
     breakdown,
-    ...ruleFields,
+    monthlyTotal,
+    total: monthlyTotal * months,
+    ...planFields,
   }
 }

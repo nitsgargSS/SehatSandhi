@@ -7,11 +7,12 @@
 // reach, and top tier. razorpay-order shares the same computePrice(), so the
 // amount charged always matches what the wizard displays.
 //
-// The response also carries the billing model. Pharmacies, insurance agents and
-// ambulance services list free and pay a percentage of what they bill, so for
-// them monthlyTotal is 0 and commissionPercent is what the wizard shows.
+// The response also carries the active pricing plan and the billing shape it
+// implies: a flat monthly price covering every pincode, a flat price per pincode,
+// or population-tier pricing — times the number of months being bought upfront.
+// Commission is reported separately, since a vertical can owe both or neither.
 //
-// Request:  { pincodes: string[], doctorId?: string, vertical?: string }
+// Request:  { pincodes: string[], doctorId?: string, vertical?: string, months?: number }
 // Response: PriceResult (see _shared/pricing.ts)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -22,7 +23,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
-  let body: { pincodes?: unknown; doctorId?: unknown; vertical?: unknown }
+  let body: { pincodes?: unknown; doctorId?: unknown; vertical?: unknown; months?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -34,6 +35,9 @@ Deno.serve(async (req) => {
   // Quote-time hint only: pre-signup there's no row to read the vertical from.
   // Ignored whenever doctorId resolves, and it never decides an amount charged.
   const vertical = typeof body.vertical === 'string' ? body.vertical : null
+  // Clamped server-side to the plan's min/max, so a hand-crafted request cannot
+  // buy 999 months at the launch rate.
+  const months = Number.isFinite(body.months) ? Number(body.months) : null
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -41,7 +45,7 @@ Deno.serve(async (req) => {
   )
 
   try {
-    const result = await computePrice(supabase, pincodes, doctorId, vertical)
+    const result = await computePrice(supabase, pincodes, doctorId, vertical, months)
     return json(result)
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)
