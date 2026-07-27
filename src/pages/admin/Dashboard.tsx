@@ -95,8 +95,14 @@ interface PlanRow {
   max_signups: number | null
   suspend_commission: boolean
   is_enabled: boolean
+  /** Every listing ever locked onto the plan — this is what a seat cap counts. */
   signups_used?: number
+  /** Live listings still inside their paid term — zero means nobody is affected today. */
+  active_enrolled?: number
+  expired_enrolled?: number
+  last_signup_at?: string | null
   seats_left?: number | null
+  can_delete?: boolean
   is_currently_active?: boolean
 }
 
@@ -199,6 +205,12 @@ export default function AdminDashboard() {
   const [planDraft, setPlanDraft] = useState<Record<string, Record<string, string>>>({})
   const [tierDraft, setTierDraft] = useState<Record<number, string>>({})
   const [vbDraft, setVbDraft] = useState<Record<string, string>>({})
+  const [showNewPlan, setShowNewPlan] = useState(false)
+  const [newPlan, setNewPlan] = useState({
+    code: '', label: '', description: '', mode: 'flat_all_pincodes',
+    monthly_price: '', default_months: '1', min_months: '1', max_months: '12',
+    max_signups: '', suspend_commission: false, sequence: '900',
+  })
   const [taxSettings, setTaxSettings] = useState<TaxSettingsRow | null>(null)
   const [taxDraft, setTaxDraft] = useState<Record<string, string>>({})
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
@@ -1144,16 +1156,103 @@ export default function AdminDashboard() {
                   <div className="card shadow-sm">
                     <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                       <h3 className="font-bold text-navy-700">Plan queue</h3>
-                      <button onClick={() => runPricingAction('activate', { planCode: null }, 'Override cleared — following the queue again.')}
-                        disabled={pricingBusy}
-                        className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-50">
-                        Clear override (auto)
-                      </button>
+                      <div className="flex gap-2">
+                        <button onClick={() => runPricingAction('activate', { planCode: null }, 'Override cleared — following the queue again.')}
+                          disabled={pricingBusy}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-50">
+                          Clear override (auto)
+                        </button>
+                        <button onClick={() => setShowNewPlan(v => !v)}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-1">
+                          <Plus className="w-3.5 h-3.5" /> New plan
+                        </button>
+                      </div>
                     </div>
                     <p className="text-sm text-gray-500 mb-4">
                       Without an override, the first enabled plan with seats left is used — so the queue advances by
                       itself when a launch offer fills up. "Use this" pins one plan until you clear it.
                     </p>
+
+                    {showNewPlan && (
+                      <div className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">Code (permanent)</label>
+                            <input className="input-field text-sm" placeholder="festive_1500"
+                              value={newPlan.code}
+                              onChange={e => setNewPlan(p => ({ ...p, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') }))} />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">Label (shown on /business)</label>
+                            <input className="input-field text-sm" placeholder="Festive offer — ₹1,500/month"
+                              value={newPlan.label} onChange={e => setNewPlan(p => ({ ...p, label: e.target.value }))} />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">Description</label>
+                            <input className="input-field text-sm" placeholder="One line of sales copy for the pricing card"
+                              value={newPlan.description} onChange={e => setNewPlan(p => ({ ...p, description: e.target.value }))} />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">Pricing mode</label>
+                            <select className="input-field text-sm" value={newPlan.mode}
+                              onChange={e => setNewPlan(p => ({ ...p, mode: e.target.value }))}>
+                              <option value="flat_all_pincodes">Flat — all pincodes included</option>
+                              <option value="flat_per_pincode">Flat — per pincode</option>
+                              <option value="pincode_tiers">By pincode population tier</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">
+                              ₹ per month {newPlan.mode === 'pincode_tiers' && <span className="text-gray-400">(tier prices apply)</span>}
+                            </label>
+                            <input className="input-field text-sm" type="number" min={0}
+                              disabled={newPlan.mode === 'pincode_tiers'}
+                              value={newPlan.monthly_price}
+                              onChange={e => setNewPlan(p => ({ ...p, monthly_price: e.target.value }))} />
+                          </div>
+                          {([['default_months', 'Suggested term (months)'], ['min_months', 'Min months'],
+                             ['max_months', 'Max months'], ['max_signups', 'Seat cap (blank = unlimited)'],
+                             ['sequence', 'Queue position']] as const).map(([f, label]) => (
+                            <div key={f}>
+                              <label className="text-xs font-medium text-gray-600 mb-1 block">{label}</label>
+                              <input className="input-field text-sm" type="number" min={0}
+                                value={newPlan[f]} onChange={e => setNewPlan(p => ({ ...p, [f]: e.target.value }))} />
+                            </div>
+                          ))}
+                        </div>
+                        <label className="flex items-center gap-2 text-sm text-gray-600">
+                          <input type="checkbox" className="w-4 h-4 accent-teal-600"
+                            checked={newPlan.suspend_commission}
+                            onChange={e => setNewPlan(p => ({ ...p, suspend_commission: e.target.checked }))} />
+                          Applies to every category, suspending commission while it runs
+                        </label>
+                        <p className="text-xs text-gray-400">
+                          Created disabled and at the back of the queue, so it cannot go live by accident. Enable it,
+                          then press "Use this" when you want it live.
+                        </p>
+                        <div className="flex gap-2">
+                          <button disabled={pricingBusy || !newPlan.code || !newPlan.label}
+                            onClick={() => {
+                              const p = newPlan
+                              setShowNewPlan(false)
+                              setNewPlan({ code: '', label: '', description: '', mode: 'flat_all_pincodes',
+                                monthly_price: '', default_months: '1', min_months: '1', max_months: '12',
+                                max_signups: '', suspend_commission: false, sequence: '900' })
+                              runPricingAction('createPlan', {
+                                code: p.code, label: p.label, description: p.description, mode: p.mode,
+                                monthly_price: p.monthly_price === '' ? null : Number(p.monthly_price),
+                                default_months: Number(p.default_months), min_months: Number(p.min_months),
+                                max_months: Number(p.max_months),
+                                max_signups: p.max_signups === '' ? null : Number(p.max_signups),
+                                suspend_commission: p.suspend_commission, sequence: Number(p.sequence),
+                              }, `Plan ${p.code} created (disabled).`)
+                            }}
+                            className="btn-teal text-sm py-2 px-4 disabled:opacity-50">Create plan</button>
+                          <button onClick={() => setShowNewPlan(false)}
+                            className="text-sm text-gray-500 px-4 py-2 rounded-lg hover:bg-gray-100">Cancel</button>
+                        </div>
+                      </div>
+                    )}
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -1164,6 +1263,7 @@ export default function AdminDashboard() {
                             <th className="pb-2 px-2">₹/month</th>
                             <th className="pb-2 px-2">Term (def/min/max)</th>
                             <th className="pb-2 px-2">Seats</th>
+                            <th className="pb-2 px-2">Enrolled</th>
                             <th className="pb-2 px-2 text-center">Actions</th>
                           </tr>
                         </thead>
@@ -1209,6 +1309,18 @@ export default function AdminDashboard() {
                                     {p.signups_used ?? 0} used{p.seats_left != null && ` · ${p.seats_left} left`}
                                   </div>
                                 </td>
+                                {/* "Enrolled" is the number that decides whether a plan can be
+                                    retired: businesses still inside a term they paid for. */}
+                                <td className="py-3 px-2">
+                                  <div className={`font-bold ${(p.active_enrolled ?? 0) > 0 ? 'text-navy-700' : 'text-gray-300'}`}>
+                                    {p.active_enrolled ?? 0}
+                                  </div>
+                                  <div className="text-[11px] text-gray-400">
+                                    {(p.expired_enrolled ?? 0) > 0 && `${p.expired_enrolled} expired`}
+                                    {(p.active_enrolled ?? 0) === 0 && (p.expired_enrolled ?? 0) === 0
+                                      && (p.signups_used ?? 0) === 0 && 'never used'}
+                                  </div>
+                                </td>
                                 <td className="py-3 px-2">
                                   <div className="flex gap-1 justify-center flex-wrap">
                                     <button onClick={() => runPricingAction('activate', { planCode: p.code }, `${p.label} is now live.`)}
@@ -1223,6 +1335,16 @@ export default function AdminDashboard() {
                                       className="text-xs font-medium px-2 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-50">
                                       {p.is_enabled ? 'Disable' : 'Enable'}
                                     </button>
+                                    {/* Deleting is offered only when nobody has ever been on
+                                        the plan; otherwise its history has to stay readable. */}
+                                    {p.can_delete && !p.is_currently_active && (
+                                      <button onClick={() => runPricingAction('deletePlan', { planCode: p.code },
+                                        `Plan ${p.code} deleted.`)}
+                                        disabled={pricingBusy}
+                                        className="text-xs font-medium px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 disabled:opacity-50">
+                                        Delete
+                                      </button>
+                                    )}
                                     {dirty && (
                                       <button onClick={() => {
                                         const patch: Record<string, unknown> = {}

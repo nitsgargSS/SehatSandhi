@@ -103,6 +103,107 @@ Deno.serve(async (req) => {
       })
     }
 
+    if (action === 'createPlan') {
+      const b = body as Record<string, unknown>
+      const code = String(b.code ?? '').trim().toLowerCase()
+      // The code ends up in doctors.pricing_plan_code and on payment rows, so it
+      // has to be stable and safe to put in a URL or a report.
+      if (!/^[a-z0-9_]{3,40}$/.test(code)) {
+        return json({ error: 'code must be 3-40 characters: lowercase letters, numbers and underscores' }, 400)
+      }
+      const { data: clash } = await supabase
+        .from('pricing_plans').select('code').eq('code', code).maybeSingle()
+      if (clash) return json({ error: `a plan called ${code} already exists` }, 400)
+
+      const mode = String(b.mode ?? 'pincode_tiers')
+      if (!['flat_all_pincodes', 'flat_per_pincode', 'pincode_tiers'].includes(mode)) {
+        return json({ error: `unknown mode: ${mode}` }, 400)
+      }
+
+      const monthlyPrice = b.monthly_price === null || b.monthly_price === undefined || b.monthly_price === ''
+        ? null : Number(b.monthly_price)
+      // A flat plan with no price would quietly charge nothing.
+      if (mode !== 'pincode_tiers' && (monthlyPrice === null || !Number.isFinite(monthlyPrice) || monthlyPrice < 0)) {
+        return json({ error: 'a flat plan needs a monthly price of 0 or more' }, 400)
+      }
+
+      const num = (v: unknown, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d)
+      const minMonths = Math.max(1, num(b.min_months, 1))
+      const maxMonths = Math.max(minMonths, num(b.max_months, 12))
+      const defMonths = Math.min(maxMonths, Math.max(minMonths, num(b.default_months, minMonths)))
+
+      const row = {
+        code,
+        label: String(b.label ?? code),
+        description: b.description ? String(b.description) : null,
+        // Default to the end of the queue: a new plan should never silently
+        // take over from whatever is live.
+        sequence: num(b.sequence, 900),
+        mode,
+        monthly_price: mode === 'pincode_tiers' ? null : Math.round(monthlyPrice as number),
+        default_months: defMonths,
+        min_months: minMonths,
+        max_months: maxMonths,
+        max_signups: b.max_signups === null || b.max_signups === undefined || b.max_signups === ''
+          ? null : Math.max(0, num(b.max_signups, 0)),
+        suspend_commission: Boolean(b.suspend_commission),
+        price_includes_gst: Boolean(b.price_includes_gst),
+        // Created disabled unless asked otherwise, so it cannot be live by
+        // accident before it has been checked.
+        is_enabled: b.is_enabled === undefined ? false : Boolean(b.is_enabled),
+        notes: b.notes ? String(b.notes) : null,
+      }
+
+      const { error } = await supabase.from('pricing_plans').insert(row)
+      if (error) return json({ error: error.message }, 500)
+
+      await logEvent(code, 'created', row)
+      return json({ ok: true, code })
+    }
+
+    if (action === 'deletePlan') {
+      const planCode = typeof body.planCode === 'string' ? body.planCode : ''
+      if (!planCode) return json({ error: 'planCode required' }, 400)
+
+      // Refuse rather than let a foreign-key violation surface as a bug. A plan
+      // anyone has ever been on should be disabled, so its history stays
+      // readable on their listing and payments.
+      const { count } = await supabase
+        .from('doctors').select('id', { count: 'exact', head: true }).eq('pricing_plan_code', planCode)
+      if ((count ?? 0) > 0) {
+        return json({
+          error: `${count} listing(s) are on ${planCode}. Disable it instead — deleting would break their billing history.`,
+        }, 400)
+      }
+
+      // A live plan must not vanish underneath a signup in progress. Ask what is
+      // ACTUALLY live rather than only what is pinned: a plan is usually live by
+      // being first in the queue, with no override set at all. Checking the
+      // override alone let the live plan be deleted.
+      const { data: active } = await supabase
+        .from('active_pricing_plan').select('code').maybeSingle()
+      if ((active as { code?: string } | null)?.code === planCode) {
+        return json({
+          error: `${planCode} is the plan new signups are being quoted right now. Make another plan live first, or disable this one.`,
+        }, 400)
+      }
+
+      const { error } = await supabase.from('pricing_plans').delete().eq('code', planCode)
+      if (error) return json({ error: error.message }, 500)
+
+      await logEvent(planCode, 'deleted', { planCode })
+      return json({ ok: true })
+    }
+
+    if (action === 'planEnrolment') {
+      const planCode = typeof body.planCode === 'string' ? body.planCode : ''
+      if (!planCode) return json({ error: 'planCode required' }, 400)
+      const { data, error } = await supabase
+        .from('plan_enrolment').select('*').eq('plan_code', planCode).limit(200)
+      if (error) return json({ error: error.message }, 500)
+      return json({ enrolment: data ?? [] })
+    }
+
     if (action === 'taxSettings') {
       const { data, error } = await supabase.from('tax_settings').select('*').maybeSingle()
       if (error) return json({ error: error.message }, 500)
