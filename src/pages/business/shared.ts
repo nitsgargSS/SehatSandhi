@@ -75,6 +75,7 @@ export interface PricingTier {
   tier_name: string
   monthly_price: number
   popLabel: string
+  /** Marketing copy exists only for the local fallback tiers; DB tiers have none. */
   blurb: string
   mostPicked?: boolean
 }

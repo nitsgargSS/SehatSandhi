@@ -172,7 +172,9 @@ export default function BusinessLanding() {
                     <div style={{ fontSize: 15, fontWeight: 800, color: hot ? '#fff' : BIZ.green, marginBottom: 6 }}>{tier.tier_name} pincode</div>
                     <div style={{ fontSize: 13, color: hot ? '#d6f2e6' : BIZ.mutedWarm, marginBottom: 16 }}>{tier.popLabel}</div>
                     <div style={{ fontSize: 'clamp(28px,7vw,34px)', fontWeight: 800, color: hot ? '#fff' : BIZ.ink, letterSpacing: '-.02em' }}>₹{tier.monthly_price.toLocaleString('en-IN')}<span style={{ fontSize: 15, fontWeight: 600, color: hot ? '#d6f2e6' : BIZ.mutedWarm }}>/mo</span></div>
-                    <div style={{ fontSize: 13, color: hot ? '#eafaf3' : BIZ.muted, marginTop: 16, lineHeight: 1.6 }}>{tier.blurb}</div>
+                    {tier.blurb && (
+                      <div style={{ fontSize: 13, color: hot ? '#eafaf3' : BIZ.muted, marginTop: 16, lineHeight: 1.6 }}>{tier.blurb}</div>
+                    )}
                   </div>
                 )
               })}

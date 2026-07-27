@@ -62,6 +62,15 @@ const FALLBACK_VERTICALS: VerticalBillingRow[] = VERTICALS.map(v => ({
   commission_basis: v.commissionBasis ?? null,
 }))
 
+/** "Population 15,000–50,000" from the tier's own bounds; either end may be open. */
+function populationLabel(min: number | null, max: number | null): string {
+  const n = (v: number) => v.toLocaleString('en-IN')
+  if (min != null && max != null) return `Population ${n(min)}–${n(max)}`
+  if (min != null) return `Population ${n(min)}+`
+  if (max != null) return `Population under ${n(max)}`
+  return ''
+}
+
 export interface PricingState {
   plan: ActivePlan
   tiers: PricingTier[]
@@ -85,7 +94,9 @@ export function usePricing(): PricingState {
       try {
         const [planRes, tierRes, vbRes] = await Promise.all([
           supabase.from('active_pricing_plan').select('*').maybeSingle(),
-          supabase.from('pricing_tiers').select('*').eq('is_active', true).order('monthly_price'),
+          supabase.from('pricing_tiers')
+            .select('tier_number, tier_name, monthly_price, min_population, max_population')
+            .eq('is_active', true).order('monthly_price'),
           supabase.from('vertical_billing').select('*').eq('is_active', true),
         ])
         if (cancelled) return
@@ -110,19 +121,24 @@ export function usePricing(): PricingState {
           gotLive = true
         }
 
-        // Merge DB prices onto the local tier copy so the marketing text
-        // (popLabel, blurb, mostPicked) survives — the DB has numbers, not copy.
+        // Render the tiers the DB actually has, not a local list with DB prices
+        // merged in. Production runs 13 tiers (₹500–₹30,000); the constants in
+        // shared.ts describe 4 (₹400–₹3,000). Merging by tier_number paired a
+        // live tier's name with unrelated hardcoded copy — "Village" labelled
+        // "Population 100,000+". The population band is derived from the DB's own
+        // min/max columns so the label can never contradict the tier.
         if (tierRes.data?.length) {
-          const byNumber = new Map(
-            (tierRes.data as { tier_number: number; tier_name: string; monthly_price: number }[])
-              .map(t => [t.tier_number, t]),
-          )
-          setTiers(PRICING_TIERS.map(t => {
-            const live = byNumber.get(t.tier_number)
-            return live
-              ? { ...t, tier_name: live.tier_name || t.tier_name, monthly_price: live.monthly_price }
-              : t
-          }))
+          const rows = tierRes.data as {
+            tier_number: number; tier_name: string; monthly_price: number
+            min_population: number | null; max_population: number | null
+          }[]
+          setTiers(rows.map(t => ({
+            tier_number: t.tier_number,
+            tier_name: t.tier_name,
+            monthly_price: t.monthly_price,
+            popLabel: populationLabel(t.min_population, t.max_population),
+            blurb: '',
+          })))
           gotLive = true
         }
 
