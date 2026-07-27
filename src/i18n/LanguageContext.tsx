@@ -13,9 +13,9 @@ const STORAGE_KEY = 'sehatsandhi_lang'
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
-    if (typeof window === 'undefined') return 'hi'
+    if (typeof window === 'undefined') return 'en'
     const saved = window.localStorage.getItem(STORAGE_KEY)
-    return saved === 'en' || saved === 'hi' ? saved : 'hi'
+    return saved === 'en' || saved === 'hi' ? saved : 'en'
   })
 
   const setLang = (l: Lang) => {
