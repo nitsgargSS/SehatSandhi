@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import FAQSection from '../components/FAQSection'
 import { useLanguage } from '../i18n/LanguageContext'
+import LiveBillingTerms from '../components/LiveBillingTerms'
 
 export default function ForPharmacy() {
   const { t } = useLanguage()
@@ -47,9 +48,10 @@ export default function ForPharmacy() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
           <h2 className="section-title">{t('forPharmacyPage.earnTitle')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
-            {[t('forPharmacyPage.earnCommission'), t('forPharmacyPage.earnDelivery'), t('forPharmacyPage.earnListing')].map(e => (
-              <div key={e} className="card text-center text-sm text-gray-600">{e}</div>
-            ))}
+            {/* Delivery charge is theirs and never changes; the fee/commission
+                terms come from the live pricing plan so they can't go stale. */}
+            <div className="card text-center text-sm text-gray-600">{t('forPharmacyPage.earnDelivery')}</div>
+            <LiveBillingTerms vertical="pharmacy" />
           </div>
         </div>
       </section>

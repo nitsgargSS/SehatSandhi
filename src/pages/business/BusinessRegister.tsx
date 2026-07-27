@@ -3,7 +3,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER } from '../../types'
-import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, isCommissionVertical } from './shared'
+import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor } from './shared'
 import VerticalIcon from './VerticalIcon'
 import SandboxAutofill from '../../components/SandboxAutofill'
 import { generateBusiness } from '../../lib/sandboxData'
@@ -11,6 +11,8 @@ import {
   computePrice, createRazorpayOrder, verifyRazorpayPayment,
   loadRazorpayCheckout, businessBackendConfigured, PriceResult,
 } from '../../lib/businessApi'
+import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
+import { useTaxSettings, localTax, isValidGstin } from '../../hooks/useTaxSettings'
 
 // Design 2b — 4-step onboarding wizard.
 // Layout: desktop = dark left step-rail + content pane; tablet (<900px) =
@@ -57,14 +59,40 @@ export default function BusinessRegister() {
   const [done, setDone] = useState(false)
   const [paid, setPaid] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [invoiceToken, setInvoiceToken] = useState<string | null>(null)
+  const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null)
+
+  // The live pricing plan. Everything below asks the plan how to price rather
+  // than assuming per-pincode tiers, so switching plans in admin changes the
+  // wizard with no deploy.
+  const { plan, tiers, verticals: vbRows } = usePricing()
+  const vb = vbRows.find(v => v.vertical === vertical)
 
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
   // Depends on which backend is active, so it is resolved here rather than
   // being a module constant.
   const backendReady = businessBackendConfigured()
   const verticalObj = verticalFor(vertical)
-  const onCommission = isCommissionVertical(vertical)
-  const commissionPct = verticalObj.commissionPercent ?? 10
+
+  const monthlyApplies = monthlyAppliesTo(plan, vb)
+  const commission = commissionFor(plan, vb)
+  // "Commission only" — no monthly fee at all, so there is nothing to pay today.
+  const onCommission = !monthlyApplies && commission.percent > 0
+  const commissionPct = commission.percent || verticalObj.commissionPercent || 10
+  const commissionBasis = commission.basis ?? verticalObj.commissionBasis ?? 'billing'
+  const flatPlan = plan.mode !== 'pincode_tiers'
+
+  // GST, from tax_settings. Zero while it is switched off, so the wizard shows
+  // exactly what will be charged either way.
+  const tax = useTaxSettings()
+
+  // How many months they're buying upfront. Defaults to the plan's term.
+  const [months, setMonths] = useState(plan.default_months)
+  useEffect(() => { setMonths(plan.default_months) }, [plan.default_months])
+  const monthOptions = Array.from(
+    { length: Math.max(1, plan.max_months - plan.min_months + 1) },
+    (_, i) => plan.min_months + i,
+  )
 
   const coverage: CoverageArea[] = useMemo(() => {
     if (areas.length) {
@@ -84,21 +112,27 @@ export default function BusinessRegister() {
   //    sum when the backend isn't configured or is unreachable. ──
   const localPrice: PriceResult = useMemo(() => {
     const chosen = coverage.filter(z => zips.includes(z.pin_code))
-    // Commission verticals owe nothing for coverage — only reach is summed.
-    const monthlyTotal = onCommission ? 0 : chosen.reduce((a, z) => a + z.monthly_price, 0)
+    const monthlyTotal = monthlyApplies ? localMonthlyTotal(plan, tiers, chosen) : 0
     const residents = chosen.reduce((a, z) => a + z.population, 0)
-    const top = onCommission
-      ? null
-      : chosen.reduce<CoverageArea | null>((a, z) => (!a || z.monthly_price > a.monthly_price ? z : a), null)
+    // "Plan tier" only means something when pincodes are individually priced.
+    const top = monthlyApplies && plan.mode === 'pincode_tiers'
+      ? chosen.reduce<CoverageArea | null>((a, z) => (!a || z.monthly_price > a.monthly_price ? z : a), null)
+      : null
     return {
-      pincodes: chosen.map(z => z.pin_code), count: chosen.length, monthlyTotal, residents,
+      pincodes: chosen.map(z => z.pin_code), count: chosen.length, residents,
       topTier: top ? { tier_number: top.tier_number, tier_name: top.tier_name } : null,
       breakdown: [],
-      model: onCommission ? 'commission' : 'pincode_monthly',
-      commissionPercent: onCommission ? commissionPct : 0,
-      commissionBasis: onCommission ? verticalObj.commissionBasis ?? null : null,
+      planCode: plan.code, planLabel: plan.label, mode: plan.mode,
+      monthlyTotal, months, total: monthlyTotal * months,
+      defaultMonths: plan.default_months, minMonths: plan.min_months, maxMonths: plan.max_months,
+      monthlyApplies,
+      commissionPercent: commission.percent,
+      commissionBasis: commission.basis,
+      commissionSuspended: commission.suspended,
+      tax: localTax(monthlyTotal * months, tax, form.gstin),
+      priceIncludesGst: plan.price_includes_gst ?? false,
     }
-  }, [coverage, zips, onCommission, commissionPct, verticalObj])
+  }, [coverage, zips, plan, tiers, months, monthlyApplies, commission, tax, form.gstin])
 
   const [serverPrice, setServerPrice] = useState<PriceResult | null>(null)
   const [pricing, setPricing] = useState(false)
@@ -110,8 +144,9 @@ export default function BusinessRegister() {
     const t = setTimeout(async () => {
       try {
         // Vertical is a display hint here (no listing row yet); the server still
-        // decides the model, and re-derives it from the row before charging.
-        const res = await computePrice(zips, null, vertical)
+        // decides the plan and re-derives the vertical from the row before
+        // charging. Months are clamped server-side to the plan's bounds.
+        const res = await computePrice(zips, null, vertical, months)
         if (id === priceReq.current) setServerPrice(res)
       } catch {
         if (id === priceReq.current) setServerPrice(null) // fall back to localPrice
@@ -120,7 +155,7 @@ export default function BusinessRegister() {
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [zips, vertical])
+  }, [zips, vertical, months])
 
   // What the summary shows: server total when we have one, else the local sum.
   const price = serverPrice ?? localPrice
@@ -228,13 +263,13 @@ export default function BusinessRegister() {
     try {
       const id = await ensureDoctorRow()
       if (!id) { setSubmitting(false); return }
-      const order = await createRazorpayOrder(zips, id, 1)
+      const order = await createRazorpayOrder(zips, id, months)
       await loadRazorpayCheckout()
       const Razorpay = (window as unknown as { Razorpay: new (o: unknown) => { open: () => void } }).Razorpay
       const rzp = new Razorpay({
         key: order.keyId, amount: order.amount, currency: order.currency,
         order_id: order.orderId, name: 'Sehatsandhi Business',
-        description: `${verticalObj.label} · ${zips.length} pincode${zips.length === 1 ? '' : 's'}`,
+        description: `${verticalObj.label} · ${zips.length} pincode${zips.length === 1 ? '' : 's'} · ${months} month${months === 1 ? '' : 's'}`,
         prefill: { name: form.owner_name || form.business_name, contact: form.phone, email: form.email },
         theme: { color: BIZ.green },
         handler: async (r: RazorpayResponse) => {
@@ -242,7 +277,14 @@ export default function BusinessRegister() {
             orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id,
             signature: r.razorpay_signature, paymentRowId: order.paymentRowId,
           })
-          if (v.ok) { setPaid(true); setDone(true) }
+          if (v.ok) {
+            // The invoice is issued inside razorpay-verify, so its number comes
+            // back with the confirmation — show it rather than making them wait
+            // for the WhatsApp message.
+            setInvoiceNumber(v.invoiceNumber ?? null)
+            setInvoiceToken(v.invoiceToken ?? null)
+            setPaid(true); setDone(true)
+          }
           else setError('Payment could not be verified. If money was deducted, our team will reconcile it.')
         },
       })
@@ -337,6 +379,20 @@ export default function BusinessRegister() {
                 <p style={{ fontSize: 15, color: BIZ.muted, maxWidth: 440, margin: '0 0 24px' }}>
                   Your {verticalObj.label} listing across {zips.length} pincode{zips.length === 1 ? '' : 's'} {paid ? 'is now live for patients in those areas.' : 'is pending review. Our team will WhatsApp you to activate it.'}
                 </p>
+                {paid && invoiceToken && (
+                  <div style={{ marginBottom: 20, background: BIZ.chipBg, border: '1px solid #cfe8dc', borderRadius: 16, padding: '16px 20px', maxWidth: 440 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: BIZ.ink }}>
+                      Tax invoice {invoiceNumber ?? ''} is ready
+                    </div>
+                    <p style={{ fontSize: 13, color: BIZ.muted, margin: '4px 0 12px', lineHeight: 1.6 }}>
+                      We've sent the link to your WhatsApp. You can open it any time and save it as a PDF.
+                    </p>
+                    <a href={`/invoice/${invoiceToken}`} target="_blank" rel="noreferrer"
+                       style={{ display: 'inline-block', background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 14, padding: '10px 18px', borderRadius: 11 }}>
+                      View invoice
+                    </a>
+                  </div>
+                )}
                 {!paid && <a href={waLink} target="_blank" rel="noreferrer" style={{ background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 15, padding: '13px 28px', borderRadius: 12 }}>Message us on WhatsApp</a>}
               </div>
             ) : (
@@ -401,8 +457,10 @@ export default function BusinessRegister() {
                       <h3 style={h3Style}>Choose your coverage</h3>
                       <p style={pStyle}>
                         {onCommission
-                          ? `Tap the pincodes you want to reach. Coverage is free on your plan — you only pay ${commissionPct}% of ${verticalObj.commissionBasis}.`
-                          : 'Tap the pincodes you want to reach. Price updates as you go.'}
+                          ? `Tap the pincodes you want to reach. Coverage is free on your plan — you only pay ${commissionPct}% of ${commissionBasis}.`
+                          : flatPlan
+                            ? `Tap the pincodes you want to reach. Every pincode is included in ${plan.label.toLowerCase()} — pick as many as you can serve.`
+                            : 'Tap the pincodes you want to reach. Price updates as you go.'}
                       </p>
                       {/* desktop: grid + sticky summary side by side; tablet: summary below */}
                       <div className="grid gap-6 items-start lg:grid-cols-[1fr_300px]">
@@ -424,7 +482,13 @@ export default function BusinessRegister() {
                                     <span style={{ fontSize: 12, color: BIZ.green, fontWeight: 700 }}>{z.population.toLocaleString('en-IN')} residents</span>
                                   </div>
                                   <div style={{ fontSize: 11, color: '#a89e8a', fontWeight: 600, marginTop: 4 }}>
-                                    {onCommission ? `${z.tier_name} · no monthly fee` : `${z.tier_name} · ₹${z.monthly_price.toLocaleString('en-IN')}/mo`}
+                                    {onCommission
+                                      ? `${z.tier_name} · no monthly fee`
+                                      : plan.mode === 'flat_all_pincodes'
+                                        ? `${z.tier_name} · included`
+                                        : plan.mode === 'flat_per_pincode'
+                                          ? `${z.tier_name} · ₹${(plan.monthly_price ?? 0).toLocaleString('en-IN')}/mo`
+                                          : `${z.tier_name} · ₹${z.monthly_price.toLocaleString('en-IN')}/mo`}
                                   </div>
                                 </div>
                               </button>
@@ -443,19 +507,41 @@ export default function BusinessRegister() {
                               <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 2 }}>Monthly listing fee</div>
                               <div style={{ fontSize: 32, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>₹0</div>
                               <div style={{ fontSize: 13.5, fontWeight: 800, color: BIZ.ink, marginTop: 12 }}>
-                                {commissionPct}% of {verticalObj.commissionBasis}
+                                {commissionPct}% of {commissionBasis}
                               </div>
                               <div style={{ fontSize: 12, color: BIZ.mutedWarm, lineHeight: 1.5, marginTop: 4 }}>{verticalObj.commissionNote}</div>
                             </div>
                           ) : (
                             <>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                <span style={{ fontSize: 14, color: BIZ.muted }}>Plan tier</span>
-                                <span style={{ background: BIZ.chipBg, color: BIZ.chipText, fontSize: 13, fontWeight: 800, padding: '4px 10px', borderRadius: 999 }}>{price.topTier?.tier_name ?? '—'}</span>
+                                <span style={{ fontSize: 14, color: BIZ.muted }}>{flatPlan ? 'Plan' : 'Plan tier'}</span>
+                                <span style={{ background: BIZ.chipBg, color: BIZ.chipText, fontSize: 13, fontWeight: 800, padding: '4px 10px', borderRadius: 999 }}>
+                                  {flatPlan ? 'All pincodes' : (price.topTier?.tier_name ?? '—')}
+                                </span>
                               </div>
                               <div style={{ borderTop: `1px dashed ${BIZ.inputBorder}`, paddingTop: 16 }}>
-                                <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 2 }}>Estimated monthly</div>
+                                <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 2 }}>
+                                  {flatPlan ? plan.label : 'Estimated monthly'}
+                                </div>
                                 <div style={{ fontSize: 32, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>₹{price.monthlyTotal.toLocaleString('en-IN')}<span style={{ fontSize: 15, color: BIZ.mutedWarm, fontWeight: 600 }}>/mo</span></div>
+                                {flatPlan && (
+                                  <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 4, lineHeight: 1.5 }}>
+                                    Every pincode you pick is included — the price does not change with coverage.
+                                  </div>
+                                )}
+                                {months > 1 && (
+                                  <div style={{ fontSize: 13, color: BIZ.ink, fontWeight: 700, marginTop: 10 }}>
+                                    ₹{(price.monthlyTotal * months).toLocaleString('en-IN')} for {months} months
+                                  </div>
+                                )}
+                                {price.tax?.applied && (
+                                  <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 8, lineHeight: 1.6 }}>
+                                    + {price.tax.rate}% GST ₹{price.tax.taxTotal.toLocaleString('en-IN')}
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: BIZ.ink, marginTop: 2 }}>
+                                      ₹{price.tax.grandTotal.toLocaleString('en-IN')} payable
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </>
                           )}
@@ -481,13 +567,69 @@ export default function BusinessRegister() {
                         <ReviewRow label="Pincodes selected" value={String(price.count)} />
                         <ReviewRow label="Total reach" value={`${price.residents.toLocaleString('en-IN')} residents`} />
                         {onCommission
-                          ? <ReviewRow label="Plan" value={`${commissionPct}% of ${verticalObj.commissionBasis}`} />
-                          : <ReviewRow label="Plan tier" value={price.topTier?.tier_name ?? '—'} />}
+                          ? <ReviewRow label="Plan" value={`${commissionPct}% of ${commissionBasis}`} />
+                          : <ReviewRow label="Plan" value={flatPlan ? plan.label : (price.topTier?.tier_name ?? '—')} />}
+                        {!onCommission && (
+                          <ReviewRow label="Monthly price" value={`₹${price.monthlyTotal.toLocaleString('en-IN')}/mo × ${months} month${months === 1 ? '' : 's'}`} />
+                        )}
+                        {!onCommission && price.tax?.applied && (
+                          <>
+                            <ReviewRow label="Taxable value" value={`₹${(price.monthlyTotal * months).toLocaleString('en-IN')}`} />
+                            {price.tax.interState
+                              ? <ReviewRow label={`IGST @ ${price.tax.rate}%`} value={`₹${price.tax.igst.toLocaleString('en-IN')}`} />
+                              : <>
+                                  <ReviewRow label={`CGST @ ${price.tax.rate / 2}%`} value={`₹${price.tax.cgst.toLocaleString('en-IN')}`} />
+                                  <ReviewRow label={`SGST @ ${price.tax.rate / 2}%`} value={`₹${price.tax.sgst.toLocaleString('en-IN')}`} />
+                                </>}
+                          </>
+                        )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 22px', background: '#f7f3ea' }}>
-                          <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>{onCommission ? 'Due today' : 'Monthly total'}</span>
-                          <span style={{ fontSize: 26, fontWeight: 800, color: BIZ.green }}>₹{price.monthlyTotal.toLocaleString('en-IN')}</span>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>Due today</span>
+                          <span style={{ fontSize: 26, fontWeight: 800, color: BIZ.green }}>
+                            ₹{(onCommission ? 0 : (price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months)).toLocaleString('en-IN')}
+                          </span>
                         </div>
+                        {!onCommission && price.tax?.applied && (
+                          <div style={{ padding: '0 22px 16px', fontSize: 12.5, color: BIZ.mutedWarm, background: '#f7f3ea' }}>
+                            Includes {price.tax.rate}% GST. A tax invoice is issued as soon as payment succeeds —
+                            we'll WhatsApp you the link and you can download it any time.
+                          </div>
+                        )}
                       </div>
+
+                      {/* Term picker — paying several months upfront holds this
+                          price for the whole term, even if the plan changes. */}
+                      {!onCommission && monthOptions.length > 1 && (
+                        <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>How many months would you like to pay for?</div>
+                          <p style={{ fontSize: 13, color: BIZ.muted, margin: '0 0 14px', lineHeight: 1.6 }}>
+                            Your rate is locked for the months you pay now. Prices rise as more patients join, so a longer term holds ₹{price.monthlyTotal.toLocaleString('en-IN')}/mo for longer.
+                          </p>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {monthOptions.map(m => {
+                              const on = months === m
+                              return (
+                                <button key={m} onClick={() => setMonths(m)} style={{
+                                  padding: '9px 14px', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit',
+                                  fontSize: 14, fontWeight: 700, minWidth: 52,
+                                  border: `2px solid ${on ? BIZ.green : '#e9e2d5'}`,
+                                  background: on ? BIZ.green : '#fff',
+                                  color: on ? '#fff' : BIZ.ink,
+                                }}>
+                                  {m}{m === plan.default_months ? '★' : ''}
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginTop: 12 }}>
+                            {months} month{months === 1 ? '' : 's'} × ₹{price.monthlyTotal.toLocaleString('en-IN')} ={' '}
+                            <strong style={{ color: BIZ.ink }}>
+                              ₹{(price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months).toLocaleString('en-IN')}
+                            </strong> today{price.tax?.applied ? ` (incl. ${price.tax.rate}% GST)` : ''}
+                            {plan.default_months > 1 && ` · ★ = our suggested ${plan.default_months}-month term`}
+                          </div>
+                        </div>
+                      )}
 
                       {onCommission ? (
                         <>
@@ -495,7 +637,7 @@ export default function BusinessRegister() {
                               are where the commission term is stated and accepted. */}
                           <div style={{ marginTop: 20, background: BIZ.chipBg, border: `1px solid #cfe8dc`, borderRadius: 18, padding: '20px 22px' }}>
                             <div style={{ fontSize: 17, fontWeight: 800, color: BIZ.ink }}>
-                              No monthly fee · {commissionPct}% of {verticalObj.commissionBasis}
+                              No monthly fee · {commissionPct}% of {commissionBasis}
                             </div>
                             <p style={{ fontSize: 14, color: BIZ.muted, lineHeight: 1.6, margin: '8px 0 0' }}>{verticalObj.commissionNote}</p>
                             <p style={{ fontSize: 13, color: BIZ.mutedWarm, lineHeight: 1.6, margin: '10px 0 0' }}>
@@ -506,7 +648,7 @@ export default function BusinessRegister() {
                                 onChange={e => { setAcceptedTerms(e.target.checked); if (e.target.checked) setError('') }}
                                 style={{ width: 18, height: 18, accentColor: BIZ.green, marginTop: 1, flex: '0 0 auto', cursor: 'pointer' }} />
                               <span style={{ fontSize: 13.5, color: BIZ.ink, fontWeight: 600, lineHeight: 1.5 }}>
-                                I agree to pay {commissionPct}% of {verticalObj.commissionBasis} on business that comes through Sehatsandhi.
+                                I agree to pay {commissionPct}% of {commissionBasis} on business that comes through Sehatsandhi.
                               </span>
                             </label>
                           </div>

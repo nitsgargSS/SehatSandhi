@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import FAQSection from '../components/FAQSection'
 import { useLanguage } from '../i18n/LanguageContext'
+import LiveBillingTerms from '../components/LiveBillingTerms'
 
 export default function ForAmbulance() {
   const { t } = useLanguage()
@@ -65,9 +66,10 @@ export default function ForAmbulance() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
           <h2 className="section-title">{t('forAmbulancePage.earnTitle')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
-            {[t('forAmbulancePage.earnEmergency'), t('forAmbulancePage.earnTransport'), t('forAmbulancePage.earnListing')].map(e => (
-              <div key={e} className="card text-center text-sm text-gray-600">{e}</div>
-            ))}
+            {/* Emergencies are commission-free as a standing promise; the rest of
+                the terms follow the live pricing plan. */}
+            <div className="card text-center text-sm text-gray-600">{t('forAmbulancePage.earnEmergency')}</div>
+            <LiveBillingTerms vertical="ambulance" />
           </div>
         </div>
       </section>

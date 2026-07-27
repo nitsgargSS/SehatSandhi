@@ -86,5 +86,7 @@ export const PIN_CODES = [
   { code: '135202', area: 'Pratapnagar' },
 ]
 
-export const WA_NUMBER = '91XXXXXXXXXX' // replace with real number
+// Digits only, country code, no '+' or spaces — it goes straight into
+// `https://wa.me/${WA_NUMBER}` at ~20 call sites, and wa.me rejects a '+'.
+export const WA_NUMBER = '917015399355'
 export const BASE_LISTING_FEE = 5000    // ₹ per PIN per month

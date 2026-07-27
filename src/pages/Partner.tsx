@@ -6,7 +6,7 @@ import SandboxAutofill from '../components/SandboxAutofill'
 import { generatePartner } from '../lib/sandboxData'
 import { useServiceAreas, tierColor } from '../hooks/useServiceAreas'
 import { useLanguage } from '../i18n/LanguageContext'
-import { isCommissionVertical } from './business/shared'
+import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../hooks/usePricing'
 
 type PartnerType = 'pharmacy' | 'lab' | 'insurance' | 'ambulance' | null
 
@@ -33,16 +33,20 @@ export default function PartnerRegister() {
     ...customAreas.map(a => a.area_name),
   ]
 
-  // Pharmacies, insurance agents and ambulance services list free and pay a
-  // percentage of billing instead of a monthly fee (see business/shared.ts and
-  // the vertical_billing table) — so no per-area price is quoted to them. Labs
-  // remain on the per-pincode monthly plan.
-  const onCommission = type ? isCommissionVertical(type) : false
+  // What this partner type actually pays, per the live pricing plan — not a
+  // hardcoded assumption. Under a flat plan even a pharmacy owes a monthly fee;
+  // under tier pricing it owes a commission instead. Reading the plan keeps this
+  // page from contradicting what the checkout wizard quotes.
+  const { plan, tiers, verticals } = usePricing()
+  const vb = type ? verticals.find(v => v.vertical === type) : undefined
+  const monthlyApplies = type ? monthlyAppliesTo(plan, vb) : true
+  const commission = commissionFor(plan, vb)
+  const onCommission = !monthlyApplies && commission.percent > 0
   const commissionBasis =
     type === 'insurance' ? t('partnerPage.commissionBasisInsurance')
       : type === 'ambulance' ? t('partnerPage.commissionBasisAmbulance')
         : t('partnerPage.commissionBasisPharmacy')
-  const monthlyTotal = onCommission ? 0 : selectedAreaObjs.reduce((sum, a) => sum + a.monthly_price, 0)
+  const monthlyTotal = monthlyApplies ? localMonthlyTotal(plan, tiers, selectedAreaObjs) : 0
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -90,7 +94,7 @@ export default function PartnerRegister() {
         {onCommission ? (
           <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700 mb-4">
             <p className="font-bold text-base">{t('partnerPage.noMonthlyFee')}</p>
-            <p className="mt-1">10% {commissionBasis}</p>
+            <p className="mt-1">{commission.percent}% {commissionBasis}</p>
           </div>
         ) : monthlyTotal > 0 && (
           <div className="bg-teal-50 rounded-xl p-4 text-sm text-teal-700 mb-4">
@@ -216,7 +220,9 @@ export default function PartnerRegister() {
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-2 block">{t('partnerPage.areaSectionLabel')}</label>
                 <p className="text-xs text-gray-400 mb-3">
-                  {onCommission ? t('partnerPage.areaSectionNoteFree') : t('partnerPage.areaSectionNoteBase')}
+                  {onCommission || plan.mode === 'flat_all_pincodes'
+                    ? t('partnerPage.areaSectionNoteFree')
+                    : t('partnerPage.areaSectionNoteBase')}
                   {type === 'pharmacy' && t('partnerPage.areaNotePharmacy')}
                   {type === 'lab' && t('partnerPage.areaNoteLab')}
                   {type === 'ambulance' && t('partnerPage.areaNoteAmbulance')}
@@ -243,7 +249,13 @@ export default function PartnerRegister() {
                           </div>
                           <span className="text-xs text-gray-500">{a.area_name}</span>
                           <span className="text-xs font-semibold text-teal-600 mt-0.5">
-                            {onCommission ? t('partnerPage.noMonthlyFeeShort') : `₹${a.monthly_price.toLocaleString('en-IN')}/mo`}
+                            {onCommission
+                              ? t('partnerPage.noMonthlyFeeShort')
+                              : plan.mode === 'flat_all_pincodes'
+                                ? t('partnerPage.pincodeIncluded')
+                                : plan.mode === 'flat_per_pincode'
+                                  ? `₹${(plan.monthly_price ?? 0).toLocaleString('en-IN')}/mo`
+                                  : `₹${a.monthly_price.toLocaleString('en-IN')}/mo`}
                           </span>
                         </button>
                       ))}
@@ -255,7 +267,7 @@ export default function PartnerRegister() {
                           {onCommission ? (
                             <>
                               <p className="text-xs text-gray-400">{t('partnerPage.noMonthlyFee')}</p>
-                              <p className="text-base font-bold text-teal-600">10% {commissionBasis}</p>
+                              <p className="text-base font-bold text-teal-600">{commission.percent}% {commissionBasis}</p>
                             </>
                           ) : (
                             <>

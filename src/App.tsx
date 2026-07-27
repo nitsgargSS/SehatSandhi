@@ -21,6 +21,7 @@ import PartnerRegister from './pages/Partner'
 import PatientHome from './pages/PatientHome'
 import BusinessLanding from './pages/business/BusinessLanding'
 import BusinessRegister from './pages/business/BusinessRegister'
+import InvoicePage from './pages/InvoicePage'
 import AdminLogin from './pages/admin/Login'
 import AdminDashboard from './pages/admin/Dashboard'
 import EnvBanner from './components/EnvBanner'
@@ -94,6 +95,10 @@ export default function App() {
           <Route path="/home-v2" element={<Navigate to="/" replace />} />
           <Route path="/business" element={<BusinessLanding />} />
           <Route path="/business/register" element={<BusinessRegister />} />
+
+          {/* Tax invoice, opened by unguessable token from a WhatsApp or email
+              link — so deliberately no login and no site nav. */}
+          <Route path="/invoice/:token" element={<InvoicePage />} />
 
           {/* Doctor */}
           <Route path="/doctor" element={<WithLayout><Register /></WithLayout>} />

@@ -7,6 +7,7 @@ import LanguageSwitcher from '../../components/LanguageSwitcher'
 import EnvSwitcher from '../../components/EnvSwitcher'
 import SandboxPanel from './SandboxPanel'
 import { isSandbox, SANDBOX_AVAILABLE } from '../../lib/env'
+import { adminPricing } from '../../lib/businessApi'
 
 // Local type extension — organization_id / is_hospital_doctor were
 // added to the doctors table via ALTER TABLE, but the shared Doctor
@@ -65,13 +66,94 @@ interface OrgSubscription {
 
 // supabase vertical_billing — how each vertical pays. The edge functions read
 // this same table when pricing, so it is the authority, not a display copy.
+//
+// monthly_enabled and commission_enabled are independent: a vertical can pay a
+// monthly fee, a commission, both, or neither. (billing_model is the legacy
+// either/or column, kept for reference only.)
 interface VerticalBillingRow {
   vertical: string
   db_speciality: string
   billing_model: 'pincode_monthly' | 'commission'
+  monthly_enabled: boolean | null
+  commission_enabled: boolean | null
   commission_percent: number | null
   commission_basis: string | null
   is_active: boolean
+}
+
+// supabase pricing_plans / pricing_plan_status
+interface PlanRow {
+  code: string
+  label: string
+  description: string | null
+  sequence: number
+  mode: 'flat_all_pincodes' | 'flat_per_pincode' | 'pincode_tiers'
+  monthly_price: number | null
+  default_months: number
+  min_months: number
+  max_months: number
+  max_signups: number | null
+  suspend_commission: boolean
+  is_enabled: boolean
+  signups_used?: number
+  seats_left?: number | null
+  is_currently_active?: boolean
+}
+
+interface TierRow {
+  tier_number: number
+  tier_name: string
+  monthly_price: number
+}
+
+interface TaxSettingsRow {
+  legal_name: string | null
+  trade_name: string | null
+  gstin: string | null
+  state_code: string | null
+  registered_address: string | null
+  city: string | null
+  pin_code: string | null
+  sac_code: string | null
+  gst_rate: number | null
+  gst_enabled: boolean | null
+  invoice_prefix: string | null
+}
+
+interface InvoiceRow {
+  id: string
+  invoice_number: string
+  invoice_date: string
+  recipient_name: string | null
+  recipient_gstin: string | null
+  place_of_supply: string | null
+  taxable_value: number
+  gst_rate: number
+  cgst_amount: number
+  sgst_amount: number
+  igst_amount: number
+  tax_total: number
+  total_amount: number
+  status: string
+  public_token: string
+  sent_whatsapp_at: string | null
+  sent_email_at: string | null
+}
+
+interface InvoiceMonth {
+  month: string
+  invoices: number
+  taxable_value: number
+  tax_collected: number
+  total_collected: number
+}
+
+interface PlanEvent {
+  id: string
+  plan_code: string | null
+  action: string
+  actor: string | null
+  created_at: string
 }
 
 export default function AdminDashboard() {
@@ -98,8 +180,75 @@ export default function AdminDashboard() {
   const [subForm, setSubForm] = useState({ speciality: '', pin_code: '', monthly_price: '' })
   const [doctorSearch, setDoctorSearch] = useState('')
 
-  // ── Per-vertical billing plans (read-only) ──
+  // ── Pricing: per-vertical billing (anon-readable) + plan management ──
+  // Reads of vertical_billing and the active plan use the normal anon key, since
+  // the site quotes them publicly anyway. WRITES go through the admin-pricing
+  // edge function, which holds a server-only key — VITE_ADMIN_PASS is compiled
+  // into this bundle, so an anon write policy on pricing would let anyone
+  // re-price the platform.
   const [billingPlans, setBillingPlans] = useState<VerticalBillingRow[]>([])
+  const [activePlan, setActivePlan] = useState<PlanRow | null>(null)
+  const [pricingKey, setPricingKey] = useState(() => sessionStorage.getItem('pricing_key') || '')
+  const [keyInput, setKeyInput] = useState('')
+  const [planRows, setPlanRows] = useState<PlanRow[]>([])
+  const [tierRows, setTierRows] = useState<TierRow[]>([])
+  const [planEvents, setPlanEvents] = useState<PlanEvent[]>([])
+  const [pricingBusy, setPricingBusy] = useState(false)
+  const [pricingMsg, setPricingMsg] = useState('')
+  const [pricingErr, setPricingErr] = useState('')
+  const [planDraft, setPlanDraft] = useState<Record<string, Record<string, string>>>({})
+  const [tierDraft, setTierDraft] = useState<Record<number, string>>({})
+  const [vbDraft, setVbDraft] = useState<Record<string, string>>({})
+  const [taxSettings, setTaxSettings] = useState<TaxSettingsRow | null>(null)
+  const [taxDraft, setTaxDraft] = useState<Record<string, string>>({})
+  const [invoices, setInvoices] = useState<InvoiceRow[]>([])
+  const [invoiceMonths, setInvoiceMonths] = useState<InvoiceMonth[]>([])
+
+  // Pull the full plan list (seat counts, disabled plans) — needs the key.
+  const loadPricing = async (key: string) => {
+    if (!key) return
+    setPricingBusy(true); setPricingErr('')
+    try {
+      const res = await adminPricing<{
+        plans: PlanRow[]; tiers: TierRow[]; verticals: VerticalBillingRow[]; events: PlanEvent[]
+      }>(key, 'list')
+      setPlanRows(res.plans || [])
+      setTierRows(res.tiers || [])
+      setBillingPlans(res.verticals || [])
+      setPlanEvents(res.events || [])
+      const ts = await adminPricing<{ taxSettings: TaxSettingsRow }>(key, 'taxSettings')
+      setTaxSettings(ts.taxSettings ?? null)
+      const inv = await adminPricing<{ invoices: InvoiceRow[]; summary: InvoiceMonth[] }>(key, 'invoices')
+      setInvoices(inv.invoices || [])
+      setInvoiceMonths(inv.summary || [])
+      sessionStorage.setItem('pricing_key', key)
+      setPricingKey(key)
+    } catch (e) {
+      setPricingErr((e as Error).message.includes('401')
+        ? 'That pricing key was not accepted.'
+        : (e as Error).message)
+      sessionStorage.removeItem('pricing_key')
+      setPricingKey('')
+    } finally {
+      setPricingBusy(false)
+    }
+  }
+
+  const runPricingAction = async (action: string, args: Record<string, unknown>, okMsg: string) => {
+    if (!pricingKey) return
+    setPricingBusy(true); setPricingErr(''); setPricingMsg('')
+    try {
+      await adminPricing(pricingKey, action, args)
+      setPricingMsg(okMsg)
+      await loadPricing(pricingKey)
+      const { data } = await supabase.from('active_pricing_plan').select('*').maybeSingle()
+      setActivePlan((data as PlanRow) || null)
+    } catch (e) {
+      setPricingErr((e as Error).message)
+    } finally {
+      setPricingBusy(false)
+    }
+  }
 
   // ── Coupons state ──
   const [coupons, setCoupons] = useState<any[]>([])
@@ -142,10 +291,15 @@ export default function AdminDashboard() {
     const { data: billingData, error: billErr } = await supabase.from('vertical_billing').select('*')
     warn('vertical_billing', billErr)
     setBillingPlans((billingData as VerticalBillingRow[]) || [])
+    const { data: planData } = await supabase.from('active_pricing_plan').select('*').maybeSingle()
+    setActivePlan((planData as PlanRow) || null)
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
+
+  // If the pricing key is already in this session, pull the full plan list.
+  useEffect(() => { if (pricingKey) loadPricing(pricingKey) }, [])
 
   const loadOrgDetail = async (orgId: string) => {
     const { data: specs } = await supabase.from('org_specialities').select('*').eq('organization_id', orgId).eq('is_active', true)
@@ -924,48 +1078,424 @@ export default function AdminDashboard() {
           )}
 
           {tab === 'billing' && (
-            <div className="card shadow-sm">
-              <div className="mb-1">
-                <h2 className="font-bold text-navy-700 text-lg">{t('adminDashboardPage.billingHeading')}</h2>
+            <div className="space-y-6">
+              {/* Which plan new registrations are being quoted right now */}
+              <div className="card shadow-sm">
+                <h2 className="font-bold text-navy-700 text-lg mb-1">{t('adminDashboardPage.billingHeading')}</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  Changing a plan affects <strong>new registrations only</strong>. Businesses already signed up keep
+                  the price and term they paid for — their locked price is on their listing.
+                </p>
+                {activePlan ? (
+                  <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 flex flex-wrap gap-4 items-center justify-between">
+                    <div>
+                      <div className="text-xs text-teal-700 font-semibold uppercase tracking-wide">Live plan</div>
+                      <div className="font-bold text-navy-700 text-lg">{activePlan.label}</div>
+                      <div className="text-xs text-gray-500 font-mono mt-0.5">{activePlan.code} · {activePlan.mode}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-teal-600">
+                        {activePlan.mode === 'pincode_tiers'
+                          ? 'By pincode tier'
+                          : `₹${Number(activePlan.monthly_price ?? 0).toLocaleString('en-IN')}/mo`}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        term {activePlan.default_months} mo (allowed {activePlan.min_months}–{activePlan.max_months})
+                        {activePlan.suspend_commission && ' · commission suspended'}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 py-4">
+                    No active plan found — run <code className="font-mono">npm run migrate</code>.
+                  </p>
+                )}
               </div>
-              <p className="text-sm text-gray-500 mb-5">{t('adminDashboardPage.billingSubtitle')}</p>
 
-              {billingPlans.length === 0 ? (
-                <p className="text-sm text-gray-400 py-6 text-center">{t('adminDashboardPage.billingEmpty')}</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-gray-500 border-b">
-                        <th className="pb-2 px-2">{t('adminDashboardPage.billingColVertical')}</th>
-                        <th className="pb-2 px-2">{t('adminDashboardPage.billingColSpeciality')}</th>
-                        <th className="pb-2 px-2">{t('adminDashboardPage.billingColModel')}</th>
-                        <th className="pb-2 px-2">{t('adminDashboardPage.billingColRate')}</th>
-                        <th className="pb-2 px-2">{t('adminDashboardPage.billingColBasis')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {billingPlans.map(p => {
-                        const commission = p.billing_model === 'commission'
-                        return (
-                          <tr key={p.vertical} className="border-b last:border-0">
-                            <td className="py-3 px-2 font-semibold text-navy-700 capitalize">{p.vertical}</td>
-                            <td className="py-3 px-2 text-gray-500 font-mono text-xs">{p.db_speciality}</td>
-                            <td className="py-3 px-2">
-                              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${commission ? 'bg-teal-50 text-teal-700' : 'bg-gray-100 text-gray-600'}`}>
-                                {commission ? t('adminDashboardPage.billingModelCommission') : t('adminDashboardPage.billingModelMonthly')}
-                              </span>
-                            </td>
-                            <td className="py-3 px-2 font-bold text-navy-700">
-                              {commission ? `${Number(p.commission_percent ?? 0)}%` : t('adminDashboardPage.billingRateByPincode')}
-                            </td>
-                            <td className="py-3 px-2 text-gray-500 text-xs max-w-xs">{p.commission_basis || '—'}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+              {/* Writes need the server-only key */}
+              {!pricingKey ? (
+                <div className="card shadow-sm">
+                  <h3 className="font-bold text-navy-700 mb-1">Unlock pricing changes</h3>
+                  <p className="text-sm text-gray-500 mb-3">
+                    Pricing writes don't use the site's public key — anyone can read that from the JS bundle. Enter the
+                    pricing key (set as the <code className="font-mono">ADMIN_PRICING_KEY</code> function secret). It's
+                    held for this browser session only.
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <input className="input-field max-w-xs" type="password" placeholder="Pricing key"
+                      value={keyInput} onChange={e => setKeyInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') loadPricing(keyInput) }} />
+                    <button onClick={() => loadPricing(keyInput)} disabled={!keyInput || pricingBusy}
+                      className="btn-teal text-sm py-2 px-4 disabled:opacity-50">
+                      {pricingBusy ? 'Checking…' : 'Unlock'}
+                    </button>
+                  </div>
+                  {pricingErr && <p className="text-red-500 text-sm mt-2">{pricingErr}</p>}
                 </div>
+              ) : (
+                <>
+                  {(pricingMsg || pricingErr) && (
+                    <div className={`rounded-xl p-3 text-sm ${pricingErr ? 'bg-red-50 text-red-600' : 'bg-teal-50 text-teal-700'}`}>
+                      {pricingErr || pricingMsg}
+                    </div>
+                  )}
+
+                  {/* Plan queue */}
+                  <div className="card shadow-sm">
+                    <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                      <h3 className="font-bold text-navy-700">Plan queue</h3>
+                      <button onClick={() => runPricingAction('activate', { planCode: null }, 'Override cleared — following the queue again.')}
+                        disabled={pricingBusy}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-50">
+                        Clear override (auto)
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Without an override, the first enabled plan with seats left is used — so the queue advances by
+                      itself when a launch offer fills up. "Use this" pins one plan until you clear it.
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs text-gray-500 border-b">
+                            <th className="pb-2 px-2">#</th>
+                            <th className="pb-2 px-2">Plan</th>
+                            <th className="pb-2 px-2">Mode</th>
+                            <th className="pb-2 px-2">₹/month</th>
+                            <th className="pb-2 px-2">Term (def/min/max)</th>
+                            <th className="pb-2 px-2">Seats</th>
+                            <th className="pb-2 px-2 text-center">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {planRows.map(p => {
+                            const d = planDraft[p.code] || {}
+                            const val = (k: keyof PlanRow) => d[k] ?? String(p[k] ?? '')
+                            const setD = (k: string, v: string) =>
+                              setPlanDraft(s => ({ ...s, [p.code]: { ...(s[p.code] || {}), [k]: v } }))
+                            const dirty = Object.keys(d).length > 0
+                            return (
+                              <tr key={p.code} className={`border-b last:border-0 ${p.is_currently_active ? 'bg-teal-50/50' : ''}`}>
+                                <td className="py-3 px-2 text-gray-400">{p.sequence}</td>
+                                <td className="py-3 px-2">
+                                  <div className="font-semibold text-navy-700">{p.label}</div>
+                                  <div className="text-xs text-gray-400 font-mono">{p.code}</div>
+                                  {p.is_currently_active && <span className="text-[10px] font-bold text-teal-700 bg-teal-100 px-1.5 py-0.5 rounded">LIVE</span>}
+                                  {!p.is_enabled && <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded ml-1">DISABLED</span>}
+                                  {p.suspend_commission && <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded ml-1">no commission</span>}
+                                </td>
+                                <td className="py-3 px-2 text-xs text-gray-500">{p.mode.replace(/_/g, ' ')}</td>
+                                <td className="py-3 px-2">
+                                  {p.mode === 'pincode_tiers' ? (
+                                    <span className="text-xs text-gray-400">by tier</span>
+                                  ) : (
+                                    <input className="input-field w-24 text-sm" type="number" min={0}
+                                      value={val('monthly_price')} onChange={e => setD('monthly_price', e.target.value)} />
+                                  )}
+                                </td>
+                                <td className="py-3 px-2">
+                                  <div className="flex gap-1">
+                                    {(['default_months', 'min_months', 'max_months'] as const).map(f => (
+                                      <input key={f} className="input-field w-14 text-sm" type="number" min={1} title={f}
+                                        value={val(f)} onChange={e => setD(f, e.target.value)} />
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-2">
+                                  <input className="input-field w-20 text-sm" type="number" min={0} placeholder="∞"
+                                    value={d.max_signups ?? (p.max_signups == null ? '' : String(p.max_signups))}
+                                    onChange={e => setD('max_signups', e.target.value)} />
+                                  <div className="text-[11px] text-gray-400 mt-1">
+                                    {p.signups_used ?? 0} used{p.seats_left != null && ` · ${p.seats_left} left`}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-2">
+                                  <div className="flex gap-1 justify-center flex-wrap">
+                                    <button onClick={() => runPricingAction('activate', { planCode: p.code }, `${p.label} is now live.`)}
+                                      disabled={pricingBusy}
+                                      className="text-xs font-medium px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 disabled:opacity-50">
+                                      Use this
+                                    </button>
+                                    <button onClick={() => runPricingAction('updatePlan',
+                                      { planCode: p.code, patch: { is_enabled: !p.is_enabled } },
+                                      `${p.label} ${p.is_enabled ? 'disabled' : 'enabled'}.`)}
+                                      disabled={pricingBusy}
+                                      className="text-xs font-medium px-2 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-50">
+                                      {p.is_enabled ? 'Disable' : 'Enable'}
+                                    </button>
+                                    {dirty && (
+                                      <button onClick={() => {
+                                        const patch: Record<string, unknown> = {}
+                                        if (d.monthly_price !== undefined) patch.monthly_price = Number(d.monthly_price)
+                                        if (d.default_months !== undefined) patch.default_months = Number(d.default_months)
+                                        if (d.min_months !== undefined) patch.min_months = Number(d.min_months)
+                                        if (d.max_months !== undefined) patch.max_months = Number(d.max_months)
+                                        if (d.max_signups !== undefined)
+                                          patch.max_signups = d.max_signups === '' ? null : Number(d.max_signups)
+                                        setPlanDraft(s => { const n = { ...s }; delete n[p.code]; return n })
+                                        runPricingAction('updatePlan', { planCode: p.code, patch }, `${p.label} updated.`)
+                                      }} disabled={pricingBusy}
+                                        className="text-xs font-bold px-2 py-1.5 rounded-lg bg-navy-700 hover:bg-navy-600 text-white disabled:opacity-50">
+                                        Save
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Pincode tier prices — used when a pincode_tiers plan is live */}
+                  <div className="card shadow-sm">
+                    <h3 className="font-bold text-navy-700 mb-1">Pincode tier prices</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Only used while a "pincode tiers" plan is live. Changing these updates the public pricing page
+                      immediately — no deploy.
+                    </p>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      {tierRows.map(tr => (
+                        <div key={tr.tier_number} className="border border-gray-200 rounded-xl p-3">
+                          <div className="text-xs text-gray-500">Tier {tr.tier_number} · {tr.tier_name}</div>
+                          <div className="flex gap-2 mt-2">
+                            <input className="input-field text-sm" type="number" min={0}
+                              value={tierDraft[tr.tier_number] ?? String(tr.monthly_price)}
+                              onChange={e => setTierDraft(s => ({ ...s, [tr.tier_number]: e.target.value }))} />
+                            {tierDraft[tr.tier_number] !== undefined
+                              && tierDraft[tr.tier_number] !== String(tr.monthly_price) && (
+                              <button onClick={() => {
+                                const v = Number(tierDraft[tr.tier_number])
+                                setTierDraft(s => { const n = { ...s }; delete n[tr.tier_number]; return n })
+                                runPricingAction('updateTier', { tierNumber: tr.tier_number, monthlyPrice: v },
+                                  `${tr.tier_name} set to ₹${v.toLocaleString('en-IN')}/mo.`)
+                              }} disabled={pricingBusy}
+                                className="text-xs font-bold px-2 rounded-lg bg-navy-700 text-white disabled:opacity-50">Save</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Per-vertical: monthly and commission are independent switches */}
+                  <div className="card shadow-sm">
+                    <h3 className="font-bold text-navy-700 mb-1">Billing by category</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Monthly fee and commission are separate — a category can have both. Turn on a commission for
+                      doctors or hospitals (say, on surgeries) without changing what they pay monthly.
+                      {activePlan?.suspend_commission && (
+                        <strong className="text-amber-700"> The live plan currently suspends all commission.</strong>
+                      )}
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs text-gray-500 border-b">
+                            <th className="pb-2 px-2">Category</th>
+                            <th className="pb-2 px-2 text-center">Monthly fee</th>
+                            <th className="pb-2 px-2 text-center">Commission</th>
+                            <th className="pb-2 px-2">%</th>
+                            <th className="pb-2 px-2">Applies to</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {billingPlans.map(v => (
+                            <tr key={v.vertical} className="border-b last:border-0">
+                              <td className="py-3 px-2">
+                                <div className="font-semibold text-navy-700 capitalize">{v.vertical}</div>
+                                <div className="text-[11px] text-gray-400 font-mono">{v.db_speciality}</div>
+                              </td>
+                              <td className="py-3 px-2 text-center">
+                                <input type="checkbox" className="w-4 h-4 accent-teal-600" checked={v.monthly_enabled !== false}
+                                  onChange={e => runPricingAction('updateVerticalBilling',
+                                    { vertical: v.vertical, patch: { monthly_enabled: e.target.checked } },
+                                    `${v.vertical}: monthly fee ${e.target.checked ? 'on' : 'off'}.`)} />
+                              </td>
+                              <td className="py-3 px-2 text-center">
+                                <input type="checkbox" className="w-4 h-4 accent-teal-600" checked={Boolean(v.commission_enabled)}
+                                  onChange={e => runPricingAction('updateVerticalBilling',
+                                    { vertical: v.vertical, patch: { commission_enabled: e.target.checked } },
+                                    `${v.vertical}: commission ${e.target.checked ? 'on' : 'off'}.`)} />
+                              </td>
+                              <td className="py-3 px-2">
+                                <div className="flex gap-1">
+                                  <input className="input-field w-16 text-sm" type="number" min={0} max={100} step={0.5}
+                                    value={vbDraft[v.vertical] ?? String(Number(v.commission_percent ?? 0))}
+                                    onChange={e => setVbDraft(s => ({ ...s, [v.vertical]: e.target.value }))} />
+                                  {vbDraft[v.vertical] !== undefined
+                                    && vbDraft[v.vertical] !== String(Number(v.commission_percent ?? 0)) && (
+                                    <button onClick={() => {
+                                      const pct = Number(vbDraft[v.vertical])
+                                      setVbDraft(s => { const n = { ...s }; delete n[v.vertical]; return n })
+                                      runPricingAction('updateVerticalBilling',
+                                        { vertical: v.vertical, patch: { commission_percent: pct } },
+                                        `${v.vertical}: commission set to ${pct}%.`)
+                                    }} disabled={pricingBusy}
+                                      className="text-xs font-bold px-2 rounded-lg bg-navy-700 text-white disabled:opacity-50">Save</button>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3 px-2 text-xs text-gray-500 max-w-xs">{v.commission_basis || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+
+                  {/* GST identity — what appears on every invoice we issue */}
+                  <div className="card shadow-sm">
+                    <h3 className="font-bold text-navy-700 mb-1">GST &amp; invoicing</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      These details go on every tax invoice. GST cannot be switched on until the GSTIN and legal name
+                      are filled in — an invoice without a supplier GSTIN is not a valid tax invoice.
+                    </p>
+                    {taxSettings ? (
+                      <>
+                        <div className={`rounded-xl p-3 mb-4 text-sm ${taxSettings.gst_enabled ? 'bg-teal-50 text-teal-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {taxSettings.gst_enabled
+                            ? `GST is ON — ${Number(taxSettings.gst_rate ?? 18)}% is added to every new listing charge.`
+                            : 'GST is OFF — prices are charged with no tax and invoices carry no GST lines.'}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {([
+                            ['legal_name', 'Registered legal name'],
+                            ['gstin', 'GSTIN (15 characters)'],
+                            ['registered_address', 'Registered address'],
+                            ['city', 'City'],
+                            ['pin_code', 'PIN code'],
+                            ['sac_code', 'SAC code'],
+                            ['gst_rate', 'GST rate %'],
+                            ['invoice_prefix', 'Invoice number prefix'],
+                          ] as const).map(([field, label]) => (
+                            <div key={field}>
+                              <label className="text-xs font-medium text-gray-600 mb-1 block">{label}</label>
+                              <input className="input-field text-sm"
+                                value={taxDraft[field] ?? String((taxSettings as unknown as Record<string, unknown>)[field] ?? '')}
+                                onChange={e => setTaxDraft(d => ({ ...d, [field]: e.target.value }))} />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 mt-4 flex-wrap items-center">
+                          <button disabled={pricingBusy || Object.keys(taxDraft).length === 0}
+                            onClick={() => {
+                              const patch: Record<string, unknown> = { ...taxDraft }
+                              if (patch.gst_rate !== undefined) patch.gst_rate = Number(patch.gst_rate)
+                              setTaxDraft({})
+                              runPricingAction('updateTaxSettings', { patch }, 'GST details saved.')
+                            }}
+                            className="btn-teal text-sm py-2 px-4 disabled:opacity-50">Save GST details</button>
+                          <button disabled={pricingBusy}
+                            onClick={() => runPricingAction('updateTaxSettings',
+                              { patch: { gst_enabled: !taxSettings.gst_enabled } },
+                              taxSettings.gst_enabled ? 'GST switched off.' : 'GST switched on.')}
+                            className={`text-sm font-semibold py-2 px-4 rounded-lg disabled:opacity-50 ${taxSettings.gst_enabled ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-teal-600 text-white hover:bg-teal-700'}`}>
+                            {taxSettings.gst_enabled ? 'Switch GST off' : 'Switch GST on'}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-400 py-4">
+                        No tax settings row — run migration 0007.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Invoice register */}
+                  <div className="card shadow-sm">
+                    <h3 className="font-bold text-navy-700 mb-1">Invoices</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Every invoice issued, newest first. Numbers are consecutive per financial year, as GST requires.
+                    </p>
+
+                    {invoiceMonths.length > 0 && (
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                        {invoiceMonths.slice(0, 4).map(m => (
+                          <div key={m.month} className="border border-gray-200 rounded-xl p-3">
+                            <div className="text-xs text-gray-500">{m.month}</div>
+                            <div className="font-bold text-navy-700">₹{Number(m.total_collected ?? 0).toLocaleString('en-IN')}</div>
+                            <div className="text-[11px] text-gray-400">
+                              {m.invoices} invoices · ₹{Number(m.tax_collected ?? 0).toLocaleString('en-IN')} tax
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {invoices.length === 0 ? (
+                      <p className="text-sm text-gray-400 py-6 text-center">
+                        No invoices yet. One is issued automatically when a payment succeeds.
+                      </p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs text-gray-500 border-b">
+                              <th className="pb-2 px-2">Invoice</th>
+                              <th className="pb-2 px-2">Date</th>
+                              <th className="pb-2 px-2">Business</th>
+                              <th className="pb-2 px-2">GSTIN</th>
+                              <th className="pb-2 px-2 text-right">Taxable</th>
+                              <th className="pb-2 px-2 text-right">Tax</th>
+                              <th className="pb-2 px-2 text-right">Total</th>
+                              <th className="pb-2 px-2">Sent</th>
+                              <th className="pb-2 px-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {invoices.map(iv => (
+                              <tr key={iv.id} className="border-b last:border-0">
+                                <td className="py-2.5 px-2 font-mono text-xs text-navy-700">{iv.invoice_number}</td>
+                                <td className="py-2.5 px-2 text-xs text-gray-500">{iv.invoice_date}</td>
+                                <td className="py-2.5 px-2">{iv.recipient_name || '—'}</td>
+                                <td className="py-2.5 px-2 font-mono text-[11px] text-gray-500">
+                                  {iv.recipient_gstin || <span className="text-gray-300">B2C</span>}
+                                </td>
+                                <td className="py-2.5 px-2 text-right">₹{Number(iv.taxable_value).toLocaleString('en-IN')}</td>
+                                <td className="py-2.5 px-2 text-right text-gray-500">
+                                  {Number(iv.tax_total) > 0
+                                    ? `₹${Number(iv.tax_total).toLocaleString('en-IN')}`
+                                    : <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="py-2.5 px-2 text-right font-semibold">₹{Number(iv.total_amount).toLocaleString('en-IN')}</td>
+                                <td className="py-2.5 px-2 text-[11px] text-gray-400">
+                                  {iv.sent_whatsapp_at ? 'WA' : ''}{iv.sent_whatsapp_at && iv.sent_email_at ? ' + ' : ''}{iv.sent_email_at ? 'email' : ''}
+                                  {!iv.sent_whatsapp_at && !iv.sent_email_at ? 'not sent' : ''}
+                                </td>
+                                <td className="py-2.5 px-2">
+                                  <a href={`/invoice/${iv.public_token}`} target="_blank" rel="noreferrer"
+                                     className="text-xs font-semibold text-teal-600 hover:text-teal-700">Open</a>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Audit — the admin password is public, so changes are logged */}
+                  {planEvents.length > 0 && (
+                    <div className="card shadow-sm">
+                      <h3 className="font-bold text-navy-700 mb-1">Recent pricing changes</h3>
+                      <p className="text-sm text-gray-500 mb-3">Every change is logged. Check here if a price looks wrong.</p>
+                      <div className="space-y-1.5">
+                        {planEvents.map(ev => (
+                          <div key={ev.id} className="flex gap-3 text-xs text-gray-600 border-b border-gray-100 pb-1.5 last:border-0">
+                            <span className="text-gray-400 whitespace-nowrap">{new Date(ev.created_at).toLocaleString('en-IN')}</span>
+                            <span className="font-semibold">{ev.action}</span>
+                            {ev.plan_code && <span className="font-mono text-gray-400">{ev.plan_code}</span>}
+                            <span className="text-gray-400">by {ev.actor || 'admin'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

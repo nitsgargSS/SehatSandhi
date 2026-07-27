@@ -5,6 +5,8 @@ import { activeConfig } from './env'
 // display AND the same server recomputes it for the Razorpay charge, so the
 // two can't diverge and the client can't tamper with the amount.
 
+export type PricingMode = 'flat_all_pincodes' | 'flat_per_pincode' | 'pincode_tiers'
+
 export interface PriceLine {
   pin_code: string
   area_name: string
@@ -14,19 +16,48 @@ export interface PriceLine {
   monthly_price: number
 }
 
-export type BillingModel = 'pincode_monthly' | 'commission'
-
 export interface PriceResult {
   pincodes: string[]
   count: number
-  monthlyTotal: number
   residents: number
   topTier: { tier_number: number; tier_name: string } | null
   breakdown: PriceLine[]
-  /** Commission verticals are never charged upfront: monthlyTotal is always 0. */
-  model: BillingModel
+
+  /** Which pricing plan produced this quote. */
+  planCode: string | null
+  planLabel: string | null
+  mode: PricingMode
+
+  /** Money is always a monthly rate times a term. total = monthlyTotal × months. */
+  monthlyTotal: number
+  months: number
+  total: number
+  defaultMonths: number
+  minMonths: number
+  maxMonths: number
+
+  /** Commission is independent of the monthly fee — a vertical can owe both. */
+  monthlyApplies: boolean
   commissionPercent: number
   commissionBasis: string | null
+  commissionSuspended: boolean
+
+  /** GST on the term. `total` is pre-tax; tax.grandTotal is what gets charged. */
+  tax: TaxBreakdown
+  priceIncludesGst: boolean
+}
+
+export interface TaxBreakdown {
+  applied: boolean
+  rate: number
+  taxableValue: number
+  cgst: number
+  sgst: number
+  igst: number
+  taxTotal: number
+  grandTotal: number
+  placeOfSupply: string | null
+  interState: boolean
 }
 
 // Resolved per call from env.ts, not captured at module load, so these requests
@@ -48,8 +79,8 @@ async function callFn<T>(name: string, payload: unknown): Promise<T> {
   })
   if (!res.ok) {
     // The edge functions return a JSON body explaining the refusal (e.g.
-    // commission_vertical, or no billable price). Surfacing it turns an opaque
-    // "failed: 400" into something a tester can act on.
+    // commission_vertical, or a month-bound violation). Surfacing it turns an
+    // opaque "failed: 400" into something a tester can act on.
     let detail = ''
     try {
       const body = await res.json()
@@ -60,11 +91,16 @@ async function callFn<T>(name: string, payload: unknown): Promise<T> {
   return res.json() as Promise<T>
 }
 
-// `vertical` is a quote-time hint so a pharmacy sees its commission terms before
-// its listing row exists. Once doctorId is known the server reads the vertical
-// off that row instead, so the hint can never change what's charged.
-export const computePrice = (pincodes: string[], doctorId?: string | null, vertical?: string | null) =>
-  callFn<PriceResult>('compute-price', { pincodes, doctorId, vertical })
+// `vertical` is a quote-time hint so a pharmacy sees its own terms before its
+// listing row exists. Once doctorId is known the server reads the vertical off
+// that row instead, so the hint can never change what's charged. `months` is
+// clamped server-side to the active plan's bounds.
+export const computePrice = (
+  pincodes: string[],
+  doctorId?: string | null,
+  vertical?: string | null,
+  months?: number | null,
+) => callFn<PriceResult>('compute-price', { pincodes, doctorId, vertical, months })
 
 export interface RazorpayOrder {
   orderId: string
@@ -74,6 +110,12 @@ export interface RazorpayOrder {
   paymentRowId: string
   monthlyTotal: number
   periodMonths: number
+  total: number
+  tax: TaxBreakdown
+  planCode: string | null
+  planLabel: string | null
+  termStart: string
+  termEnd: string
 }
 
 export const createRazorpayOrder = (pincodes: string[], doctorId: string, periodMonths = 1) =>
@@ -84,7 +126,22 @@ export const verifyRazorpayPayment = (args: {
   paymentId: string
   signature: string
   paymentRowId?: string
-}) => callFn<{ ok: boolean; status?: string; error?: string }>('razorpay-verify', args)
+}) => callFn<{
+  ok: boolean
+  status?: string
+  error?: string
+  /** Issued inside razorpay-verify, so the wizard can show it immediately. */
+  invoiceNumber?: string | null
+  invoiceToken?: string | null
+  invoiceError?: string | null
+}>('razorpay-verify', args)
+
+// ── Admin pricing writes ──
+// These never go over the anon key: VITE_ADMIN_PASS ships in the public bundle,
+// so an anon write policy on pricing would let anyone re-price the platform. The
+// edge function holds a server-only key, which the admin types once per session.
+export const adminPricing = <T>(key: string, action: string, args: Record<string, unknown> = {}) =>
+  callFn<T>('admin-pricing', { key, action, actor: 'admin', ...args })
 
 // Lazily inject the Razorpay Checkout script (self-contained; no bundler dep).
 let rzpLoading: Promise<void> | null = null

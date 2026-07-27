@@ -9,6 +9,11 @@ dist
 .env.migrate
 supabase/.temp/
 
+# Supabase CLI personal access token. Grants full account access — deploying
+# functions, reading secrets, creating and deleting projects — so it is a wider
+# credential than the database URLs above, not a narrower one.
+.env.supabase
+
 # Editor swap/backup files — these mirror the buffer contents, so a swap file
 # next to .env.migrate contains the credentials in plaintext even though the
 # env file itself is ignored.

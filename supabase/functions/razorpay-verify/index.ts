@@ -71,15 +71,81 @@ Deno.serve(async (req) => {
 
   if (!valid) return json({ ok: false, error: 'signature mismatch' }, 400)
 
-  // On success, activate the listing (doctor row moves pending → active).
+  // On success, activate the listing and LOCK IN what was sold.
+  //
+  // The price lock is the reason a later plan toggle is safe: the plan code,
+  // monthly price, mode and term dates are copied from the payment onto the
+  // listing, so re-pricing the platform never re-prices a business mid-term.
+  // At term_end they are quoted whatever plan is active then — see the
+  // subscription_renewals_due view.
   const { data: pay } = await supabase
     .from('payments')
-    .select('doctor_id')
+    .select('doctor_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end')
     .eq('razorpay_order_id', orderId)
     .maybeSingle()
+
   if (pay?.doctor_id) {
-    await supabase.from('doctors').update({ status: 'active' }).eq('id', pay.doctor_id)
+    const p = pay as {
+      doctor_id: string
+      pricing_plan_code: string | null
+      pricing_mode: string | null
+      monthly_price: number | null
+      period_months: number | null
+      term_start: string | null
+      term_end: string | null
+    }
+    await supabase.from('doctors').update({
+      status: 'active',
+      pricing_plan_code: p.pricing_plan_code,
+      locked_monthly_price: p.monthly_price,
+      locked_mode: p.pricing_mode,
+      months_paid: p.period_months,
+      term_start: p.term_start,
+      term_end: p.term_end,
+      locked_at: new Date().toISOString(),
+    }).eq('id', p.doctor_id)
   }
 
-  return json({ ok: true, status: 'paid' })
+  // Issue the tax invoice. Deliberately AFTER the payment is marked paid and the
+  // listing activated: if invoicing fails we must not leave a verified payment
+  // looking unverified, and the issuer is idempotent so it can be retried.
+  let invoice: { invoice_number?: string; public_token?: string } | null = null
+  let invoiceError: string | null = null
+  const paymentRow = paymentRowId ?? null
+  try {
+    const targetId = paymentRow ?? (await supabase
+      .from('payments').select('id').eq('razorpay_order_id', orderId).maybeSingle()).data?.id
+    if (targetId) {
+      const { data: inv, error: iErr } = await supabase
+        .rpc('sehat_issue_invoice', { p_payment_id: targetId })
+      if (iErr) invoiceError = iErr.message
+      else invoice = inv as { invoice_number?: string; public_token?: string }
+    }
+  } catch (e) {
+    invoiceError = String((e as Error).message ?? e)
+  }
+
+  // Send the invoice link over WhatsApp and email. Best-effort: a delivery
+  // failure must never fail the payment response, and the business can always
+  // download it from their dashboard.
+  if (invoice?.public_token) {
+    try {
+      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/invoice-send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ token: invoice.public_token }),
+      })
+    } catch { /* logged on the invoice row by invoice-send */ }
+  }
+
+  return json({
+    ok: true,
+    status: 'paid',
+    invoiceNumber: invoice?.invoice_number ?? null,
+    invoiceToken: invoice?.public_token ?? null,
+    invoiceError,
+  })
 })

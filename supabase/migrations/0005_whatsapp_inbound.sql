@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Sehatsandhi — inbound WhatsApp (AISensy) contacts, sessions and opt-in
 --
--- Run AFTER supabase/schema.sql and supabase/patients.sql.
+-- Applied by npm run migrate, after 0004 (patient register import).
 -- Safe to re-run: every statement is idempotent.
 --
 -- THE MODEL: INBOUND-ONLY
@@ -474,7 +474,7 @@ create policy "read_active_entry_points" on wa_entry_points
 --          closed_at = now(), last_activity_at = now()
 --    where id = '<session id>';
 --
--- STOP handling — one insert, and the triggers in patients.sql do the rest
+-- STOP handling — one insert, and the triggers from 0004 do the rest
 -- (consent flipped to withdrawn, logged, dropped from messageable_whatsapp):
 --
 --   insert into opt_outs (phone, channel, reason)

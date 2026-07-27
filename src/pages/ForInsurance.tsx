@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { XCircle, CheckCircle2 } from 'lucide-react'
 import FAQSection from '../components/FAQSection'
 import { useLanguage } from '../i18n/LanguageContext'
+import LiveBillingTerms from '../components/LiveBillingTerms'
 
 export default function ForInsurance() {
   const { t } = useLanguage()
@@ -74,9 +75,9 @@ export default function ForInsurance() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
           <h2 className="section-title">{t('forInsurancePage.earnTitle')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8 mb-6">
-            {[t('forInsurancePage.earnLead'), t('forInsurancePage.earnCommission'), t('forInsurancePage.earnListing')].map(e => (
-              <div key={e} className="card text-center text-sm text-gray-600">{e}</div>
-            ))}
+            {/* Lead value is fixed; fee and commission come from the live plan. */}
+            <div className="card text-center text-sm text-gray-600">{t('forInsurancePage.earnLead')}</div>
+            <LiveBillingTerms vertical="insurance" />
           </div>
           <div className="bg-navy-700 rounded-xl p-5 text-white text-sm">
             <p className="font-bold mb-2">{t('forInsurancePage.exampleTitle')}</p>
