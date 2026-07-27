@@ -24,6 +24,8 @@ export interface ActivePlan {
   max_months: number
   applies_to_verticals: string[] | null
   suspend_commission: boolean
+  /** Quoted all-in (tax carved out) rather than tax added on top. */
+  price_includes_gst: boolean
 }
 
 export interface VerticalBillingRow {
@@ -47,6 +49,7 @@ const FALLBACK_PLAN: ActivePlan = {
   max_months: 12,
   applies_to_verticals: null,
   suspend_commission: false,
+  price_includes_gst: false,
 }
 
 // Derived from the VERTICALS constants, which still describe today's default:
@@ -102,6 +105,7 @@ export function usePricing(): PricingState {
             max_months: Number(p.max_months ?? 12),
             applies_to_verticals: (p.applies_to_verticals as string[]) ?? null,
             suspend_commission: Boolean(p.suspend_commission),
+            price_includes_gst: Boolean(p.price_includes_gst),
           })
           gotLive = true
         }

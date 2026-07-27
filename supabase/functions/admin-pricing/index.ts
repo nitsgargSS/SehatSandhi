@@ -44,6 +44,11 @@ const PLAN_FIELDS = new Set([
 const VERTICAL_FIELDS = new Set([
   'monthly_enabled', 'commission_enabled', 'commission_percent', 'commission_basis',
 ])
+const TAX_FIELDS = new Set([
+  'legal_name', 'trade_name', 'gstin', 'state_code', 'state_name', 'registered_address',
+  'city', 'pin_code', 'email', 'phone', 'sac_code', 'service_description', 'gst_rate',
+  'gst_enabled', 'invoice_prefix', 'invoice_terms',
+])
 
 function pick(patch: Record<string, unknown>, allowed: Set<string>) {
   const out: Record<string, unknown> = {}
@@ -96,6 +101,65 @@ Deno.serve(async (req) => {
         verticals: verticals.data ?? [],
         events: events.data ?? [],
       })
+    }
+
+    if (action === 'taxSettings') {
+      const { data, error } = await supabase.from('tax_settings').select('*').maybeSingle()
+      if (error) return json({ error: error.message }, 500)
+      return json({ taxSettings: data })
+    }
+
+    if (action === 'updateTaxSettings') {
+      const patch = pick(body.patch as Record<string, unknown>, TAX_FIELDS)
+      if (!Object.keys(patch).length) return json({ error: 'nothing to update' }, 400)
+
+      // A GSTIN is on every invoice we issue and cannot be a typo. Validate the
+      // shape here rather than discovering it on a filed return.
+      if ('gstin' in patch && patch.gstin) {
+        const g = String(patch.gstin).trim().toUpperCase()
+        if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(g)) {
+          return json({ error: 'that is not a valid 15-character GSTIN' }, 400)
+        }
+        patch.gstin = g
+        patch.state_code = g.slice(0, 2)
+      }
+      if ('gst_rate' in patch) {
+        const r = Number(patch.gst_rate)
+        if (!Number.isFinite(r) || r < 0 || r > 100) {
+          return json({ error: 'gst_rate must be between 0 and 100' }, 400)
+        }
+        patch.gst_rate = r
+      }
+      // Turning GST on without a GSTIN would issue invalid tax invoices.
+      if (patch.gst_enabled === true) {
+        const { data: cur } = await supabase.from('tax_settings').select('gstin, legal_name').maybeSingle()
+        const gstin = (patch.gstin as string) ?? (cur as { gstin?: string } | null)?.gstin
+        const legal = (patch.legal_name as string) ?? (cur as { legal_name?: string } | null)?.legal_name
+        if (!gstin || !legal) {
+          return json({ error: 'set your GSTIN and legal name before enabling GST' }, 400)
+        }
+      }
+
+      patch.updated_by = actor
+      patch.updated_at = new Date().toISOString()
+      const { error } = await supabase.from('tax_settings').update(patch).eq('id', true)
+      if (error) return json({ error: error.message }, 500)
+
+      await logEvent(null, 'tax_settings_changed', patch)
+      return json({ ok: true })
+    }
+
+    if (action === 'invoices') {
+      const limit = Number.isFinite(body.limit) ? Math.min(Number(body.limit), 500) : 100
+      const [rows, summary] = await Promise.all([
+        supabase.from('invoices')
+          .select('id, invoice_number, invoice_date, fy, recipient_name, recipient_gstin, place_of_supply, taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, tax_total, total_amount, status, public_token, sent_whatsapp_at, sent_email_at')
+          .order('invoice_date', { ascending: false }).order('invoice_number', { ascending: false })
+          .limit(limit),
+        supabase.from('invoice_monthly_summary').select('*').limit(24),
+      ])
+      if (rows.error) return json({ error: rows.error.message }, 500)
+      return json({ invoices: rows.data ?? [], summary: summary.data ?? [] })
     }
 
     if (action === 'activate') {

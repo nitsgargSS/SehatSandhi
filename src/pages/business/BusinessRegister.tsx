@@ -12,6 +12,7 @@ import {
   loadRazorpayCheckout, businessBackendConfigured, PriceResult,
 } from '../../lib/businessApi'
 import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
+import { useTaxSettings, localTax, isValidGstin } from '../../hooks/useTaxSettings'
 
 // Design 2b — 4-step onboarding wizard.
 // Layout: desktop = dark left step-rail + content pane; tablet (<900px) =
@@ -58,6 +59,8 @@ export default function BusinessRegister() {
   const [done, setDone] = useState(false)
   const [paid, setPaid] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [invoiceToken, setInvoiceToken] = useState<string | null>(null)
+  const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null)
 
   // The live pricing plan. Everything below asks the plan how to price rather
   // than assuming per-pincode tiers, so switching plans in admin changes the
@@ -78,6 +81,10 @@ export default function BusinessRegister() {
   const commissionPct = commission.percent || verticalObj.commissionPercent || 10
   const commissionBasis = commission.basis ?? verticalObj.commissionBasis ?? 'billing'
   const flatPlan = plan.mode !== 'pincode_tiers'
+
+  // GST, from tax_settings. Zero while it is switched off, so the wizard shows
+  // exactly what will be charged either way.
+  const tax = useTaxSettings()
 
   // How many months they're buying upfront. Defaults to the plan's term.
   const [months, setMonths] = useState(plan.default_months)
@@ -122,8 +129,10 @@ export default function BusinessRegister() {
       commissionPercent: commission.percent,
       commissionBasis: commission.basis,
       commissionSuspended: commission.suspended,
+      tax: localTax(monthlyTotal * months, tax, form.gstin),
+      priceIncludesGst: plan.price_includes_gst ?? false,
     }
-  }, [coverage, zips, plan, tiers, months, monthlyApplies, commission])
+  }, [coverage, zips, plan, tiers, months, monthlyApplies, commission, tax, form.gstin])
 
   const [serverPrice, setServerPrice] = useState<PriceResult | null>(null)
   const [pricing, setPricing] = useState(false)
@@ -268,7 +277,14 @@ export default function BusinessRegister() {
             orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id,
             signature: r.razorpay_signature, paymentRowId: order.paymentRowId,
           })
-          if (v.ok) { setPaid(true); setDone(true) }
+          if (v.ok) {
+            // The invoice is issued inside razorpay-verify, so its number comes
+            // back with the confirmation — show it rather than making them wait
+            // for the WhatsApp message.
+            setInvoiceNumber(v.invoiceNumber ?? null)
+            setInvoiceToken(v.invoiceToken ?? null)
+            setPaid(true); setDone(true)
+          }
           else setError('Payment could not be verified. If money was deducted, our team will reconcile it.')
         },
       })
@@ -363,6 +379,20 @@ export default function BusinessRegister() {
                 <p style={{ fontSize: 15, color: BIZ.muted, maxWidth: 440, margin: '0 0 24px' }}>
                   Your {verticalObj.label} listing across {zips.length} pincode{zips.length === 1 ? '' : 's'} {paid ? 'is now live for patients in those areas.' : 'is pending review. Our team will WhatsApp you to activate it.'}
                 </p>
+                {paid && invoiceToken && (
+                  <div style={{ marginBottom: 20, background: BIZ.chipBg, border: '1px solid #cfe8dc', borderRadius: 16, padding: '16px 20px', maxWidth: 440 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: BIZ.ink }}>
+                      Tax invoice {invoiceNumber ?? ''} is ready
+                    </div>
+                    <p style={{ fontSize: 13, color: BIZ.muted, margin: '4px 0 12px', lineHeight: 1.6 }}>
+                      We've sent the link to your WhatsApp. You can open it any time and save it as a PDF.
+                    </p>
+                    <a href={`/invoice/${invoiceToken}`} target="_blank" rel="noreferrer"
+                       style={{ display: 'inline-block', background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 14, padding: '10px 18px', borderRadius: 11 }}>
+                      View invoice
+                    </a>
+                  </div>
+                )}
                 {!paid && <a href={waLink} target="_blank" rel="noreferrer" style={{ background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 15, padding: '13px 28px', borderRadius: 12 }}>Message us on WhatsApp</a>}
               </div>
             ) : (
@@ -504,6 +534,14 @@ export default function BusinessRegister() {
                                     ₹{(price.monthlyTotal * months).toLocaleString('en-IN')} for {months} months
                                   </div>
                                 )}
+                                {price.tax?.applied && (
+                                  <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 8, lineHeight: 1.6 }}>
+                                    + {price.tax.rate}% GST ₹{price.tax.taxTotal.toLocaleString('en-IN')}
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: BIZ.ink, marginTop: 2 }}>
+                                      ₹{price.tax.grandTotal.toLocaleString('en-IN')} payable
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </>
                           )}
@@ -534,12 +572,29 @@ export default function BusinessRegister() {
                         {!onCommission && (
                           <ReviewRow label="Monthly price" value={`₹${price.monthlyTotal.toLocaleString('en-IN')}/mo × ${months} month${months === 1 ? '' : 's'}`} />
                         )}
+                        {!onCommission && price.tax?.applied && (
+                          <>
+                            <ReviewRow label="Taxable value" value={`₹${(price.monthlyTotal * months).toLocaleString('en-IN')}`} />
+                            {price.tax.interState
+                              ? <ReviewRow label={`IGST @ ${price.tax.rate}%`} value={`₹${price.tax.igst.toLocaleString('en-IN')}`} />
+                              : <>
+                                  <ReviewRow label={`CGST @ ${price.tax.rate / 2}%`} value={`₹${price.tax.cgst.toLocaleString('en-IN')}`} />
+                                  <ReviewRow label={`SGST @ ${price.tax.rate / 2}%`} value={`₹${price.tax.sgst.toLocaleString('en-IN')}`} />
+                                </>}
+                          </>
+                        )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 22px', background: '#f7f3ea' }}>
                           <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>Due today</span>
                           <span style={{ fontSize: 26, fontWeight: 800, color: BIZ.green }}>
-                            ₹{(onCommission ? 0 : price.monthlyTotal * months).toLocaleString('en-IN')}
+                            ₹{(onCommission ? 0 : (price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months)).toLocaleString('en-IN')}
                           </span>
                         </div>
+                        {!onCommission && price.tax?.applied && (
+                          <div style={{ padding: '0 22px 16px', fontSize: 12.5, color: BIZ.mutedWarm, background: '#f7f3ea' }}>
+                            Includes {price.tax.rate}% GST. A tax invoice is issued as soon as payment succeeds —
+                            we'll WhatsApp you the link and you can download it any time.
+                          </div>
+                        )}
                       </div>
 
                       {/* Term picker — paying several months upfront holds this
@@ -568,7 +623,9 @@ export default function BusinessRegister() {
                           </div>
                           <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginTop: 12 }}>
                             {months} month{months === 1 ? '' : 's'} × ₹{price.monthlyTotal.toLocaleString('en-IN')} ={' '}
-                            <strong style={{ color: BIZ.ink }}>₹{(price.monthlyTotal * months).toLocaleString('en-IN')}</strong> today
+                            <strong style={{ color: BIZ.ink }}>
+                              ₹{(price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months).toLocaleString('en-IN')}
+                            </strong> today{price.tax?.applied ? ` (incl. ${price.tax.rate}% GST)` : ''}
                             {plan.default_months > 1 && ` · ★ = our suggested ${plan.default_months}-month term`}
                           </div>
                         </div>

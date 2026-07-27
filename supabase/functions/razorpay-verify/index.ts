@@ -106,5 +106,46 @@ Deno.serve(async (req) => {
     }).eq('id', p.doctor_id)
   }
 
-  return json({ ok: true, status: 'paid' })
+  // Issue the tax invoice. Deliberately AFTER the payment is marked paid and the
+  // listing activated: if invoicing fails we must not leave a verified payment
+  // looking unverified, and the issuer is idempotent so it can be retried.
+  let invoice: { invoice_number?: string; public_token?: string } | null = null
+  let invoiceError: string | null = null
+  const paymentRow = paymentRowId ?? null
+  try {
+    const targetId = paymentRow ?? (await supabase
+      .from('payments').select('id').eq('razorpay_order_id', orderId).maybeSingle()).data?.id
+    if (targetId) {
+      const { data: inv, error: iErr } = await supabase
+        .rpc('sehat_issue_invoice', { p_payment_id: targetId })
+      if (iErr) invoiceError = iErr.message
+      else invoice = inv as { invoice_number?: string; public_token?: string }
+    }
+  } catch (e) {
+    invoiceError = String((e as Error).message ?? e)
+  }
+
+  // Send the invoice link over WhatsApp and email. Best-effort: a delivery
+  // failure must never fail the payment response, and the business can always
+  // download it from their dashboard.
+  if (invoice?.public_token) {
+    try {
+      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/invoice-send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ token: invoice.public_token }),
+      })
+    } catch { /* logged on the invoice row by invoice-send */ }
+  }
+
+  return json({
+    ok: true,
+    status: 'paid',
+    invoiceNumber: invoice?.invoice_number ?? null,
+    invoiceToken: invoice?.public_token ?? null,
+    invoiceError,
+  })
 })

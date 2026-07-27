@@ -13,8 +13,13 @@
 // and the vertical both come from the server, never from the request body.
 //
 // Request:  { pincodes: string[], doctorId: string, periodMonths?: number }
+// The amount charged INCLUDES GST when tax_settings has it enabled: the plan
+// price is the taxable value and 18% is added on top (or backed out, for a plan
+// quoted inclusive). The breakdown is stored on the payments row, and
+// razorpay-verify turns it into an invoice.
+//
 // Response: { orderId, amount, currency, keyId, paymentRowId, monthlyTotal,
-//             periodMonths, total, planCode, termStart, termEnd }
+//             periodMonths, total, tax, planCode, termStart, termEnd }
 //
 // Env: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
@@ -82,7 +87,11 @@ Deno.serve(async (req) => {
   }
 
   const months = priced.months
-  const amountPaise = priced.total * 100   // total = monthlyTotal × months
+  // GST is charged on top unless the plan is quoted inclusive; either way
+  // tax.grandTotal is the figure to take. Paise, because Razorpay works in paise
+  // and rupee floats would drift a paisa from the invoice.
+  const chargeable = priced.tax.grandTotal
+  const amountPaise = Math.round(chargeable * 100)
 
   // The term this payment buys. A renewal continues from the existing term_end
   // rather than from today, so paying late costs no extra days and paying early
@@ -107,7 +116,9 @@ Deno.serve(async (req) => {
     .from('payments')
     .insert({
       doctor_id: doctorId,
-      amount: priced.total,
+      // amount is the grand total actually taken, so anything reading it sees
+      // real money. The pre-tax figure lives in taxable_value.
+      amount: chargeable,
       type: 'listing',
       status: 'pending',
       pin_codes: priced.pincodes,
@@ -117,6 +128,13 @@ Deno.serve(async (req) => {
       monthly_price: priced.monthlyTotal,
       term_start: isoDate(termStart),
       term_end: isoDate(termEnd),
+      taxable_value: priced.tax.taxableValue,
+      gst_rate: priced.tax.applied ? priced.tax.rate : 0,
+      cgst_amount: priced.tax.cgst,
+      sgst_amount: priced.tax.sgst,
+      igst_amount: priced.tax.igst,
+      tax_total: priced.tax.taxTotal,
+      place_of_supply: priced.tax.placeOfSupply,
     })
     .select('id')
     .single()
@@ -157,6 +175,7 @@ Deno.serve(async (req) => {
     monthlyTotal: priced.monthlyTotal,
     periodMonths: months,
     total: priced.total,
+    tax: priced.tax,
     planCode: priced.planCode,
     planLabel: priced.planLabel,
     termStart: isoDate(termStart),

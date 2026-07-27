@@ -18,6 +18,7 @@
 // The vertical is read from the listing's speciality whenever a doctorId is
 // known. The client's hint is only trusted before that row exists, for a quote.
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { applyGst, extractGst, resolveRecipientState, resolveTaxSettings, TaxBreakdown } from './tax.ts'
 
 export type PricingMode = 'flat_all_pincodes' | 'flat_per_pincode' | 'pincode_tiers'
 
@@ -41,6 +42,7 @@ export interface PricingPlan {
   max_months: number
   applies_to_verticals: string[] | null
   suspend_commission: boolean
+  price_includes_gst: boolean
 }
 
 export interface PriceResult {
@@ -69,6 +71,11 @@ export interface PriceResult {
   commissionPercent: number
   commissionBasis: string | null
   commissionSuspended: boolean
+
+  // GST on the term total. `total` above is the pre-tax figure; grandTotal is
+  // what the customer actually pays.
+  tax: TaxBreakdown
+  priceIncludesGst: boolean
 }
 
 export interface VerticalBilling {
@@ -99,7 +106,7 @@ const FALLBACK_PLAN: PricingPlan = {
   code: 'pincode_tiers', label: 'Pay for reach — priced by pincode', description: null,
   mode: 'pincode_tiers', monthly_price: null,
   default_months: 1, min_months: 1, max_months: 12,
-  applies_to_verticals: null, suspend_commission: false,
+  applies_to_verticals: null, suspend_commission: false, price_includes_gst: false,
 }
 
 /** The plan in force right now: manual override, else the first open plan in the queue. */
@@ -118,6 +125,7 @@ export async function resolveActivePlan(supabase: SupabaseClient): Promise<Prici
     max_months: Number(p.max_months ?? 12),
     applies_to_verticals: (p.applies_to_verticals as string[]) ?? null,
     suspend_commission: Boolean(p.suspend_commission),
+    price_includes_gst: Boolean(p.price_includes_gst),
   }
 }
 
@@ -185,9 +193,11 @@ export async function computePrice(
   verticalHint?: string | null,
   requestedMonths?: number | null,
 ): Promise<PriceResult> {
-  const [plan, vb] = await Promise.all([
+  const [plan, vb, taxSettings, recipientState] = await Promise.all([
     resolveActivePlan(supabase),
     resolveVerticalBilling(supabase, doctorId, verticalHint),
+    resolveTaxSettings(supabase),
+    resolveRecipientState(supabase, doctorId),
   ])
 
   const months = clampMonths(plan, requestedMonths)
@@ -224,7 +234,10 @@ export async function computePrice(
   if (!pincodes.length) {
     return {
       pincodes: [], count: 0, residents: 0, topTier: null, breakdown: [],
-      monthlyTotal: 0, total: 0, ...planFields,
+      monthlyTotal: 0, total: 0,
+      tax: applyGst(0, taxSettings, recipientState),
+      priceIncludesGst: plan.price_includes_gst,
+      ...planFields,
     }
   }
 
@@ -317,6 +330,13 @@ export async function computePrice(
     else monthlyTotal = tierSum
   }
 
+  // Tax applies to the whole term, not one month, since the term is what gets
+  // charged and invoiced in a single transaction.
+  const termTotal = monthlyTotal * months
+  const tax = plan.price_includes_gst
+    ? extractGst(termTotal, taxSettings, recipientState)
+    : applyGst(termTotal, taxSettings, recipientState)
+
   return {
     pincodes: breakdown.map((b) => b.pin_code),
     count: breakdown.length,
@@ -324,7 +344,9 @@ export async function computePrice(
     topTier: topTier ? { tier_number: topTier.tier_number, tier_name: topTier.tier_name } : null,
     breakdown,
     monthlyTotal,
-    total: monthlyTotal * months,
+    total: termTotal,
+    tax,
+    priceIncludesGst: plan.price_includes_gst,
     ...planFields,
   }
 }

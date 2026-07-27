@@ -106,6 +106,48 @@ interface TierRow {
   monthly_price: number
 }
 
+interface TaxSettingsRow {
+  legal_name: string | null
+  trade_name: string | null
+  gstin: string | null
+  state_code: string | null
+  registered_address: string | null
+  city: string | null
+  pin_code: string | null
+  sac_code: string | null
+  gst_rate: number | null
+  gst_enabled: boolean | null
+  invoice_prefix: string | null
+}
+
+interface InvoiceRow {
+  id: string
+  invoice_number: string
+  invoice_date: string
+  recipient_name: string | null
+  recipient_gstin: string | null
+  place_of_supply: string | null
+  taxable_value: number
+  gst_rate: number
+  cgst_amount: number
+  sgst_amount: number
+  igst_amount: number
+  tax_total: number
+  total_amount: number
+  status: string
+  public_token: string
+  sent_whatsapp_at: string | null
+  sent_email_at: string | null
+}
+
+interface InvoiceMonth {
+  month: string
+  invoices: number
+  taxable_value: number
+  tax_collected: number
+  total_collected: number
+}
+
 interface PlanEvent {
   id: string
   plan_code: string | null
@@ -157,6 +199,10 @@ export default function AdminDashboard() {
   const [planDraft, setPlanDraft] = useState<Record<string, Record<string, string>>>({})
   const [tierDraft, setTierDraft] = useState<Record<number, string>>({})
   const [vbDraft, setVbDraft] = useState<Record<string, string>>({})
+  const [taxSettings, setTaxSettings] = useState<TaxSettingsRow | null>(null)
+  const [taxDraft, setTaxDraft] = useState<Record<string, string>>({})
+  const [invoices, setInvoices] = useState<InvoiceRow[]>([])
+  const [invoiceMonths, setInvoiceMonths] = useState<InvoiceMonth[]>([])
 
   // Pull the full plan list (seat counts, disabled plans) — needs the key.
   const loadPricing = async (key: string) => {
@@ -170,6 +216,11 @@ export default function AdminDashboard() {
       setTierRows(res.tiers || [])
       setBillingPlans(res.verticals || [])
       setPlanEvents(res.events || [])
+      const ts = await adminPricing<{ taxSettings: TaxSettingsRow }>(key, 'taxSettings')
+      setTaxSettings(ts.taxSettings ?? null)
+      const inv = await adminPricing<{ invoices: InvoiceRow[]; summary: InvoiceMonth[] }>(key, 'invoices')
+      setInvoices(inv.invoices || [])
+      setInvoiceMonths(inv.summary || [])
       sessionStorage.setItem('pricing_key', key)
       setPricingKey(key)
     } catch (e) {
@@ -1293,6 +1344,138 @@ export default function AdminDashboard() {
                         </tbody>
                       </table>
                     </div>
+                  </div>
+
+
+                  {/* GST identity — what appears on every invoice we issue */}
+                  <div className="card shadow-sm">
+                    <h3 className="font-bold text-navy-700 mb-1">GST &amp; invoicing</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      These details go on every tax invoice. GST cannot be switched on until the GSTIN and legal name
+                      are filled in — an invoice without a supplier GSTIN is not a valid tax invoice.
+                    </p>
+                    {taxSettings ? (
+                      <>
+                        <div className={`rounded-xl p-3 mb-4 text-sm ${taxSettings.gst_enabled ? 'bg-teal-50 text-teal-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {taxSettings.gst_enabled
+                            ? `GST is ON — ${Number(taxSettings.gst_rate ?? 18)}% is added to every new listing charge.`
+                            : 'GST is OFF — prices are charged with no tax and invoices carry no GST lines.'}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {([
+                            ['legal_name', 'Registered legal name'],
+                            ['gstin', 'GSTIN (15 characters)'],
+                            ['registered_address', 'Registered address'],
+                            ['city', 'City'],
+                            ['pin_code', 'PIN code'],
+                            ['sac_code', 'SAC code'],
+                            ['gst_rate', 'GST rate %'],
+                            ['invoice_prefix', 'Invoice number prefix'],
+                          ] as const).map(([field, label]) => (
+                            <div key={field}>
+                              <label className="text-xs font-medium text-gray-600 mb-1 block">{label}</label>
+                              <input className="input-field text-sm"
+                                value={taxDraft[field] ?? String((taxSettings as unknown as Record<string, unknown>)[field] ?? '')}
+                                onChange={e => setTaxDraft(d => ({ ...d, [field]: e.target.value }))} />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 mt-4 flex-wrap items-center">
+                          <button disabled={pricingBusy || Object.keys(taxDraft).length === 0}
+                            onClick={() => {
+                              const patch: Record<string, unknown> = { ...taxDraft }
+                              if (patch.gst_rate !== undefined) patch.gst_rate = Number(patch.gst_rate)
+                              setTaxDraft({})
+                              runPricingAction('updateTaxSettings', { patch }, 'GST details saved.')
+                            }}
+                            className="btn-teal text-sm py-2 px-4 disabled:opacity-50">Save GST details</button>
+                          <button disabled={pricingBusy}
+                            onClick={() => runPricingAction('updateTaxSettings',
+                              { patch: { gst_enabled: !taxSettings.gst_enabled } },
+                              taxSettings.gst_enabled ? 'GST switched off.' : 'GST switched on.')}
+                            className={`text-sm font-semibold py-2 px-4 rounded-lg disabled:opacity-50 ${taxSettings.gst_enabled ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-teal-600 text-white hover:bg-teal-700'}`}>
+                            {taxSettings.gst_enabled ? 'Switch GST off' : 'Switch GST on'}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-400 py-4">
+                        No tax settings row — run migration 0007.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Invoice register */}
+                  <div className="card shadow-sm">
+                    <h3 className="font-bold text-navy-700 mb-1">Invoices</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Every invoice issued, newest first. Numbers are consecutive per financial year, as GST requires.
+                    </p>
+
+                    {invoiceMonths.length > 0 && (
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+                        {invoiceMonths.slice(0, 4).map(m => (
+                          <div key={m.month} className="border border-gray-200 rounded-xl p-3">
+                            <div className="text-xs text-gray-500">{m.month}</div>
+                            <div className="font-bold text-navy-700">₹{Number(m.total_collected ?? 0).toLocaleString('en-IN')}</div>
+                            <div className="text-[11px] text-gray-400">
+                              {m.invoices} invoices · ₹{Number(m.tax_collected ?? 0).toLocaleString('en-IN')} tax
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {invoices.length === 0 ? (
+                      <p className="text-sm text-gray-400 py-6 text-center">
+                        No invoices yet. One is issued automatically when a payment succeeds.
+                      </p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs text-gray-500 border-b">
+                              <th className="pb-2 px-2">Invoice</th>
+                              <th className="pb-2 px-2">Date</th>
+                              <th className="pb-2 px-2">Business</th>
+                              <th className="pb-2 px-2">GSTIN</th>
+                              <th className="pb-2 px-2 text-right">Taxable</th>
+                              <th className="pb-2 px-2 text-right">Tax</th>
+                              <th className="pb-2 px-2 text-right">Total</th>
+                              <th className="pb-2 px-2">Sent</th>
+                              <th className="pb-2 px-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {invoices.map(iv => (
+                              <tr key={iv.id} className="border-b last:border-0">
+                                <td className="py-2.5 px-2 font-mono text-xs text-navy-700">{iv.invoice_number}</td>
+                                <td className="py-2.5 px-2 text-xs text-gray-500">{iv.invoice_date}</td>
+                                <td className="py-2.5 px-2">{iv.recipient_name || '—'}</td>
+                                <td className="py-2.5 px-2 font-mono text-[11px] text-gray-500">
+                                  {iv.recipient_gstin || <span className="text-gray-300">B2C</span>}
+                                </td>
+                                <td className="py-2.5 px-2 text-right">₹{Number(iv.taxable_value).toLocaleString('en-IN')}</td>
+                                <td className="py-2.5 px-2 text-right text-gray-500">
+                                  {Number(iv.tax_total) > 0
+                                    ? `₹${Number(iv.tax_total).toLocaleString('en-IN')}`
+                                    : <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="py-2.5 px-2 text-right font-semibold">₹{Number(iv.total_amount).toLocaleString('en-IN')}</td>
+                                <td className="py-2.5 px-2 text-[11px] text-gray-400">
+                                  {iv.sent_whatsapp_at ? 'WA' : ''}{iv.sent_whatsapp_at && iv.sent_email_at ? ' + ' : ''}{iv.sent_email_at ? 'email' : ''}
+                                  {!iv.sent_whatsapp_at && !iv.sent_email_at ? 'not sent' : ''}
+                                </td>
+                                <td className="py-2.5 px-2">
+                                  <a href={`/invoice/${iv.public_token}`} target="_blank" rel="noreferrer"
+                                     className="text-xs font-semibold text-teal-600 hover:text-teal-700">Open</a>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
 
                   {/* Audit — the admin password is public, so changes are logged */}

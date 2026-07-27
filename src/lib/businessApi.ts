@@ -41,6 +41,23 @@ export interface PriceResult {
   commissionPercent: number
   commissionBasis: string | null
   commissionSuspended: boolean
+
+  /** GST on the term. `total` is pre-tax; tax.grandTotal is what gets charged. */
+  tax: TaxBreakdown
+  priceIncludesGst: boolean
+}
+
+export interface TaxBreakdown {
+  applied: boolean
+  rate: number
+  taxableValue: number
+  cgst: number
+  sgst: number
+  igst: number
+  taxTotal: number
+  grandTotal: number
+  placeOfSupply: string | null
+  interState: boolean
 }
 
 // Resolved per call from env.ts, not captured at module load, so these requests
@@ -94,6 +111,7 @@ export interface RazorpayOrder {
   monthlyTotal: number
   periodMonths: number
   total: number
+  tax: TaxBreakdown
   planCode: string | null
   planLabel: string | null
   termStart: string
@@ -108,7 +126,15 @@ export const verifyRazorpayPayment = (args: {
   paymentId: string
   signature: string
   paymentRowId?: string
-}) => callFn<{ ok: boolean; status?: string; error?: string }>('razorpay-verify', args)
+}) => callFn<{
+  ok: boolean
+  status?: string
+  error?: string
+  /** Issued inside razorpay-verify, so the wizard can show it immediately. */
+  invoiceNumber?: string | null
+  invoiceToken?: string | null
+  invoiceError?: string | null
+}>('razorpay-verify', args)
 
 // ── Admin pricing writes ──
 // These never go over the anon key: VITE_ADMIN_PASS ships in the public bundle,
