@@ -79,7 +79,7 @@ Production already *has* this schema — it was dumped from there. Running it
 would fail on duplicate objects.
 
 ```bash
-cp .env.migrate.example .env.migrate     # then fill in both connection strings
+cp .env.supabase.example .env.supabase   # then fill in both connection strings
 node scripts/migrate.mjs baseline --env prod --version 0001_baseline --yes
 ```
 
@@ -114,7 +114,7 @@ ten drifted tables as resolved.
 1. **Dashboard → New Project**, name it `sehatsandhi-sandbox`, **same region as
    production** so latency-sensitive behaviour matches.
 
-2. Add its connection string to `.env.migrate` as `SUPABASE_DB_URL_SANDBOX`,
+2. Add its connection string to `.env.supabase` as `SUPABASE_DB_URL_SANDBOX`,
    then apply the schema:
    ```bash
    node scripts/migrate.mjs up --env sandbox
@@ -130,7 +130,7 @@ ten drifted tables as resolved.
    are also undeliverable and may be rejected outright.
 
 5. Seed the fixed logins (needs `SANDBOX_SUPABASE_URL` and
-   `SANDBOX_SERVICE_ROLE_KEY` in `.env.migrate`):
+   `SANDBOX_SERVICE_ROLE_KEY` in `.env.supabase`):
    ```bash
    node scripts/seed-sandbox-accounts.mjs
    ```

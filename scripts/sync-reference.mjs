@@ -29,7 +29,7 @@ import dotenv from 'dotenv'
 import { ROOT, loadTablesConfig, syncTables } from './lib/tables-config.mjs'
 import { assertDbUrls } from './lib/db-url.mjs'
 
-dotenv.config({ path: join(ROOT, '.env.migrate'), quiet: true })
+dotenv.config({ path: join(ROOT, '.env.supabase'), quiet: true })
 
 // ── args ──
 const argv = process.argv.slice(2)
@@ -48,8 +48,8 @@ if (!['mirror', 'upsert'].includes(mode)) fail('--mode must be "mirror" or "upse
 
 const PROD_URL = process.env.SUPABASE_DB_URL_PROD
 const SANDBOX_URL = process.env.SUPABASE_DB_URL_SANDBOX
-if (!PROD_URL) fail('SUPABASE_DB_URL_PROD is not set (see .env.migrate).')
-if (!SANDBOX_URL) fail('SUPABASE_DB_URL_SANDBOX is not set (see .env.migrate).')
+if (!PROD_URL) fail('SUPABASE_DB_URL_PROD is not set (see .env.supabase).')
+if (!SANDBOX_URL) fail('SUPABASE_DB_URL_SANDBOX is not set (see .env.supabase).')
 assertDbUrls([['SUPABASE_DB_URL_PROD', PROD_URL], ['SUPABASE_DB_URL_SANDBOX', SANDBOX_URL]])
 
 // ── Safety: never write to production ──
@@ -66,7 +66,7 @@ function projectRef(url) {
   try {
     u = new URL(url)
   } catch {
-    fail('Could not parse a connection string in .env.migrate — expected a postgresql:// URL.')
+    fail('Could not parse a connection string in .env.supabase — expected a postgresql:// URL.')
   }
   const user = decodeURIComponent(u.username)
   if (user.includes('.')) return user.split('.').slice(1).join('.').toLowerCase()  // pooler: postgres.<ref>

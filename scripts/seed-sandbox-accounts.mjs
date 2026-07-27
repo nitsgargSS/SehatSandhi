@@ -14,7 +14,7 @@
 //   node scripts/seed-sandbox-accounts.mjs
 //
 // Needs the sandbox project's SERVICE ROLE key (Dashboard → Settings → API).
-// Add to .env.migrate:
+// Add to .env.supabase:
 //   SANDBOX_SUPABASE_URL=https://<sandbox-ref>.supabase.co
 //   SANDBOX_SERVICE_ROLE_KEY=<service role key>
 
@@ -22,7 +22,7 @@ import { join } from 'node:path'
 import dotenv from 'dotenv'
 import { ROOT } from './lib/tables-config.mjs'
 
-dotenv.config({ path: join(ROOT, '.env.migrate'), quiet: true })
+dotenv.config({ path: join(ROOT, '.env.supabase'), quiet: true })
 
 function fail(msg) {
   console.error(`\n  ✗ ${msg}\n`)
@@ -31,8 +31,8 @@ function fail(msg) {
 
 const url = process.env.SANDBOX_SUPABASE_URL
 const serviceKey = process.env.SANDBOX_SERVICE_ROLE_KEY
-if (!url) fail('SANDBOX_SUPABASE_URL is not set (see .env.migrate).')
-if (!serviceKey) fail('SANDBOX_SERVICE_ROLE_KEY is not set (see .env.migrate).')
+if (!url) fail('SANDBOX_SUPABASE_URL is not set (see .env.supabase).')
+if (!serviceKey) fail('SANDBOX_SERVICE_ROLE_KEY is not set (see .env.supabase).')
 
 // Guard: the service-role key bypasses RLS entirely, so refuse to point this at
 // the production project even if the values get crossed.
