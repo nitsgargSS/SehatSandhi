@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { Doctor, Appointment, PIN_CODES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, DAYS_OF_WEEK, AvailabilityTemplate } from '../../lib/availability'
+import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
 
 interface StaffMember {
   id: string
@@ -32,6 +33,14 @@ export default function DoctorDashboard() {
   const { t } = useLanguage()
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  // Appointment actions. Cancelling asks for a reason and rescheduling shows the
+  // doctor's real open slots, so neither is a blind click.
+  const [apptBusy, setApptBusy] = useState<string | null>(null)
+  const [apptError, setApptError] = useState('')
+  const [cancelling, setCancelling] = useState<Appointment | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [rescheduling, setRescheduling] = useState<Appointment | null>(null)
+  const [reschedDate, setReschedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [camps, setCamps] = useState<CampOffer[]>([])
   const [loading, setLoading] = useState(true)
@@ -205,9 +214,45 @@ export default function DoctorDashboard() {
     setTimeout(() => setAvailSaved(false), 2000)
   }
 
+  const reloadAppointments = async () => {
+    if (!doctor) return
+    const { data } = await supabase.from('appointments').select('*')
+      .eq('doctor_id', doctor.id).order('created_at', { ascending: false }).limit(20)
+    setAppointments(data || [])
+  }
+
+  // One wrapper so every action gets the same busy state, error surface and
+  // refresh — and so a failure is shown rather than silently swallowed.
+  const runApptAction = async (id: string, fn: () => Promise<void>) => {
+    setApptBusy(id); setApptError('')
+    try {
+      await fn()
+      await reloadAppointments()
+      setCancelling(null); setRescheduling(null); setCancelReason('')
+    } catch (e) {
+      setApptError((e as Error).message)
+    } finally {
+      setApptBusy(null)
+    }
+  }
+
+  // Open slots on the chosen day, excluding this appointment's own slot so a
+  // reschedule doesn't hide the time it is currently on.
+  const reschedSlots = rescheduling
+    ? generateSlotsForDate(
+        availability,
+        new Date(reschedDate + 'T00:00:00'),
+        appointments
+          .filter(a => a.status !== 'cancelled' && a.status !== 'no_show' && a.id !== rescheduling.id)
+          .map(a => a.slot_datetime),
+      ).filter(sl => sl.available)
+    : []
+
   // Today's actual slots, minus already-booked ones — this is
   // now the FIRST thing a doctor sees, not buried in a 5th tab
   const todaysBookedTimes = appointments
+    // A no-show frees nothing retroactively, but a cancelled slot is bookable
+    // again — which is why cancel and no-show are separate outcomes.
     .filter(a => a.status !== 'cancelled')
     .map(a => a.slot_datetime)
   const todaysSlots = generateSlotsForDate(availability, new Date(), todaysBookedTimes)
@@ -307,15 +352,74 @@ export default function DoctorDashboard() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {appointments.map(a => (
-                    <div key={a.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl flex-wrap gap-2">
-                      <div>
-                        <p className="font-medium text-gray-800 text-sm">{a.patient_name}</p>
-                        <p className="text-sm text-gray-400">{t('dashboardPage.ageLabel')} {a.patient_age} · {new Date(a.slot_datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                  {apptError && (
+                    <div className="bg-red-50 text-red-600 text-sm rounded-xl p-3">{apptError}</div>
+                  )}
+                  {appointments.map(a => {
+                    const open = a.status === 'booked' || a.status === 'confirmed'
+                    const busy = apptBusy === a.id
+                    return (
+                      <div key={a.id} className="p-3 bg-gray-50 rounded-xl">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div>
+                            <p className="font-medium text-gray-800 text-sm">{a.patient_name}</p>
+                            <p className="text-sm text-gray-400">
+                              {t('dashboardPage.ageLabel')} {a.patient_age} · {new Date(a.slot_datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                            </p>
+                            {/* The original time matters: a patient may still be
+                                holding a reminder for it. */}
+                            {a.previous_slot_datetime && (
+                              <p className="text-xs text-amber-600 mt-0.5">
+                                Moved from {new Date(a.previous_slot_datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                              </p>
+                            )}
+                            {a.status === 'cancelled' && a.cancelled_by && (
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                Cancelled by {a.cancelled_by === 'patient' ? 'the patient' : a.cancelled_by}
+                                {a.cancel_reason ? ` — ${a.cancel_reason}` : ''}
+                              </p>
+                            )}
+                          </div>
+                          <span className={a.status === 'completed' ? 'badge-active'
+                            : (a.status === 'cancelled' || a.status === 'no_show') ? 'badge-suspended'
+                            : 'badge-pending'}>{a.status === 'no_show' ? 'no show' : a.status}</span>
+                        </div>
+
+                        {open && (
+                          <div className="flex gap-1.5 mt-3 flex-wrap">
+                            {a.status === 'booked' && (
+                              <button disabled={busy}
+                                onClick={() => runApptAction(a.id, () => setAppointmentStatus(a.id, 'confirmed'))}
+                                className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-50">
+                                Confirm
+                              </button>
+                            )}
+                            <button disabled={busy}
+                              onClick={() => { setRescheduling(a); setApptError('') }}
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">
+                              Reschedule
+                            </button>
+                            <button disabled={busy}
+                              onClick={() => runApptAction(a.id, () => setAppointmentStatus(a.id, 'completed'))}
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">
+                              Completed
+                            </button>
+                            <button disabled={busy}
+                              onClick={() => runApptAction(a.id, () => setAppointmentStatus(a.id, 'no_show'))}
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">
+                              No show
+                            </button>
+                            <button disabled={busy}
+                              onClick={() => { setCancelling(a); setCancelReason(''); setApptError('') }}
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 disabled:opacity-50">
+                              Cancel
+                            </button>
+                            {busy && <span className="text-xs text-gray-400 self-center">working…</span>}
+                          </div>
+                        )}
                       </div>
-                      <span className={a.status === 'completed' ? 'badge-active' : a.status === 'cancelled' ? 'badge-suspended' : 'badge-pending'}>{a.status}</span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -595,6 +699,81 @@ export default function DoctorDashboard() {
           </div>
         )}
       </div>
+
+      {/* Cancel — a reason is worth capturing: it goes to the patient verbatim
+          and is the difference between "cancelled" and an explanation. */}
+      {cancelling && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+             onClick={() => setCancelling(null)}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-navy-700 mb-1">Cancel this appointment?</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {cancelling.patient_name} · {new Date(cancelling.slot_datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+            </p>
+            <label className="text-xs font-medium text-gray-600 mb-1 block">Reason (sent to the patient)</label>
+            <textarea className="input-field text-sm mb-2" rows={2} autoFocus
+              placeholder="e.g. Doctor unavailable that morning"
+              value={cancelReason} onChange={e => setCancelReason(e.target.value)} />
+            <p className="text-xs text-gray-400 mb-4">
+              The patient is told on WhatsApp straight away, and the slot becomes bookable again.
+            </p>
+            {apptError && <p className="text-red-500 text-sm mb-3">{apptError}</p>}
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setCancelling(null)}
+                className="px-4 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100">Keep it</button>
+              <button disabled={apptBusy === cancelling.id}
+                onClick={() => runApptAction(cancelling.id, () => cancelAppointment(cancelling.id, cancelReason, 'clinic', doctor?.name))}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50">
+                {apptBusy === cancelling.id ? 'Cancelling…' : 'Cancel appointment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule — offers only genuinely open slots from this doctor's own
+          availability, so a clash is impossible to pick by hand. */}
+      {rescheduling && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+             onClick={() => setRescheduling(null)}>
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-navy-700 mb-1">Move this appointment</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {rescheduling.patient_name} · currently {new Date(rescheduling.slot_datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+            </p>
+            <label className="text-xs font-medium text-gray-600 mb-1 block">New date</label>
+            <input type="date" className="input-field text-sm mb-4"
+              value={reschedDate} min={new Date().toISOString().slice(0, 10)}
+              onChange={e => setReschedDate(e.target.value)} />
+
+            {reschedSlots.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">
+                No open slots that day — check your weekly availability under Schedule.
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-56 overflow-y-auto">
+                {reschedSlots.map(sl => (
+                  <button key={sl.datetime} disabled={apptBusy === rescheduling.id}
+                    onClick={() => runApptAction(rescheduling.id,
+                      () => rescheduleAppointment(rescheduling.id, sl.datetime, undefined, 'clinic', doctor?.name))}
+                    className="text-xs font-semibold px-2 py-2 rounded-lg border-2 border-gray-200 hover:border-teal-400 hover:bg-teal-50 disabled:opacity-50">
+                    {sl.time}
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-gray-400 mt-4">
+              The patient gets the new time on WhatsApp immediately.
+            </p>
+            {apptError && <p className="text-red-500 text-sm mt-2">{apptError}</p>}
+            <div className="flex justify-end mt-4">
+              <button onClick={() => setRescheduling(null)}
+                className="px-4 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
