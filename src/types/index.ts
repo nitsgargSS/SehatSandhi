@@ -95,4 +95,6 @@ export const PIN_CODES = [
 // Digits only, country code, no '+' or spaces — it goes straight into
 // `https://wa.me/${WA_NUMBER}` at ~20 call sites, and wa.me rejects a '+'.
 export const WA_NUMBER = '917015399355'
-export const BASE_LISTING_FEE = 5000    // ₹ per PIN per month
+// No listing price lives in code. It is pricing_plans.monthly_price (flat plans)
+// or pricing_tiers.monthly_price (per-pincode), read at runtime by usePricing —
+// a constant here would be one more place to forget when the rate changes.
