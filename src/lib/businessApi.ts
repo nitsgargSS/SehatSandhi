@@ -122,8 +122,17 @@ export interface RazorpayOrder {
   termEnd: string
 }
 
-export const createRazorpayOrder = (pincodes: string[], doctorId: string, periodMonths = 1) =>
-  callFn<RazorpayOrder>('razorpay-order', { pincodes, doctorId, periodMonths })
+export interface BuyerGstDetails {
+  /** The buyer's own GSTIN, so they can claim the 18% back as input credit. */
+  gstin?: string
+  gstLegalName?: string
+  billingAddress?: string
+}
+
+export const createRazorpayOrder = (
+  pincodes: string[], doctorId: string, periodMonths = 1, gst: BuyerGstDetails = {},
+) =>
+  callFn<RazorpayOrder>('razorpay-order', { pincodes, doctorId, periodMonths, ...gst })
 
 export const verifyRazorpayPayment = (args: {
   orderId: string

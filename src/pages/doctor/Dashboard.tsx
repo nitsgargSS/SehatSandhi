@@ -5,6 +5,7 @@ import { Doctor, Appointment, PIN_CODES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, DAYS_OF_WEEK, AvailabilityTemplate } from '../../lib/availability'
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
+import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 
 interface StaffMember {
   id: string
@@ -49,6 +50,29 @@ export default function DoctorDashboard() {
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
   const [tab, setTab] = useState<'today' | 'schedule' | 'clinic'>('today')
+
+  // GSTIN, editable by the clinic itself. doctors_update_own already permits a
+  // signed-in clinic to update its own row, so this needs no new policy.
+  const [gstinDraft, setGstinDraft] = useState('')
+  const [gstSaving, setGstSaving] = useState(false)
+  const [gstMsg, setGstMsg] = useState('')
+  useEffect(() => { setGstinDraft(doctor?.gstin ?? '') }, [doctor?.gstin])
+
+  const saveGstin = async () => {
+    if (!doctor) return
+    setGstSaving(true); setGstMsg('')
+    const value = gstinDraft.trim()
+    const { error } = await supabase.from('doctors').update({
+      gstin: value || null,
+      // Derived, never typed separately — it is the first two digits by
+      // definition, and letting them drift apart would misstate the tax split.
+      state_code: value ? value.slice(0, 2) : null,
+    }).eq('id', doctor.id)
+    setGstSaving(false)
+    setGstMsg(error ? `Could not save: ${error.message}` : 'Saved.')
+    if (!error) setDoctor({ ...doctor, gstin: value || undefined })
+    setTimeout(() => setGstMsg(''), 4000)
+  }
   const [availability, setAvailability] = useState<AvailabilityTemplate[]>([])
   const [availSaving, setAvailSaving] = useState(false)
   const [availSaved, setAvailSaved] = useState(false)
@@ -500,6 +524,42 @@ export default function DoctorDashboard() {
         {/* ══════════ CLINIC — staff management + camps & offers ══════════ */}
         {tab === 'clinic' && (
           <div className="space-y-4">
+            {/* GST number — added here as well as in signup, because a business
+                often registers for GST after joining, and without this their
+                only route to a claimable invoice would be asking us to edit the
+                database. Applies to invoices issued from now on; ones already
+                issued cannot be altered. */}
+            <div className="card shadow-sm">
+              <h3 className="font-bold text-navy-700 mb-1">GST number</h3>
+              <p className="text-sm text-gray-500 mb-3">
+                Optional. Add your GSTIN and we will print it on your tax invoices, so you can claim the
+                18% GST back as input credit. Invoices already issued are not changed — this applies to
+                your next renewal onwards.
+              </p>
+              <div className="flex gap-2 flex-wrap items-start">
+                <div>
+                  <input className="input-field font-mono tracking-wide uppercase max-w-xs"
+                    maxLength={15} placeholder="06AELPG4279G1ZD"
+                    value={gstinDraft}
+                    onChange={e => setGstinDraft(e.target.value.toUpperCase().replace(/\s/g, ''))} />
+                  {gstinDraft.length === 15 && (
+                    <p className={`text-xs mt-1 font-semibold ${isValidGstin(gstinDraft) ? 'text-teal-600' : 'text-red-500'}`}>
+                      {isValidGstin(gstinDraft)
+                        ? `✓ Valid${GST_STATE_NAMES[gstinDraft.slice(0, 2)] ? ` · registered in ${GST_STATE_NAMES[gstinDraft.slice(0, 2)]}` : ''}`
+                        : 'That does not look like a valid GSTIN — please check your certificate.'}
+                    </p>
+                  )}
+                </div>
+                <button
+                  disabled={gstSaving || (gstinDraft !== '' && !isValidGstin(gstinDraft)) || gstinDraft === (doctor?.gstin ?? '')}
+                  onClick={saveGstin}
+                  className="btn-teal text-sm py-2 px-5 disabled:opacity-50">
+                  {gstSaving ? 'Saving…' : 'Save'}
+                </button>
+                {gstMsg && <span className="text-sm text-teal-600 self-center">{gstMsg}</span>}
+              </div>
+            </div>
+
             <div className="card shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-navy-700">{t('dashboardPage.staffHeading')}</h3>
