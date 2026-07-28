@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { LanguageProvider } from './i18n/LanguageContext'
 import { supabase } from './lib/supabase'
+import { track } from './lib/analytics'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Landing from './pages/Landing'
@@ -75,12 +76,28 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => {
 // top of the step footer's buttons.
 const FLOAT_HIDDEN_PATHS = ['/business/register']
 
+// One page_view per route change. Placed inside the router so it sees client
+// navigations, which never reload the page and would otherwise go uncounted.
+// Admin and invoice paths are skipped: those are our own screens and a customer's
+// private link, neither of which belongs in product analytics.
+const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/']
+
+const PageViewTracker = () => {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    if (TRACK_EXCLUDED.some(p => pathname.startsWith(p))) return
+    track('page_view', { path: pathname })
+  }, [pathname])
+  return null
+}
+
 const WhatsAppFloat = () => {
   const { pathname } = useLocation()
   if (FLOAT_HIDDEN_PATHS.includes(pathname)) return null
   return (
     <a href={`https://wa.me/${WA_NUMBER}?text=Namaste!`}
        target="_blank" rel="noreferrer"
+       onClick={() => track('whatsapp_click', { path: pathname })}
        className="fixed bottom-6 right-6 w-14 h-14 bg-[#25D366] rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-50"
        title="Book appointment on WhatsApp">
       <svg className="w-7 h-7 text-white fill-current" viewBox="0 0 24 24">
@@ -151,6 +168,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 
+        <PageViewTracker />
         <WhatsAppFloat />
       </BrowserRouter>
     </LanguageProvider>
