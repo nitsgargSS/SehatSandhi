@@ -31,8 +31,8 @@ import { computePrice } from '../_shared/pricing.ts'
  * The GSTIN's own check digit, over the first 14 characters.
  *
  * Mirrors gstinCheckDigit in src/hooks/useTaxSettings.ts. A shape check alone
- * accepts a mistyped state code, which is how 01AELPG4279G1ZD nearly reached
- * our own invoices — the same mistake a customer can make.
+ * accepts a mistyped state code — a wrong first two digits nearly reached our
+ * own invoices, and it is the same mistake a customer can make.
  */
 function gstinCheckDigit(first14: string): string {
   const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'

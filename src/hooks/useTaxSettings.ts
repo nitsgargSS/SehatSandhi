@@ -139,10 +139,10 @@ export const GST_STATE_NAMES: Record<string, string> = {
 /**
  * The GSTIN's own check digit, computed over the first 14 characters.
  *
- * The shape regex alone accepts a mistyped state code — '01AELPG4279G1ZD' looks
- * perfectly well-formed but is a Jammu & Kashmir prefix on a Haryana PAN, and no
- * such registration exists. The 15th character is a checksum over everything
- * before it, so a single wrong digit anywhere fails here.
+ * The shape regex alone accepts a mistyped state code: a Jammu & Kashmir '01'
+ * prefix on a Haryana PAN looks perfectly well-formed, and we very nearly filed
+ * under one. The 15th character is a checksum over everything before it, so a
+ * single wrong digit anywhere fails here.
  *
  * Worth catching on both sides: our GSTIN is printed on every invoice we issue,
  * and a customer's wrong GSTIN costs them the input credit and puts an invalid
