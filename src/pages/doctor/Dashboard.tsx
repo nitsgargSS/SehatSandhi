@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { isSandbox } from '../../lib/env'
 import { Doctor, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -51,7 +52,41 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'appointments' | 'schedule' | 'clinic' | 'reports'>('today')
+  const [tab, setTab] = useState<'today' | 'appointments' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
+
+  // ── Bills ──
+  // Until now the only copy of an invoice was the WhatsApp link sent once at
+  // payment, plus our admin panel. The first renewal produces someone asking
+  // what they paid and when, and they had no way to look.
+  interface Bill {
+    invoice_number: string; invoice_date: string
+    period_start: string | null; period_end: string | null; months: number | null
+    taxable_value: string; gst_rate: string
+    cgst_amount: string; sgst_amount: string; igst_amount: string
+    total_amount: string; status: string; public_token: string | null
+  }
+  const [bills, setBills] = useState<Bill[]>([])
+  const [billsLoading, setBillsLoading] = useState(false)
+
+  useEffect(() => {
+    if (tab !== 'bills' || !doctor) return
+    let cancelled = false
+    setBillsLoading(true)
+    supabase.from('invoices')
+      .select('invoice_number, invoice_date, period_start, period_end, months, taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, total_amount, status, public_token')
+      .order('invoice_date', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return
+        // No doctor_id filter needed: RLS returns only this clinic's own rows,
+        // and for a hospital that means every listing on its number.
+        setBills((data as Bill[]) || [])
+        setBillsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [tab, doctor])
+
+  const money = (v: string | number | null) =>
+    `₹${Number(v ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
   // ── All appointments ──
   // The dashboard used to load 20 rows ordered by creation time and nothing
@@ -537,6 +572,7 @@ export default function DoctorDashboard() {
     { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4" /> },
     { id: 'schedule', label: t('dashboardPage.tabSchedule'), icon: <Clock className="w-4 h-4" /> },
     { id: 'clinic', label: t('dashboardPage.tabClinic'), icon: <Users className="w-4 h-4" /> },
+    { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
     { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
   ]
 
@@ -976,6 +1012,80 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ CLINIC — staff management + camps & offers ══════════ */}
+        {tab === 'bills' && (
+          <div className="space-y-4">
+            <div className="card shadow-sm">
+              <h3 className="font-bold text-navy-700 mb-1">Your bills</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Every tax invoice we have raised for your listing. Open one to save or print it —
+                they stay here, you do not need the WhatsApp message.
+              </p>
+
+              {billsLoading ? (
+                <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>
+              ) : bills.length === 0 ? (
+                <p className="text-sm text-gray-400 py-8 text-center">
+                  No invoices yet. One is raised as soon as a payment succeeds.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {bills.map(b => {
+                    const inter = Number(b.igst_amount) > 0
+                    return (
+                      <div key={b.invoice_number} className="border border-gray-100 rounded-xl p-3">
+                        <div className="flex items-start justify-between gap-2 flex-wrap mb-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-navy-700">{b.invoice_number}</p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(b.invoice_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              {b.months ? ` · ${b.months} month${b.months === 1 ? '' : 's'}` : ''}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-lg font-bold text-navy-700">{money(b.total_amount)}</p>
+                            <span className="text-[10px] font-bold text-teal-700 bg-teal-100 px-1.5 py-0.5 rounded">
+                              {b.status.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* The split spelled out, because this is the number a
+                            business hands to its accountant to claim credit. */}
+                        <div className="text-xs text-gray-500 space-y-0.5 mb-2">
+                          <div>Listing fee {money(b.taxable_value)}</div>
+                          {inter ? (
+                            <div>IGST @ {Number(b.gst_rate)}% {money(b.igst_amount)}</div>
+                          ) : (
+                            <>
+                              <div>CGST @ {Number(b.gst_rate) / 2}% {money(b.cgst_amount)}</div>
+                              <div>SGST @ {Number(b.gst_rate) / 2}% {money(b.sgst_amount)}</div>
+                            </>
+                          )}
+                          {b.period_start && b.period_end && (
+                            <div className="text-gray-400">
+                              Covers {new Date(b.period_start).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                              {' – '}
+                              {new Date(b.period_end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </div>
+                          )}
+                        </div>
+
+                        {b.public_token && (
+                          <a href={`/invoice/${b.public_token}${isSandbox() ? '?env=sandbox' : ''}`}
+                             target="_blank" rel="noreferrer"
+                             className="inline-block text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700">
+                            Open invoice
+                          </a>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {tab === 'reports' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
