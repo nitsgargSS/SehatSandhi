@@ -7,6 +7,7 @@ import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTempl
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
 import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../components/Charts'
+import { headcountFor, marginalDoctorCost, describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 
 interface StaffMember {
   id: string
@@ -134,20 +135,12 @@ export default function DoctorDashboard() {
   // Consultants that count towards the bill — suspended ones do not, which is
   // the whole reason removing one is worth doing promptly.
   const billableDoctors = roster.filter(d => d.status !== 'suspended').length
-  // What one more doctor actually costs, which depends on the plan's model. The
-  // panel used to state the base_plus_extra figure unconditionally, so under
-  // per_doctor it told a hospital ₹300 when the real answer was ₹1,000 — a
-  // business quoting itself the wrong price.
-  const perDoctorPlan = plan?.doctor_billing === 'per_doctor'
-  const extraDoctors = plan && plan.doctor_billing === 'base_plus_extra'
-    ? Math.max(0, billableDoctors - plan.included_doctors) : 0
-  const extraCost = plan ? extraDoctors * plan.extra_doctor_price : 0
-  /** Monthly cost of adding one more, under whichever model is live. */
-  const marginalCost = !plan ? 0
-    : perDoctorPlan ? Number(plan.monthly_price ?? 0)
-    : billableDoctors >= plan.included_doctors ? plan.extra_doctor_price
-    : 0
-  const headcountBills = Boolean(plan) && plan!.doctor_billing !== 'none'
+  // All of this comes from _shared/headcount.ts, which the pricing engine and
+  // the signup wizard also use. Computing it here separately is what let this
+  // panel go on quoting a superseded model.
+  const hc = plan ? headcountFor(plan, billableDoctors) : null
+  const marginalCost = plan ? marginalDoctorCost(plan, billableDoctors) : 0
+  const headcountSentence = plan ? describeHeadcount(plan, billableDoctors) : null
 
   const [gstinDraft, setGstinDraft] = useState('')
   const [gstSaving, setGstSaving] = useState(false)
@@ -914,17 +907,10 @@ export default function DoctorDashboard() {
 
                 {/* What the roster costs, stated where it is changed rather than
                     discovered on the next invoice. */}
-                {plan && headcountBills && (
+                {hc?.billsHeadcount && headcountSentence && (
                   <div className="bg-navy-50 border border-navy-100 rounded-xl p-3 mb-4 text-sm text-navy-700">
                     <strong>{billableDoctors}</strong> doctor{billableDoctors === 1 ? '' : 's'} on your bill.
-                    {perDoctorPlan
-                      ? <> Each is ₹{Number(plan.monthly_price ?? 0).toLocaleString('en-IN')}/month, so that is{' '}
-                          <strong>₹{(billableDoctors * Number(plan.monthly_price ?? 0)).toLocaleString('en-IN')}/month</strong>.</>
-                      : <> Your plan includes {plan.included_doctors}
-                          {extraDoctors > 0
-                            ? <>, so {extraDoctors} extra {extraDoctors === 1 ? 'adds' : 'add'}{' '}
-                                <strong>₹{extraCost.toLocaleString('en-IN')}/month</strong>.</>
-                            : <> — you are within that, so there is no extra charge.</>}</>}
+                    {' '}{headcountSentence}
                     {' '}A change takes effect from your next renewal, not mid-term.
                   </div>
                 )}

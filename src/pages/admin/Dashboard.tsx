@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Building2, Plu
 import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
 import { StatTile, ColumnChart, BarList, RangePicker } from '../../components/Charts'
+import { describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
 import EnvSwitcher from '../../components/EnvSwitcher'
@@ -1376,12 +1377,14 @@ export default function AdminDashboard() {
                           <option value="base_plus_extra">Include some doctors, charge for the rest</option>
                           <option value="none">Ignore how many doctors — one price per hospital</option>
                         </select>
+                        {/* Worked for a 3-doctor hospital, from the same helper
+                            the wizard and the clinic dashboard use — so this
+                            preview cannot describe a model the site is not
+                            actually applying. */}
                         <p className="text-xs text-gray-500 mt-2">
-                          {(activePlan.doctor_billing ?? 'none') === 'per_doctor'
-                            ? <>A hospital with 3 doctors pays <strong>₹{(Number(activePlan.monthly_price ?? 0) * 3).toLocaleString('en-IN')}</strong>/month. Solo listings are unaffected.</>
-                            : (activePlan.doctor_billing === 'base_plus_extra')
-                              ? <>{activePlan.included_doctors ?? 1} doctors are included; each one after costs ₹{(activePlan.extra_doctor_price ?? 0).toLocaleString('en-IN')}/month.</>
-                              : <>Every hospital pays the same regardless of how many doctors it lists.</>}
+                          {describeHeadcount(activePlan, 3)
+                            ?? 'Every hospital pays the same regardless of how many doctors it lists.'}
+                          {' '}Solo listings are unaffected.
                         </p>
                       </div>
 

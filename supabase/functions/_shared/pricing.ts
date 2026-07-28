@@ -19,6 +19,7 @@
 // known. The client's hint is only trusted before that row exists, for a quote.
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { applyGst, extractGst, resolveRecipientState, resolveTaxSettings, TaxBreakdown } from './tax.ts'
+import { applyHeadcount, headcountFor } from './headcount.ts'
 
 export type PricingMode = 'flat_all_pincodes' | 'flat_per_pincode' | 'pincode_tiers'
 
@@ -259,17 +260,13 @@ export async function computePrice(
   const commissionPercent = vb.commissionEnabled && !commissionSuspended ? vb.commissionPercent : 0
   const commissionBasis = commissionPercent > 0 ? vb.commissionBasis : null
 
-  // Headcount only bites for a listing that belongs to an organisation. A solo
-  // practice reports zero consultants and is never charged for being one doctor:
-  // the multiplier stays 1 and no extra is added, whatever the plan says.
-  const perDoctor = plan.doctor_billing === 'per_doctor' && doctorCount > 0
-  // Coverage price is multiplied by headcount under per_doctor, so one editable
-  // rate drives the whole bill and stays right when that rate changes.
-  const doctorMultiplier = perDoctor ? doctorCount : 1
-  const extraDoctors = plan.doctor_billing === 'base_plus_extra' && doctorCount > 0
-    ? Math.max(0, doctorCount - plan.included_doctors)
-    : 0
-  const extraDoctorCost = extraDoctors * plan.extra_doctor_price
+  // Headcount terms come from _shared/headcount.ts, which the wizard and the
+  // clinic dashboard also use — the three used to compute this separately, and
+  // one of them went on quoting the superseded model.
+  const hc = headcountFor(plan, doctorCount)
+  const doctorMultiplier = hc.multiplier
+  const extraDoctors = hc.extraDoctors
+  const extraDoctorCost = hc.extraCost
 
   const planFields = {
     planCode: plan.code,
@@ -398,9 +395,7 @@ export async function computePrice(
     // A negotiated customMonthly is deliberately left alone by both models: it
     // is a whole-price agreement, and silently scaling or adding to it would
     // break the deal that was struck.
-    if (customMonthly === null) {
-      monthlyTotal = monthlyTotal * doctorMultiplier + extraDoctorCost
-    }
+    if (customMonthly === null) monthlyTotal = applyHeadcount(monthlyTotal, hc)
   }
 
   // Tax applies to the whole term, not one month, since the term is what gets
