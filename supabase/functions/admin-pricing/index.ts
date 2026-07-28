@@ -110,16 +110,47 @@ Deno.serve(async (req) => {
     return json({ error: 'invalid JSON' }, 400)
   }
 
-  const key = typeof body.key === 'string' ? body.key : ''
-  if (!safeEqual(key, adminKey)) return json({ error: 'unauthorised' }, 401)
-
-  const actor = typeof body.actor === 'string' && body.actor ? body.actor : 'admin'
-  const action = typeof body.action === 'string' ? body.action : ''
-
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
+
+  // Two ways in, in this order:
+  //
+  //  1. The admin's own Supabase session — the normal path. The dashboard sends
+  //     the JWT it already holds, so there is no key to paste and every change
+  //     is attributed to a named person in pricing_plan_events.
+  //  2. ADMIN_PRICING_KEY — break glass. Kept for scripts and for the case where
+  //     a pricing mistake has locked someone out of the dashboard itself.
+  //
+  // A valid JWT is not sufficient on its own: every clinic owner has one. It has
+  // to belong to a row in admin_users.
+  let actor = typeof body.actor === 'string' && body.actor ? body.actor : 'admin'
+
+  const bearer = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? ''
+  const suppliedKey = typeof body.key === 'string' ? body.key : ''
+  let authorised = false
+
+  if (bearer) {
+    const { data: { user } } = await supabase.auth.getUser(bearer)
+    if (user) {
+      const { data: admin } = await supabase
+        .from('admin_users').select('email, is_active').eq('auth_uid', user.id).maybeSingle()
+      if (admin && admin.is_active !== false) {
+        authorised = true
+        actor = (admin.email as string) || user.email || user.id
+      }
+    }
+  }
+
+  if (!authorised && suppliedKey) {
+    authorised = safeEqual(suppliedKey, adminKey)
+    if (authorised) actor = `${actor} (pricing key)`
+  }
+
+  if (!authorised) return json({ error: 'unauthorised' }, 401)
+
+  const action = typeof body.action === 'string' ? body.action : ''
 
   const logEvent = (planCode: string | null, act: string, detail: unknown) =>
     supabase.from('pricing_plan_events').insert({

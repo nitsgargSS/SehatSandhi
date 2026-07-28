@@ -195,6 +195,8 @@ export default function AdminDashboard() {
   const [billingPlans, setBillingPlans] = useState<VerticalBillingRow[]>([])
   const [activePlan, setActivePlan] = useState<PlanRow | null>(null)
   const [pricingKey, setPricingKey] = useState(() => sessionStorage.getItem('pricing_key') || '')
+  // Authorised to change pricing — by the admin session, or by a typed key.
+  const [pricingReady, setPricingReady] = useState(false)
   const [keyInput, setKeyInput] = useState('')
   const [planRows, setPlanRows] = useState<PlanRow[]>([])
   const [tierRows, setTierRows] = useState<TierRow[]>([])
@@ -220,8 +222,9 @@ export default function AdminDashboard() {
   const [invoiceMonths, setInvoiceMonths] = useState<InvoiceMonth[]>([])
 
   // Pull the full plan list (seat counts, disabled plans) — needs the key.
+  // key is optional: an admin session authorises on its own. It is only passed
+  // when someone types one into the break-glass box.
   const loadPricing = async (key: string) => {
-    if (!key) return
     setPricingBusy(true); setPricingErr('')
     try {
       const res = await adminPricing<{
@@ -236,21 +239,27 @@ export default function AdminDashboard() {
       const inv = await adminPricing<{ invoices: InvoiceRow[]; summary: InvoiceMonth[] }>(key, 'invoices')
       setInvoices(inv.invoices || [])
       setInvoiceMonths(inv.summary || [])
-      sessionStorage.setItem('pricing_key', key)
+      if (key) sessionStorage.setItem('pricing_key', key)
       setPricingKey(key)
+      setPricingReady(true)
     } catch (e) {
+      // A 401 with no key typed means the session itself was refused — either
+      // this account is not in admin_users, or the session has expired.
       setPricingErr((e as Error).message.includes('401')
-        ? 'That pricing key was not accepted.'
+        ? (key
+            ? 'That pricing key was not accepted.'
+            : 'This account is not authorised for pricing changes. Sign in again, or use a pricing key below.')
         : (e as Error).message)
       sessionStorage.removeItem('pricing_key')
       setPricingKey('')
+      setPricingReady(false)
     } finally {
       setPricingBusy(false)
     }
   }
 
   const runPricingAction = async (action: string, args: Record<string, unknown>, okMsg: string) => {
-    if (!pricingKey) return
+    if (!pricingReady) return
     setPricingBusy(true); setPricingErr(''); setPricingMsg('')
     try {
       await adminPricing(pricingKey, action, args)
@@ -314,7 +323,9 @@ export default function AdminDashboard() {
   useEffect(() => { load() }, [])
 
   // If the pricing key is already in this session, pull the full plan list.
-  useEffect(() => { if (pricingKey) loadPricing(pricingKey) }, [])
+  // Being signed in as an admin is enough — the edge function reads the session
+  // token. The key box only appears if this fails, as a break-glass path.
+  useEffect(() => { loadPricing(pricingKey) }, [])
 
   const loadOrgDetail = async (orgId: string) => {
     const { data: specs } = await supabase.from('org_specialities').select('*').eq('organization_id', orgId).eq('is_active', true)
@@ -485,7 +496,14 @@ export default function AdminDashboard() {
     load()
   }
 
-  const logout = () => { sessionStorage.removeItem('admin_auth'); window.location.href = '/ng-ctrl-2026' }
+  // Ends the Supabase session server-side, so the token cannot be replayed from
+  // this browser afterwards. The pricing key is dropped too — it is held only
+  // for the session that typed it.
+  const logout = async () => {
+    sessionStorage.removeItem('pricing_key')
+    await supabase.auth.signOut()
+    window.location.href = '/ng-ctrl-2026'
+  }
 
   const pending = doctors.filter(d => d.status === 'pending')
   const active  = doctors.filter(d => d.status === 'active')
@@ -1129,13 +1147,16 @@ export default function AdminDashboard() {
               </div>
 
               {/* Writes need the server-only key */}
-              {!pricingKey ? (
+              {!pricingReady ? (
                 <div className="card shadow-sm">
-                  <h3 className="font-bold text-navy-700 mb-1">Unlock pricing changes</h3>
+                  <h3 className="font-bold text-navy-700 mb-1">
+                    {pricingBusy ? 'Checking your access…' : 'Pricing is locked'}
+                  </h3>
                   <p className="text-sm text-gray-500 mb-3">
-                    Pricing writes don't use the site's public key — anyone can read that from the JS bundle. Enter the
-                    pricing key (set as the <code className="font-mono">ADMIN_PRICING_KEY</code> function secret). It's
-                    held for this browser session only.
+                    Being signed in as an admin normally unlocks this by itself. If you are seeing this, the session
+                    was refused — the account may not be in <code className="font-mono">admin_users</code>, or the
+                    session has expired and signing in again will fix it. The pricing key below is the way back in
+                    when it does not.
                   </p>
                   <div className="flex gap-2 flex-wrap">
                     <input className="input-field max-w-xs" type="password" placeholder="Pricing key"

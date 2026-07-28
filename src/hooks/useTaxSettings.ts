@@ -24,23 +24,46 @@ export function useTaxSettings(): TaxSettingsState {
 
   useEffect(() => {
     let cancelled = false
-    supabase
-      .from('tax_settings')
-      .select('gst_enabled, gstin, state_code, gst_rate, sac_code')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return
-        const t = data as Record<string, unknown> | null
-        setState({
-          // An invoice with no supplier GSTIN is not a tax invoice, so a blank
-          // gstin disables GST regardless of the switch.
-          enabled: Boolean(t?.gst_enabled) && Boolean(t?.gstin),
-          rate: Number(t?.gst_rate ?? 18),
-          supplierStateCode: (t?.state_code as string) ?? null,
-          sacCode: String(t?.sac_code ?? '998365'),
-          loading: false,
-        })
+    // public_tax_display, not tax_settings: the underlying row carries the legal
+    // name, GSTIN, registered address and phone, and used to be readable by
+    // anyone holding the public key. The view exposes only what is needed to
+    // render a price — the rate, whether it applies, and the supplier state for
+    // the CGST/SGST vs IGST split. See migration 0012.
+    //
+    // Falls back to tax_settings when the view is absent, which is only true on
+    // a deployment that has not run 0012 yet. Without the fallback there is a
+    // window during a deploy where this returns nothing, GST silently reads as
+    // off, and the page quotes ₹1,000 while the server still charges ₹1,180 —
+    // the exact surprise the GST work existed to remove. Dead weight once every
+    // environment is migrated, and cheap to keep until then.
+    const load = async () => {
+      const view = await supabase
+        .from('public_tax_display')
+        .select('gst_enabled, has_gstin, state_code, gst_rate, sac_code')
+        .maybeSingle()
+
+      let t = view.data as Record<string, unknown> | null
+      if (view.error) {
+        const legacy = await supabase
+          .from('tax_settings')
+          .select('gst_enabled, gstin, state_code, gst_rate, sac_code')
+          .maybeSingle()
+        const l = legacy.data as Record<string, unknown> | null
+        t = l && { ...l, has_gstin: Boolean(l.gstin) }
+      }
+
+      if (cancelled) return
+      setState({
+        // An invoice with no supplier GSTIN is not a tax invoice, so a missing
+        // gstin disables GST regardless of the switch.
+        enabled: Boolean(t?.gst_enabled) && Boolean(t?.has_gstin),
+        rate: Number(t?.gst_rate ?? 18),
+        supplierStateCode: (t?.state_code as string) ?? null,
+        sacCode: String(t?.sac_code ?? '998365'),
+        loading: false,
       })
+    }
+    load()
     return () => { cancelled = true }
   }, [])
 

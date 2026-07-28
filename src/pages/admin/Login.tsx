@@ -2,24 +2,51 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
+import { supabase } from '../../lib/supabase'
 
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'admin@sehatsandhi.com'
-const ADMIN_PASS  = import.meta.env.VITE_ADMIN_PASS  || 'admin@SS2026'
+// Authentication happens in Supabase Auth, against a hashed password, server
+// side. The previous version compared against VITE_ADMIN_EMAIL/VITE_ADMIN_PASS —
+// which Vite compiles into the public bundle, so the credentials shipped to
+// every visitor and anyone could set sessionStorage.admin_auth and walk in.
+//
+// Being a valid user is not enough: every business owner with a clinic login is
+// also a Supabase Auth user. Authorisation is membership of admin_users, which
+// is checked here for a clear error and enforced by RLS on every table besides.
 
 export default function AdminLogin() {
   const { t } = useLanguage()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (email === ADMIN_EMAIL && password === ADMIN_PASS) {
-      sessionStorage.setItem('admin_auth', 'true')
+    setBusy(true); setError('')
+    try {
+      const { data, error: authErr } = await supabase.auth.signInWithPassword({
+        email: email.trim(), password,
+      })
+      if (authErr || !data.session) {
+        setError(t('adminLoginPage.errorInvalid'))
+        return
+      }
+
+      const { data: admin } = await supabase
+        .from('admin_users').select('role').eq('auth_uid', data.user.id).maybeSingle()
+
+      if (!admin) {
+        // Signed in as a real user, but not an admin. Drop the session rather
+        // than leave a half-privileged one lying around in this tab.
+        await supabase.auth.signOut()
+        setError(t('adminLoginPage.errorInvalid'))
+        return
+      }
+
       navigate('/ng-ctrl-2026/dashboard')
-    } else {
-      setError(t('adminLoginPage.errorInvalid'))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -41,7 +68,10 @@ export default function AdminLogin() {
             <input className="input-field" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
           </div>
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-          <button type="submit" className="btn-teal w-full justify-center py-3">{t('adminLoginPage.btnLogin')}</button>
+          <button type="submit" disabled={busy}
+            className="btn-teal w-full justify-center py-3 disabled:opacity-60">
+            {busy ? '…' : t('adminLoginPage.btnLogin')}
+          </button>
         </form>
         <p className="text-xs text-gray-400 text-center mt-4">{t('adminLoginPage.footerNote')}</p>
       </div>
