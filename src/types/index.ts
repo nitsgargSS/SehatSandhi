@@ -27,6 +27,22 @@ export interface Doctor {
   billing_address?: string
 }
 
+// Where a doctor actually sits. A listing may have several; exactly one is
+// primary, and that is where any booking that does not name a clinic lands —
+// including every booking the WhatsApp bot makes until it starts asking.
+export interface PracticeLocation {
+  id: string
+  doctor_id: string
+  name: string
+  address?: string | null
+  pin_code?: string | null
+  landmark?: string | null
+  phone?: string | null
+  is_primary: boolean
+  is_active: boolean
+  created_at?: string
+}
+
 export interface Appointment {
   id: string
   patient_phone: string
@@ -43,6 +59,8 @@ export interface Appointment {
   cancel_reason?: string | null
   previous_slot_datetime?: string | null
   reschedule_count?: number | null
+  /** Which of the doctor's clinics. Defaults to their primary by trigger. */
+  location_id?: string | null
 }
 
 export interface Payment {
