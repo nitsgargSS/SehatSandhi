@@ -1168,6 +1168,29 @@ export default function AdminDashboard() {
                         /business, the vertical pages and the signup wizard right away — no deploy. Businesses
                         already paid keep their locked rate until their term ends.
                       </p>
+                      {/* A seat cap makes the queue advance on its own, which
+                          moves the price with nobody deciding it. Say so where
+                          the price is edited, not three cards further down. */}
+                      {(() => {
+                        const capped = planRows.find(p => p.code === activePlan.code && p.max_signups != null)
+                        const next = planRows
+                          .filter(p => p.is_enabled && p.sequence > activePlan.sequence)
+                          .sort((a, b) => a.sequence - b.sequence)[0]
+                        return capped ? (
+                          <div className="bg-amber-50 text-amber-800 text-xs rounded-lg p-3 mb-3">
+                            <strong>This price will change by itself.</strong> After {capped.seats_left ?? 0} more
+                            signup{(capped.seats_left ?? 0) === 1 ? '' : 's'} this plan stops being offered
+                            {next && <> and new businesses are quoted <strong>{next.mode === 'pincode_tiers'
+                              ? 'the per-pincode tiers' : `₹${Number(next.monthly_price ?? 0).toLocaleString('en-IN')}/mo`}</strong> on {next.label}</>}.
+                            {' '}Clear the seat cap in the table below to stop that.
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 text-gray-600 text-xs rounded-lg p-3 mb-3">
+                            No seat cap is set, so <strong>nothing changes this price but you</strong>. Change it as
+                            often as you like — it only ever affects businesses who sign up afterwards.
+                          </div>
+                        )
+                      })()}
                       <div className="flex gap-2 flex-wrap items-center">
                         <span className="text-2xl font-bold text-gray-400">₹</span>
                         <input className="input-field w-40 text-lg font-bold" type="number" min={0} step={100}
