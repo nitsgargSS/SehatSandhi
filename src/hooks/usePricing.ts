@@ -28,8 +28,10 @@ export interface ActivePlan {
   price_includes_gst: boolean
   /** Consultants a hospital's base price covers before per-doctor charges start. */
   included_doctors: number
-  /** ₹/month per consultant beyond included_doctors. Zero disables headcount pricing. */
+  /** ₹/month per consultant beyond included_doctors. Used by base_plus_extra. */
   extra_doctor_price: number
+  /** How headcount affects the bill: none | per_doctor | base_plus_extra. */
+  doctor_billing: string
 }
 
 export interface VerticalBillingRow {
@@ -58,6 +60,7 @@ const FALLBACK_PLAN: ActivePlan = {
   // per-doctor charge nobody agreed to.
   included_doctors: 1,
   extra_doctor_price: 0,
+  doctor_billing: 'none',
 }
 
 // Derived from the VERTICALS constants, which still describe today's default:
@@ -127,6 +130,7 @@ export function usePricing(): PricingState {
             price_includes_gst: Boolean(p.price_includes_gst),
             included_doctors: Number(p.included_doctors ?? 1),
             extra_doctor_price: Number(p.extra_doctor_price ?? 0),
+            doctor_billing: String(p.doctor_billing ?? 'none'),
           })
           gotLive = true
         }

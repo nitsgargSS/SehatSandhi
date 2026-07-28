@@ -42,6 +42,8 @@ export interface PriceResult {
   includedDoctors: number
   extraDoctors: number
   extraDoctorCost: number
+  doctorBilling: string
+  doctorMultiplier: number
   monthlyApplies: boolean
   commissionPercent: number
   commissionBasis: string | null

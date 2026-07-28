@@ -45,8 +45,10 @@ export interface PricingPlan {
   price_includes_gst: boolean
   /** Consultants covered by the base price, before extra_doctor_price applies. */
   included_doctors: number
-  /** ₹/month per consultant beyond included_doctors. Zero disables headcount pricing. */
+  /** ₹/month per consultant beyond included_doctors. Used by base_plus_extra. */
   extra_doctor_price: number
+  /** How headcount affects the bill: none | per_doctor | base_plus_extra. */
+  doctor_billing: string
 }
 
 export interface PriceResult {
@@ -75,6 +77,9 @@ export interface PriceResult {
   includedDoctors: number
   extraDoctors: number
   extraDoctorCost: number
+  doctorBilling: string
+  /** Headcount the coverage price is multiplied by. 1 for everything but per_doctor. */
+  doctorMultiplier: number
 
   // commission, independent of the monthly fee above
   monthlyApplies: boolean
@@ -119,7 +124,7 @@ const FALLBACK_PLAN: PricingPlan = {
   applies_to_verticals: null, suspend_commission: false, price_includes_gst: false,
   // Headcount pricing off in the fallback: a stale or unreachable plans table
   // must never invent a per-doctor charge nobody agreed to.
-  included_doctors: 1, extra_doctor_price: 0,
+  included_doctors: 1, extra_doctor_price: 0, doctor_billing: 'none',
 }
 
 /** The plan in force right now: manual override, else the first open plan in the queue. */
@@ -141,6 +146,7 @@ export async function resolveActivePlan(supabase: SupabaseClient): Promise<Prici
     price_includes_gst: Boolean(p.price_includes_gst),
     included_doctors: Number(p.included_doctors ?? 1),
     extra_doctor_price: Number(p.extra_doctor_price ?? 0),
+    doctor_billing: String(p.doctor_billing ?? 'none'),
   }
 }
 
@@ -253,10 +259,14 @@ export async function computePrice(
   const commissionPercent = vb.commissionEnabled && !commissionSuspended ? vb.commissionPercent : 0
   const commissionBasis = commissionPercent > 0 ? vb.commissionBasis : null
 
-  // Headcount only bites for a listing that belongs to an organisation, and only
-  // once the plan sets a price for it. A solo practice reports zero consultants
-  // and is never charged for being one doctor.
-  const extraDoctors = doctorCount > 0
+  // Headcount only bites for a listing that belongs to an organisation. A solo
+  // practice reports zero consultants and is never charged for being one doctor:
+  // the multiplier stays 1 and no extra is added, whatever the plan says.
+  const perDoctor = plan.doctor_billing === 'per_doctor' && doctorCount > 0
+  // Coverage price is multiplied by headcount under per_doctor, so one editable
+  // rate drives the whole bill and stays right when that rate changes.
+  const doctorMultiplier = perDoctor ? doctorCount : 1
+  const extraDoctors = plan.doctor_billing === 'base_plus_extra' && doctorCount > 0
     ? Math.max(0, doctorCount - plan.included_doctors)
     : 0
   const extraDoctorCost = extraDoctors * plan.extra_doctor_price
@@ -277,6 +287,8 @@ export async function computePrice(
     includedDoctors: plan.included_doctors,
     extraDoctors,
     extraDoctorCost,
+    doctorBilling: plan.doctor_billing,
+    doctorMultiplier,
   }
 
   const pincodes = [...new Set(rawPincodes.map(String))]
@@ -383,9 +395,12 @@ export async function computePrice(
     // separate lines — a hospital querying its bill is almost always querying
     // the headcount rather than the pincodes.
     //
-    // A negotiated customMonthly is deliberately left alone: it is a whole-price
-    // agreement, and silently adding to it would break the deal that was struck.
-    if (customMonthly === null) monthlyTotal += extraDoctorCost
+    // A negotiated customMonthly is deliberately left alone by both models: it
+    // is a whole-price agreement, and silently scaling or adding to it would
+    // break the deal that was struck.
+    if (customMonthly === null) {
+      monthlyTotal = monthlyTotal * doctorMultiplier + extraDoctorCost
+    }
   }
 
   // Tax applies to the whole term, not one month, since the term is what gets
