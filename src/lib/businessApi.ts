@@ -1,4 +1,5 @@
 import { activeConfig } from './env'
+import { supabase } from './supabase'
 
 // Client wrappers for the business Edge Functions. Pricing is always fetched
 // from the server (compute-price) — the wizard uses the returned total for
@@ -64,7 +65,7 @@ export interface TaxBreakdown {
 // always hit the same backend the Supabase client is writing to. Reading
 // import.meta.env directly here would let the two drift apart — creating
 // listing rows in one project while charging through another's Razorpay keys.
-async function callFn<T>(name: string, payload: unknown): Promise<T> {
+async function callFn<T>(name: string, payload: unknown, authToken?: string): Promise<T> {
   const { url, anon } = activeConfig()
   if (!url || !anon) throw new Error(`${name} unavailable: Supabase is not configured`)
 
@@ -72,7 +73,10 @@ async function callFn<T>(name: string, payload: unknown): Promise<T> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${anon}`,
+      // The caller's own session token where there is one — admin-pricing reads
+      // it to identify the admin. apikey stays the anon key either way: that is
+      // the project credential, separate from who is calling.
+      Authorization: `Bearer ${authToken || anon}`,
       apikey: anon,
     },
     body: JSON.stringify(payload),
@@ -137,11 +141,20 @@ export const verifyRazorpayPayment = (args: {
 }>('razorpay-verify', args)
 
 // ── Admin pricing writes ──
-// These never go over the anon key: VITE_ADMIN_PASS ships in the public bundle,
-// so an anon write policy on pricing would let anyone re-price the platform. The
-// edge function holds a server-only key, which the admin types once per session.
-export const adminPricing = <T>(key: string, action: string, args: Record<string, unknown> = {}) =>
-  callFn<T>('admin-pricing', { key, action, actor: 'admin', ...args })
+// Never over the anon key alone: an anon write policy on pricing would let
+// anyone holding the public bundle re-price the platform. The function
+// authorises the signed-in admin's own session token, and falls back to the
+// server-only ADMIN_PRICING_KEY when there is no session (scripts, break glass).
+export const adminPricing = async <T>(
+  key: string, action: string, args: Record<string, unknown> = {},
+): Promise<T> => {
+  const { data: { session } } = await supabase.auth.getSession()
+  return callFn<T>(
+    'admin-pricing',
+    { key, action, actor: 'admin', ...args },
+    session?.access_token,
+  )
+}
 
 // Lazily inject the Razorpay Checkout script (self-contained; no bundler dep).
 let rzpLoading: Promise<void> | null = null

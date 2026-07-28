@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { LanguageProvider } from './i18n/LanguageContext'
+import { supabase } from './lib/supabase'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Landing from './pages/Landing'
@@ -32,9 +34,40 @@ import { WA_NUMBER } from './types'
 // or any public page. Bookmark it privately.
 const ADMIN_PATH = 'ng-ctrl-2026'
 
+// Gate on a real Supabase session plus admin_users membership, not on a
+// sessionStorage flag anyone could set from the console. Both checks are
+// asynchronous, so the guard renders nothing until it knows — bouncing to the
+// login page while the session is still loading would sign the admin out on
+// every refresh.
+//
+// This is defence in depth, not the defence itself: RLS is what actually stops
+// a non-admin reading anything (migration 0012). Editing this component in
+// devtools gets you an empty dashboard.
 const AdminGuard = ({ children }: { children: React.ReactNode }) => {
-  const auth = sessionStorage.getItem('admin_auth')
-  return auth ? <>{children}</> : <Navigate to={`/${ADMIN_PATH}`} replace />
+  const [state, setState] = useState<'checking' | 'in' | 'out'>('checking')
+
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (cancelled) return
+      if (!session) { setState('out'); return }
+      const { data } = await supabase
+        .from('admin_users').select('role').eq('auth_uid', session.user.id).maybeSingle()
+      if (!cancelled) setState(data ? 'in' : 'out')
+    }
+    check()
+    // Signing out in another tab should close this one too.
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (!session) setState('out')
+    })
+    return () => { cancelled = true; sub.subscription.unsubscribe() }
+  }, [])
+
+  if (state === 'checking') {
+    return <div className="min-h-screen flex items-center justify-center text-gray-400">…</div>
+  }
+  return state === 'in' ? <>{children}</> : <Navigate to={`/${ADMIN_PATH}`} replace />
 }
 
 // Global floating WhatsApp button. Hidden on the business onboarding wizard:
