@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
 import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
+import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../components/Charts'
 
 interface StaffMember {
   id: string
@@ -49,7 +50,33 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'schedule' | 'clinic'>('today')
+  const [tab, setTab] = useState<'today' | 'schedule' | 'clinic' | 'reports'>('today')
+
+  // ── Reports ──
+  interface ReportRow {
+    day: string; times_listed: number; profile_views: number; whatsapp_clicks: number
+    unique_visitors: number; bookings: number; completed: number; cancelled: number; no_show: number
+  }
+  const [reportDays, setReportDays] = useState(30)
+  const [report, setReport] = useState<ReportRow[]>([])
+  const [reportLoading, setReportLoading] = useState(false)
+
+  useEffect(() => {
+    if (tab !== 'reports' || !doctor) return
+    let cancelled = false
+    setReportLoading(true)
+    supabase.rpc('sehat_business_report', { p_doctor_id: doctor.id, p_days: reportDays })
+      .then(({ data }) => {
+        if (cancelled) return
+        setReport((data as ReportRow[]) || [])
+        setReportLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [tab, doctor, reportDays])
+
+  const rTotal = (k: keyof ReportRow) => report.reduce((a, r) => a + (Number(r[k]) || 0), 0)
+  const dayLabel = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
   // GSTIN, editable by the clinic itself. doctors_update_own already permits a
   // signed-in clinic to update its own row, so this needs no new policy.
@@ -441,6 +468,7 @@ export default function DoctorDashboard() {
     { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
     { id: 'schedule', label: t('dashboardPage.tabSchedule'), icon: <Clock className="w-4 h-4" /> },
     { id: 'clinic', label: t('dashboardPage.tabClinic'), icon: <Users className="w-4 h-4" /> },
+    { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
   ]
 
   return (
@@ -772,6 +800,82 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ CLINIC — staff management + camps & offers ══════════ */}
+        {tab === 'reports' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h2 className="text-xl font-bold text-navy-700">How your listing is doing</h2>
+                <p className="text-sm text-gray-500">
+                  What patients did on Sehatsandhi, and what came of it.
+                </p>
+              </div>
+              <RangePicker value={reportDays} onChange={setReportDays} />
+            </div>
+
+            {reportLoading ? (
+              <div className="card shadow-sm text-sm text-gray-400 py-10 text-center">Loading…</div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <StatTile label="Times you appeared" value={rTotal('times_listed')}
+                    sub="in patient searches" />
+                  <StatTile label="Profile opened" value={rTotal('profile_views')} />
+                  <StatTile label="WhatsApp taps" value={rTotal('whatsapp_clicks')} />
+                  <StatTile label="Appointments booked" value={rTotal('bookings')} />
+                </div>
+
+                <div className="card shadow-sm">
+                  {/* Ordered stages, so the drop between two of them is the
+                      finding — "seen 240 times, opened 12" is what tells a clinic
+                      the photo is the problem, not the price. */}
+                  <BarList
+                    title="From search to appointment"
+                    data={[
+                      { label: 'Appeared in a search', value: rTotal('times_listed') },
+                      { label: 'Profile opened', value: rTotal('profile_views') },
+                      { label: 'Tapped WhatsApp', value: rTotal('whatsapp_clicks') },
+                      { label: 'Booked an appointment', value: rTotal('bookings') },
+                    ] as Point[]} />
+                  {rTotal('times_listed') > 0 && (
+                    <p className="text-xs text-gray-500 mt-4">
+                      {rTotal('profile_views') === 0
+                        ? 'Patients are seeing you in results but not opening your profile. A photo and clear timings usually fix that.'
+                        : `${Math.round((rTotal('profile_views') / rTotal('times_listed')) * 100)}% of the patients who saw you opened your profile.`}
+                    </p>
+                  )}
+                </div>
+
+                <div className="card shadow-sm">
+                  <ColumnChart title="Profile opens per day" height={140}
+                    data={report.map(r => ({ label: dayLabel(r.day), value: r.profile_views }))} />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="card shadow-sm">
+                    <ColumnChart title="Appointments booked per day" height={120}
+                      data={report.map(r => ({ label: dayLabel(r.day), value: r.bookings }))} />
+                  </div>
+                  <div className="card shadow-sm">
+                    <BarList title="What happened to those appointments"
+                      data={[
+                        { label: 'Completed', value: rTotal('completed') },
+                        { label: 'Cancelled', value: rTotal('cancelled') },
+                        { label: 'Did not turn up', value: rTotal('no_show') },
+                      ] as Point[]}
+                      alertWhen={d => d.label === 'Did not turn up' && d.value > 0} />
+                    {rTotal('no_show') > 0 && (
+                      <p className="text-xs text-gray-500 mt-4">
+                        {rTotal('no_show')} patient{rTotal('no_show') === 1 ? '' : 's'} did not turn up.
+                        A reminder the evening before is the usual remedy.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {tab === 'clinic' && (
           <div className="space-y-4">
             {/* Consultants. Only for a hospital — a solo practice never sees this. */}

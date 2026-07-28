@@ -2,6 +2,7 @@ import { useEffect, useState, Fragment } from 'react'
 import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Building2, Plus, Trash2, ChevronLeft, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
+import { StatTile, ColumnChart, BarList, RangePicker } from '../../components/Charts'
 import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
 import EnvSwitcher from '../../components/EnvSwitcher'
@@ -167,7 +168,42 @@ export default function AdminDashboard() {
   const [doctors, setDoctors] = useState<DoctorWithOrg[]>([])
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs' | 'coupons' | 'billing' | 'account' | 'sandbox'>('pending')
+  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs' | 'coupons' | 'billing' | 'reports' | 'account' | 'sandbox'>('pending')
+
+  // ── Platform reporting ──
+  interface PlatformRow {
+    day: string; visitors: number; page_views: number; searches: number
+    profile_views: number; whatsapp_clicks: number; business_leads: number
+    new_listings: number; bookings: number
+  }
+  interface DemandRow {
+    pin_code: string; area_name: string; speciality: string | null
+    searches: number; searchers: number; active_listings: number
+  }
+  const [repDays, setRepDays] = useState(30)
+  const [platform, setPlatform] = useState<PlatformRow[]>([])
+  const [demand, setDemand] = useState<DemandRow[]>([])
+  const [repLoading, setRepLoading] = useState(false)
+
+  useEffect(() => {
+    if (tab !== 'reports') return
+    let cancelled = false
+    setRepLoading(true)
+    Promise.all([
+      supabase.rpc('sehat_platform_report', { p_days: repDays }),
+      supabase.rpc('sehat_demand_report', { p_days: repDays }),
+    ]).then(([p, d]) => {
+      if (cancelled) return
+      setPlatform((p.data as PlatformRow[]) || [])
+      setDemand((d.data as DemandRow[]) || [])
+      setRepLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [tab, repDays])
+
+  const pTotal = (k: keyof PlatformRow) => platform.reduce((a, r) => a + (Number(r[k]) || 0), 0)
+  const dLabel = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+  const specName = (id: string | null) => SPECIALITIES.find(s => s.id === id)?.en ?? id ?? 'Any'
   const [search, setSearch] = useState('')
   const [actionMsg, setActionMsg] = useState('')
   const [expandedDoctorId, setExpandedDoctorId] = useState<string | null>(null)
@@ -603,6 +639,7 @@ export default function AdminDashboard() {
               { id: 'orgs', label: t('adminDashboardPage.navOrgs'), count: 0, badge: false },
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
               { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
+              { id: 'reports', label: 'Reports', count: 0, badge: false },
               { id: 'account', label: 'Account', count: 0, badge: false },
               // Only reachable while pointed at the sandbox backend — the purge
               // it exposes must never be one click away from production data.
@@ -1783,6 +1820,75 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   )}
+                </>
+              )}
+            </div>
+          )}
+
+          {tab === 'reports' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-2xl font-bold text-navy-700">Reports</h2>
+                  <p className="text-sm text-gray-500">
+                    What is happening across the platform, and where to go next.
+                  </p>
+                </div>
+                <RangePicker value={repDays} onChange={setRepDays} />
+              </div>
+
+              {repLoading ? (
+                <div className="card shadow-sm text-sm text-gray-400 py-10 text-center">Loading…</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <StatTile label="Visitors" value={pTotal('visitors')} sub="distinct sessions" />
+                    <StatTile label="Searches" value={pTotal('searches')} />
+                    <StatTile label="Profiles opened" value={pTotal('profile_views')} />
+                    <StatTile label="WhatsApp taps" value={pTotal('whatsapp_clicks')} />
+                  </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <StatTile label="Business signups started" value={pTotal('business_leads')} />
+                    <StatTile label="Listings created" value={pTotal('new_listings')} />
+                    <StatTile label="Appointments booked" value={pTotal('bookings')} />
+                    <StatTile label="Doctors live now" value={doctors.filter(d => d.status === 'active').length} />
+                  </div>
+
+                  <div className="card shadow-sm">
+                    <ColumnChart title="Visitors per day" height={150}
+                      data={platform.map(r => ({ label: dLabel(r.day), value: r.visitors }))} />
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="card shadow-sm">
+                      <ColumnChart title="Searches per day" height={120}
+                        data={platform.map(r => ({ label: dLabel(r.day), value: r.searches }))} />
+                    </div>
+                    <div className="card shadow-sm">
+                      <ColumnChart title="Business signups started per day" height={120}
+                        data={platform.map(r => ({ label: dLabel(r.day), value: r.business_leads }))} />
+                    </div>
+                  </div>
+
+                  {/* The expansion argument: what people looked for against what
+                      we could actually offer them. Amber rows have no listing at
+                      all, and say so in words as well as colour. */}
+                  <div className="card shadow-sm">
+                    <BarList
+                      title="What patients searched for — and whether we had anyone"
+                      data={demand.slice(0, 15).map(d => ({
+                        label: `${specName(d.speciality)} · ${d.area_name}`,
+                        value: d.searches,
+                        hint: d.active_listings === 0
+                          ? 'no listings'
+                          : `${d.active_listings} listed`,
+                      }))}
+                      alertWhen={d => d.hint === 'no listings'} />
+                    <p className="text-xs text-gray-500 mt-4">
+                      Rows in amber are searches we could not answer. A high count there is the case for
+                      recruiting in that area, or for entering that town at all.
+                    </p>
+                  </div>
                 </>
               )}
             </div>
