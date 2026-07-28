@@ -66,6 +66,29 @@ export const verticalFor = (key: VerticalKey): Vertical =>
 export const isCommissionVertical = (key: VerticalKey): boolean =>
   verticalFor(key).billing === 'commission'
 
+/**
+ * Which vertical a listing belongs to, from the speciality stored on its row.
+ *
+ * Anything unrecognised is a doctor: a cardiologist is stored as CARD, a
+ * dermatologist as SKIN, and only the six business types have codes of their
+ * own. Mirrors SPECIALITY_TO_VERTICAL in the pricing engine, which resolves the
+ * same question server-side and must reach the same answer.
+ */
+export const verticalForSpeciality = (speciality?: string | null): VerticalKey => {
+  const match = VERTICALS.find(v => v.dbSpeciality === (speciality ?? '').toUpperCase())
+  return match?.key ?? 'doctors'
+}
+
+/**
+ * Does this vertical see patients at a booked time?
+ *
+ * A pharmacy takes orders, an agent takes calls and an ambulance takes
+ * emergencies — none of them run an appointment book, so a schedule of
+ * consultation slots is noise on their dashboard rather than a feature.
+ */
+export const takesAppointments = (key: VerticalKey): boolean =>
+  key === 'doctors' || key === 'hospital' || key === 'lab'
+
 
 // The four population tiers, matching supabase pricing_tiers and the landing's
 // pricing section. Kept here so the landing renders the same numbers the wizard

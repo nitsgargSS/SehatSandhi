@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { isSandbox } from '../../lib/env'
+import { verticalForSpeciality, takesAppointments, verticalFor } from '../business/shared'
 import { Doctor, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -368,6 +369,14 @@ export default function DoctorDashboard() {
     load()
   }, [])
 
+  // 'today' does not exist for a pharmacy or an agent, so it would render an
+  // empty page on their first visit.
+  useEffect(() => {
+    if (doctor && !takesAppointments(verticalForSpeciality(doctor.speciality)) && (tab === 'today' || tab === 'appointments')) {
+      setTab('reports')
+    }
+  }, [doctor, tab])
+
   const logout = async () => { await supabase.auth.signOut(); window.location.href = '/doctor/login' }
 
   const submitStaff = async () => {
@@ -567,11 +576,24 @@ export default function DoctorDashboard() {
     </div>
   )
 
+  // The dashboard was written for a clinic and shown to everyone. A pharmacy saw
+  // "today's appointment slots" and an Appointments tab; an insurance agent saw
+  // a schedule of consultation hours. The plumbing underneath — login, bills,
+  // reports, locations — is identical for every vertical because they all share
+  // the doctors table, so only what is offered needs to differ.
+  const myVertical = verticalForSpeciality(doctor?.speciality)
+  const booksAppointments = takesAppointments(myVertical)
+  const verticalLabel = verticalFor(myVertical).label
+
   const tabs = [
-    { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
-    { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4" /> },
-    { id: 'schedule', label: t('dashboardPage.tabSchedule'), icon: <Clock className="w-4 h-4" /> },
-    { id: 'clinic', label: t('dashboardPage.tabClinic'), icon: <Users className="w-4 h-4" /> },
+    ...(booksAppointments ? [
+      { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
+      { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4" /> },
+    ] : []),
+    // Hours and branches matter to a pharmacy and an ambulance service too —
+    // patients need to know when they are open and where.
+    { id: 'schedule', label: booksAppointments ? t('dashboardPage.tabSchedule') : 'Hours & branches', icon: <Clock className="w-4 h-4" /> },
+    { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
     { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
     { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
   ]
@@ -603,8 +625,14 @@ export default function DoctorDashboard() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: t('dashboardPage.statTotalAppointments'), value: counts.total, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
-            { label: t('dashboardPage.statThisMonth'), value: counts.month, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
+            // Appointment counts are shown only to the verticals that take
+            // them; a pharmacy would otherwise lead with two permanent zeroes.
+            ...(booksAppointments ? [
+              { label: t('dashboardPage.statTotalAppointments'), value: counts.total, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
+              { label: t('dashboardPage.statThisMonth'), value: counts.month, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
+            ] : [
+              { label: 'Listed as', value: verticalLabel, icon: <Users className="w-5 h-5 text-teal-500" /> },
+            ]),
             { label: t('dashboardPage.statActiveAreas'), value: doctor.pin_codes?.length || 0, icon: <MapPin className="w-5 h-5 text-navy-600" /> },
             { label: t('dashboardPage.statStatus'), value: doctor.status === 'active' ? '✓' : '⏳', icon: <Star className="w-5 h-5 text-amber-500" /> },
           ].map(s => (
@@ -1120,7 +1148,9 @@ export default function DoctorDashboard() {
                       { label: 'Appeared in a search', value: rTotal('times_listed') },
                       { label: 'Profile opened', value: rTotal('profile_views') },
                       { label: 'Tapped WhatsApp', value: rTotal('whatsapp_clicks') },
-                      { label: 'Booked an appointment', value: rTotal('bookings') },
+                      ...(booksAppointments
+                        ? [{ label: 'Booked an appointment', value: rTotal('bookings') }]
+                        : []),
                     ] as Point[]} />
                   {rTotal('times_listed') > 0 && (
                     <p className="text-xs text-gray-500 mt-4">
@@ -1136,7 +1166,8 @@ export default function DoctorDashboard() {
                     data={report.map(r => ({ label: dayLabel(r.day), value: r.profile_views }))} />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className={`grid grid-cols-1 gap-4 ${booksAppointments ? 'lg:grid-cols-2' : ''}`}>
+                  {booksAppointments && <>
                   <div className="card shadow-sm">
                     <ColumnChart title="Appointments booked per day" height={120}
                       data={report.map(r => ({ label: dayLabel(r.day), value: r.bookings }))} />
@@ -1156,6 +1187,17 @@ export default function DoctorDashboard() {
                       </p>
                     )}
                   </div>
+                  </>}
+                  {!booksAppointments && (
+                    <div className="card shadow-sm">
+                      <ColumnChart title="WhatsApp taps per day" height={120}
+                        data={report.map(r => ({ label: dayLabel(r.day), value: r.whatsapp_clicks }))} />
+                      <p className="text-xs text-gray-500 mt-4">
+                        A tap is someone opening WhatsApp to contact you — the closest thing to an enquiry
+                        we can see from here.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </>
             )}
