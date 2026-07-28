@@ -51,7 +51,49 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'schedule' | 'clinic' | 'reports'>('today')
+  const [tab, setTab] = useState<'today' | 'appointments' | 'schedule' | 'clinic' | 'reports'>('today')
+
+  // ── All appointments ──
+  // The dashboard used to load 20 rows ordered by creation time and nothing
+  // else, so a clinic could not see its own history, could not look a patient
+  // up, and could not see next week. The month figure was counted from those
+  // same 20 rows, so it quietly under-reported past the twentieth booking.
+  interface ApptCounts { total: number; month: number }
+  const [counts, setCounts] = useState<ApptCounts>({ total: 0, month: 0 })
+
+  const [allAppts, setAllAppts] = useState<Appointment[]>([])
+  const [apptLoading, setApptLoading] = useState(false)
+  const [apptFrom, setApptFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10)
+  })
+  const [apptTo, setApptTo] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10)
+  })
+  const [apptStatus, setApptStatus] = useState<string>('all')
+  const [apptSearch, setApptSearch] = useState('')
+
+  const loadAllAppointments = async (doctorId: string) => {
+    setApptLoading(true)
+    // Filtered in the database, not in the browser: a busy clinic's full history
+    // is not something to download so it can be thrown away client-side.
+    let q = supabase.from('appointments').select('*')
+      .eq('doctor_id', doctorId)
+      .gte('slot_datetime', `${apptFrom}T00:00:00`)
+      .lte('slot_datetime', `${apptTo}T23:59:59`)
+      .order('slot_datetime', { ascending: false })
+      .limit(500)
+    if (apptStatus !== 'all') q = q.eq('status', apptStatus)
+    const { data } = await q
+    setAllAppts((data as Appointment[]) || [])
+    setApptLoading(false)
+  }
+
+  const visibleAppts = allAppts.filter(a => {
+    const t = apptSearch.trim().toLowerCase()
+    if (!t) return true
+    return (a.patient_name ?? '').toLowerCase().includes(t)
+      || (a.patient_phone ?? '').includes(t)
+  })
 
   // ── Reports ──
   interface ReportRow {
@@ -61,6 +103,11 @@ export default function DoctorDashboard() {
   const [reportDays, setReportDays] = useState(30)
   const [report, setReport] = useState<ReportRow[]>([])
   const [reportLoading, setReportLoading] = useState(false)
+
+  useEffect(() => {
+    if (tab !== 'appointments' || !doctor) return
+    loadAllAppointments(doctor.id)
+  }, [tab, doctor, apptFrom, apptTo, apptStatus])
 
   useEffect(() => {
     if (tab !== 'reports' || !doctor) return
@@ -260,6 +307,16 @@ export default function DoctorDashboard() {
         setDoctor(doc)
         const { data: appts } = await supabase.from('appointments').select('*').eq('doctor_id', doc.id).order('created_at', { ascending: false }).limit(20)
         setAppointments(appts || [])
+
+        // Counted in the database. Counting the 20 rows above under-reported
+        // every clinic past its twentieth booking.
+        const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
+        const [{ count: total }, { count: month }] = await Promise.all([
+          supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('doctor_id', doc.id),
+          supabase.from('appointments').select('id', { count: 'exact', head: true })
+            .eq('doctor_id', doc.id).gte('created_at', monthStart.toISOString()),
+        ])
+        setCounts({ total: total ?? 0, month: month ?? 0 })
         await loadStaff(doc.id)
         await loadCamps(doc.id)
         await loadLocations(doc.id)
@@ -477,6 +534,7 @@ export default function DoctorDashboard() {
 
   const tabs = [
     { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
+    { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4" /> },
     { id: 'schedule', label: t('dashboardPage.tabSchedule'), icon: <Clock className="w-4 h-4" /> },
     { id: 'clinic', label: t('dashboardPage.tabClinic'), icon: <Users className="w-4 h-4" /> },
     { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
@@ -509,8 +567,8 @@ export default function DoctorDashboard() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: t('dashboardPage.statTotalAppointments'), value: appointments.length, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
-            { label: t('dashboardPage.statThisMonth'), value: appointments.filter(a => new Date(a.created_at).getMonth() === new Date().getMonth()).length, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
+            { label: t('dashboardPage.statTotalAppointments'), value: counts.total, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
+            { label: t('dashboardPage.statThisMonth'), value: counts.month, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
             { label: t('dashboardPage.statActiveAreas'), value: doctor.pin_codes?.length || 0, icon: <MapPin className="w-5 h-5 text-navy-600" /> },
             { label: t('dashboardPage.statStatus'), value: doctor.status === 'active' ? '✓' : '⏳', icon: <Star className="w-5 h-5 text-amber-500" /> },
           ].map(s => (
@@ -635,6 +693,113 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ SCHEDULE — areas info + weekly availability template ══════════ */}
+        {tab === 'appointments' && (
+          <div className="space-y-4">
+            <div className="card shadow-sm">
+              <h3 className="font-bold text-navy-700 mb-1">All appointments</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Everything booked with you, past and future. Search by patient name or number.
+              </p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                <div>
+                  <label className="text-[11px] text-gray-500 block mb-1">From</label>
+                  <input type="date" className="input-field text-sm" value={apptFrom}
+                    onChange={e => setApptFrom(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-500 block mb-1">To</label>
+                  <input type="date" className="input-field text-sm" value={apptTo}
+                    onChange={e => setApptTo(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-500 block mb-1">Status</label>
+                  <select className="input-field text-sm" value={apptStatus}
+                    onChange={e => setApptStatus(e.target.value)}>
+                    <option value="all">All</option>
+                    <option value="booked">Booked</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="no_show">Did not turn up</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-500 block mb-1">Search</label>
+                  <input className="input-field text-sm" placeholder="Name or number"
+                    value={apptSearch} onChange={e => setApptSearch(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="text-xs text-gray-500 mb-3">
+                {apptLoading ? 'Loading…' : (
+                  <>
+                    <strong className="text-navy-700">{visibleAppts.length}</strong> appointment
+                    {visibleAppts.length === 1 ? '' : 's'}
+                    {apptSearch && ` matching "${apptSearch}"`}
+                    {/* Say when the window is full rather than silently truncating. */}
+                    {allAppts.length >= 500 && ' · showing the first 500 — narrow the dates to see more'}
+                  </>
+                )}
+              </div>
+
+              {!apptLoading && visibleAppts.length === 0 ? (
+                <p className="text-sm text-gray-400 py-8 text-center">
+                  Nothing in this range.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {visibleAppts.map(a => {
+                    const when = new Date(a.slot_datetime)
+                    const past = when < new Date()
+                    return (
+                      <div key={a.id} className={`border rounded-xl p-3 ${past ? 'border-gray-100 bg-gray-50/50' : 'border-gray-100'}`}>
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div className="min-w-0">
+                            <p className="font-medium text-navy-700">{a.patient_name || 'Patient'}</p>
+                            <p className="text-xs text-gray-500">{a.patient_phone}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-semibold text-navy-700">
+                              {when.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {when.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            a.status === 'completed' ? 'bg-teal-100 text-teal-700'
+                            : a.status === 'cancelled' ? 'bg-gray-200 text-gray-600'
+                            : a.status === 'no_show' ? 'bg-amber-100 text-amber-800'
+                            : 'bg-navy-50 text-navy-700'}`}>
+                            {a.status === 'no_show' ? 'DID NOT TURN UP' : a.status.toUpperCase()}
+                          </span>
+                          {a.cancelled_by && (
+                            <span className="text-[11px] text-gray-400">cancelled by {a.cancelled_by}</span>
+                          )}
+                          {(a.reschedule_count ?? 0) > 0 && (
+                            <span className="text-[11px] text-gray-400">
+                              rescheduled {a.reschedule_count}×
+                            </span>
+                          )}
+                          {a.booked_via && (
+                            <span className="text-[11px] text-gray-400">via {a.booked_via.replace(/_/g, ' ')}</span>
+                          )}
+                        </div>
+                        {a.cancel_reason && (
+                          <p className="text-xs text-gray-500 mt-1.5">"{a.cancel_reason}"</p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {tab === 'schedule' && (
           <div className="space-y-4">
             <div className="card shadow-sm">
