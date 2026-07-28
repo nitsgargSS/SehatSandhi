@@ -649,7 +649,7 @@ export default function BusinessRegister() {
                             value={form.gstin ?? ''}
                             onChange={e => setForm(f => ({ ...f, gstin: e.target.value.toUpperCase().replace(/\s/g, '') }))}
                             maxLength={15}
-                            placeholder="06AELPG4279G1ZD"
+                            placeholder="22AAAAA0000A1Z5"
                             style={{
                               width: '100%', maxWidth: 280, padding: '11px 13px', borderRadius: 11,
                               border: `2px solid ${gstinState === 'bad' ? '#d94848' : gstinState === 'ok' ? BIZ.green : BIZ.inputBorder}`,

@@ -732,7 +732,7 @@ export default function DoctorDashboard() {
               <div className="flex gap-2 flex-wrap items-start">
                 <div>
                   <input className="input-field font-mono tracking-wide uppercase max-w-xs"
-                    maxLength={15} placeholder="06AELPG4279G1ZD"
+                    maxLength={15} placeholder="22AAAAA0000A1Z5"
                     value={gstinDraft}
                     onChange={e => setGstinDraft(e.target.value.toUpperCase().replace(/\s/g, ''))} />
                   {gstinDraft.length === 15 && (
