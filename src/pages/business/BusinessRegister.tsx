@@ -12,7 +12,7 @@ import {
   loadRazorpayCheckout, businessBackendConfigured, PriceResult,
 } from '../../lib/businessApi'
 import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
-import { useTaxSettings, localTax, isValidGstin } from '../../hooks/useTaxSettings'
+import { useTaxSettings, localTax, isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { track } from '../../lib/analytics'
 
 // Design 2b — 4-step onboarding wizard.
@@ -222,6 +222,19 @@ export default function BusinessRegister() {
   })
 
   // Create (or reuse) the pending doctor row; returns its id for payment.
+  // Three states, not two: an empty field is neither valid nor invalid, and
+  // colouring a half-typed GSTIN red is just nagging.
+  const gstinState: 'empty' | 'partial' | 'ok' | 'bad' = (() => {
+    const v = (form.gstin ?? '').trim()
+    if (!v) return 'empty'
+    if (v.length < 15) return 'partial'
+    return isValidGstin(v) ? 'ok' : 'bad'
+  })()
+
+  const buyerStateName = gstinState === 'ok'
+    ? (GST_STATE_NAMES[(form.gstin ?? '').slice(0, 2)] ?? null)
+    : null
+
   const doctorIdRef = useRef<string | null>(null)
   const ensureDoctorRow = async (): Promise<string | null> => {
     if (doctorIdRef.current) return doctorIdRef.current
@@ -273,7 +286,18 @@ export default function BusinessRegister() {
     try {
       const id = await ensureDoctorRow()
       if (!id) { setSubmitting(false); return }
-      const order = await createRazorpayOrder(zips, id, months)
+      // A wrong GSTIN produces an invoice they cannot claim against, and it is
+      // not correctable afterwards without a credit note. Stop here instead.
+      if (gstinState === 'bad' || gstinState === 'partial') {
+        setError('Please correct your GST number, or clear the field if you are not registered.')
+        setSubmitting(false)
+        return
+      }
+      const order = await createRazorpayOrder(zips, id, months, {
+        gstin: gstinState === 'ok' ? form.gstin : undefined,
+        gstLegalName: form.gst_legal_name || undefined,
+        billingAddress: form.address || undefined,
+      })
       await loadRazorpayCheckout()
       const Razorpay = (window as unknown as { Razorpay: new (o: unknown) => { open: () => void } }).Razorpay
       const rzp = new Razorpay({
@@ -606,6 +630,50 @@ export default function BusinessRegister() {
                           </div>
                         )}
                       </div>
+
+                      {/* The buyer's own GSTIN. Optional, and only worth showing
+                          while we are actually charging GST — without it the
+                          18% is a cost to them; with it they claim it back as
+                          input credit, so the field pays for itself. */}
+                      {!onCommission && price.tax?.applied && (
+                        <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
+                            Your GST number <span style={{ fontWeight: 600, color: BIZ.mutedWarm }}>— optional</span>
+                          </div>
+                          <p style={{ fontSize: 13, color: BIZ.muted, margin: '0 0 12px', lineHeight: 1.6 }}>
+                            If your business is GST registered, add it and we will print it on your tax invoice.
+                            You can then claim the ₹{(price.tax?.taxTotal ?? 0).toLocaleString('en-IN')} GST back as
+                            input credit. Leave it blank if you are not registered — the price does not change either way.
+                          </p>
+                          <input
+                            value={form.gstin ?? ''}
+                            onChange={e => setForm(f => ({ ...f, gstin: e.target.value.toUpperCase().replace(/\s/g, '') }))}
+                            maxLength={15}
+                            placeholder="06AELPG4279G1ZD"
+                            style={{
+                              width: '100%', maxWidth: 280, padding: '11px 13px', borderRadius: 11,
+                              border: `2px solid ${gstinState === 'bad' ? '#d94848' : gstinState === 'ok' ? BIZ.green : BIZ.inputBorder}`,
+                              fontFamily: 'inherit', fontSize: 15, fontWeight: 700, letterSpacing: '.04em',
+                              textTransform: 'uppercase', color: BIZ.ink, background: '#fff',
+                            }} />
+                          {/* Say which state it implies. A wrong first two digits
+                              is the commonest GSTIN typo and it silently changes
+                              the tax split between CGST/SGST and IGST. */}
+                          {gstinState === 'ok' && (
+                            <div style={{ fontSize: 13, color: BIZ.green, fontWeight: 700, marginTop: 8 }}>
+                              ✓ Valid{buyerStateName ? ` · registered in ${buyerStateName}` : ''}
+                              {price.tax?.interState
+                                ? ' · your invoice will show IGST'
+                                : ' · your invoice will show CGST + SGST'}
+                            </div>
+                          )}
+                          {gstinState === 'bad' && (
+                            <div style={{ fontSize: 13, color: '#d94848', fontWeight: 700, marginTop: 8 }}>
+                              That does not look like a valid GSTIN — please check it against your GST certificate.
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Term picker — paying several months upfront holds this
                           price for the whole term, even if the plan changes. */}

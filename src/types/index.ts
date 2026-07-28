@@ -16,6 +16,15 @@ export interface Doctor {
   photo_url?: string
   status: DoctorStatus
   created_at: string
+  // GST registration of the BUSINESS BEING BILLED — ours lives in tax_settings.
+  // Optional: a business that isn't registered simply pays the GST. When set, it
+  // is printed on their tax invoice so they can claim it as input credit, and
+  // its first two digits decide CGST+SGST versus IGST. Columns added in
+  // migration 0007.
+  gstin?: string
+  gst_legal_name?: string
+  state_code?: string
+  billing_address?: string
 }
 
 export interface Appointment {

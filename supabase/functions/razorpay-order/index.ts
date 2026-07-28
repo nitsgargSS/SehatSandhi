@@ -27,6 +27,25 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { computePrice } from '../_shared/pricing.ts'
 
+/**
+ * The GSTIN's own check digit, over the first 14 characters.
+ *
+ * Mirrors gstinCheckDigit in src/hooks/useTaxSettings.ts. A shape check alone
+ * accepts a mistyped state code, which is how 01AELPG4279G1ZD nearly reached
+ * our own invoices — the same mistake a customer can make.
+ */
+function gstinCheckDigit(first14: string): string {
+  const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  let sum = 0
+  for (let i = 0; i < 14; i++) {
+    const value = charset.indexOf(first14[i])
+    if (value < 0) return ''
+    const product = value * (i % 2 === 0 ? 1 : 2)
+    sum += Math.floor(product / 36) + (product % 36)
+  }
+  return charset[(36 - (sum % 36)) % 36]
+}
+
 // Term dates are whole calendar months from the start date.
 function addMonths(from: Date, months: number): Date {
   const d = new Date(from.getTime())
@@ -43,7 +62,10 @@ Deno.serve(async (req) => {
   const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET')
   if (!keyId || !keySecret) return json({ error: 'Razorpay not configured' }, 500)
 
-  let body: { pincodes?: unknown; doctorId?: unknown; periodMonths?: unknown }
+  let body: {
+    pincodes?: unknown; doctorId?: unknown; periodMonths?: unknown
+    gstin?: unknown; gstLegalName?: unknown; billingAddress?: unknown
+  }
   try {
     body = await req.json()
   } catch {
@@ -60,6 +82,42 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
+
+  // ── The buyer's own GST details, optional ────────────────────────────────
+  // Written BEFORE the price is computed, because computePrice resolves the
+  // recipient's state from this row to decide CGST+SGST versus IGST. Setting it
+  // afterwards would tax the sale as intra-state and then print an inter-state
+  // invoice — the money moved and the invoice would disagree.
+  //
+  // Validated here rather than trusting the client: this number goes on a tax
+  // invoice, and a business that cannot claim the input credit because of a
+  // typo has paid 18% for nothing.
+  const rawGstin = typeof body.gstin === 'string' ? body.gstin.trim().toUpperCase() : ''
+  if (rawGstin && doctorId) {
+    if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(rawGstin)) {
+      return json({ error: 'That GSTIN is not 15 characters in the expected format.' }, 400)
+    }
+    const expected = gstinCheckDigit(rawGstin.slice(0, 14))
+    if (expected !== rawGstin[14]) {
+      return json({
+        error: `${rawGstin} fails its own check digit — please re-check it against your GST certificate.`,
+      }, 400)
+    }
+
+    const patch: Record<string, unknown> = {
+      gstin: rawGstin,
+      state_code: rawGstin.slice(0, 2),
+    }
+    if (typeof body.gstLegalName === 'string' && body.gstLegalName.trim()) {
+      patch.gst_legal_name = body.gstLegalName.trim()
+    }
+    if (typeof body.billingAddress === 'string' && body.billingAddress.trim()) {
+      patch.billing_address = body.billingAddress.trim()
+    }
+
+    const { error: gstErr } = await supabase.from('doctors').update(patch).eq('id', doctorId)
+    if (gstErr) return json({ error: `could not save GST details: ${gstErr.message}` }, 500)
+  }
 
   // Authoritative amount — server computes it, client cannot influence it.
   // computePrice clamps the requested months to the plan's min/max.
