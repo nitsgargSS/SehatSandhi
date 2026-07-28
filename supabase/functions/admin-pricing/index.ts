@@ -57,6 +57,25 @@ function pick(patch: Record<string, unknown>, allowed: Set<string>) {
 }
 
 /**
+ * The GSTIN's own check digit, over the first 14 characters.
+ *
+ * Weights alternate 1,2 from the left; each product is folded as
+ * quotient + remainder over 36, and the check digit completes the sum to a
+ * multiple of 36. Mirrors gstinCheckDigit in src/hooks/useTaxSettings.ts.
+ */
+function gstinCheckDigit(first14: string): string {
+  const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  let sum = 0
+  for (let i = 0; i < 14; i++) {
+    const value = charset.indexOf(first14[i])
+    if (value < 0) return ''
+    const product = value * (i % 2 === 0 ? 1 : 2)
+    sum += Math.floor(product / 36) + (product % 36)
+  }
+  return charset[(36 - (sum % 36)) % 36]
+}
+
+/**
  * Reject a price written into plan copy.
  *
  * The site renders the amount from monthly_price and the name from label. A
@@ -244,6 +263,17 @@ Deno.serve(async (req) => {
         const g = String(patch.gstin).trim().toUpperCase()
         if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(g)) {
           return json({ error: 'that is not a valid 15-character GSTIN' }, 400)
+        }
+        // The shape check passes a mistyped state code — the checksum does not.
+        // This GSTIN goes on every invoice and decides CGST+SGST vs IGST, so a
+        // wrong digit here misstates the tax on every sale.
+        const expected = gstinCheckDigit(g.slice(0, 14))
+        if (expected !== g[14]) {
+          return json({
+            error: `${g} fails its own check digit (expected '${expected}' at the end, got '${g[14]}'). `
+              + `Check it against your GST certificate — the first two digits are the state code, `
+              + `06 for Haryana.`,
+          }, 400)
         }
         patch.gstin = g
         patch.state_code = g.slice(0, 2)
