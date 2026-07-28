@@ -59,24 +59,33 @@ export function ColumnChart({ data, height = 140, title }: {
         </div>
       ) : (
         <>
-          <div className="flex items-end gap-[2px]" style={{ height }}>
-            {data.map((d, i) => (
-              <div key={i}
-                title={`${d.label}: ${d.value.toLocaleString('en-IN')}${d.hint ? ` · ${d.hint}` : ''}`}
-                className="flex-1 min-w-0 rounded-t transition-opacity hover:opacity-70"
-                style={{
-                  // A zero day keeps a 2px stub so the axis reads as continuous
-                  // rather than looking like missing data.
-                  height: `${Math.max(d.value === 0 ? 2 : 6, (d.value / max) * height)}px`,
-                  background: d.value === 0 ? '#e5e7eb' : SERIES,
-                  borderTopLeftRadius: 4, borderTopRightRadius: 4,
-                }} />
-            ))}
+          {/* Scrolls rather than shrinks.
+              These were flex-1 with no minimum, so 90 days on a 360px phone gave
+              each bar under 2px — the chart rendered but was invisible, which is
+              worse than an empty state because it looks like a bug in the data.
+              A 5px floor keeps every bar a bar; the row scrolls when they no
+              longer fit, and still fills the width when they do. */}
+          <div className="overflow-x-auto -mx-1 px-1">
+            <div className="flex items-end gap-[2px]" style={{ height, minWidth: '100%' }}>
+              {data.map((d, i) => (
+                <div key={i}
+                  title={`${d.label}: ${d.value.toLocaleString('en-IN')}${d.hint ? ` · ${d.hint}` : ''}`}
+                  className="flex-1 rounded-t transition-opacity hover:opacity-70"
+                  style={{
+                    minWidth: 5,
+                    // A zero day keeps a 2px stub so the axis reads as continuous
+                    // rather than looking like missing data.
+                    height: `${Math.max(d.value === 0 ? 2 : 6, (d.value / max) * height)}px`,
+                    background: d.value === 0 ? '#e5e7eb' : SERIES,
+                    borderTopLeftRadius: 4, borderTopRightRadius: 4,
+                  }} />
+              ))}
+            </div>
           </div>
-          <div className="flex justify-between text-[11px] text-gray-400 mt-2">
-            <span>{data[0]?.label}</span>
-            <span>peak {max.toLocaleString('en-IN')}</span>
-            <span>{data[data.length - 1]?.label}</span>
+          <div className="flex justify-between text-[11px] text-gray-400 mt-2 gap-2">
+            <span className="truncate">{data[0]?.label}</span>
+            <span className="shrink-0">peak {max.toLocaleString('en-IN')}</span>
+            <span className="truncate text-right">{data[data.length - 1]?.label}</span>
           </div>
         </>
       )}

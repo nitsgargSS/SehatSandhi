@@ -614,11 +614,31 @@ export default function AdminDashboard() {
     ? doctors.filter(d => !d.organization_id && d.name.toLowerCase().includes(doctorSearch.toLowerCase()))
     : []
 
+  // One definition, rendered twice — as the desktop rail and as the mobile strip.
+  const NAV_ITEMS = [
+
+              { id: 'pending', label: t('adminDashboardPage.navPendingPrefix'), count: pending.length, badge: pending.length > 0 },
+              { id: 'all', label: t('adminDashboardPage.navAllDoctors'), count: 0, badge: false },
+              { id: 'camps', label: t('adminDashboardPage.navCamps'), count: pendingCamps.length, badge: pendingCamps.length > 0 },
+              { id: 'orgs', label: t('adminDashboardPage.navOrgs'), count: 0, badge: false },
+              { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
+              { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
+              { id: 'reports', label: 'Reports', count: 0, badge: false },
+              { id: 'account', label: 'Account', count: 0, badge: false },
+              // Only reachable while pointed at the sandbox backend — the purge
+              // it exposes must never be one click away from production data.
+              ...(isSandbox() ? [{ id: 'sandbox', label: '🧪 Sandbox', count: 0, badge: false }] : []),
+  ]
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="flex">
         {/* Sidebar */}
-        <aside className="w-56 bg-navy-700 min-h-screen fixed left-0 top-0 flex flex-col pt-6">
+        {/* Fixed 224px rail on desktop. Hidden below md, where it used to sit on
+            top of the content while ml-56 pushed that content off-screen — on a
+            360px phone it left about 70px of usable width, so every panel here
+            was unreadable, not only the charts. */}
+        <aside className="hidden md:flex w-56 bg-navy-700 min-h-screen fixed left-0 top-0 flex-col pt-6">
           <div className="px-5 mb-4">
             <img src="/logo.png" alt="Sehatsandhi" className="h-10 brightness-0 invert" />
             <p className="text-white/40 text-xs mt-2">{t('adminDashboardPage.sidebarLabel')}</p>
@@ -632,19 +652,7 @@ export default function AdminDashboard() {
             </div>
           )}
           <nav className="flex-1 px-3 space-y-1">
-            {[
-              { id: 'pending', label: t('adminDashboardPage.navPendingPrefix'), count: pending.length, badge: pending.length > 0 },
-              { id: 'all', label: t('adminDashboardPage.navAllDoctors'), count: 0, badge: false },
-              { id: 'camps', label: t('adminDashboardPage.navCamps'), count: pendingCamps.length, badge: pendingCamps.length > 0 },
-              { id: 'orgs', label: t('adminDashboardPage.navOrgs'), count: 0, badge: false },
-              { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
-              { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
-              { id: 'reports', label: 'Reports', count: 0, badge: false },
-              { id: 'account', label: 'Account', count: 0, badge: false },
-              // Only reachable while pointed at the sandbox backend — the purge
-              // it exposes must never be one click away from production data.
-              ...(isSandbox() ? [{ id: 'sandbox', label: '🧪 Sandbox', count: 0, badge: false }] : []),
-            ].map(n => (
+            {NAV_ITEMS.map(n => (
               <button key={n.id} onClick={() => { setTab(n.id as any); setSelectedOrgId(null) }}
                 className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-between ${tab === n.id ? 'bg-teal-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}>
                 {n.label}
@@ -658,7 +666,24 @@ export default function AdminDashboard() {
         </aside>
 
         {/* Main content */}
-        <main className="ml-56 flex-1 p-8">
+        <main className="md:ml-56 flex-1 p-4 md:p-8 min-w-0">
+          {/* Mobile nav: the rail's items as one scrollable row. */}
+          <div className="md:hidden -mx-4 px-4 mb-5 overflow-x-auto">
+            <div className="flex gap-2 w-max pb-1">
+              {NAV_ITEMS.map(n => (
+                <button key={n.id} onClick={() => { setTab(n.id as any); setSelectedOrgId(null) }}
+                  className={`shrink-0 px-3.5 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1.5 ${
+                    tab === n.id ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>
+                  {n.label}
+                  {n.badge && <span className="bg-amber-500 text-white text-[10px] px-1.5 rounded-full">{n.count}</span>}
+                </button>
+              ))}
+              <button onClick={logout}
+                className="shrink-0 px-3.5 py-2 rounded-xl text-sm font-medium bg-white text-gray-400 border border-gray-200">
+                Log out
+              </button>
+            </div>
+          </div>
           {/* Stats — no fake revenue calculation */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {[
