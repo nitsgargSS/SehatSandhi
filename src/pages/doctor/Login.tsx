@@ -1,21 +1,87 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { activeConfig } from '../../lib/env'
 import { useLanguage } from '../../i18n/LanguageContext'
+
+// Log in with a code sent to the WhatsApp number the business registered with.
+//
+// This replaces an email-and-password form most businesses could never have
+// used. The signup wizard — the one that takes payment — collects email as
+// optional and creates no account at all, so anyone who joined through it had no
+// credentials and no way to reach their dashboard. The phone number is required
+// at signup, and a code is what this audience already expects.
+//
+// The legacy email/password route still works for listings created through the
+// old /doctor form: sehat_caller_listing_ids() honours both. It is kept below as
+// a fallback rather than removed, so nobody who can log in today is locked out.
+
+type Step = 'phone' | 'code'
 
 export default function DoctorLogin() {
   const { t } = useLanguage()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const navigate = useNavigate()
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const [step, setStep] = useState<Step>('phone')
+  const [phone, setPhone] = useState('')
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [devCode, setDevCode] = useState<string | null>(null)
+
+  const [showLegacy, setShowLegacy] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+
+  const callOtp = async (payload: Record<string, unknown>) => {
+    const { url, anon } = activeConfig()
+    if (!url || !anon) throw new Error('Login is unavailable right now.')
+    const res = await fetch(`${url}/functions/v1/clinic-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${anon}`, apikey: anon },
+      body: JSON.stringify(payload),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || 'Something went wrong. Please try again.')
+    return body
+  }
+
+  const requestCode = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true); setError('')
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const r = await callOtp({ action: 'request', phone })
+      // The same message either way, deliberately: a different one would tell
+      // anyone which numbers belong to businesses on the platform.
+      setNotice(r.message ?? 'If that number is registered, a code is on its way.')
+      setDevCode(r.devCode ?? null)
+      setStep('code')
+    } catch (err) {
+      setError((err as Error).message)
+    } finally { setBusy(false) }
+  }
+
+  const verifyCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy(true); setError('')
+    try {
+      const r = await callOtp({ action: 'verify', phone, code })
+      // The function hands back a one-time token; exchanging it here is what
+      // creates the session, so the browser ends up holding a normal login.
+      const { error: vErr } = await supabase.auth.verifyOtp({ token_hash: r.tokenHash, type: 'email' })
+      if (vErr) throw new Error('Could not start your session. Please try again.')
+      navigate('/doctor/dashboard')
+    } catch (err) {
+      setError((err as Error).message)
+    } finally { setBusy(false) }
+  }
+
+  const legacyLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy(true); setError('')
     const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-    if (err) { setError(err.message); setLoading(false) }
+    if (err) { setError(err.message); setBusy(false) }
     else navigate('/doctor/dashboard')
   }
 
@@ -25,29 +91,90 @@ export default function DoctorLogin() {
         <div className="text-center mb-8">
           <img src="/logo.png" alt="Sehatsandhi" className="h-14 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-navy-700">{t('loginPage.title')}</h1>
-          <p className="text-gray-400 text-sm mt-1">{t('loginPage.subtitle')}</p>
+          <p className="text-gray-400 text-sm mt-1">
+            {step === 'phone'
+              ? 'Enter the WhatsApp number you registered with'
+              : `We sent a 6-digit code to ${phone}`}
+          </p>
         </div>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">{t('loginPage.labelEmail')}</label>
-            <input className="input-field" type="email" placeholder="doctor@clinic.com"
-              value={email} onChange={e => setEmail(e.target.value)} required />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">{t('loginPage.labelPassword')}</label>
-            <input className="input-field" type="password" placeholder="••••••••"
-              value={password} onChange={e => setPassword(e.target.value)} required />
-          </div>
-          {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
-          <button type="submit" disabled={loading} className="btn-teal w-full justify-center py-3 text-base mt-2 disabled:opacity-60">
-            {loading ? t('loginPage.btnSigningIn') : t('loginPage.btnLogin')}
-          </button>
-        </form>
+
+        {showLegacy ? (
+          <form onSubmit={legacyLogin} className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">{t('loginPage.labelEmail')}</label>
+              <input className="input-field" type="email" placeholder="doctor@clinic.com"
+                value={email} onChange={e => setEmail(e.target.value)} required />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">{t('loginPage.labelPassword')}</label>
+              <input className="input-field" type="password" placeholder="••••••••"
+                value={password} onChange={e => setPassword(e.target.value)} required />
+            </div>
+            {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
+            <button type="submit" disabled={busy} className="btn-teal w-full justify-center py-3 text-base disabled:opacity-60">
+              {busy ? t('loginPage.btnSigningIn') : t('loginPage.btnLogin')}
+            </button>
+            <button type="button" onClick={() => { setShowLegacy(false); setError('') }}
+              className="w-full text-sm text-teal-600 py-1">
+              Log in with my WhatsApp number instead
+            </button>
+          </form>
+        ) : step === 'phone' ? (
+          <form onSubmit={requestCode} className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">WhatsApp number</label>
+              <input className="input-field" type="tel" inputMode="tel" autoComplete="tel"
+                placeholder="98765 43210" value={phone}
+                onChange={e => setPhone(e.target.value)} required />
+            </div>
+            {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
+            <button type="submit" disabled={busy || phone.replace(/\D/g, '').length < 10}
+              className="btn-teal w-full justify-center py-3 text-base disabled:opacity-60">
+              {busy ? 'Sending…' : 'Send code'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={verifyCode} className="space-y-4">
+            {notice && <p className="text-xs text-gray-500 text-center">{notice}</p>}
+            {/* Sandbox only. The function returns the code when no WhatsApp or
+                SMS provider is configured, so the flow is testable without one. */}
+            {devCode && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2 text-center">
+                Test mode — your code is <strong>{devCode}</strong>
+              </p>
+            )}
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">6-digit code</label>
+              <input className="input-field text-center text-lg font-bold tracking-[0.4em]"
+                inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                placeholder="000000" value={code}
+                onChange={e => setCode(e.target.value.replace(/\D/g, ''))} required />
+            </div>
+            {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
+            <button type="submit" disabled={busy || code.length !== 6}
+              className="btn-teal w-full justify-center py-3 text-base disabled:opacity-60">
+              {busy ? 'Checking…' : 'Log in'}
+            </button>
+            <button type="button" onClick={() => { setStep('phone'); setCode(''); setError('') }}
+              className="w-full text-sm text-gray-500 py-1">
+              Use a different number
+            </button>
+          </form>
+        )}
+
         <div className="mt-6 text-center space-y-2">
           <p className="text-sm text-gray-500">
-            {t('loginPage.newDoctor')} <Link to="/doctor" className="text-teal-600 hover:underline font-medium">{t('loginPage.registerHere')}</Link>
+            {t('loginPage.newDoctor')}{' '}
+            <Link to="/business/register" className="text-teal-600 hover:underline font-medium">
+              {t('loginPage.registerHere')}
+            </Link>
           </p>
-          <button className="text-xs text-gray-400 hover:text-gray-600">{t('loginPage.forgotPassword')}</button>
+          {!showLegacy && (
+            <button onClick={() => { setShowLegacy(true); setError('') }}
+              className="text-xs text-gray-400 hover:text-gray-600">
+              Registered before with an email and password?
+            </button>
+          )}
         </div>
       </div>
     </div>
