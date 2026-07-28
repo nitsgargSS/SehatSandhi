@@ -4,6 +4,7 @@ import VerticalIcon from './VerticalIcon'
 import WhatsAppBotMock from './WhatsAppBotMock'
 import ReachSnapshot from './ReachSnapshot'
 import { usePricing, commissionFor, monthlyAppliesTo } from '../../hooks/usePricing'
+import { useTaxSettings } from '../../hooks/useTaxSettings'
 
 // Design 2a — "List your business" marketing landing, desktop-first, Warm Care look.
 // Colors are the exact design values (kept off the site's teal/navy theme on purpose).
@@ -17,8 +18,15 @@ const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 
 export default function BusinessLanding() {
   const { plan, tiers, verticals } = usePricing()
+  const tax = useTaxSettings()
   const flatPlan = plan.mode !== 'pincode_tiers'
   const flatPrice = plan.monthly_price ?? 0
+
+  // Say on the card what the number does and does not include, so the figure
+  // here and the figure at checkout are never a surprise to each other.
+  const gstNote = !tax.enabled ? null
+    : plan.price_includes_gst ? `incl. ${tax.rate}% GST`
+    : `+ ${tax.rate}% GST`
 
   // Verticals actually paying a commission right now (empty while a flat plan
   // suspends it), and those on the monthly fee.
@@ -136,22 +144,28 @@ export default function BusinessLanding() {
                 <div style={{ fontSize: 'clamp(40px,11vw,60px)', fontWeight: 800, color: '#fff', letterSpacing: '-.03em', marginTop: 10, lineHeight: 1 }}>
                   ₹{flatPrice.toLocaleString('en-IN')}
                   <span style={{ fontSize: 'clamp(15px,4vw,18px)', fontWeight: 600, color: '#d6f2e6' }}>/month</span>
+                  {gstNote && (
+                    <span style={{ fontSize: 'clamp(13px,3.4vw,15px)', fontWeight: 600, color: '#d6f2e6' }}> {gstNote}</span>
+                  )}
                 </div>
                 {plan.mode === 'flat_all_pincodes' && (
                   <div style={{ fontSize: 15, color: '#eafaf3', marginTop: 14, lineHeight: 1.6 }}>
                     Pick one pincode or twenty — the price is the same. Your fee does not go up as your reach does.
                   </div>
                 )}
-                {plan.default_months > 1 && (
+                {/* The term is the business's choice, so advertise the choice —
+                    not a multi-month total they never agreed to. */}
+                {plan.max_months > plan.min_months && (
                   <div style={{ display: 'inline-block', marginTop: 18, background: 'rgba(255,255,255,.16)', color: '#fff', fontSize: 14, fontWeight: 700, padding: '8px 14px', borderRadius: 999 }}>
-                    Pay {plan.default_months} months upfront — ₹{(flatPrice * plan.default_months).toLocaleString('en-IN')}
+                    Pay for as few as {plan.min_months} month{plan.min_months === 1 ? '' : 's'} — you choose the term
                   </div>
                 )}
               </div>
             </div>
             <p style={{ fontSize: 13.5, color: BIZ.mutedWarm, textAlign: 'center', marginTop: 22, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
               Your rate is held for the months you pay for, so it will not change mid-term even when this offer ends.
-              You can pay for {plan.min_months}–{plan.max_months} months at a time.
+              Choose any term from {plan.min_months} to {plan.max_months} months at checkout — you see the total before you pay.
+              {gstNote && !plan.price_includes_gst && ` GST at ${tax.rate}% is added on top and a tax invoice is issued with every payment.`}
               {monthlyVerticals.length === VERTICALS.length && ' This applies to every category — doctors, hospitals, pharmacies, labs, insurance and ambulance services.'}
             </p>
           </>
@@ -180,7 +194,8 @@ export default function BusinessLanding() {
               })}
             </div>
             <p style={{ fontSize: 13.5, color: BIZ.mutedWarm, textAlign: 'center', marginTop: 22 }}>
-              Your total is the sum of every pincode you pick. <strong style={{ color: BIZ.ink }}>Premium placement slots</strong> (top of your category in a pincode) are an optional weekly add-on.
+              Your total is the sum of every pincode you pick{gstNote ? `, ${gstNote}` : ''}, for the term you choose at checkout.
+              {' '}<strong style={{ color: BIZ.ink }}>Premium placement slots</strong> (top of your category in a pincode) are an optional weekly add-on.
             </p>
           </>
         )}

@@ -56,6 +56,27 @@ function pick(patch: Record<string, unknown>, allowed: Set<string>) {
   return out
 }
 
+/**
+ * Reject a price written into plan copy.
+ *
+ * The site renders the amount from monthly_price and the name from label. A
+ * label of "Launch offer — ₹1,000/month" therefore keeps promising ₹1,000 after
+ * the rate is changed to ₹2,500 — two prices on one screen, the stale one in the
+ * bigger type. pricing_plans_copy_has_no_price (migration 0010) enforces this in
+ * the database too; this is here to give a sentence instead of a constraint name.
+ */
+function copyPriceError(patch: Record<string, unknown>): string | null {
+  const hasPrice = (s: unknown) =>
+    typeof s === 'string' && (/₹/.test(s) || /\brs\.?\s*[0-9]/i.test(s))
+  for (const field of ['label', 'description']) {
+    if (hasPrice(patch[field])) {
+      return `Leave the amount out of the plan ${field} — the site prints it from the monthly price, `
+        + `so a figure here would contradict the real rate the next time you change it.`
+    }
+  }
+  return null
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
@@ -119,6 +140,9 @@ Deno.serve(async (req) => {
       if (!['flat_all_pincodes', 'flat_per_pincode', 'pincode_tiers'].includes(mode)) {
         return json({ error: `unknown mode: ${mode}` }, 400)
       }
+
+      const newCopyErr = copyPriceError({ label: b.label, description: b.description })
+      if (newCopyErr) return json({ error: newCopyErr }, 400)
 
       const monthlyPrice = b.monthly_price === null || b.monthly_price === undefined || b.monthly_price === ''
         ? null : Number(b.monthly_price)
@@ -288,6 +312,9 @@ Deno.serve(async (req) => {
 
       const patch = pick(body.patch as Record<string, unknown>, PLAN_FIELDS)
       if (!Object.keys(patch).length) return json({ error: 'nothing to update' }, 400)
+
+      const copyErr = copyPriceError(patch)
+      if (copyErr) return json({ error: copyErr }, 400)
 
       // A flat plan with no price would silently charge ₹0. The DB constraint
       // also catches this; failing here gives a readable message.
