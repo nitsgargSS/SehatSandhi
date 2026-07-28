@@ -43,6 +43,10 @@ export interface PricingPlan {
   applies_to_verticals: string[] | null
   suspend_commission: boolean
   price_includes_gst: boolean
+  /** Consultants covered by the base price, before extra_doctor_price applies. */
+  included_doctors: number
+  /** ₹/month per consultant beyond included_doctors. Zero disables headcount pricing. */
+  extra_doctor_price: number
 }
 
 export interface PriceResult {
@@ -65,6 +69,12 @@ export interface PriceResult {
   defaultMonths: number
   minMonths: number
   maxMonths: number
+
+  // headcount — a hospital is billed for its consultants, a solo practice is not
+  doctorCount: number
+  includedDoctors: number
+  extraDoctors: number
+  extraDoctorCost: number
 
   // commission, independent of the monthly fee above
   monthlyApplies: boolean
@@ -107,6 +117,9 @@ const FALLBACK_PLAN: PricingPlan = {
   mode: 'pincode_tiers', monthly_price: null,
   default_months: 1, min_months: 1, max_months: 12,
   applies_to_verticals: null, suspend_commission: false, price_includes_gst: false,
+  // Headcount pricing off in the fallback: a stale or unreachable plans table
+  // must never invent a per-doctor charge nobody agreed to.
+  included_doctors: 1, extra_doctor_price: 0,
 }
 
 /** The plan in force right now: manual override, else the first open plan in the queue. */
@@ -126,7 +139,25 @@ export async function resolveActivePlan(supabase: SupabaseClient): Promise<Prici
     applies_to_verticals: (p.applies_to_verticals as string[]) ?? null,
     suspend_commission: Boolean(p.suspend_commission),
     price_includes_gst: Boolean(p.price_includes_gst),
+    included_doctors: Number(p.included_doctors ?? 1),
+    extra_doctor_price: Number(p.extra_doctor_price ?? 0),
   }
+}
+
+/**
+ * Billable consultants for a listing, via its organisation.
+ *
+ * Zero for anything that is not part of one, which is every solo practice — a
+ * single doctor must never be charged for being one doctor.
+ */
+export async function resolveDoctorCount(
+  supabase: SupabaseClient,
+  doctorId?: string | null,
+): Promise<number> {
+  if (!doctorId) return 0
+  const { data, error } = await supabase.rpc('sehat_org_doctor_count', { p_doctor_id: doctorId })
+  if (error || data == null) return 0
+  return Number(data) || 0
 }
 
 /**
@@ -198,11 +229,12 @@ export async function computePrice(
   verticalHint?: string | null,
   requestedMonths?: number | null,
 ): Promise<PriceResult> {
-  const [plan, vb, taxSettings, recipientState] = await Promise.all([
+  const [plan, vb, taxSettings, recipientState, doctorCount] = await Promise.all([
     resolveActivePlan(supabase),
     resolveVerticalBilling(supabase, doctorId, verticalHint),
     resolveTaxSettings(supabase),
     resolveRecipientState(supabase, doctorId),
+    resolveDoctorCount(supabase, doctorId),
   ])
 
   const months = clampMonths(plan, requestedMonths)
@@ -221,6 +253,14 @@ export async function computePrice(
   const commissionPercent = vb.commissionEnabled && !commissionSuspended ? vb.commissionPercent : 0
   const commissionBasis = commissionPercent > 0 ? vb.commissionBasis : null
 
+  // Headcount only bites for a listing that belongs to an organisation, and only
+  // once the plan sets a price for it. A solo practice reports zero consultants
+  // and is never charged for being one doctor.
+  const extraDoctors = doctorCount > 0
+    ? Math.max(0, doctorCount - plan.included_doctors)
+    : 0
+  const extraDoctorCost = extraDoctors * plan.extra_doctor_price
+
   const planFields = {
     planCode: plan.code,
     planLabel: plan.label,
@@ -233,6 +273,10 @@ export async function computePrice(
     commissionPercent,
     commissionBasis,
     commissionSuspended,
+    doctorCount,
+    includedDoctors: plan.included_doctors,
+    extraDoctors,
+    extraDoctorCost,
   }
 
   const pincodes = [...new Set(rawPincodes.map(String))]
@@ -333,6 +377,15 @@ export async function computePrice(
     else if (plan.mode === 'flat_all_pincodes') monthlyTotal = plan.monthly_price ?? 0
     else if (plan.mode === 'flat_per_pincode') monthlyTotal = (plan.monthly_price ?? 0) * breakdown.length
     else monthlyTotal = tierSum
+
+    // Consultants past the included headcount. Added after the coverage price,
+    // not folded into it, so the invoice can show "reach" and "consultants" as
+    // separate lines — a hospital querying its bill is almost always querying
+    // the headcount rather than the pincodes.
+    //
+    // A negotiated customMonthly is deliberately left alone: it is a whole-price
+    // agreement, and silently adding to it would break the deal that was struck.
+    if (customMonthly === null) monthlyTotal += extraDoctorCost
   }
 
   // Tax applies to the whole term, not one month, since the term is what gets
