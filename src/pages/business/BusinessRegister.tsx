@@ -14,6 +14,9 @@ import {
 import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
 import { useTaxSettings, localTax, isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { track } from '../../lib/analytics'
+// Same file the pricing engine uses, so the quote here and the amount charged
+// cannot describe different models.
+import { headcountFor, applyHeadcount, describeDoctorRate } from '../../../supabase/functions/_shared/headcount'
 
 // Design 2b — 4-step onboarding wizard.
 // Layout: desktop = dark left step-rail + content pane; tablet (<900px) =
@@ -136,13 +139,9 @@ export default function BusinessRegister() {
     // the number on screen matches what Razorpay is asked for.
     const namedDoctors = vertical === 'hospital'
       ? hospDoctors.filter(d => d.name.trim()).length : 0
-    const billing = plan.doctor_billing ?? 'none'
-    const doctorMultiplier = billing === 'per_doctor' && namedDoctors > 0 ? namedDoctors : 1
-    const extraDoctors = billing === 'base_plus_extra' && namedDoctors > 0
-      ? Math.max(0, namedDoctors - (plan.included_doctors ?? 1)) : 0
-    const extraDoctorCost = extraDoctors * (plan.extra_doctor_price ?? 0)
+    const hc = headcountFor(plan, namedDoctors)
     const monthlyTotal = monthlyApplies
-      ? localMonthlyTotal(plan, tiers, chosen) * doctorMultiplier + extraDoctorCost : 0
+      ? applyHeadcount(localMonthlyTotal(plan, tiers, chosen), hc) : 0
     const residents = chosen.reduce((a, z) => a + z.population, 0)
     // "Plan tier" only means something when pincodes are individually priced.
     const top = monthlyApplies && plan.mode === 'pincode_tiers'
@@ -155,12 +154,12 @@ export default function BusinessRegister() {
       planCode: plan.code, planLabel: plan.label, mode: plan.mode,
       monthlyTotal, months, total: monthlyTotal * months,
       defaultMonths: plan.default_months, minMonths: plan.min_months, maxMonths: plan.max_months,
-      doctorCount: namedDoctors,
+      doctorCount: hc.doctorCount,
       includedDoctors: plan.included_doctors ?? 1,
-      extraDoctors,
-      extraDoctorCost,
-      doctorBilling: billing,
-      doctorMultiplier,
+      extraDoctors: hc.extraDoctors,
+      extraDoctorCost: hc.extraCost,
+      doctorBilling: plan.doctor_billing ?? 'none',
+      doctorMultiplier: hc.multiplier,
       monthlyApplies,
       commissionPercent: commission.percent,
       commissionBasis: commission.basis,
@@ -534,13 +533,7 @@ export default function BusinessRegister() {
                             Add each consultant who sees patients here. Every one gets their own profile and
                             appointment calendar, so a patient searching for a cardiologist in your area finds
                             them by name.
-                            {plan.doctor_billing === 'per_doctor' ? (
-                              <> Each doctor is <strong>₹{(plan.monthly_price ?? 0).toLocaleString('en-IN')}/month</strong>,
-                              so your total follows the number you add.</>
-                            ) : plan.doctor_billing === 'base_plus_extra' && (plan.extra_doctor_price ?? 0) > 0 ? (
-                              <> Your plan includes <strong>{plan.included_doctors}</strong>; each additional
-                              doctor is ₹{(plan.extra_doctor_price).toLocaleString('en-IN')}/month.</>
-                            ) : null}
+                            {describeDoctorRate(plan) && <> {describeDoctorRate(plan)}</>}
                           </p>
 
                           {/* Grouped per doctor. Stacked as four bare fields the
