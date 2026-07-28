@@ -88,7 +88,13 @@ export default function DoctorDashboard() {
   const [rosterErr, setRosterErr] = useState('')
   const [showAddDoc, setShowAddDoc] = useState(false)
   const [docForm, setDocForm] = useState({ name: '', speciality: 'GEN', qualification: '', phone: '' })
-  const [plan, setPlan] = useState<{ included_doctors: number; extra_doctor_price: number } | null>(null)
+  interface PlanTerms {
+    doctor_billing: string
+    monthly_price: number | null
+    included_doctors: number
+    extra_doctor_price: number
+  }
+  const [plan, setPlan] = useState<PlanTerms | null>(null)
 
   const loadRoster = async (orgId: string) => {
     const { data } = await supabase.from('doctors')
@@ -128,8 +134,20 @@ export default function DoctorDashboard() {
   // Consultants that count towards the bill — suspended ones do not, which is
   // the whole reason removing one is worth doing promptly.
   const billableDoctors = roster.filter(d => d.status !== 'suspended').length
-  const extraDoctors = plan ? Math.max(0, billableDoctors - plan.included_doctors) : 0
+  // What one more doctor actually costs, which depends on the plan's model. The
+  // panel used to state the base_plus_extra figure unconditionally, so under
+  // per_doctor it told a hospital ₹300 when the real answer was ₹1,000 — a
+  // business quoting itself the wrong price.
+  const perDoctorPlan = plan?.doctor_billing === 'per_doctor'
+  const extraDoctors = plan && plan.doctor_billing === 'base_plus_extra'
+    ? Math.max(0, billableDoctors - plan.included_doctors) : 0
   const extraCost = plan ? extraDoctors * plan.extra_doctor_price : 0
+  /** Monthly cost of adding one more, under whichever model is live. */
+  const marginalCost = !plan ? 0
+    : perDoctorPlan ? Number(plan.monthly_price ?? 0)
+    : billableDoctors >= plan.included_doctors ? plan.extra_doctor_price
+    : 0
+  const headcountBills = Boolean(plan) && plan!.doctor_billing !== 'none'
 
   const [gstinDraft, setGstinDraft] = useState('')
   const [gstSaving, setGstSaving] = useState(false)
@@ -255,8 +273,8 @@ export default function DoctorDashboard() {
         if (doc.organization_id) {
           await loadRoster(doc.organization_id)
           const { data: p } = await supabase.from('active_pricing_plan')
-            .select('included_doctors, extra_doctor_price').maybeSingle()
-          if (p) setPlan(p as { included_doctors: number; extra_doctor_price: number })
+            .select('doctor_billing, monthly_price, included_doctors, extra_doctor_price').maybeSingle()
+          if (p) setPlan(p as PlanTerms)
         }
         await loadAvailability(doc.id)
       }
@@ -896,14 +914,17 @@ export default function DoctorDashboard() {
 
                 {/* What the roster costs, stated where it is changed rather than
                     discovered on the next invoice. */}
-                {plan && plan.extra_doctor_price > 0 && (
+                {plan && headcountBills && (
                   <div className="bg-navy-50 border border-navy-100 rounded-xl p-3 mb-4 text-sm text-navy-700">
                     <strong>{billableDoctors}</strong> doctor{billableDoctors === 1 ? '' : 's'} on your bill.
-                    Your plan includes {plan.included_doctors}
-                    {extraDoctors > 0
-                      ? <>, so {extraDoctors} extra {extraDoctors === 1 ? 'adds' : 'add'}{' '}
-                          <strong>₹{extraCost.toLocaleString('en-IN')}/month</strong>.</>
-                      : <> — you are within that, so there is no extra charge.</>}
+                    {perDoctorPlan
+                      ? <> Each is ₹{Number(plan.monthly_price ?? 0).toLocaleString('en-IN')}/month, so that is{' '}
+                          <strong>₹{(billableDoctors * Number(plan.monthly_price ?? 0)).toLocaleString('en-IN')}/month</strong>.</>
+                      : <> Your plan includes {plan.included_doctors}
+                          {extraDoctors > 0
+                            ? <>, so {extraDoctors} extra {extraDoctors === 1 ? 'adds' : 'add'}{' '}
+                                <strong>₹{extraCost.toLocaleString('en-IN')}/month</strong>.</>
+                            : <> — you are within that, so there is no extra charge.</>}</>}
                     {' '}A change takes effect from your next renewal, not mid-term.
                   </div>
                 )}
@@ -924,10 +945,10 @@ export default function DoctorDashboard() {
                       <input className="input-field text-sm" placeholder="Phone (optional)"
                         value={docForm.phone} onChange={e => setDocForm(f => ({ ...f, phone: e.target.value }))} />
                     </div>
-                    {plan && plan.extra_doctor_price > 0 && billableDoctors >= plan.included_doctors && (
+                    {marginalCost > 0 && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
                         Adding this doctor takes you to {billableDoctors + 1}, which adds
-                        ₹{plan.extra_doctor_price.toLocaleString('en-IN')}/month from your next renewal.
+                        ₹{marginalCost.toLocaleString('en-IN')}/month from your next renewal.
                       </p>
                     )}
                     <div className="flex gap-2">
