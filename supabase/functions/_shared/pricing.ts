@@ -235,14 +235,30 @@ export async function computePrice(
   doctorId?: string | null,
   verticalHint?: string | null,
   requestedMonths?: number | null,
+  doctorCountHint?: number | null,
 ): Promise<PriceResult> {
-  const [plan, vb, taxSettings, recipientState, doctorCount] = await Promise.all([
+  const [plan, vb, taxSettings, recipientState, resolvedCount] = await Promise.all([
     resolveActivePlan(supabase),
     resolveVerticalBilling(supabase, doctorId, verticalHint),
     resolveTaxSettings(supabase),
     resolveRecipientState(supabase, doctorId),
     resolveDoctorCount(supabase, doctorId),
   ])
+
+  // With a listing, the headcount comes from the database and the client cannot
+  // influence it — that is the number charged. Without one, a hospital is still
+  // filling in the wizard and has no row to count, so the quote uses what they
+  // have typed. Same shape as verticalHint: display-only, ignored the moment a
+  // doctorId resolves, and never able to decide an amount charged.
+  // Restricted to the hospital vertical. A solo practice has no consultants to
+  // count, and without this guard a crafted request could inflate its own quote
+  // — harmless to the amount charged, which always comes from the database, but
+  // it would show a doctor a price that is not theirs.
+  const doctorCount = doctorId
+    ? resolvedCount
+    : (vb.vertical === 'hospital'
+        ? Math.max(0, Math.floor(Number(doctorCountHint) || 0))
+        : 0)
 
   const months = clampMonths(plan, requestedMonths)
 

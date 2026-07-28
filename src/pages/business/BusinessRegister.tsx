@@ -142,6 +142,11 @@ export default function BusinessRegister() {
   // they stack. A filter, two bulk actions and one compact row each turns it
   // into a list you can scan. Under a flat plan "select all" is usually the
   // right answer anyway, so it is one tap away.
+  // Counted in one place: the local quote, the server quote and the re-quote
+  // effect must all agree on how many consultants have been entered.
+  const namedHospitalDoctors = vertical === 'hospital'
+    ? hospDoctors.filter(d => d.name.trim()).length : 0
+
   const [areaQuery, setAreaQuery] = useState('')
   const visibleAreas = useMemo(() => {
     const q = areaQuery.trim().toLowerCase()
@@ -156,8 +161,7 @@ export default function BusinessRegister() {
     const chosen = coverage.filter(z => zips.includes(z.pin_code))
     // Consultants beyond the plan's included headcount. Mirrors the server so
     // the number on screen matches what Razorpay is asked for.
-    const namedDoctors = vertical === 'hospital'
-      ? hospDoctors.filter(d => d.name.trim()).length : 0
+    const namedDoctors = namedHospitalDoctors
     const hc = headcountFor(plan, namedDoctors)
     const monthlyTotal = monthlyApplies
       ? applyHeadcount(localMonthlyTotal(plan, tiers, chosen), hc) : 0
@@ -200,7 +204,11 @@ export default function BusinessRegister() {
         // Vertical is a display hint here (no listing row yet); the server still
         // decides the plan and re-derives the vertical from the row before
         // charging. Months are clamped server-side to the plan's bounds.
-        const res = await computePrice(zips, null, vertical, months)
+        // Without this the server counts zero consultants — there is no listing
+        // yet — and its answer overrides the local one that does count them. A
+        // hospital saw one doctor's price and would have been charged for all of
+        // them at checkout, where the real doctorId is finally passed.
+        const res = await computePrice(zips, null, vertical, months, namedHospitalDoctors)
         if (id === priceReq.current) setServerPrice(res)
       } catch {
         if (id === priceReq.current) setServerPrice(null) // fall back to localPrice
@@ -209,7 +217,7 @@ export default function BusinessRegister() {
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [zips, vertical, months, hospDoctors.length])
+  }, [zips, vertical, months, namedHospitalDoctors])
 
   // What the summary shows: server total when we have one, else the local sum.
   const price = serverPrice ?? localPrice
