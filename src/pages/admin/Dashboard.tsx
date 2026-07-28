@@ -90,6 +90,9 @@ interface PlanRow {
   sequence: number
   mode: 'flat_all_pincodes' | 'flat_per_pincode' | 'pincode_tiers'
   monthly_price: number | null
+  doctor_billing?: string
+  included_doctors?: number
+  extra_doctor_price?: number
   default_months: number
   min_months: number
   max_months: number
@@ -1356,6 +1359,32 @@ export default function AdminDashboard() {
                           {pricingBusy ? 'Saving…' : 'Save price'}
                         </button>
                       </div>
+                      {/* How a hospital's headcount multiplies that price. Sits
+                          beside the price because the two together are the bill,
+                          and separating them is how "₹1,000 for 3 doctors"
+                          happened. */}
+                      <div className="mt-4 pt-4 border-t">
+                        <label className="text-xs font-medium text-gray-600 mb-1 block">
+                          Hospitals with several doctors
+                        </label>
+                        <select className="input-field text-sm max-w-md"
+                          value={activePlan.doctor_billing ?? 'none'}
+                          onChange={e => runPricingAction('updatePlan',
+                            { planCode: activePlan.code, patch: { doctor_billing: e.target.value } },
+                            'Hospital billing updated.')}>
+                          <option value="per_doctor">Charge the full price per doctor</option>
+                          <option value="base_plus_extra">Include some doctors, charge for the rest</option>
+                          <option value="none">Ignore how many doctors — one price per hospital</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {(activePlan.doctor_billing ?? 'none') === 'per_doctor'
+                            ? <>A hospital with 3 doctors pays <strong>₹{(Number(activePlan.monthly_price ?? 0) * 3).toLocaleString('en-IN')}</strong>/month. Solo listings are unaffected.</>
+                            : (activePlan.doctor_billing === 'base_plus_extra')
+                              ? <>{activePlan.included_doctors ?? 1} doctors are included; each one after costs ₹{(activePlan.extra_doctor_price ?? 0).toLocaleString('en-IN')}/month.</>
+                              : <>Every hospital pays the same regardless of how many doctors it lists.</>}
+                        </p>
+                      </div>
+
                       {/* Show the business's-eye view of the number being typed,
                           so GST is never a surprise at the payment screen. */}
                       {livePriceDraft !== '' && Number(livePriceDraft) >= 0 && (

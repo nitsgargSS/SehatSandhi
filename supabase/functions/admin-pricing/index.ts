@@ -40,6 +40,7 @@ const PLAN_FIELDS = new Set([
   'label', 'description', 'sequence', 'mode', 'monthly_price',
   'default_months', 'min_months', 'max_months', 'max_signups',
   'suspend_commission', 'is_enabled', 'starts_at', 'ends_at', 'notes',
+  'doctor_billing', 'included_doctors', 'extra_doctor_price',
 ])
 const VERTICAL_FIELDS = new Set([
   'monthly_enabled', 'commission_enabled', 'commission_percent', 'commission_basis',
@@ -376,6 +377,11 @@ Deno.serve(async (req) => {
 
       const copyErr = copyPriceError(patch)
       if (copyErr) return json({ error: copyErr }, 400)
+
+      if ('doctor_billing' in patch
+          && !['none', 'per_doctor', 'base_plus_extra'].includes(String(patch.doctor_billing))) {
+        return json({ error: 'doctor_billing must be none, per_doctor or base_plus_extra' }, 400)
+      }
 
       // A flat plan with no price would silently charge ₹0. The DB constraint
       // also catches this; failing here gives a readable message.
