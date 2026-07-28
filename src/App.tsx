@@ -1,34 +1,39 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { LanguageProvider } from './i18n/LanguageContext'
 import { supabase } from './lib/supabase'
 import { track } from './lib/analytics'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
-import Landing from './pages/Landing'
-import HowItWorks from './pages/HowItWorks'
-import Partners from './pages/Partners'
-import ForDoctors from './pages/ForDoctors'
-import ForPharmacy from './pages/ForPharmacy'
-import ForLabs from './pages/ForLabs'
-import ForAmbulance from './pages/ForAmbulance'
-import ForInsurance from './pages/ForInsurance'
-import ForHospitals from './pages/ForHospitals'
-import SpecialityLanding from './pages/SpecialityLanding'
-import Register from './pages/doctor/Register'
-import DoctorLogin from './pages/doctor/Login'
-import DoctorDashboard from './pages/doctor/Dashboard'
-import DoctorProfile from './pages/doctor/Profile'
-import Points from './pages/Points'
-import PartnerRegister from './pages/Partner'
 import PatientHome from './pages/PatientHome'
-import BusinessLanding from './pages/business/BusinessLanding'
-import BusinessRegister from './pages/business/BusinessRegister'
-import InvoicePage from './pages/InvoicePage'
-import AdminLogin from './pages/admin/Login'
-import AdminDashboard from './pages/admin/Dashboard'
 import EnvBanner from './components/EnvBanner'
 import { WA_NUMBER } from './types'
+
+// Loaded on demand. Everything used to ship in one 865 kB chunk, so a patient
+// opening the homepage from a WhatsApp link downloaded the admin dashboard, the
+// billing screens and the signup wizard before seeing anything. PatientHome
+// stays eager — it is the first paint for almost everyone who arrives.
+const Landing = lazy(() => import('./pages/Landing'))
+const HowItWorks = lazy(() => import('./pages/HowItWorks'))
+const Partners = lazy(() => import('./pages/Partners'))
+const ForDoctors = lazy(() => import('./pages/ForDoctors'))
+const ForPharmacy = lazy(() => import('./pages/ForPharmacy'))
+const ForLabs = lazy(() => import('./pages/ForLabs'))
+const ForAmbulance = lazy(() => import('./pages/ForAmbulance'))
+const ForInsurance = lazy(() => import('./pages/ForInsurance'))
+const ForHospitals = lazy(() => import('./pages/ForHospitals'))
+const SpecialityLanding = lazy(() => import('./pages/SpecialityLanding'))
+const Register = lazy(() => import('./pages/doctor/Register'))
+const DoctorLogin = lazy(() => import('./pages/doctor/Login'))
+const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
+const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
+const Points = lazy(() => import('./pages/Points'))
+const PartnerRegister = lazy(() => import('./pages/Partner'))
+const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
+const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
+const InvoicePage = lazy(() => import('./pages/InvoicePage'))
+const AdminLogin = lazy(() => import('./pages/admin/Login'))
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
 
 // ── SECURITY: Admin URL is intentionally non-obvious ──
 // Never link this path from Navbar, Footer, sitemap,
@@ -122,6 +127,11 @@ export default function App() {
         {/* Outside <Routes> so the sandbox warning is present on every page,
             including the full-bleed ones that opt out of Navbar/Footer. */}
         <EnvBanner />
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">
+            Loading…
+          </div>
+        }>
         <Routes>
           {/* Public — new Warm Care customer homepage (Sehatsandhi.dc.html).
               No site nav/footer: patients land here from a WhatsApp/SMS link
@@ -167,6 +177,7 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
 
         <PageViewTracker />
         <WhatsAppFloat />
