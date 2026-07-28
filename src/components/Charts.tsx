@@ -42,11 +42,35 @@ export interface Point { label: string; value: number; hint?: string }
  * Columns rather than a line: these are discrete daily totals, often small
  * integers, and a line between them implies a continuity that days do not have.
  */
-export function ColumnChart({ data, height = 140, title }: {
+/**
+ * Above this many points a phone cannot give each bar a usable width, so they
+ * are summed into weeks instead. 90 daily bars need ~640px; 13 weekly ones fit
+ * anywhere. Scrolling the chart sideways was the alternative and is worse — it
+ * fights the page's own scroll under a thumb, and it hid two thirds of the
+ * range behind a gesture nobody knew was there.
+ */
+const MAX_BARS = 45
+
+function bucketByWeek(data: Point[]): { data: Point[]; weekly: boolean } {
+  if (data.length <= MAX_BARS) return { data, weekly: false }
+  const out: Point[] = []
+  for (let i = 0; i < data.length; i += 7) {
+    const week = data.slice(i, i + 7)
+    out.push({
+      label: week[0].label,
+      value: week.reduce((a, d) => a + d.value, 0),
+      hint: `week of ${week[0].label}`,
+    })
+  }
+  return { data: out, weekly: true }
+}
+
+export function ColumnChart({ data: raw, height = 140, title }: {
   data: Point[]
   height?: number
   title?: string
 }) {
+  const { data, weekly } = bucketByWeek(raw)
   const max = Math.max(1, ...data.map(d => d.value))
   const allZero = data.every(d => d.value === 0)
 
@@ -59,32 +83,31 @@ export function ColumnChart({ data, height = 140, title }: {
         </div>
       ) : (
         <>
-          {/* Scrolls rather than shrinks.
-              These were flex-1 with no minimum, so 90 days on a 360px phone gave
-              each bar under 2px — the chart rendered but was invisible, which is
-              worse than an empty state because it looks like a bug in the data.
-              A 5px floor keeps every bar a bar; the row scrolls when they no
-              longer fit, and still fills the width when they do. */}
-          <div className="overflow-x-auto -mx-1 px-1">
-            <div className="flex items-end gap-[2px]" style={{ height, minWidth: '100%' }}>
-              {data.map((d, i) => (
-                <div key={i}
-                  title={`${d.label}: ${d.value.toLocaleString('en-IN')}${d.hint ? ` · ${d.hint}` : ''}`}
-                  className="flex-1 rounded-t transition-opacity hover:opacity-70"
-                  style={{
-                    minWidth: 5,
-                    // A zero day keeps a 2px stub so the axis reads as continuous
-                    // rather than looking like missing data.
-                    height: `${Math.max(d.value === 0 ? 2 : 6, (d.value / max) * height)}px`,
-                    background: d.value === 0 ? '#e5e7eb' : SERIES,
-                    borderTopLeftRadius: 4, borderTopRightRadius: 4,
-                  }} />
-              ))}
-            </div>
+          {/* No horizontal scroll: bucketByWeek keeps the count low enough that
+              every bar fits at a usable width. The 4px floor is a backstop for a
+              very narrow viewport — a bar must always be a bar, never a hairline
+              that reads as broken data rather than as no data. */}
+          <div className="flex items-end gap-[2px]" style={{ height }}>
+            {data.map((d, i) => (
+              <div key={i}
+                title={`${d.hint ?? d.label}: ${d.value.toLocaleString('en-IN')}`}
+                className="flex-1 rounded-t transition-opacity hover:opacity-70"
+                style={{
+                  minWidth: 4,
+                  // A zero keeps a 2px stub so the axis reads as continuous
+                  // rather than looking like missing data.
+                  height: `${Math.max(d.value === 0 ? 2 : 6, (d.value / max) * height)}px`,
+                  background: d.value === 0 ? '#e5e7eb' : SERIES,
+                  borderTopLeftRadius: 4, borderTopRightRadius: 4,
+                }} />
+            ))}
           </div>
           <div className="flex justify-between text-[11px] text-gray-400 mt-2 gap-2">
             <span className="truncate">{data[0]?.label}</span>
-            <span className="shrink-0">peak {max.toLocaleString('en-IN')}</span>
+            {/* Say when bars stopped being days, or the numbers look inflated. */}
+            <span className="shrink-0">
+              {weekly ? `weekly · peak ${max.toLocaleString('en-IN')}` : `peak ${max.toLocaleString('en-IN')}`}
+            </span>
             <span className="truncate text-right">{data[data.length - 1]?.label}</span>
           </div>
         </>
