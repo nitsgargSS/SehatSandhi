@@ -543,22 +543,50 @@ export default function BusinessRegister() {
                             ) : null}
                           </p>
 
+                          {/* Grouped per doctor. Stacked as four bare fields the
+                              remove button ended up orphaned on its own line and
+                              nothing showed which doctor it belonged to — three
+                              doctors read as twelve unrelated inputs. Each is a
+                              card on mobile, one row from sm up. */}
                           {hospDoctors.map((doc, i) => (
-                            <div key={i} className="grid gap-2 grid-cols-1 sm:grid-cols-[1.4fr_1fr_1fr_auto]" style={{ marginBottom: 10 }}>
-                              <input placeholder="Doctor's name" value={doc.name}
-                                onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, name: e.target.value } : d))}
-                                style={hospInput} />
-                              <select value={doc.speciality}
-                                onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, speciality: e.target.value } : d))}
-                                style={hospInput}>
-                                {SPECIALITIES.map(sp => <option key={sp.id} value={sp.id}>{sp.en}</option>)}
-                              </select>
-                              <input placeholder="Qualification" value={doc.qualification ?? ''}
-                                onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, qualification: e.target.value } : d))}
-                                style={hospInput} />
-                              <button onClick={() => setHospDoctors(list => list.filter((_, j) => j !== i))}
-                                style={{ ...hospInput, width: 44, cursor: 'pointer', color: '#d94848', fontWeight: 800, borderColor: '#f0d9d9' }}
-                                title="Remove">×</button>
+                            <div key={i}
+                              style={{
+                                border: `1px solid ${BIZ.border}`, borderRadius: 14,
+                                padding: 12, marginBottom: 10, background: '#fdfcfa',
+                              }}
+                              className="sm:border-0 sm:p-0 sm:bg-transparent sm:rounded-none">
+                              <div className="flex items-center justify-between mb-2 sm:hidden">
+                                <span style={{ fontSize: 12.5, fontWeight: 800, color: BIZ.mutedWarm, letterSpacing: '.04em' }}>
+                                  DOCTOR {i + 1}
+                                </span>
+                                <button onClick={() => setHospDoctors(list => list.filter((_, j) => j !== i))}
+                                  style={{
+                                    border: 'none', background: 'transparent', cursor: 'pointer',
+                                    color: '#d94848', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
+                                    padding: '2px 4px',
+                                  }}>
+                                  Remove
+                                </button>
+                              </div>
+                              <div className="grid gap-2 grid-cols-1 sm:grid-cols-[1.4fr_1fr_1fr_auto]">
+                                <input placeholder="Doctor's name" value={doc.name}
+                                  onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, name: e.target.value } : d))}
+                                  style={hospInput} />
+                                <select value={doc.speciality}
+                                  onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, speciality: e.target.value } : d))}
+                                  style={hospInput}>
+                                  {SPECIALITIES.map(sp => <option key={sp.id} value={sp.id}>{sp.en}</option>)}
+                                </select>
+                                <input placeholder="Qualification" value={doc.qualification ?? ''}
+                                  onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, qualification: e.target.value } : d))}
+                                  style={hospInput} />
+                                {/* The × only exists from sm up, where the row
+                                    layout gives it a column of its own. */}
+                                <button onClick={() => setHospDoctors(list => list.filter((_, j) => j !== i))}
+                                  className="hidden sm:block"
+                                  style={{ ...hospInput, width: 44, cursor: 'pointer', color: '#d94848', fontWeight: 800, borderColor: '#f0d9d9' }}
+                                  title="Remove">×</button>
+                              </div>
                             </div>
                           ))}
 
