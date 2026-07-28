@@ -13,6 +13,7 @@ import {
 } from '../../lib/businessApi'
 import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
 import { useTaxSettings, localTax, isValidGstin } from '../../hooks/useTaxSettings'
+import { track } from '../../lib/analytics'
 
 // Design 2b — 4-step onboarding wizard.
 // Layout: desktop = dark left step-rail + content pane; tablet (<900px) =
@@ -85,6 +86,10 @@ export default function BusinessRegister() {
   // GST, from tax_settings. Zero while it is switched off, so the wizard shows
   // exactly what will be charged either way.
   const tax = useTaxSettings()
+
+  // Entering the wizard is the top of the sales funnel; comparing this against
+  // paid listings is what shows where signups are being lost.
+  useEffect(() => { track('business_lead') }, [])
 
   // How many months they're buying upfront — always their choice.
   //

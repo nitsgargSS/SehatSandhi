@@ -4,6 +4,7 @@ import { MapPin, ArrowLeft, Star } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES, WA_NUMBER } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
+import { track, trackImpressions } from '../lib/analytics'
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '-')
 
@@ -39,6 +40,15 @@ export default function SpecialityLanding() {
         .contains('pin_codes', [area.code])
 
       const docs = data || []
+      // Every search, whether or not it found anyone. The zero-result ones are
+      // the most valuable: they are demand_by_area's unserved markets.
+      track('search', { speciality: speciality.id, pinCode: area.code })
+      // One impression per listing shown — the denominator that turns "12 profile
+      // views" into "12 out of 240", which is what tells a business the problem
+      // is their photo rather than their pricing.
+      if (docs.length) {
+        trackImpressions(docs.map(d => d.id), { speciality: speciality.id, pinCode: area.code })
+      }
       if (docs.length > 0) {
         const { data: ratings } = await supabase
           .from('rating_aggregate')
