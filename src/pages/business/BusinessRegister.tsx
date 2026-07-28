@@ -37,6 +37,11 @@ import { headcountFor, applyHeadcount, describeDoctorRate } from '../../../supab
 
 const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 
+// What a doctor may pick. LAB and PHRM are excluded deliberately: they are
+// separate verticals with their own signup and their own billing, and choosing
+// one here would bill a doctor as a diagnostics centre.
+const DOCTOR_SPECIALITIES = SPECIALITIES.filter(s => s.id !== 'LAB' && s.id !== 'PHRM')
+
 // Compact row input for the consultant list — narrower than the main Field so
 // four of them fit one line on a laptop.
 const hospInput: React.CSSProperties = {
@@ -131,6 +136,19 @@ export default function BusinessRegister() {
   const toggleZip = (pin: string) =>
     setZips(s => (s.includes(pin) ? s.filter(p => p !== pin) : [...s, pin]))
 
+  // ── Area picker ──
+  // Twenty areas as twenty large cards was a wall, especially on a phone where
+  // they stack. A filter, two bulk actions and one compact row each turns it
+  // into a list you can scan. Under a flat plan "select all" is usually the
+  // right answer anyway, so it is one tap away.
+  const [areaQuery, setAreaQuery] = useState('')
+  const visibleAreas = useMemo(() => {
+    const q = areaQuery.trim().toLowerCase()
+    if (!q) return coverage
+    return coverage.filter(z =>
+      z.area_name.toLowerCase().includes(q) || z.pin_code.includes(q))
+  }, [coverage, areaQuery])
+
   // ── Live pricing: prefer the server (authoritative); fall back to a local
   //    sum when the backend isn't configured or is unreachable. ──
   const localPrice: PriceResult = useMemo(() => {
@@ -198,13 +216,19 @@ export default function BusinessRegister() {
   // ── Step validation ──
   const stepValid = (s: number): boolean => {
     if (s === 1) return !!vertical
-    if (s === 2) return !!(form.business_name?.trim() && form.phone?.trim())
+    // A doctor without a speciality is unsearchable — patients match on it
+    // exactly — so it is required rather than defaulted to something wrong.
+    if (s === 2) return !!(form.business_name?.trim() && form.phone?.trim()
+      && (vertical !== 'doctors' || form.speciality))
     if (s === 3) return zips.length > 0
     return true
   }
   const nextStep = () => {
     if (!stepValid(step)) {
-      setError(step === 2 ? 'Please enter at least a business name and WhatsApp number.'
+      setError(step === 2
+        ? (vertical === 'doctors' && !form.speciality
+            ? 'Please choose a speciality — it is how patients find you.'
+            : 'Please enter at least a business name and WhatsApp number.')
         : step === 3 ? 'Select at least one pincode to continue.' : 'Please complete this step.')
       return
     }
@@ -290,7 +314,11 @@ export default function BusinessRegister() {
 
     const { data, error: insErr } = await supabase.rpc('create_listing', {
       p_name: form.business_name || form.owner_name || 'Business',
-      p_speciality: verticalObj.dbSpeciality,
+      // The doctor's own speciality when they chose one; the vertical's own code
+      // otherwise (PHARMACY, LAB, …), which is what identifies those businesses.
+      p_speciality: vertical === 'doctors' && form.speciality
+        ? form.speciality
+        : verticalObj.dbSpeciality,
       p_clinic_name: form.business_name || form.owner_name,
       p_address: form.address || '',
       p_pin_codes: zips,
@@ -512,7 +540,34 @@ export default function BusinessRegister() {
                         <Field label="Business name *" placeholder="e.g. Aggarwal Eye Care" value={form.business_name} onChange={v => upd('business_name', v)} />
                         <Field label="Owner / contact name" placeholder="e.g. Dr. Ramesh Aggarwal" value={form.owner_name} onChange={v => upd('owner_name', v)} />
                         <Field label="WhatsApp number *" placeholder="+91 " value={form.phone} onChange={v => upd('phone', v)} type="tel" inputMode="tel" autoComplete="tel" />
-                        <Field label="Category / speciality" placeholder="e.g. Ophthalmology" value={form.category} onChange={v => upd('category', v)} />
+                        {/* A dropdown, and it is now saved. This was free text
+                            that create_listing ignored — every doctor was stored
+                            as GEN, so a cardiologist never appeared in a
+                            cardiology search. Patients match on this exact value. */}
+                        {vertical === 'doctors' ? (
+                          <div>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: BIZ.ink, marginBottom: 7 }}>
+                              Speciality *
+                            </label>
+                            <select value={form.speciality ?? ''}
+                              onChange={e => upd('speciality', e.target.value)}
+                              style={{
+                                width: '100%', padding: '13px 14px', borderRadius: 12,
+                                border: `1.5px solid ${BIZ.inputBorder}`, fontFamily: 'inherit',
+                                fontSize: 15, color: form.speciality ? BIZ.ink : BIZ.mutedWarm, background: '#fff',
+                              }}>
+                              <option value="">Choose a speciality…</option>
+                              {DOCTOR_SPECIALITIES.map(sp => (
+                                <option key={sp.id} value={sp.id}>{sp.en}</option>
+                              ))}
+                            </select>
+                            <p style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 6 }}>
+                              This is what patients search by, so pick the one they would look for.
+                            </p>
+                          </div>
+                        ) : (
+                          <Field label="Category / speciality" placeholder="e.g. Ophthalmology" value={form.category} onChange={v => upd('category', v)} />
+                        )}
                         <Field label="Registration number" placeholder="e.g. HR-12345 (optional)" value={form.reg_number} onChange={v => upd('reg_number', v)} />
                         <Field label="Email" placeholder="you@example.com (optional)" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />
                         <div className="sm:col-span-2 xl:col-span-3">
@@ -638,36 +693,92 @@ export default function BusinessRegister() {
                       </p>
                       {/* desktop: grid + sticky summary side by side; tablet: summary below */}
                       <div className="grid gap-6 items-start lg:grid-cols-[1fr_300px]">
-                        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                          {coverage.map(z => {
-                            const on = zips.includes(z.pin_code)
-                            return (
-                              <button key={z.pin_code} onClick={() => toggleZip(z.pin_code)} style={{
-                                textAlign: 'left', padding: '13px 14px', borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
-                                border: `2px solid ${on ? BIZ.green : '#e9e2d5'}`, background: on ? 'rgba(14,159,110,.09)' : '#fff',
+                        <div>
+                          {/* Filter and bulk actions, above the list they act on. */}
+                          <div className="flex gap-2 flex-wrap items-center mb-3">
+                            <input
+                              value={areaQuery}
+                              onChange={e => setAreaQuery(e.target.value)}
+                              placeholder="Search area or pincode…"
+                              style={{
+                                flex: '1 1 180px', minWidth: 0, padding: '10px 13px', borderRadius: 11,
+                                border: `1.5px solid ${BIZ.inputBorder}`, fontFamily: 'inherit',
+                                fontSize: 14, color: BIZ.ink, background: '#fff',
+                              }} />
+                            <button onClick={() => setZips(coverage.map(z => z.pin_code))}
+                              style={{
+                                padding: '10px 14px', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit',
+                                fontSize: 13, fontWeight: 800, border: `1.5px solid ${BIZ.green}`,
+                                background: '#fff', color: BIZ.green, whiteSpace: 'nowrap',
                               }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                  <span style={{ fontSize: 14, fontWeight: 800, color: BIZ.ink }}>{z.area_name}</span>
-                                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: BIZ.green, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flex: '0 0 auto', opacity: on ? 1 : 0 }}>✓</span>
-                                </div>
-                                <div style={{ marginTop: 8 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <span style={{ fontSize: 12, color: BIZ.mutedWarm, fontWeight: 600 }}>{z.pin_code}</span>
-                                    <span style={{ fontSize: 12, color: BIZ.green, fontWeight: 700 }}>{z.population.toLocaleString('en-IN')} residents</span>
-                                  </div>
-                                  <div style={{ fontSize: 11, color: '#a89e8a', fontWeight: 600, marginTop: 4 }}>
-                                    {onCommission
-                                      ? `${z.tier_name} · no monthly fee`
-                                      : plan.mode === 'flat_all_pincodes'
-                                        ? `${z.tier_name} · included`
-                                        : plan.mode === 'flat_per_pincode'
-                                          ? `${z.tier_name} · ₹${(plan.monthly_price ?? 0).toLocaleString('en-IN')}/mo`
-                                          : `${z.tier_name} · ₹${z.monthly_price.toLocaleString('en-IN')}/mo`}
-                                  </div>
-                                </div>
+                              Select all
+                            </button>
+                            {zips.length > 0 && (
+                              <button onClick={() => setZips([])}
+                                style={{
+                                  padding: '10px 14px', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit',
+                                  fontSize: 13, fontWeight: 700, border: `1.5px solid ${BIZ.inputBorder}`,
+                                  background: '#fff', color: BIZ.muted, whiteSpace: 'nowrap',
+                                }}>
+                                Clear
                               </button>
-                            )
-                          })}
+                            )}
+                          </div>
+
+                          {/* Count first, so the choice is visible without
+                              scrolling back through the list. */}
+                          <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 10 }}>
+                            {zips.length === 0
+                              ? `${visibleAreas.length} area${visibleAreas.length === 1 ? '' : 's'} available`
+                              : <><strong style={{ color: BIZ.ink }}>{zips.length} selected</strong>
+                                  {areaQuery && ` · ${visibleAreas.length} matching`}</>}
+                          </div>
+
+                          <div style={{ border: `1px solid ${BIZ.border}`, borderRadius: 14, overflow: 'hidden' }}>
+                            {visibleAreas.length === 0 && (
+                              <div style={{ padding: '18px 14px', fontSize: 14, color: BIZ.mutedWarm, textAlign: 'center' }}>
+                                Nothing matches "{areaQuery}".
+                              </div>
+                            )}
+                            {visibleAreas.map((z, i) => {
+                              const on = zips.includes(z.pin_code)
+                              return (
+                                <button key={z.pin_code} onClick={() => toggleZip(z.pin_code)} style={{
+                                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                                  textAlign: 'left', padding: '11px 13px', cursor: 'pointer',
+                                  fontFamily: 'inherit', border: 'none',
+                                  borderTop: i === 0 ? 'none' : `1px solid ${BIZ.border}`,
+                                  background: on ? 'rgba(14,159,110,.08)' : '#fff',
+                                }}>
+                                  <span style={{
+                                    width: 20, height: 20, borderRadius: 6, flex: '0 0 auto',
+                                    border: `2px solid ${on ? BIZ.green : '#d8cfbd'}`,
+                                    background: on ? BIZ.green : '#fff', color: '#fff',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
+                                  }}>{on ? '✓' : ''}</span>
+                                  <span style={{ flex: 1, minWidth: 0 }}>
+                                    <span style={{ fontSize: 14.5, fontWeight: 700, color: BIZ.ink }}>{z.area_name}</span>
+                                    <span style={{ fontSize: 12.5, color: BIZ.mutedWarm }}> · {z.pin_code}</span>
+                                    <span style={{ display: 'block', fontSize: 12, color: BIZ.mutedWarm, marginTop: 2 }}>
+                                      {z.population.toLocaleString('en-IN')} residents
+                                    </span>
+                                  </span>
+                                  {/* Only show a per-area price when the plan
+                                      actually charges per area — under a flat
+                                      plan it is noise on every row. */}
+                                  <span style={{ fontSize: 12.5, fontWeight: 700, color: BIZ.green, flex: '0 0 auto', textAlign: 'right' }}>
+                                    {onCommission
+                                      ? 'no fee'
+                                      : plan.mode === 'flat_all_pincodes'
+                                        ? 'included'
+                                        : plan.mode === 'flat_per_pincode'
+                                          ? `₹${(plan.monthly_price ?? 0).toLocaleString('en-IN')}/mo`
+                                          : `₹${z.monthly_price.toLocaleString('en-IN')}/mo`}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
                         </div>
                         <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: 22 }} className="lg:sticky lg:top-5">
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
