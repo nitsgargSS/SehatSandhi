@@ -14,6 +14,7 @@ import {
 import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
 import { useTaxSettings, localTax, isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { track } from '../../lib/analytics'
+import { isSandbox } from '../../lib/env'
 // Same file the pricing engine uses, so the quote here and the amount charged
 // cannot describe different models.
 import { headcountFor, applyHeadcount, describeDoctorRate } from '../../../supabase/functions/_shared/headcount'
@@ -375,8 +376,30 @@ export default function BusinessRegister() {
         key: order.keyId, amount: order.amount, currency: order.currency,
         order_id: order.orderId, name: 'Sehatsandhi Business',
         description: `${verticalObj.label} · ${zips.length} pincode${zips.length === 1 ? '' : 's'} · ${months} month${months === 1 ? '' : 's'}`,
-        prefill: { name: form.owner_name || form.business_name, contact: form.phone, email: form.email },
+        // Razorpay wants a bare 10-digit number or +91XXXXXXXXXX with nothing
+        // else in it. Our field is placeholdered "+91 ", so what people type
+        // usually carries a country code and spaces — passed through raw, the
+        // Checkout form can land in a state it will not advance out of.
+        // An unusable value is dropped rather than sent: Checkout then just asks
+        // for it, which is recoverable, where a malformed one is not.
+        prefill: {
+          name: form.owner_name || form.business_name,
+          contact: (() => {
+            const digits = (form.phone ?? '').replace(/\D/g, '')
+            if (digits.length === 10) return digits
+            if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`
+            if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1)
+            return undefined
+          })(),
+          email: form.email || undefined,
+        },
         theme: { color: BIZ.green },
+        // Don't offer to save the card. A business pays for a listing term once
+        // and renews months later, so a stored card buys nothing — and the
+        // tokenisation consent it triggers adds a second OTP screen ("Securely
+        // saving your card") on top of the payment's own, which is a step to
+        // lose people on.
+        remember_customer: false,
         handler: async (r: RazorpayResponse) => {
           const v = await verifyRazorpayPayment({
             orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id,
@@ -492,7 +515,13 @@ export default function BusinessRegister() {
                     <p style={{ fontSize: 13, color: BIZ.muted, margin: '4px 0 12px', lineHeight: 1.6 }}>
                       We've sent the link to your WhatsApp. You can open it any time and save it as a PDF.
                     </p>
-                    <a href={`/invoice/${invoiceToken}`} target="_blank" rel="noreferrer"
+                    {/* Carry the backend choice across the tab boundary.
+                        target="_blank" opens a tab with its own sessionStorage,
+                        where getEnv() falls back to prod — so a sandbox invoice
+                        was being looked up in production and reported invalid.
+                        applyEnvFromUrl() consumes this param and strips it. */}
+                    <a href={`/invoice/${invoiceToken}${isSandbox() ? '?env=sandbox' : ''}`}
+                       target="_blank" rel="noreferrer"
                        style={{ display: 'inline-block', background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 14, padding: '10px 18px', borderRadius: 11 }}>
                       View invoice
                     </a>
