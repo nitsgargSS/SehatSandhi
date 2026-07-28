@@ -1,0 +1,334 @@
+================================================================================
+SEHATSANDHI — WHAT CHANGED ON 28 JULY 2026
+A plain summary for reading. 38 commits, 17 database migrations, both projects.
+================================================================================
+
+Roughly half of today was building what you asked for. The other half was
+finding things that were already broken and had no way of announcing themselves
+— a doctor's speciality that was collected and thrown away, a login that did not
+exist, a counter that under-reported. Those are called out as they come up,
+because they are the ones you could not have seen from the outside.
+
+
+--------------------------------------------------------------------------------
+1. PRICING IS NOW ONE NUMBER YOU CONTROL
+--------------------------------------------------------------------------------
+
+You said the ₹1,000 felt hardcoded and that you wanted a free hand. You were
+right, and it was worse than it looked.
+
+The price was written into the plan's NAME ("Launch offer — ₹1,000/month") and
+into its permanent CODE ("launch_1000"). The website printed the name as its
+headline and the real number just below it, so changing the price in admin gave
+two different prices on one screen — with the stale one in larger type.
+
+There was a second problem you had not seen. The plan carried a cap of 50
+signups, and the queue advances by itself when a cap fills. The 51st business
+would have been quoted ₹2,000 with nobody deciding that. That is the opposite of
+a free hand.
+
+Now: prices live in one editable field in Admin → Billing. Names and codes cannot
+contain an amount — the database refuses it. All seat caps are cleared, so
+nothing moves the price except someone typing one. The change reaches the
+website, the vertical pages and the signup wizard with no deploy.
+
+The term also stopped being forced. Checkout used to preselect five months and
+the landing page advertised the five-month total as though it were the offer. It
+now opens at one month and the business picks.
+
+
+--------------------------------------------------------------------------------
+2. GST IS LIVE
+--------------------------------------------------------------------------------
+
+Configured on both projects: NG Technologies, 06AELPG4279G1ZD, Haryana, 18%,
+SAC 998365. Invoices are numbered gaplessly per financial year.
+
+The GSTIN you first sent began "01", which is the Jammu & Kashmir state code. The
+last character of a GSTIN is a checksum over the rest, and it only balances for
+"06" — so the number was not merely inconsistent with a Haryana address, it was
+not a valid GSTIN at all. Now checked automatically on both our number and any
+customer's.
+
+A business can enter its own GSTIN and claim the 18% back as input credit.
+Nothing had ever asked for it: the field existed in the database and in the tax
+maths, but no input was ever drawn on screen, so every invoice would have gone
+out with no recipient GSTIN. It also meant inter-state was unreachable — a Punjab
+customer would have been charged CGST+SGST on an inter-state supply, which is
+wrong tax rather than a missing convenience.
+
+
+--------------------------------------------------------------------------------
+3. ADMIN LOGIN WAS NOT REAL
+--------------------------------------------------------------------------------
+
+The admin password was compiled into the public JavaScript. "admin@SS2026" sat in
+the file every visitor downloads, next to the "hidden" admin URL. Anyone could
+read both. Treat that password as compromised; it no longer works anywhere.
+
+Admin is now a real Supabase account with a server-side password, and there is a
+change-password screen that asks for the current one first — so an open tab
+cannot be used to lock you out.
+
+The same work uncovered a bug that would have bitten on your first registration:
+the approval queue could not see pending doctors at all, and Activate would have
+written nothing. The dashboard read with the public key, which is only permitted
+to see ACTIVE listings. Nobody had noticed because there were no doctors yet.
+
+The same fault turned out to exist for camps, and for an organisation's
+specialities and subscriptions. Found by auditing all 47 tables. Worth knowing
+why it hid: an empty table and a forbidden table both return nothing, so
+"no rows" proved nothing until rows existed.
+
+
+--------------------------------------------------------------------------------
+4. THE ADMIN PANEL WORKS ON A PHONE NOW
+--------------------------------------------------------------------------------
+
+The sidebar was 224 pixels wide, fixed, and sat on top of the content while also
+pushing it 224 pixels right — leaving about 70 pixels of usable width on a phone.
+Every tab was unreadable, not only the new ones.
+
+Doctors, Camps and Organisations are now cards with the action buttons in reach.
+Approve had been off the right edge behind a sideways scroll with nothing to
+indicate it existed. Other tables still scroll sideways but now say so.
+
+
+--------------------------------------------------------------------------------
+5. REPORTING
+--------------------------------------------------------------------------------
+
+There was no data behind it. A table for site visits existed in the database and
+had never been written to, so any report would have been a chart of zero.
+Recording started today — searches, listing impressions, profile opens, WhatsApp
+taps, signup starts. History cannot be backfilled, which is why it shipped before
+the dashboards.
+
+Nothing personal is stored: no IP, no location, no device fingerprint. The
+session id lives only for the browser tab, so two visits on different days cannot
+be linked to each other.
+
+A clinic sees its own funnel — appeared in search, profile opened, WhatsApp
+tapped, booked — plus what became of those appointments. The ratio is the point:
+"seen 2,418 times, opened 312" tells a clinic its photo is the problem, not its
+price.
+
+You see the platform, plus one view built for your expansion question: what
+patients searched for against whether anyone was listed to serve them. Searches
+you could not answer are drawn in amber. That is the argument for entering a town.
+
+Expect near-empty charts on production for a while — recording started today
+against a site with no traffic.
+
+
+--------------------------------------------------------------------------------
+6. LOCATIONS AND HOURLY WINDOWS
+--------------------------------------------------------------------------------
+
+A doctor sitting in two places could not say so — a listing had one address, so
+"Mon–Wed Jagadhri, Thu–Sat Radaur" was inexpressible and a patient was never told
+which building to walk into. Locations are now their own thing, managed by the
+doctor, free in any pincode as you chose.
+
+Hourly windows were blocked outright by a database rule allowing exactly one
+appointment per doctor per instant. Correct for a 15-minute slot; fatal for a
+12–1 window, where the second patient's booking simply fails. It is replaced by a
+capacity the clinic sets per location — your choice, so a busy OPD can take eight
+an hour where a specialist takes three.
+
+One thing this needs and does not have: the WhatsApp bot is a separate backend
+and has not been updated. Bookings still work and default to the main location,
+but until the bot asks "which clinic?" patients cannot choose one or see hourly
+windows.
+
+
+--------------------------------------------------------------------------------
+7. HOSPITALS
+--------------------------------------------------------------------------------
+
+A hospital registered as one anonymous listing, its doctors were invisible, and
+it paid a single GP's price. The database had the structure for organisations and
+their doctors from the very beginning, and nothing in the app had ever written to
+it.
+
+A hospital now lists its consultants during signup and manages them afterwards.
+Each becomes a real listing — own profile, own calendar, findable by speciality —
+so they inherit everything else with no special casing.
+
+Pricing changed twice today at your direction. It began as "three included, then
+₹300 each", which is why three doctors quoted ₹1,000 when you tested. It is now
+₹1,000 per doctor: three doctors, ₹3,000. Both models remain available as a
+dropdown in admin, because that is a commercial decision, not a code change.
+
+There was a real bug in between. On the pricing step the listing does not exist
+yet, so the server counted zero consultants and returned one doctor's price —
+overriding the local figure that had counted them correctly. At payment the real
+listing is passed and the headcount reappears. You would have been shown ₹1,180
+and charged ₹2,360. Quoting one price and taking another is the worst version of
+a pricing fault, and it was live.
+
+
+--------------------------------------------------------------------------------
+8. SPECIALITY WAS BEING THROWN AWAY
+--------------------------------------------------------------------------------
+
+This is the one worth dwelling on.
+
+"Category / speciality" in the signup form was free text, and the code that
+created the listing never read it. Every doctor was stored as "GEN" regardless of
+what they practise. Patients search on an exact speciality match, so a
+cardiologist registering today would never have appeared in a cardiology search
+— and neither of you would have had any way to notice.
+
+It is now a dropdown, it is saved, and it is required. There is also a way to
+correct it in admin, since anyone registered before today is stored wrongly.
+
+
+--------------------------------------------------------------------------------
+9. CLINICS CAN LOG IN AT ALL
+--------------------------------------------------------------------------------
+
+You asked how a doctor logs in. The answer was that they could not.
+
+There are two signup paths. The old form creates an account with a password. The
+wizard — the one we have been building, the one that takes payment — creates a
+listing and no account whatsoever. So a business could sign up, pay ₹1,180, be
+activated, and have no way to reach the dashboard where its reports, roster,
+GSTIN and appointments live. Production had zero non-admin accounts.
+
+Login is now a six-digit code to the WhatsApp number, which is required at signup
+and is what this audience expects. An unknown number gets the same reply as a
+known one, so the form cannot be used to discover which numbers are businesses.
+Codes are stored hashed, single use, ten-minute expiry, five wrong tries, and a
+sixty-second resend cooldown — without which it is a free SMS cannon pointed at
+any number we hold and billed to us.
+
+One login reaches every listing on that number, so a doctor who also runs a
+pharmacy sees both.
+
+Codes cannot actually be delivered yet — no WhatsApp or SMS provider is
+configured — so sandbox shows the code on screen instead.
+
+
+--------------------------------------------------------------------------------
+10. THE CLINIC DASHBOARD
+--------------------------------------------------------------------------------
+
+Six tabs: Today, Appointments, Schedule, Clinic, Bills, Reports.
+
+Appointments and Bills are new. Before today a clinic could see its twenty most
+recent bookings and nothing else — no history, no patient search, no view of next
+week. Worse, the "This month" figure was counted from those same twenty rows, so
+it silently under-reported for any clinic past its twentieth booking. A wrong
+number presented as fact is worse than a missing screen.
+
+Bills lists every invoice with the tax split spelled out, because that is the
+number a business hands its accountant to claim the credit. Until today the only
+copy was a WhatsApp link sent once at payment.
+
+Different categories now see different tabs. A pharmacy has no appointment book,
+so it was being shown today's consultation slots and two permanent zeroes.
+
+
+--------------------------------------------------------------------------------
+11. PHARMACY, INSURANCE AND AMBULANCE PAY NOTHING MONTHLY
+--------------------------------------------------------------------------------
+
+As you decided today, the flat fee applies to doctors, hospitals and labs only.
+The other three are free to list and owe 10% of billing — which is what their
+pages have always promised. Before this change they were being charged ₹1,000 a
+month while their own pages said "no monthly fee, and if nothing sells you pay
+nothing".
+
+Their signup takes no payment and the wizard shows no Pay button; an attempt to
+charge them is refused by the server.
+
+Two things follow from this. The 10% is a term, not something we can bill — we
+can see a WhatsApp tap but not what a pharmacy dispensed, so until they report
+their billing these are free listings. And because there is no payment, their
+listing stays pending until you approve it, which is the intended gate for drug
+licence and IRDA checks.
+
+
+--------------------------------------------------------------------------------
+12. PAYMENTS
+--------------------------------------------------------------------------------
+
+Razorpay works. A real test payment went end to end: ₹3,540 charged, listing
+activated, price and term locked for the period paid, invoice SS/2026-27/0005
+issued, and the arithmetic reconciling exactly.
+
+A few things had to be fixed to get there. Checkout was offering to save the
+card, which adds a second consent screen with its own OTP — that is the screen
+you got stuck on. The phone number was passed to Razorpay with "+91 " and spaces
+still in it, which their form does not accept. And the invoice link opened in a
+new tab, where the sandbox choice was lost, so a valid invoice reported itself as
+invalid.
+
+A webhook now exists, and it matters more than it sounds. Before it, the entire
+post-payment chain depended on the customer's browser returning from Checkout. If
+their phone died or they closed the tab, Razorpay had the money and we had no
+record: payment stuck pending, listing never activated, no invoice, and you would
+find out when they complained. Every other failure here is recoverable by
+retrying. That one takes money and leaves nothing to retry from.
+
+Still untested: closing the tab mid-payment. A normal payment fires both paths,
+so it does not exercise the webhook's reason for existing.
+
+Production has no Razorpay keys and no webhook yet. Live keys need their own.
+
+
+--------------------------------------------------------------------------------
+13. SITE SPEED
+--------------------------------------------------------------------------------
+
+Every page shipped in one 865 kB bundle, so a patient opening the homepage from a
+WhatsApp link downloaded the admin dashboard, the billing screens and the signup
+wizard before seeing anything. Now 496 kB — 43% less, and it matters on a rural
+connection.
+
+
+--------------------------------------------------------------------------------
+WHAT IS STILL WAITING ON YOU
+--------------------------------------------------------------------------------
+
+1. Regenerate the live Razorpay key. The pair pasted in chat earlier can create
+   charges on your real account.
+
+2. Messaging credentials — AISensy and MSG91, with their DLT templates. Until
+   these exist: login codes are shown on screen rather than sent, appointment
+   notifications queue without going out, and invoice links are not delivered.
+
+3. The WhatsApp bot. It is a separate backend and it is what makes locations and
+   hourly windows real for patients.
+
+4. A CA to confirm the SAC code, and whether a 10% commission model triggers
+   compulsory GST registration under Section 24(vii).
+
+
+--------------------------------------------------------------------------------
+KNOWN GAPS
+--------------------------------------------------------------------------------
+
+- No way to capture what a pharmacy or agent actually billed, so the 10% cannot
+  be invoiced.
+- Appointment notifications only send when a clinic acts from the dashboard;
+  nothing drains the queue on a schedule.
+- Production reporting will be near-empty until there is real traffic.
+
+
+--------------------------------------------------------------------------------
+A NOTE ON WHAT I VERIFIED
+--------------------------------------------------------------------------------
+
+Everything above was checked against the real databases and the deployed
+functions — prices read back after changing them, permissions tested with the
+role actually switched, a real payment put through Razorpay.
+
+What I mostly did NOT do is use the screens in a browser. You found two mobile
+faults that way that I had missed, and after that I started taking screenshots at
+phone width before claiming a layout worked. But most of this document describes
+behaviour proven at the database and API level, not by clicking through it.
+
+A step-by-step testing checklist for the same work is in
+docs/2026-07-28-changes.md if it is useful later.
