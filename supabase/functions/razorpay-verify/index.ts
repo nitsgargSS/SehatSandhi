@@ -13,6 +13,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { fulfilPayment } from '../_shared/fulfilment.ts'
 
 async function hmacSha256Hex(key: string, message: string): Promise<string> {
   const enc = new TextEncoder()
@@ -59,87 +60,22 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
 
-  // Find the payment row by explicit id or by the order id we stored on create.
-  const query = supabase.from('payments').update({
-    status: valid ? 'paid' : 'failed',
-    razorpay_payment_id: paymentId,
-  })
-  const { error: uErr } = paymentRowId
-    ? await query.eq('id', paymentRowId)
-    : await query.eq('razorpay_order_id', orderId)
-  if (uErr) return json({ ok: false, error: uErr.message }, 500)
-
-  if (!valid) return json({ ok: false, error: 'signature mismatch' }, 400)
-
-  // On success, activate the listing and LOCK IN what was sold.
-  //
-  // The price lock is the reason a later plan toggle is safe: the plan code,
-  // monthly price, mode and term dates are copied from the payment onto the
-  // listing, so re-pricing the platform never re-prices a business mid-term.
-  // At term_end they are quoted whatever plan is active then — see the
-  // subscription_renewals_due view.
-  const { data: pay } = await supabase
-    .from('payments')
-    .select('doctor_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end')
-    .eq('razorpay_order_id', orderId)
-    .maybeSingle()
-
-  if (pay?.doctor_id) {
-    const p = pay as {
-      doctor_id: string
-      pricing_plan_code: string | null
-      pricing_mode: string | null
-      monthly_price: number | null
-      period_months: number | null
-      term_start: string | null
-      term_end: string | null
-    }
-    await supabase.from('doctors').update({
-      status: 'active',
-      pricing_plan_code: p.pricing_plan_code,
-      locked_monthly_price: p.monthly_price,
-      locked_mode: p.pricing_mode,
-      months_paid: p.period_months,
-      term_start: p.term_start,
-      term_end: p.term_end,
-      locked_at: new Date().toISOString(),
-    }).eq('id', p.doctor_id)
+  // A bad signature still gets recorded, so a tampered return is visible rather
+  // than silent — but it must never fulfil.
+  if (!valid) {
+    await supabase.from('payments')
+      .update({ status: 'failed', razorpay_payment_id: paymentId })
+      .eq(paymentRowId ? 'id' : 'razorpay_order_id', paymentRowId ?? orderId)
+    return json({ ok: false, error: 'signature mismatch' }, 400)
   }
 
-  // Issue the tax invoice. Deliberately AFTER the payment is marked paid and the
-  // listing activated: if invoicing fails we must not leave a verified payment
-  // looking unverified, and the issuer is idempotent so it can be retried.
-  let invoice: { invoice_number?: string; public_token?: string } | null = null
-  let invoiceError: string | null = null
-  const paymentRow = paymentRowId ?? null
-  try {
-    const targetId = paymentRow ?? (await supabase
-      .from('payments').select('id').eq('razorpay_order_id', orderId).maybeSingle()).data?.id
-    if (targetId) {
-      const { data: inv, error: iErr } = await supabase
-        .rpc('sehat_issue_invoice', { p_payment_id: targetId })
-      if (iErr) invoiceError = iErr.message
-      else invoice = inv as { invoice_number?: string; public_token?: string }
-    }
-  } catch (e) {
-    invoiceError = String((e as Error).message ?? e)
-  }
-
-  // Send the invoice link over WhatsApp and email. Best-effort: a delivery
-  // failure must never fail the payment response, and the business can always
-  // download it from their dashboard.
-  if (invoice?.public_token) {
-    try {
-      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/invoice-send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({ token: invoice.public_token }),
-      })
-    } catch { /* logged on the invoice row by invoice-send */ }
-  }
+  // Shared with razorpay-webhook, which does the same work when the browser
+  // never makes it back. Both are idempotent, so whichever arrives first wins
+  // and the second is a no-op.
+  const result = await fulfilPayment(supabase, { orderId, paymentId, paymentRowId })
+  if (!result.ok) return json({ ok: false, error: result.error }, 500)
+  const invoice = { invoice_number: result.invoiceNumber, public_token: result.invoiceToken }
+  const invoiceError = result.invoiceError
 
   return json({
     ok: true,
