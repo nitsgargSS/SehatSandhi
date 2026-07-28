@@ -167,7 +167,7 @@ export default function AdminDashboard() {
   const [doctors, setDoctors] = useState<DoctorWithOrg[]>([])
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs' | 'coupons' | 'billing' | 'sandbox'>('pending')
+  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs' | 'coupons' | 'billing' | 'account' | 'sandbox'>('pending')
   const [search, setSearch] = useState('')
   const [actionMsg, setActionMsg] = useState('')
   const [expandedDoctorId, setExpandedDoctorId] = useState<string | null>(null)
@@ -496,6 +496,62 @@ export default function AdminDashboard() {
     load()
   }
 
+  // ── Account: change password ──
+  const [pw, setPw] = useState({ current: '', next: '', confirm: '' })
+  const [pwBusy, setPwBusy] = useState(false)
+  const [pwMsg, setPwMsg] = useState('')
+  const [pwErr, setPwErr] = useState('')
+  const [adminEmail, setAdminEmail] = useState('')
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setAdminEmail(data.user?.email ?? ''))
+  }, [])
+
+  const changePassword = async () => {
+    setPwErr(''); setPwMsg('')
+
+    if (pw.next !== pw.confirm) { setPwErr('The two new passwords do not match.'); return }
+    // Supabase's own floor is 6, which is not a password. Length is the only
+    // rule that reliably helps, so ask for length rather than punctuation.
+    if (pw.next.length < 12) { setPwErr('Use at least 12 characters — length matters more than symbols.'); return }
+    if (pw.next === pw.current) { setPwErr('That is the password you already have.'); return }
+    // Without the email the re-auth below fails, and its error message would
+    // blame the current password for something that is not its fault.
+    if (!adminEmail) { setPwErr('Still loading your account — try again in a moment.'); return }
+
+    setPwBusy(true)
+    try {
+      // Re-authenticate first. updateUser() would accept the change on the
+      // strength of the session alone, so anyone who got hold of an open tab
+      // could set a new password and lock the real owner out. Proving the
+      // current password is what makes that impossible.
+      const { error: reauth } = await supabase.auth.signInWithPassword({
+        email: adminEmail, password: pw.current,
+      })
+      if (reauth) { setPwErr('That current password is not right.'); return }
+
+      const { error } = await supabase.auth.updateUser({ password: pw.next })
+      if (error) { setPwErr(error.message); return }
+
+      setPw({ current: '', next: '', confirm: '' })
+      setPwMsg('Password changed. Other devices stay signed in until their sessions expire — use "Sign out everywhere" if one is lost.')
+    } finally {
+      setPwBusy(false)
+    }
+  }
+
+  // For a lost or stolen device: revokes every refresh token for this account,
+  // including this tab's, so everything has to sign in again.
+  const signOutEverywhere = async () => {
+    setPwBusy(true)
+    try {
+      await supabase.auth.signOut({ scope: 'global' })
+      window.location.href = '/ng-ctrl-2026'
+    } finally {
+      setPwBusy(false)
+    }
+  }
+
   // Ends the Supabase session server-side, so the token cannot be replayed from
   // this browser afterwards. The pricing key is dropped too — it is held only
   // for the session that typed it.
@@ -547,6 +603,7 @@ export default function AdminDashboard() {
               { id: 'orgs', label: t('adminDashboardPage.navOrgs'), count: 0, badge: false },
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
               { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
+              { id: 'account', label: 'Account', count: 0, badge: false },
               // Only reachable while pointed at the sandbox backend — the purge
               // it exposes must never be one click away from production data.
               ...(isSandbox() ? [{ id: 'sandbox', label: '🧪 Sandbox', count: 0, badge: false }] : []),
@@ -1728,6 +1785,70 @@ export default function AdminDashboard() {
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          {tab === 'account' && (
+            <div className="space-y-6 max-w-xl">
+              <div>
+                <h2 className="text-2xl font-bold text-navy-700">Account</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Signed in as <strong>{adminEmail || '…'}</strong>
+                </p>
+              </div>
+
+              <div className="card shadow-sm">
+                <h3 className="font-bold text-navy-700 mb-1">Change password</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  This is the password for the admin dashboard. It is stored hashed by Supabase — nobody, including
+                  me, can read it back, so pick something you will not lose.
+                </p>
+
+                {(pwMsg || pwErr) && (
+                  <div className={`rounded-xl p-3 text-sm mb-4 ${pwErr ? 'bg-red-50 text-red-600' : 'bg-teal-50 text-teal-700'}`}>
+                    {pwErr || pwMsg}
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {([
+                    ['current', 'Current password', 'current-password'],
+                    ['next', 'New password', 'new-password'],
+                    ['confirm', 'New password again', 'new-password'],
+                  ] as const).map(([field, label, ac]) => (
+                    <div key={field}>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">{label}</label>
+                      <input className="input-field" type="password" autoComplete={ac}
+                        value={pw[field]}
+                        onChange={e => setPw(p => ({ ...p, [field]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') changePassword() }} />
+                    </div>
+                  ))}
+                  {/* Say the rule before it is broken, not after. */}
+                  <p className={`text-xs ${pw.next && pw.next.length < 12 ? 'text-amber-600' : 'text-gray-400'}`}>
+                    At least 12 characters. A short phrase you will remember beats a short jumble you will not.
+                  </p>
+                </div>
+
+                <button onClick={changePassword}
+                  disabled={pwBusy || !pw.current || !pw.next || !pw.confirm}
+                  className="btn-teal text-sm py-2 px-5 mt-4 disabled:opacity-50">
+                  {pwBusy ? 'Saving…' : 'Change password'}
+                </button>
+              </div>
+
+              <div className="card shadow-sm">
+                <h3 className="font-bold text-navy-700 mb-1">Sign out everywhere</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Ends every signed-in session for this account on every device, including this one. Use it if a
+                  phone or laptop that was signed in is lost — changing the password alone does not close sessions
+                  that are already open.
+                </p>
+                <button onClick={signOutEverywhere} disabled={pwBusy}
+                  className="text-sm font-semibold py-2 px-5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50">
+                  Sign out everywhere
+                </button>
+              </div>
             </div>
           )}
 
