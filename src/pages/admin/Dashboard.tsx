@@ -208,6 +208,40 @@ export default function AdminDashboard() {
   const pTotal = (k: keyof PlatformRow) => platform.reduce((a, r) => a + (Number(r[k]) || 0), 0)
   const dLabel = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
   const specName = (id: string | null) => SPECIALITIES.find(s => s.id === id)?.en ?? id ?? 'Any'
+
+  // ── Changing a listing's speciality ──
+  // Needed because every doctor registered before today was stored as GEN
+  // regardless of what they practise, and patients match on this exact value.
+  // admins_update_doctors (migration 0012) already permits the write.
+  const [specBusy, setSpecBusy] = useState<string | null>(null)
+  const [specMsg, setSpecMsg] = useState('')
+
+  // Specialities that ARE a business vertical. Moving a listing onto one of
+  // these changes how it is billed — a doctor set to PHARMACY stops paying
+  // monthly and starts owing commission — so it is confirmed, not silent.
+  const VERTICAL_SPECIALITIES: Record<string, string> = {
+    GEN: 'doctors', HOSPITAL: 'hospital', LAB: 'lab',
+    PHARMACY: 'pharmacy', INSURANCE: 'insurance', AMBULANCE: 'ambulance',
+  }
+  const verticalOf = (spec: string) => VERTICAL_SPECIALITIES[spec] ?? 'doctors'
+
+  const changeSpeciality = async (doc: Doctor, next: string) => {
+    if (!next || next === doc.speciality) return
+    const from = verticalOf(doc.speciality), to = verticalOf(next)
+    if (from !== to && !window.confirm(
+      `${doc.name} is billed as "${from}". Changing the speciality to ${specName(next)} `
+      + `moves them to "${to}", which changes how they are charged.\n\nContinue?`
+    )) return
+
+    setSpecBusy(doc.id); setSpecMsg('')
+    const { error } = await supabase.from('doctors')
+      .update({ speciality: next }).eq('id', doc.id)
+    setSpecBusy(null)
+    if (error) { setSpecMsg(`Could not change: ${error.message}`); return }
+    setSpecMsg(`${doc.name} is now listed under ${specName(next)}.`)
+    setTimeout(() => setSpecMsg(''), 5000)
+    await load()
+  }
   const [search, setSearch] = useState('')
   const [actionMsg, setActionMsg] = useState('')
   const [expandedDoctorId, setExpandedDoctorId] = useState<string | null>(null)
@@ -717,6 +751,12 @@ export default function AdminDashboard() {
                 value={search} onChange={e => setSearch(e.target.value)} />
             </div>
 
+            {specMsg && (
+              <div className={`rounded-xl p-3 text-sm mb-4 ${specMsg.startsWith('Could not') ? 'bg-red-50 text-red-600' : 'bg-teal-50 text-teal-700'}`}>
+                {specMsg}
+              </div>
+            )}
+
             {loading ? <p className="text-gray-400 text-sm py-8 text-center">{t('adminDashboardPage.loadingText')}</p> :
               filtered.length === 0 ? <p className="text-gray-400 text-sm py-12 text-center">{t('adminDashboardPage.noDoctorsFound')}</p> : (
               <div className="overflow-x-auto">
@@ -737,7 +777,24 @@ export default function AdminDashboard() {
                         <p className="font-medium text-gray-800">{d.name} {d.is_hospital_doctor && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}</p>
                         <p className="text-xs text-gray-400">{d.qualification} · {d.phone}</p>
                       </td>
-                      <td className="py-3 px-2 text-gray-600">{d.speciality}</td>
+                      {/* Editable: patients find a listing by this exact value,
+                          so a wrong one makes the listing invisible rather than
+                          merely mislabelled. */}
+                      <td className="py-3 px-2">
+                        <select
+                          value={d.speciality ?? ''}
+                          disabled={specBusy === d.id}
+                          onChange={e => changeSpeciality(d, e.target.value)}
+                          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 max-w-[170px] disabled:opacity-50"
+                          title="Change what patients search for to find this listing">
+                          {!SPECIALITIES.some(sp => sp.id === d.speciality) && d.speciality && (
+                            <option value={d.speciality}>{d.speciality} (unrecognised)</option>
+                          )}
+                          {SPECIALITIES.map(sp => (
+                            <option key={sp.id} value={sp.id}>{sp.en}</option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="py-3 px-2">
                         <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{d.reg_number}</span>
                       </td>
