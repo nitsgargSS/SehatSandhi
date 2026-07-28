@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
 import { StatTile, ColumnChart, BarList, RangePicker } from '../../components/Charts'
 import { describeHeadcount } from '../../../supabase/functions/_shared/headcount'
+import ScrollableTable from '../../components/ScrollableTable'
 import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
 import EnvSwitcher from '../../components/EnvSwitcher'
@@ -959,7 +960,7 @@ export default function AdminDashboard() {
             <h2 className="font-bold text-navy-700 text-lg mb-5">{t('adminDashboardPage.campsApprovalHeading')}</h2>
             {loading ? <p className="text-gray-400 text-sm py-8 text-center">{t('adminDashboardPage.loadingText')}</p> :
               pendingCamps.length === 0 ? <p className="text-gray-400 text-sm py-12 text-center">{t('adminDashboardPage.campsNoPending')}</p> : (
-              <div className="overflow-x-auto">
+              <ScrollableTable>
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-gray-100 text-gray-400 text-xs">
                     <th className="text-left py-3 px-2">{t('adminDashboardPage.colDoctorCamp')}</th>
@@ -998,7 +999,7 @@ export default function AdminDashboard() {
                     </tr>
                   ))}</tbody>
                 </table>
-              </div>
+              </ScrollableTable>
             )}
           </div>
           )}
@@ -1058,7 +1059,7 @@ export default function AdminDashboard() {
               {organizations.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-12">{t('adminDashboardPage.orgNoneYet')}</p>
               ) : (
-                <div className="overflow-x-auto">
+                <ScrollableTable>
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-gray-100 text-gray-400 text-xs">
                       <th className="text-left py-3 px-2">{t('adminDashboardPage.colOrgName')}</th>
@@ -1095,7 +1096,7 @@ export default function AdminDashboard() {
                       </tr>
                     ))}</tbody>
                   </table>
-                </div>
+                </ScrollableTable>
               )}
             </div>
           )}
@@ -1309,7 +1310,7 @@ export default function AdminDashboard() {
               {coupons.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-12">{t('adminDashboardPage.couponNoneYet')}</p>
               ) : (
-                <div className="overflow-x-auto">
+                <ScrollableTable>
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-gray-100 text-gray-400 text-xs">
                       <th className="text-left py-3 px-2">{t('adminDashboardPage.couponCodeLabel')}</th>
@@ -1355,7 +1356,7 @@ export default function AdminDashboard() {
                       )
                     })}</tbody>
                   </table>
-                </div>
+                </ScrollableTable>
               )}
             </div>
           )}
@@ -1638,7 +1639,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                     )}
-                    <div className="overflow-x-auto">
+                    <ScrollableTable>
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-left text-xs text-gray-500 border-b">
@@ -1755,7 +1756,7 @@ export default function AdminDashboard() {
                           })}
                         </tbody>
                       </table>
-                    </div>
+                    </ScrollableTable>
                   </div>
 
                   {/* Pincode tier prices — used when a pincode_tiers plan is live */}
@@ -1799,7 +1800,7 @@ export default function AdminDashboard() {
                         <strong className="text-amber-700"> The live plan currently suspends all commission.</strong>
                       )}
                     </p>
-                    <div className="overflow-x-auto">
+                    <ScrollableTable>
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-left text-xs text-gray-500 border-b">
@@ -1852,7 +1853,7 @@ export default function AdminDashboard() {
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </ScrollableTable>
                   </div>
 
 
@@ -1940,7 +1941,7 @@ export default function AdminDashboard() {
                         No invoices yet. One is issued automatically when a payment succeeds.
                       </p>
                     ) : (
-                      <div className="overflow-x-auto">
+                      <ScrollableTable>
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="text-left text-xs text-gray-500 border-b">
@@ -1983,7 +1984,7 @@ export default function AdminDashboard() {
                             ))}
                           </tbody>
                         </table>
-                      </div>
+                      </ScrollableTable>
                     )}
                   </div>
 
