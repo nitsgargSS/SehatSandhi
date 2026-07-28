@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { track } from '../../lib/analytics'
+import { PracticeLocation } from '../../types'
 import { useParams, Link } from 'react-router-dom'
 import { MapPin, Clock, CheckCircle2, ArrowLeft, Share2, Copy, Star } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -33,6 +34,7 @@ export default function DoctorProfile() {
   const { slug } = useParams()
   const { t, lang } = useLanguage()
   const [doctor, setDoctor] = useState<Doctor | null>(null)
+  const [locations, setLocations] = useState<PracticeLocation[]>([])
   const [ratingAgg, setRatingAgg] = useState<RatingAgg | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,6 +55,15 @@ export default function DoctorProfile() {
       // A profile open is the signal a business cares most about, and the
       // denominator for "seen 240 times, opened 12".
       if (data?.id) track('doctor_view', { doctorId: data.id, speciality: data.speciality })
+
+      // Every clinic this doctor sits at. A patient who is not told which
+      // building to walk into is the problem multi-location exists to solve.
+      if (data?.id) {
+        const { data: locs } = await supabase.from('practice_locations')
+          .select('*').eq('doctor_id', data.id).eq('is_active', true)
+          .order('is_primary', { ascending: false })
+        setLocations((locs as PracticeLocation[]) || [])
+      }
 
       if (data?.id) {
         const [{ data: agg }, { data: reviewRows }] = await Promise.all([
@@ -206,9 +217,23 @@ export default function DoctorProfile() {
               <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
                 <MapPin className="w-4 h-4 text-teal-500 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-gray-400 mb-0.5">{t('profilePage.labelClinicAddress')}</p>
-                  <p className="text-sm text-gray-700">{doctor.clinic_name}</p>
-                  <p className="text-xs text-gray-500">{doctor.address}</p>
+                  <p className="text-xs text-gray-400 mb-0.5">
+                    {locations.length > 1 ? 'Clinics' : t('profilePage.labelClinicAddress')}
+                  </p>
+                  {locations.length > 0 ? (
+                    locations.map((l, i) => (
+                      <div key={l.id} className={i > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}>
+                        <p className="text-sm text-gray-700">{l.name}</p>
+                        {l.address && <p className="text-xs text-gray-500">{l.address}</p>}
+                        {l.phone && <p className="text-xs text-gray-500">{l.phone}</p>}
+                      </div>
+                    ))
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-700">{doctor.clinic_name}</p>
+                      <p className="text-xs text-gray-500">{doctor.address}</p>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">

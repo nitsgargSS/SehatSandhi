@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { Doctor, Appointment, PIN_CODES } from '../../types'
+import { Doctor, Appointment, PracticeLocation, PIN_CODES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
-import { generateSlotsForDate, DAYS_OF_WEEK, AvailabilityTemplate } from '../../lib/availability'
+import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
 import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 
@@ -73,6 +73,64 @@ export default function DoctorDashboard() {
     if (!error) setDoctor({ ...doctor, gstin: value || undefined })
     setTimeout(() => setGstMsg(''), 4000)
   }
+  // ── Practice locations ──
+  // A doctor may sit in several places. Hours and capacity are per location,
+  // because "Mon-Wed Jagadhri, Thu-Sat Radaur" is the whole point.
+  const [locations, setLocations] = useState<PracticeLocation[]>([])
+  const [activeLoc, setActiveLoc] = useState<string>('')
+  const [locForm, setLocForm] = useState({ name: '', address: '', pin_code: '', phone: '' })
+  const [showAddLoc, setShowAddLoc] = useState(false)
+  const [locBusy, setLocBusy] = useState(false)
+
+  const loadLocations = async (doctorId: string) => {
+    const { data } = await supabase.from('practice_locations')
+      .select('*').eq('doctor_id', doctorId).eq('is_active', true)
+      .order('is_primary', { ascending: false }).order('created_at')
+    const rows = (data as PracticeLocation[]) || []
+    setLocations(rows)
+    setActiveLoc(cur => cur && rows.some(r => r.id === cur) ? cur : (rows[0]?.id ?? ''))
+  }
+
+  const addLocation = async () => {
+    if (!doctor || !locForm.name.trim()) return
+    setLocBusy(true)
+    const { error } = await supabase.from('practice_locations').insert({
+      doctor_id: doctor.id,
+      name: locForm.name.trim(),
+      address: locForm.address.trim() || null,
+      pin_code: locForm.pin_code.trim() || null,
+      phone: locForm.phone.trim() || null,
+      // Never primary on creation: exactly one primary exists and it is the
+      // fallback every un-located booking lands on. Promote deliberately.
+      is_primary: false,
+    })
+    setLocBusy(false)
+    if (!error) {
+      setLocForm({ name: '', address: '', pin_code: '', phone: '' })
+      setShowAddLoc(false)
+      await loadLocations(doctor.id)
+    }
+  }
+
+  const makePrimary = async (id: string) => {
+    if (!doctor) return
+    setLocBusy(true)
+    // Clear first: a partial unique index allows only one primary, so setting
+    // the new one before clearing the old would violate it.
+    await supabase.from('practice_locations').update({ is_primary: false }).eq('doctor_id', doctor.id)
+    await supabase.from('practice_locations').update({ is_primary: true }).eq('id', id)
+    await loadLocations(doctor.id)
+    setLocBusy(false)
+  }
+
+  const deactivateLocation = async (id: string) => {
+    if (!doctor) return
+    setLocBusy(true)
+    await supabase.from('practice_locations').update({ is_active: false }).eq('id', id)
+    await loadLocations(doctor.id)
+    setLocBusy(false)
+  }
+
   const [availability, setAvailability] = useState<AvailabilityTemplate[]>([])
   const [availSaving, setAvailSaving] = useState(false)
   const [availSaved, setAvailSaved] = useState(false)
@@ -115,6 +173,7 @@ export default function DoctorDashboard() {
         setAppointments(appts || [])
         await loadStaff(doc.id)
         await loadCamps(doc.id)
+        await loadLocations(doc.id)
         await loadAvailability(doc.id)
       }
       setLoading(false)
@@ -198,36 +257,57 @@ export default function DoctorDashboard() {
   }
 
   // ── Availability management ──
-  const getDayRow = (dow: number) => availability.find(a => a.day_of_week === dow)
+  // Scoped to the location being edited — otherwise Monday at the branch would
+  // silently show Monday at the main clinic.
+  const getDayRow = (dow: number) =>
+    availability.find(a => a.day_of_week === dow && (a.location_id ?? '') === activeLoc)
 
   const toggleWorkingDay = (dow: number) => {
     const existing = getDayRow(dow)
     if (existing) {
-      setAvailability(prev => prev.filter(a => a.day_of_week !== dow))
+      setAvailability(prev => prev.filter(
+        a => !(a.day_of_week === dow && (a.location_id ?? '') === activeLoc)))
     } else {
       setAvailability(prev => [...prev, {
-        id: `new-${dow}`, doctor_id: doctor?.id || '', day_of_week: dow,
-        start_time: '10:00:00', end_time: '18:00:00', slot_duration_minutes: 15, is_active: true,
+        id: `new-${dow}-${activeLoc}`, doctor_id: doctor?.id || '', location_id: activeLoc,
+        day_of_week: dow,
+        // Hourly by default: patients are given a 12-1 window to arrive in
+        // rather than a 15-minute appointment nobody can keep to.
+        start_time: '10:00:00', end_time: '18:00:00',
+        slot_duration_minutes: 60, slot_capacity: 4, is_active: true,
       }])
     }
   }
 
-  const updateDayRow = (dow: number, field: 'start_time' | 'end_time' | 'slot_duration_minutes', value: string | number) => {
-    setAvailability(prev => prev.map(a => a.day_of_week === dow ? { ...a, [field]: value } : a))
+  const updateDayRow = (
+    dow: number,
+    field: 'start_time' | 'end_time' | 'slot_duration_minutes' | 'slot_capacity',
+    value: string | number,
+  ) => {
+    setAvailability(prev => prev.map(a =>
+      a.day_of_week === dow && (a.location_id ?? '') === activeLoc ? { ...a, [field]: value } : a))
   }
 
   const saveAvailability = async () => {
     if (!doctor) return
     setAvailSaving(true)
-    await supabase.from('doctor_availability').delete().eq('doctor_id', doctor.id)
-    if (availability.length > 0) {
+    // Delete-then-insert scoped to the location being edited. Unscoped, saving
+    // the Radaur branch would delete the main clinic's hours, because the editor
+    // only ever holds the rows for one location.
+    await supabase.from('doctor_availability')
+      .delete().eq('doctor_id', doctor.id).eq('location_id', activeLoc)
+
+    const rows = availability.filter(a => (a.location_id ?? '') === activeLoc)
+    if (rows.length > 0) {
       await supabase.from('doctor_availability').insert(
-        availability.map(a => ({
+        rows.map(a => ({
           doctor_id: doctor.id,
+          location_id: activeLoc || null,
           day_of_week: a.day_of_week,
           start_time: a.start_time,
           end_time: a.end_time,
           slot_duration_minutes: a.slot_duration_minutes,
+          slot_capacity: a.slot_capacity ?? 4,
           is_active: true,
         }))
       )
@@ -260,17 +340,25 @@ export default function DoctorDashboard() {
     }
   }
 
-  // Open slots on the chosen day, excluding this appointment's own slot so a
-  // reschedule doesn't hide the time it is currently on.
-  const reschedSlots = rescheduling
-    ? generateSlotsForDate(
-        availability,
-        new Date(reschedDate + 'T00:00:00'),
-        appointments
-          .filter(a => a.status !== 'cancelled' && a.status !== 'no_show' && a.id !== rescheduling.id)
-          .map(a => a.slot_datetime),
-      ).filter(sl => sl.available)
-    : []
+  // Open windows on the chosen day, from the server.
+  //
+  // sehat_open_windows is the same source the capacity trigger enforces against,
+  // so a window offered here cannot be rejected on submit. The local generator
+  // could only see this doctor's own loaded appointments and knew nothing about
+  // locations, so it would have offered windows that were already full.
+  const [reschedSlots, setReschedSlots] = useState<TimeSlot[]>([])
+  useEffect(() => {
+    if (!rescheduling || !doctor) { setReschedSlots([]); return }
+    let cancelled = false
+    fetchOpenWindows(doctor.id, new Date(reschedDate + 'T00:00:00')).then(w => {
+      if (cancelled) return
+      // Keep the window this appointment already sits on: it is "full" only
+      // because of this booking, and hiding it makes a same-day location change
+      // impossible.
+      setReschedSlots(w.filter(sl => sl.available || sl.datetime === rescheduling.slot_datetime))
+    })
+    return () => { cancelled = true }
+  }, [rescheduling, reschedDate, doctor])
 
   // Today's actual slots, minus already-booked ones — this is
   // now the FIRST thing a doctor sees, not buried in a 5th tab
@@ -474,9 +562,103 @@ export default function DoctorDashboard() {
               </div>
             </div>
 
+            {/* Where you sit. Hours below are set per location. */}
+            <div className="card shadow-sm">
+              <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h3 className="font-bold text-navy-700">Your locations</h3>
+                {!showAddLoc && (
+                  <button onClick={() => setShowAddLoc(true)} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
+                    <Plus className="w-4 h-4" /> Add location
+                  </button>
+                )}
+              </div>
+              <p className="text-gray-500 text-sm mb-4">
+                If you sit at more than one clinic, add each one here. Patients are told which building to
+                come to, and you set separate hours for each below. There is no extra charge for a second
+                location.
+              </p>
+
+              {showAddLoc && (
+                <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input className="input-field text-sm" placeholder="Name, e.g. Radaur branch"
+                      value={locForm.name} onChange={e => setLocForm(f => ({ ...f, name: e.target.value }))} />
+                    <input className="input-field text-sm" placeholder="Phone at this clinic (optional)"
+                      value={locForm.phone} onChange={e => setLocForm(f => ({ ...f, phone: e.target.value }))} />
+                    <input className="input-field text-sm sm:col-span-2" placeholder="Full address"
+                      value={locForm.address} onChange={e => setLocForm(f => ({ ...f, address: e.target.value }))} />
+                    <input className="input-field text-sm" placeholder="PIN code"
+                      value={locForm.pin_code} onChange={e => setLocForm(f => ({ ...f, pin_code: e.target.value }))} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={addLocation} disabled={locBusy || !locForm.name.trim()}
+                      className="btn-teal text-sm py-2 px-5 disabled:opacity-50">
+                      {locBusy ? 'Saving…' : 'Add'}
+                    </button>
+                    <button onClick={() => setShowAddLoc(false)}
+                      className="text-sm text-gray-500 px-4">Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {locations.map(l => (
+                  <div key={l.id} className="flex items-center gap-3 flex-wrap border border-gray-100 rounded-xl p-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-navy-700 flex items-center gap-2">
+                        {l.name}
+                        {l.is_primary && (
+                          <span className="text-[10px] font-bold text-teal-700 bg-teal-100 px-1.5 py-0.5 rounded">MAIN</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {[l.address, l.pin_code].filter(Boolean).join(', ') || 'No address yet'}
+                        {l.phone ? ` · ${l.phone}` : ''}
+                      </div>
+                    </div>
+                    {!l.is_primary && (
+                      <>
+                        <button onClick={() => makePrimary(l.id)} disabled={locBusy}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-50">
+                          Make main
+                        </button>
+                        <button onClick={() => deactivateLocation(l.id)} disabled={locBusy}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 disabled:opacity-50">
+                          Remove
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* The main location is where any booking that does not name one
+                  lands, so it cannot be removed — only replaced. */}
+              <p className="text-xs text-gray-400 mt-3">
+                Your main location receives any booking that does not name a clinic. Make another one main
+                first if you want to remove it.
+              </p>
+            </div>
+
             <div className="card shadow-sm">
               <h3 className="font-bold text-navy-700 mb-1">{t('dashboardPage.availabilityHeading')}</h3>
-              <p className="text-gray-500 text-sm mb-5">{t('dashboardPage.availabilityDesc')}</p>
+              <p className="text-gray-500 text-sm mb-4">{t('dashboardPage.availabilityDesc')}</p>
+
+              {locations.length > 1 && (
+                <div className="flex gap-2 flex-wrap mb-4">
+                  {locations.map(l => (
+                    <button key={l.id} onClick={() => setActiveLoc(l.id)}
+                      className={`text-sm font-semibold px-4 py-2 rounded-xl transition ${
+                        activeLoc === l.id ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="bg-navy-50 border border-navy-100 rounded-xl p-3 mb-4 text-sm text-navy-700">
+                Patients book an <strong>hourly window</strong> — 12–1, 1–2 and so on — not an exact minute.
+                Set how many patients you can see in one hour and we will stop taking bookings once that
+                hour is full.
+              </div>
 
               <div className="space-y-2 mb-6">
                 {DAYS_OF_WEEK.map(day => {
@@ -501,8 +683,19 @@ export default function DoctorDashboard() {
                             <select className="input-field w-auto text-sm py-1.5"
                               value={row.slot_duration_minutes}
                               onChange={e => updateDayRow(day.value, 'slot_duration_minutes', parseInt(e.target.value))}>
-                              {[10, 15, 20, 30].map(m => <option key={m} value={m}>{m} {t('dashboardPage.minutesSuffix')}</option>)}
+                              {[30, 60, 120].map(m => (
+                                <option key={m} value={m}>
+                                  {m === 60 ? 'Hourly windows' : m === 120 ? '2-hour windows' : 'Half-hourly'}
+                                </option>
+                              ))}
                             </select>
+                            <label className="flex items-center gap-1.5 text-sm text-gray-600">
+                              <input type="number" min={1} max={200}
+                                className="input-field w-16 text-sm py-1.5"
+                                value={row.slot_capacity ?? 4}
+                                onChange={e => updateDayRow(day.value, 'slot_capacity', parseInt(e.target.value) || 1)} />
+                              patients per window
+                            </label>
                           </div>
                         )}
                       </div>
@@ -818,6 +1011,16 @@ export default function DoctorDashboard() {
                       () => rescheduleAppointment(rescheduling.id, sl.datetime, undefined, 'clinic', doctor?.name))}
                     className="text-xs font-semibold px-2 py-2 rounded-lg border-2 border-gray-200 hover:border-teal-400 hover:bg-teal-50 disabled:opacity-50">
                     {sl.time}
+                    {/* Seats left, so a nearly-full window is visible before
+                        moving a patient into it. */}
+                    {sl.seatsLeft != null && (
+                      <span className="block text-[10px] font-normal text-gray-400">
+                        {sl.seatsLeft} left
+                      </span>
+                    )}
+                    {sl.locationName && reschedSlots.some(o => o.locationName !== sl.locationName) && (
+                      <span className="block text-[10px] font-normal text-teal-600">{sl.locationName}</span>
+                    )}
                   </button>
                 ))}
               </div>
