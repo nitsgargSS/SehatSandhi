@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// fix-env-passwords — percent-encode the passwords in .env.migrate in place.
+// fix-env-passwords — percent-encode the passwords in .env.supabase in place.
 //
 // A Supabase-generated password often contains @ # / ? or :, and a literal @
 // makes the URL parse against the wrong host boundary: the pooler then answers
@@ -17,11 +17,11 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { ROOT } from './lib/tables-config.mjs'
 
-const ENV_PATH = join(ROOT, '.env.migrate')
+const ENV_PATH = join(ROOT, '.env.supabase')
 const checkOnly = process.argv.includes('--check')
 
 if (!existsSync(ENV_PATH)) {
-  console.error(`\n  ✗ ${ENV_PATH} not found. Copy .env.migrate.example first.\n`)
+  console.error(`\n  ✗ ${ENV_PATH} not found. Copy .env.supabase.example first.\n`)
   process.exit(1)
 }
 
@@ -60,7 +60,7 @@ for (const key of KEYS) {
 }
 
 if (!changes.length) {
-  console.log('\n  ✓ Passwords in .env.migrate are already correctly encoded.\n')
+  console.log('\n  ✓ Passwords in .env.supabase are already correctly encoded.\n')
   process.exit(0)
 }
 
@@ -77,4 +77,4 @@ if (checkOnly) {
 }
 
 writeFileSync(ENV_PATH, updated)
-console.log('\n  ✓ .env.migrate updated. Verify with:  node scripts/migrate.mjs status --env prod\n')
+console.log('\n  ✓ .env.supabase updated. Verify with:  node scripts/migrate.mjs status --env prod\n')

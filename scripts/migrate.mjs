@@ -14,7 +14,7 @@
 //   node scripts/migrate.mjs baseline   --env prod --version 0001_baseline
 //   node scripts/migrate.mjs rebaseline --env prod --version 0001_baseline
 //
-// Connection strings come from .env.migrate (gitignored — they carry passwords):
+// Connection strings come from .env.supabase (gitignored — they carry passwords):
 //   SUPABASE_DB_URL_PROD=postgresql://...
 //   SUPABASE_DB_URL_SANDBOX=postgresql://...
 
@@ -29,7 +29,7 @@ import { assertDbUrls } from './lib/db-url.mjs'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MIGRATIONS_DIR = join(ROOT, 'supabase', 'migrations')
 
-dotenv.config({ path: join(ROOT, '.env.migrate'), quiet: true })
+dotenv.config({ path: join(ROOT, '.env.supabase'), quiet: true })
 
 // ── args ──
 const argv = process.argv.slice(2)
@@ -50,7 +50,7 @@ const dbUrl = process.env[dbUrlKey]
 if (!dbUrl) {
   fail(
     `${dbUrlKey} is not set.\n` +
-    `Create .env.migrate (see .env.migrate.example) with the connection string for ${env}.`
+    `Create .env.supabase (see .env.supabase.example) with the connection string for ${env}.`
   )
 }
 // Catch the two common malformed-URL cases before they surface as a bare DNS

@@ -5,17 +5,16 @@ dist
 *.local
 .DS_Store
 
-# Migration/sync connection strings (contain DB passwords)
-.env.migrate
+# Every Supabase credential the scripts in scripts/ need: the migration/sync
+# connection strings (which carry DB passwords), the sandbox service role key,
+# and the CLI personal access token. That token is the widest of them — it grants
+# full account access, including deploying functions, reading secrets, and
+# creating and deleting projects.
+.env.supabase
 supabase/.temp/
 
-# Supabase CLI personal access token. Grants full account access — deploying
-# functions, reading secrets, creating and deleting projects — so it is a wider
-# credential than the database URLs above, not a narrower one.
-.env.supabase
-
 # Editor swap/backup files — these mirror the buffer contents, so a swap file
-# next to .env.migrate contains the credentials in plaintext even though the
+# next to .env.supabase contains the credentials in plaintext even though the
 # env file itself is ignored.
 *.swp
 *.swo

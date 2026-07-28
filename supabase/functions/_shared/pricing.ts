@@ -180,9 +180,14 @@ export async function resolveVerticalBilling(
 
 /** Clamp a requested term to what the plan allows. Never trust the client's months. */
 export function clampMonths(plan: PricingPlan, requested?: number | null): number {
+  // Falls back to the SHORTEST term, not default_months. default_months only
+  // badges one option as best value in the picker (see migration 0010); using it
+  // here would let an admin's marketing highlight decide how many months a
+  // business is charged for when the client sends nothing — the amount charged
+  // must never exceed what was explicitly asked for.
   const n = Number.isFinite(requested) && (requested as number) > 0
     ? Math.floor(requested as number)
-    : plan.default_months
+    : plan.min_months
   return Math.min(plan.max_months, Math.max(plan.min_months, n))
 }
 

@@ -24,7 +24,7 @@ import dotenv from 'dotenv'
 import { ROOT, loadTablesConfig } from './lib/tables-config.mjs'
 import { assertDbUrls } from './lib/db-url.mjs'
 
-dotenv.config({ path: join(ROOT, '.env.migrate'), quiet: true })
+dotenv.config({ path: join(ROOT, '.env.supabase'), quiet: true })
 
 const argv = process.argv.slice(2)
 const has = (n) => argv.includes(`--${n}`)
@@ -39,7 +39,7 @@ const env = flag('env')
 if (!['prod', 'sandbox'].includes(env)) fail('--env must be "prod" or "sandbox"')
 
 const dbUrl = process.env[`SUPABASE_DB_URL_${env.toUpperCase()}`]
-if (!dbUrl) fail(`SUPABASE_DB_URL_${env.toUpperCase()} is not set (see .env.migrate).`)
+if (!dbUrl) fail(`SUPABASE_DB_URL_${env.toUpperCase()} is not set (see .env.supabase).`)
 assertDbUrls([[`SUPABASE_DB_URL_${env.toUpperCase()}`, dbUrl]])
 
 // ── what the repo says the schema is ──

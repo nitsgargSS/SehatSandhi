@@ -81,7 +81,7 @@ export function assertDbUrls(entries) {
   if (all.length) {
     console.error('\n  ✗ Connection string problems:\n')
     all.forEach(p => console.error(`  • ${p}\n`))
-    console.error('  See .env.migrate.example for the expected format.\n')
+    console.error('  See .env.supabase.example for the expected format.\n')
     process.exit(1)
   }
 }

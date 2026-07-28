@@ -211,6 +211,9 @@ export default function AdminDashboard() {
     monthly_price: '', default_months: '1', min_months: '1', max_months: '12',
     max_signups: '', suspend_commission: false, sequence: '900',
   })
+  // The one number that changes most often, given its own field at the top of
+  // the tab rather than buried in a column of the plan table.
+  const [livePriceDraft, setLivePriceDraft] = useState('')
   const [taxSettings, setTaxSettings] = useState<TaxSettingsRow | null>(null)
   const [taxDraft, setTaxDraft] = useState<Record<string, string>>({})
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
@@ -1112,7 +1115,8 @@ export default function AdminDashboard() {
                           : `₹${Number(activePlan.monthly_price ?? 0).toLocaleString('en-IN')}/mo`}
                       </div>
                       <div className="text-xs text-gray-500">
-                        term {activePlan.default_months} mo (allowed {activePlan.min_months}–{activePlan.max_months})
+                        business picks {activePlan.min_months}–{activePlan.max_months} months
+                        {activePlan.default_months > activePlan.min_months && ` · ${activePlan.default_months} shown as best value`}
                         {activePlan.suspend_commission && ' · commission suspended'}
                       </div>
                     </div>
@@ -1152,6 +1156,56 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
+                  {/* Change the price — the single most common edit, so it gets
+                      its own field instead of a column in the table below.
+                      Type a number, save, and /business shows it immediately;
+                      nothing about the price is written into code or copy. */}
+                  {activePlan && activePlan.mode !== 'pincode_tiers' && (
+                    <div className="card shadow-sm">
+                      <h3 className="font-bold text-navy-700 mb-1">Price on the live plan</h3>
+                      <p className="text-sm text-gray-500 mb-3">
+                        What a business pays per month on <strong>{activePlan.label}</strong>. Saving updates
+                        /business, the vertical pages and the signup wizard right away — no deploy. Businesses
+                        already paid keep their locked rate until their term ends.
+                      </p>
+                      <div className="flex gap-2 flex-wrap items-center">
+                        <span className="text-2xl font-bold text-gray-400">₹</span>
+                        <input className="input-field w-40 text-lg font-bold" type="number" min={0} step={100}
+                          placeholder={String(activePlan.monthly_price ?? 0)}
+                          value={livePriceDraft}
+                          onChange={e => setLivePriceDraft(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter' && livePriceDraft !== '') {
+                            runPricingAction('updatePlan',
+                              { planCode: activePlan.code, patch: { monthly_price: Number(livePriceDraft) } },
+                              `${activePlan.label} is now ₹${Number(livePriceDraft).toLocaleString('en-IN')}/month.`)
+                            setLivePriceDraft('')
+                          } }} />
+                        <span className="text-sm text-gray-500">per month</span>
+                        <button
+                          disabled={pricingBusy || livePriceDraft === '' || Number(livePriceDraft) === activePlan.monthly_price}
+                          onClick={() => {
+                            runPricingAction('updatePlan',
+                              { planCode: activePlan.code, patch: { monthly_price: Number(livePriceDraft) } },
+                              `${activePlan.label} is now ₹${Number(livePriceDraft).toLocaleString('en-IN')}/month.`)
+                            setLivePriceDraft('')
+                          }}
+                          className="btn-teal text-sm py-2 px-5 disabled:opacity-50">
+                          {pricingBusy ? 'Saving…' : 'Save price'}
+                        </button>
+                      </div>
+                      {/* Show the business's-eye view of the number being typed,
+                          so GST is never a surprise at the payment screen. */}
+                      {livePriceDraft !== '' && Number(livePriceDraft) >= 0 && (
+                        <p className="text-xs text-gray-500 mt-3">
+                          A business would see <strong>₹{Number(livePriceDraft).toLocaleString('en-IN')}/month</strong>
+                          {taxSettings?.gst_enabled && taxSettings?.gstin
+                            ? <> and pay <strong>₹{Math.round(Number(livePriceDraft) * (1 + Number(taxSettings.gst_rate ?? 18) / 100)).toLocaleString('en-IN')}</strong> for one month, including {Number(taxSettings.gst_rate ?? 18)}% GST.</>
+                            : <> — GST is currently switched off, so that is the whole amount charged.</>}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Plan queue */}
                   <div className="card shadow-sm">
                     <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
@@ -1183,9 +1237,13 @@ export default function AdminDashboard() {
                               onChange={e => setNewPlan(p => ({ ...p, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') }))} />
                           </div>
                           <div>
-                            <label className="text-xs font-medium text-gray-600 mb-1 block">Label (shown on /business)</label>
-                            <input className="input-field text-sm" placeholder="Festive offer — ₹1,500/month"
+                            <label className="text-xs font-medium text-gray-600 mb-1 block">Name (shown on /business)</label>
+                            <input className="input-field text-sm" placeholder="Festive offer"
                               value={newPlan.label} onChange={e => setNewPlan(p => ({ ...p, label: e.target.value }))} />
+                            <p className="text-[11px] text-gray-400 mt-1">
+                              A name, not a price. The ₹ figure is rendered from the field below, so a price typed
+                              here would contradict it the next time you change the rate — it is rejected.
+                            </p>
                           </div>
                           <div className="sm:col-span-2">
                             <label className="text-xs font-medium text-gray-600 mb-1 block">Description</label>
@@ -1210,8 +1268,13 @@ export default function AdminDashboard() {
                               value={newPlan.monthly_price}
                               onChange={e => setNewPlan(p => ({ ...p, monthly_price: e.target.value }))} />
                           </div>
-                          {([['default_months', 'Suggested term (months)'], ['min_months', 'Min months'],
-                             ['max_months', 'Max months'], ['max_signups', 'Seat cap (blank = unlimited)'],
+                          {/* default_months only badges one option as best value.
+                              Checkout always opens at the minimum, so nobody is
+                              pre-committed to a term they did not choose. */}
+                          {([['default_months', 'Highlight term as "best value" (= min for none)'],
+                             ['min_months', 'Shortest term a business may buy'],
+                             ['max_months', 'Longest term a business may buy'],
+                             ['max_signups', 'Seat cap (blank = unlimited)'],
                              ['sequence', 'Queue position']] as const).map(([f, label]) => (
                             <div key={f}>
                               <label className="text-xs font-medium text-gray-600 mb-1 block">{label}</label>
@@ -1261,7 +1324,9 @@ export default function AdminDashboard() {
                             <th className="pb-2 px-2">Plan</th>
                             <th className="pb-2 px-2">Mode</th>
                             <th className="pb-2 px-2">₹/month</th>
-                            <th className="pb-2 px-2">Term (def/min/max)</th>
+                            <th className="pb-2 px-2" title="highlighted / shortest / longest — checkout opens at the shortest">
+                              Months (best-value/min/max)
+                            </th>
                             <th className="pb-2 px-2">Seats</th>
                             <th className="pb-2 px-2">Enrolled</th>
                             <th className="pb-2 px-2 text-center">Actions</th>

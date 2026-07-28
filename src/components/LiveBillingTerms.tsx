@@ -31,8 +31,8 @@ export default function LiveBillingTerms({ vertical }: { vertical: VerticalKey }
     } else {
       terms.push('Monthly listing fee, set by the population of the pincodes you choose')
     }
-    if (plan.default_months > 1) {
-      terms.push(`Pay ${plan.default_months} months upfront and your rate is held for the whole term`)
+    if (plan.max_months > plan.min_months) {
+      terms.push(`Pay for ${plan.min_months}–${plan.max_months} months — you pick the term, and your rate is held for whatever you pay`)
     }
   } else {
     terms.push('No monthly listing fee')

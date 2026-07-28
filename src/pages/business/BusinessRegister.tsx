@@ -86,9 +86,14 @@ export default function BusinessRegister() {
   // exactly what will be charged either way.
   const tax = useTaxSettings()
 
-  // How many months they're buying upfront. Defaults to the plan's term.
-  const [months, setMonths] = useState(plan.default_months)
-  useEffect(() => { setMonths(plan.default_months) }, [plan.default_months])
+  // How many months they're buying upfront — always their choice.
+  //
+  // This used to open at plan.default_months, which was 5, so a business that
+  // wanted one month was pre-committed to five and had to notice the picker to
+  // undo it. It opens at the shortest allowed term instead; default_months only
+  // marks one option as best value (see the ★ below) and never preselects.
+  const [months, setMonths] = useState(plan.min_months)
+  useEffect(() => { setMonths(plan.min_months) }, [plan.min_months])
   const monthOptions = Array.from(
     { length: Math.max(1, plan.max_months - plan.min_months + 1) },
     (_, i) => plan.min_months + i,
@@ -603,7 +608,8 @@ export default function BusinessRegister() {
                         <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
                           <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>How many months would you like to pay for?</div>
                           <p style={{ fontSize: 13, color: BIZ.muted, margin: '0 0 14px', lineHeight: 1.6 }}>
-                            Your rate is locked for the months you pay now. Prices rise as more patients join, so a longer term holds ₹{price.monthlyTotal.toLocaleString('en-IN')}/mo for longer.
+                            Start with {plan.min_months} month{plan.min_months === 1 ? '' : 's'} if you prefer — it is entirely your choice.
+                            Your rate is locked for the months you pay now, so a longer term holds ₹{price.monthlyTotal.toLocaleString('en-IN')}/mo for longer.
                           </p>
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             {monthOptions.map(m => {
@@ -616,17 +622,23 @@ export default function BusinessRegister() {
                                   background: on ? BIZ.green : '#fff',
                                   color: on ? '#fff' : BIZ.ink,
                                 }}>
-                                  {m}{m === plan.default_months ? '★' : ''}
+                                  {m}{m === plan.default_months && plan.default_months > plan.min_months ? '★' : ''}
                                 </button>
                               )
                             })}
                           </div>
-                          <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginTop: 12 }}>
+                          {/* Spell the arithmetic out. With GST on, months × rate
+                              is the taxable value, not the amount charged — one
+                              "=" across both would be wrong by the tax. */}
+                          <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginTop: 12, lineHeight: 1.7 }}>
                             {months} month{months === 1 ? '' : 's'} × ₹{price.monthlyTotal.toLocaleString('en-IN')} ={' '}
-                            <strong style={{ color: BIZ.ink }}>
+                            ₹{(price.monthlyTotal * months).toLocaleString('en-IN')}
+                            {price.tax?.applied && <> + {price.tax.rate}% GST ₹{price.tax.taxTotal.toLocaleString('en-IN')}</>}
+                            <br />
+                            <strong style={{ color: BIZ.ink, fontSize: 15 }}>
                               ₹{(price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months).toLocaleString('en-IN')}
-                            </strong> today{price.tax?.applied ? ` (incl. ${price.tax.rate}% GST)` : ''}
-                            {plan.default_months > 1 && ` · ★ = our suggested ${plan.default_months}-month term`}
+                            </strong> payable today
+                            {plan.default_months > plan.min_months && ` · ★ = best value at ${plan.default_months} months`}
                           </div>
                         </div>
                       )}
