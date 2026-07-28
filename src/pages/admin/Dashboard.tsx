@@ -652,6 +652,60 @@ export default function AdminDashboard() {
     ? doctors.filter(d => !d.organization_id && d.name.toLowerCase().includes(doctorSearch.toLowerCase()))
     : []
 
+  // Rendered by both the desktop table and the mobile cards. Defined once: the
+  // approve/reject buttons are the whole point of this screen, and two copies
+  // would drift the first time one of them changed.
+  const SpecialitySelect = ({ d }: { d: Doctor }) => (
+    <select
+      value={d.speciality ?? ''}
+      disabled={specBusy === d.id}
+      onChange={e => changeSpeciality(d, e.target.value)}
+      className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 w-full md:max-w-[170px] disabled:opacity-50"
+      title="Change what patients search for to find this listing">
+      {!SPECIALITIES.some(sp => sp.id === d.speciality) && d.speciality && (
+        <option value={d.speciality}>{d.speciality} (unrecognised)</option>
+      )}
+      {SPECIALITIES.map(sp => <option key={sp.id} value={sp.id}>{sp.en}</option>)}
+    </select>
+  )
+
+  const DoctorActions = ({ d }: { d: Doctor }) => (
+    <div className="flex gap-1 flex-wrap md:justify-center">
+      <button onClick={() => toggleVerify(d)}
+        className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition ${expandedDoctorId === d.id ? 'bg-navy-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-500'}`}>
+        <Search className="w-3.5 h-3.5" /> {t('adminDashboardPage.verifyButton')}
+      </button>
+      {d.status === 'pending' && <>
+        <button onClick={() => approve(d.id, d.name)}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
+          <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleApprove')}
+        </button>
+        <button onClick={() => openRejectModal('doctor', d.id, d.name)}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
+          <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleReject')}
+        </button>
+      </>}
+      {d.status === 'active' && (
+        <button onClick={() => openRejectModal('doctor', d.id, d.name)}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
+          <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleSuspend')}
+        </button>
+      )}
+      {d.status === 'suspended' && (
+        <button onClick={() => approve(d.id, d.name)}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
+          <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleReactivate')}
+        </button>
+      )}
+    </div>
+  )
+
+  const StatusBadge = ({ status }: { status: string }) => (
+    <span className={status === 'active' ? 'badge-active' : status === 'suspended' ? 'badge-suspended' : 'badge-pending'}>
+      {status}
+    </span>
+  )
+
   // One definition, rendered twice — as the desktop rail and as the mobile strip.
   const NAV_ITEMS = [
 
@@ -759,7 +813,67 @@ export default function AdminDashboard() {
 
             {loading ? <p className="text-gray-400 text-sm py-8 text-center">{t('adminDashboardPage.loadingText')}</p> :
               filtered.length === 0 ? <p className="text-gray-400 text-sm py-12 text-center">{t('adminDashboardPage.noDoctorsFound')}</p> : (
-              <div className="overflow-x-auto">
+              <>
+              {/* Cards below md. The table is 541px wide inside a 278px column on
+                  a phone, so Reg no., Areas, Added, Status and every action
+                  button sat off the right edge behind a sideways scroll nobody
+                  could see — Approve, the one thing this screen is for, included. */}
+              <div className="md:hidden space-y-3">
+                {filtered.map(d => (
+                  <div key={d.id} className="border border-gray-100 rounded-xl p-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-800 leading-snug">
+                          {d.name}
+                          {d.is_hospital_doctor && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}
+                        </p>
+                        <p className="text-xs text-gray-400">{d.qualification} · {d.phone}</p>
+                      </div>
+                      <StatusBadge status={d.status} />
+                    </div>
+
+                    <div className="mb-2"><SpecialitySelect d={d} /></div>
+
+                    <div className="text-xs text-gray-500 space-y-0.5 mb-3">
+                      {d.reg_number && (
+                        <div>Reg <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">{d.reg_number}</span></div>
+                      )}
+                      {d.pin_codes?.length ? <div>Areas: {d.pin_codes.join(', ')}</div> : null}
+                      <div>Added {new Date(d.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div>
+                    </div>
+
+                    <DoctorActions d={d} />
+
+                    {/* The verification panel opens inside the card it belongs
+                        to, rather than as a row of a table that is not rendered. */}
+                    {expandedDoctorId === d.id && (
+                      <div className="bg-navy-50 rounded-lg px-3 py-3 mt-3">
+                        <p className="font-bold text-navy-700 text-sm mb-2">{t('adminDashboardPage.verificationChecklistTitle')}</p>
+                        {NMC_QUALIFICATIONS.includes(d.qualification) ? (
+                          <a href="https://www.nmc.org.in/information-desk/indian-medical-register/" target="_blank" rel="noreferrer"
+                            className="text-teal-600 hover:underline text-sm font-medium inline-block mb-2">
+                            {t('adminDashboardPage.checkNmcLink')}
+                          </a>
+                        ) : (
+                          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-2">
+                            {t('adminDashboardPage.nonNmcWarning')}
+                          </p>
+                        )}
+                        <textarea className="input-field text-sm w-full" rows={3}
+                          placeholder={t('adminDashboardPage.notesPlaceholder')}
+                          value={notesDraft} onChange={e => setNotesDraft(e.target.value)} />
+                        <div className="flex items-center gap-3 mt-2">
+                          <button onClick={() => saveVerificationNotes(d.id)}
+                            className="btn-teal text-xs py-1.5 px-4">{t('adminDashboardPage.saveNotesButton')}</button>
+                          {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-gray-100 text-gray-400 text-xs">
                     <th className="text-left py-3 px-2">{t('adminDashboardPage.colDoctor')}</th>
@@ -781,19 +895,7 @@ export default function AdminDashboard() {
                           so a wrong one makes the listing invisible rather than
                           merely mislabelled. */}
                       <td className="py-3 px-2">
-                        <select
-                          value={d.speciality ?? ''}
-                          disabled={specBusy === d.id}
-                          onChange={e => changeSpeciality(d, e.target.value)}
-                          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 max-w-[170px] disabled:opacity-50"
-                          title="Change what patients search for to find this listing">
-                          {!SPECIALITIES.some(sp => sp.id === d.speciality) && d.speciality && (
-                            <option value={d.speciality}>{d.speciality} (unrecognised)</option>
-                          )}
-                          {SPECIALITIES.map(sp => (
-                            <option key={sp.id} value={sp.id}>{sp.en}</option>
-                          ))}
-                        </select>
+                        <SpecialitySelect d={d} />
                       </td>
                       <td className="py-3 px-2">
                         <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{d.reg_number}</span>
@@ -804,41 +906,8 @@ export default function AdminDashboard() {
                       <td className="py-3 px-2 text-xs text-gray-500">
                         {new Date(d.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       </td>
-                      <td className="py-3 px-2">
-                        <span className={d.status === 'active' ? 'badge-active' : d.status === 'suspended' ? 'badge-suspended' : 'badge-pending'}>
-                          {d.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2">
-                        <div className="flex gap-1 justify-center flex-wrap">
-                          <button onClick={() => toggleVerify(d)}
-                            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition ${expandedDoctorId === d.id ? 'bg-navy-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-500'}`}>
-                            <Search className="w-3.5 h-3.5" /> {t('adminDashboardPage.verifyButton')}
-                          </button>
-                          {d.status === 'pending' && <>
-                            <button onClick={() => approve(d.id, d.name)}
-                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleApprove')}
-                            </button>
-                            <button onClick={() => openRejectModal('doctor', d.id, d.name)}
-                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
-                              <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleReject')}
-                            </button>
-                          </>}
-                          {d.status === 'active' && (
-                            <button onClick={() => openRejectModal('doctor', d.id, d.name)}
-                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
-                              <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleSuspend')}
-                            </button>
-                          )}
-                          {d.status === 'suspended' && (
-                            <button onClick={() => approve(d.id, d.name)}
-                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleReactivate')}
-                            </button>
-                          )}
-                        </div>
-                      </td>
+                      <td className="py-3 px-2"><StatusBadge status={d.status} /></td>
+                      <td className="py-3 px-2"><DoctorActions d={d} /></td>
                     </tr>
                     {expandedDoctorId === d.id && (
                       <tr>
@@ -879,6 +948,7 @@ export default function AdminDashboard() {
                   ))}</tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
           )}
