@@ -22,6 +22,9 @@ export interface Doctor {
   // its first two digits decide CGST+SGST versus IGST. Columns added in
   // migration 0007.
   gstin?: string
+  /** Set when this listing belongs to a hospital. Null for a solo practice. */
+  organization_id?: string | null
+  is_hospital_doctor?: boolean
   gst_legal_name?: string
   state_code?: string
   billing_address?: string

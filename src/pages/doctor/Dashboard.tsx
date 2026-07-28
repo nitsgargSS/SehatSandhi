@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { Doctor, Appointment, PracticeLocation, PIN_CODES } from '../../types'
+import { Doctor, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
@@ -53,6 +53,57 @@ export default function DoctorDashboard() {
 
   // GSTIN, editable by the clinic itself. doctors_update_own already permits a
   // signed-in clinic to update its own row, so this needs no new policy.
+  // ── Hospital roster ──
+  // Only present when this listing belongs to an organisation. A solo practice
+  // never sees any of it.
+  const [roster, setRoster] = useState<Doctor[]>([])
+  const [rosterBusy, setRosterBusy] = useState(false)
+  const [rosterErr, setRosterErr] = useState('')
+  const [showAddDoc, setShowAddDoc] = useState(false)
+  const [docForm, setDocForm] = useState({ name: '', speciality: 'GEN', qualification: '', phone: '' })
+  const [plan, setPlan] = useState<{ included_doctors: number; extra_doctor_price: number } | null>(null)
+
+  const loadRoster = async (orgId: string) => {
+    const { data } = await supabase.from('doctors')
+      .select('*').eq('organization_id', orgId).eq('is_hospital_doctor', true)
+      .order('name')
+    setRoster((data as Doctor[]) || [])
+  }
+
+  const addRosterDoctor = async () => {
+    if (!doctor || !docForm.name.trim()) return
+    setRosterBusy(true); setRosterErr('')
+    const { error } = await supabase.rpc('sehat_org_add_doctor', {
+      p_org_listing_id: doctor.id,
+      p_name: docForm.name.trim(),
+      p_speciality: docForm.speciality,
+      p_qualification: docForm.qualification || null,
+      p_phone: docForm.phone || null,
+    })
+    setRosterBusy(false)
+    if (error) { setRosterErr(error.message); return }
+    setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '' })
+    setShowAddDoc(false)
+    if (doctor.organization_id) await loadRoster(doctor.organization_id)
+  }
+
+  const setRosterStatus = async (id: string, status: 'suspended' | 'active') => {
+    if (!doctor) return
+    setRosterBusy(true); setRosterErr('')
+    const { error } = await supabase.rpc('sehat_org_set_doctor_status', {
+      p_doctor_id: id, p_status: status,
+    })
+    setRosterBusy(false)
+    if (error) { setRosterErr(error.message); return }
+    if (doctor.organization_id) await loadRoster(doctor.organization_id)
+  }
+
+  // Consultants that count towards the bill — suspended ones do not, which is
+  // the whole reason removing one is worth doing promptly.
+  const billableDoctors = roster.filter(d => d.status !== 'suspended').length
+  const extraDoctors = plan ? Math.max(0, billableDoctors - plan.included_doctors) : 0
+  const extraCost = plan ? extraDoctors * plan.extra_doctor_price : 0
+
   const [gstinDraft, setGstinDraft] = useState('')
   const [gstSaving, setGstSaving] = useState(false)
   const [gstMsg, setGstMsg] = useState('')
@@ -174,6 +225,12 @@ export default function DoctorDashboard() {
         await loadStaff(doc.id)
         await loadCamps(doc.id)
         await loadLocations(doc.id)
+        if (doc.organization_id) {
+          await loadRoster(doc.organization_id)
+          const { data: p } = await supabase.from('active_pricing_plan')
+            .select('included_doctors, extra_doctor_price').maybeSingle()
+          if (p) setPlan(p as { included_doctors: number; extra_doctor_price: number })
+        }
         await loadAvailability(doc.id)
       }
       setLoading(false)
@@ -717,6 +774,113 @@ export default function DoctorDashboard() {
         {/* ══════════ CLINIC — staff management + camps & offers ══════════ */}
         {tab === 'clinic' && (
           <div className="space-y-4">
+            {/* Consultants. Only for a hospital — a solo practice never sees this. */}
+            {doctor.organization_id && (
+              <div className="card shadow-sm">
+                <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                  <h3 className="font-bold text-navy-700">Your doctors</h3>
+                  {!showAddDoc && (
+                    <button onClick={() => setShowAddDoc(true)} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
+                      <Plus className="w-4 h-4" /> Add doctor
+                    </button>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 mb-3">
+                  Each doctor gets their own profile and appointment calendar. A new one is checked by our
+                  team before going live, the same as any listing.
+                </p>
+
+                {/* What the roster costs, stated where it is changed rather than
+                    discovered on the next invoice. */}
+                {plan && plan.extra_doctor_price > 0 && (
+                  <div className="bg-navy-50 border border-navy-100 rounded-xl p-3 mb-4 text-sm text-navy-700">
+                    <strong>{billableDoctors}</strong> doctor{billableDoctors === 1 ? '' : 's'} on your bill.
+                    Your plan includes {plan.included_doctors}
+                    {extraDoctors > 0
+                      ? <>, so {extraDoctors} extra {extraDoctors === 1 ? 'adds' : 'add'}{' '}
+                          <strong>₹{extraCost.toLocaleString('en-IN')}/month</strong>.</>
+                      : <> — you are within that, so there is no extra charge.</>}
+                    {' '}A change takes effect from your next renewal, not mid-term.
+                  </div>
+                )}
+
+                {rosterErr && <div className="bg-red-50 text-red-600 text-sm rounded-xl p-3 mb-3">{rosterErr}</div>}
+
+                {showAddDoc && (
+                  <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input className="input-field text-sm" placeholder="Doctor's name"
+                        value={docForm.name} onChange={e => setDocForm(f => ({ ...f, name: e.target.value }))} />
+                      <select className="input-field text-sm" value={docForm.speciality}
+                        onChange={e => setDocForm(f => ({ ...f, speciality: e.target.value }))}>
+                        {SPECIALITIES.map(sp => <option key={sp.id} value={sp.id}>{sp.en}</option>)}
+                      </select>
+                      <input className="input-field text-sm" placeholder="Qualification, e.g. MD"
+                        value={docForm.qualification} onChange={e => setDocForm(f => ({ ...f, qualification: e.target.value }))} />
+                      <input className="input-field text-sm" placeholder="Phone (optional)"
+                        value={docForm.phone} onChange={e => setDocForm(f => ({ ...f, phone: e.target.value }))} />
+                    </div>
+                    {plan && plan.extra_doctor_price > 0 && billableDoctors >= plan.included_doctors && (
+                      <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
+                        Adding this doctor takes you to {billableDoctors + 1}, which adds
+                        ₹{plan.extra_doctor_price.toLocaleString('en-IN')}/month from your next renewal.
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <button onClick={addRosterDoctor} disabled={rosterBusy || !docForm.name.trim()}
+                        className="btn-teal text-sm py-2 px-5 disabled:opacity-50">
+                        {rosterBusy ? 'Adding…' : 'Add'}
+                      </button>
+                      <button onClick={() => { setShowAddDoc(false); setRosterErr('') }}
+                        className="text-sm text-gray-500 px-4">Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {roster.length === 0 && (
+                    <p className="text-sm text-gray-400 py-2">No doctors added yet.</p>
+                  )}
+                  {roster.map(d => {
+                    const suspended = d.status === 'suspended'
+                    return (
+                      <div key={d.id} className={`flex items-center gap-3 flex-wrap border rounded-xl p-3 ${suspended ? 'border-gray-100 bg-gray-50 opacity-70' : 'border-gray-100'}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-navy-700 flex items-center gap-2 flex-wrap">
+                            {d.name}
+                            {d.status === 'pending' && (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">AWAITING APPROVAL</span>
+                            )}
+                            {suspended && (
+                              <span className="text-[10px] font-bold text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded">REMOVED</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {SPECIALITIES.find(sp => sp.id === d.speciality)?.en ?? d.speciality}
+                            {d.qualification ? ` · ${d.qualification}` : ''}
+                            {suspended ? ' · not on your bill' : ''}
+                          </div>
+                        </div>
+                        <button disabled={rosterBusy}
+                          onClick={() => setRosterStatus(d.id, suspended ? 'active' : 'suspended')}
+                          className={`text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50 ${
+                            suspended ? 'bg-teal-50 hover:bg-teal-100 text-teal-700'
+                                      : 'bg-red-50 hover:bg-red-100 text-red-500'}`}>
+                          {suspended ? 'Bring back' : 'Remove'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+                {/* Removing is reversible and keeps history — worth saying, or a
+                    clinic will hesitate to remove someone who has left. */}
+                <p className="text-xs text-gray-400 mt-3">
+                  Removing a doctor takes them off the site and off your bill, and keeps their past
+                  appointments. You can bring them back at any time.
+                </p>
+              </div>
+            )}
+
             {/* GST number — added here as well as in signup, because a business
                 often registers for GST after joining, and without this their
                 only route to a claimable invoice would be asking us to edit the
