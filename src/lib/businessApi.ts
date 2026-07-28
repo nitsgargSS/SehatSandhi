@@ -110,7 +110,9 @@ export const computePrice = (
   doctorId?: string | null,
   vertical?: string | null,
   months?: number | null,
-) => callFn<PriceResult>('compute-price', { pincodes, doctorId, vertical, months })
+  /** Consultants typed into the wizard, before the listing exists to count them. */
+  doctorCount?: number | null,
+) => callFn<PriceResult>('compute-price', { pincodes, doctorId, vertical, months, doctorCount })
 
 export interface RazorpayOrder {
   orderId: string

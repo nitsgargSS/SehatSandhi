@@ -12,7 +12,8 @@
 // or population-tier pricing — times the number of months being bought upfront.
 // Commission is reported separately, since a vertical can owe both or neither.
 //
-// Request:  { pincodes: string[], doctorId?: string, vertical?: string, months?: number }
+// Request:  { pincodes: string[], doctorId?: string, vertical?: string, months?: number,
+//             doctorCount?: number }
 // Response: PriceResult (see _shared/pricing.ts)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -23,7 +24,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
-  let body: { pincodes?: unknown; doctorId?: unknown; vertical?: unknown; months?: unknown }
+  let body: {
+    pincodes?: unknown; doctorId?: unknown; vertical?: unknown
+    months?: unknown; doctorCount?: unknown
+  }
   try {
     body = await req.json()
   } catch {
@@ -45,7 +49,9 @@ Deno.serve(async (req) => {
   )
 
   try {
-    const result = await computePrice(supabase, pincodes, doctorId, vertical, months)
+    // Hint only, and only while there is no listing to count — see computePrice.
+    const doctorCount = Number.isFinite(body.doctorCount) ? Number(body.doctorCount) : null
+    const result = await computePrice(supabase, pincodes, doctorId, vertical, months, doctorCount)
     return json(result)
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)
