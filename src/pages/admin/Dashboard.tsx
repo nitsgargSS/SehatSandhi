@@ -701,6 +701,35 @@ export default function AdminDashboard() {
     </div>
   )
 
+  const CampActions = ({ c }: { c: any }) => (
+    <div className="flex gap-1 flex-wrap md:justify-center">
+      <button onClick={() => approveCamp(c.id, c.title)}
+        className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
+        <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleApprove')}
+      </button>
+      <button onClick={() => openRejectModal('camp', c.id, c.title)}
+        className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
+        <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleReject')}
+      </button>
+    </div>
+  )
+
+  const OrgActions = ({ o }: { o: any }) => (
+    <div className="flex gap-2 flex-wrap items-center md:justify-center">
+      <button onClick={() => openOrgDetail(o.id)}
+        className="text-xs text-teal-600 hover:underline font-medium">{t('adminDashboardPage.viewDetailsButton')}</button>
+      {o.status !== 'active' ? (
+        <button onClick={() => approveOrg(o.id)} className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
+          <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.orgApprove')}
+        </button>
+      ) : (
+        <button onClick={() => suspendOrg(o.id)} className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
+          <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.orgSuspend')}
+        </button>
+      )}
+    </div>
+  )
+
   const StatusBadge = ({ status }: { status: string }) => (
     <span className={status === 'active' ? 'badge-active' : status === 'suspended' ? 'badge-suspended' : 'badge-pending'}>
       {status}
@@ -960,7 +989,33 @@ export default function AdminDashboard() {
             <h2 className="font-bold text-navy-700 text-lg mb-5">{t('adminDashboardPage.campsApprovalHeading')}</h2>
             {loading ? <p className="text-gray-400 text-sm py-8 text-center">{t('adminDashboardPage.loadingText')}</p> :
               pendingCamps.length === 0 ? <p className="text-gray-400 text-sm py-12 text-center">{t('adminDashboardPage.campsNoPending')}</p> : (
-              <ScrollableTable>
+              <>
+              {/* Cards below md: approving a camp is the action this screen
+                  exists for, and in the table it is the last column — off the
+                  right edge of a phone. */}
+              <div className="md:hidden space-y-3">
+                {pendingCamps.map(c => (
+                  <div key={c.id} className="border border-gray-100 rounded-xl p-3">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-medium text-gray-800 leading-snug min-w-0">{c.title}</p>
+                      <span className="text-xs shrink-0 text-gray-500">
+                        {c.camp_type === 'free_camp' ? '🆓 Free Camp' : '💰 Offer'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">{c.doctors?.name}</p>
+                    <p className="text-xs text-gray-400 mb-2">{c.doctors?.clinic_name}</p>
+                    <div className="text-xs text-gray-500 space-y-0.5 mb-3">
+                      <div>
+                        {new Date(c.date_from).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – {new Date(c.date_to).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </div>
+                      {c.pin_codes?.length ? <div>Areas: {c.pin_codes.join(', ')}</div> : null}
+                    </div>
+                    <CampActions c={c} />
+                  </div>
+                ))}
+              </div>
+
+              <ScrollableTable className="hidden md:block">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-gray-100 text-gray-400 text-xs">
                     <th className="text-left py-3 px-2">{t('adminDashboardPage.colDoctorCamp')}</th>
@@ -984,22 +1039,12 @@ export default function AdminDashboard() {
                       <td className="py-3 px-2">
                         <span className="text-xs text-gray-600">{c.pin_codes?.join(', ')}</span>
                       </td>
-                      <td className="py-3 px-2">
-                        <div className="flex gap-1 justify-center">
-                          <button onClick={() => approveCamp(c.id, c.title)}
-                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleApprove')}
-                          </button>
-                          <button onClick={() => openRejectModal('camp', c.id, c.title)}
-                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
-                            <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleReject')}
-                          </button>
-                        </div>
-                      </td>
+                      <td className="py-3 px-2"><CampActions c={c} /></td>
                     </tr>
                   ))}</tbody>
                 </table>
               </ScrollableTable>
+              </>
             )}
           </div>
           )}
@@ -1059,7 +1104,29 @@ export default function AdminDashboard() {
               {organizations.length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-12">{t('adminDashboardPage.orgNoneYet')}</p>
               ) : (
-                <ScrollableTable>
+                <>
+                <div className="md:hidden space-y-3">
+                  {organizations.map(o => (
+                    <div key={o.id} className="border border-gray-100 rounded-xl p-3">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="font-medium text-gray-800 flex items-center gap-1.5 min-w-0">
+                          <Building2 className="w-3.5 h-3.5 text-navy-600 shrink-0" />
+                          <span className="truncate">{o.name}</span>
+                        </p>
+                        <StatusBadge status={o.status} />
+                      </div>
+                      <p className="text-xs text-gray-500 capitalize mb-2">
+                        {o.type.replace('_', ' ')}
+                        {o.phone ? ` · ${o.phone}` : ''}
+                        {' · '}
+                        {doctors.filter(d => d.organization_id === o.id).length} doctors
+                      </p>
+                      <OrgActions o={o} />
+                    </div>
+                  ))}
+                </div>
+
+                <ScrollableTable className="hidden md:block">
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-gray-100 text-gray-400 text-xs">
                       <th className="text-left py-3 px-2">{t('adminDashboardPage.colOrgName')}</th>
@@ -1079,24 +1146,12 @@ export default function AdminDashboard() {
                           <span className={o.status === 'active' ? 'badge-active' : o.status === 'suspended' ? 'badge-suspended' : 'badge-pending'}>{o.status}</span>
                         </td>
                         <td className="py-3 px-2 text-gray-600">{doctors.filter(d => d.organization_id === o.id).length}</td>
-                        <td className="py-3 px-2">
-                          <div className="flex gap-1 justify-center items-center">
-                            <button onClick={() => openOrgDetail(o.id)} className="text-xs text-teal-600 hover:underline font-medium mr-2">{t('adminDashboardPage.viewDetailsButton')}</button>
-                            {o.status !== 'active' ? (
-                              <button onClick={() => approveOrg(o.id)} className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-600 transition text-xs font-medium">
-                                <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.orgApprove')}
-                              </button>
-                            ) : (
-                              <button onClick={() => suspendOrg(o.id)} className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
-                                <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.orgSuspend')}
-                              </button>
-                            )}
-                          </div>
-                        </td>
+                        <td className="py-3 px-2"><OrgActions o={o} /></td>
                       </tr>
                     ))}</tbody>
                   </table>
                 </ScrollableTable>
+                </>
               )}
             </div>
           )}
