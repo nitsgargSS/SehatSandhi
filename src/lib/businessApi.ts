@@ -38,6 +38,10 @@ export interface PriceResult {
   maxMonths: number
 
   /** Commission is independent of the monthly fee — a vertical can owe both. */
+  doctorCount: number
+  includedDoctors: number
+  extraDoctors: number
+  extraDoctorCost: number
   monthlyApplies: boolean
   commissionPercent: number
   commissionBasis: string | null
@@ -120,6 +124,14 @@ export interface RazorpayOrder {
   planLabel: string | null
   termStart: string
   termEnd: string
+}
+
+export interface HospitalDoctor {
+  name: string
+  speciality: string
+  qualification?: string
+  phone?: string
+  consultation_fee?: number
 }
 
 export interface BuyerGstDetails {

@@ -26,6 +26,10 @@ export interface ActivePlan {
   suspend_commission: boolean
   /** Quoted all-in (tax carved out) rather than tax added on top. */
   price_includes_gst: boolean
+  /** Consultants a hospital's base price covers before per-doctor charges start. */
+  included_doctors: number
+  /** ₹/month per consultant beyond included_doctors. Zero disables headcount pricing. */
+  extra_doctor_price: number
 }
 
 export interface VerticalBillingRow {
@@ -50,6 +54,10 @@ const FALLBACK_PLAN: ActivePlan = {
   applies_to_verticals: null,
   suspend_commission: false,
   price_includes_gst: false,
+  // Off in the fallback: an unreachable plans table must never invent a
+  // per-doctor charge nobody agreed to.
+  included_doctors: 1,
+  extra_doctor_price: 0,
 }
 
 // Derived from the VERTICALS constants, which still describe today's default:
@@ -117,6 +125,8 @@ export function usePricing(): PricingState {
             applies_to_verticals: (p.applies_to_verticals as string[]) ?? null,
             suspend_commission: Boolean(p.suspend_commission),
             price_includes_gst: Boolean(p.price_includes_gst),
+            included_doctors: Number(p.included_doctors ?? 1),
+            extra_doctor_price: Number(p.extra_doctor_price ?? 0),
           })
           gotLive = true
         }

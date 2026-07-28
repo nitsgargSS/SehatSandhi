@@ -2,14 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
-import { WA_NUMBER } from '../../types'
+import { WA_NUMBER, SPECIALITIES } from '../../types'
 import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor } from './shared'
 import VerticalIcon from './VerticalIcon'
 import SandboxAutofill from '../../components/SandboxAutofill'
 import { generateBusiness } from '../../lib/sandboxData'
 import {
   computePrice, createRazorpayOrder, verifyRazorpayPayment,
-  loadRazorpayCheckout, businessBackendConfigured, PriceResult,
+  loadRazorpayCheckout, businessBackendConfigured, PriceResult, HospitalDoctor,
 } from '../../lib/businessApi'
 import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
 import { useTaxSettings, localTax, isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
@@ -33,6 +33,13 @@ import { track } from '../../lib/analytics'
 //     asks the business to accept the commission term instead.
 
 const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
+
+// Compact row input for the consultant list — narrower than the main Field so
+// four of them fit one line on a laptop.
+const hospInput: React.CSSProperties = {
+  padding: '10px 12px', borderRadius: 10, border: `1.5px solid ${BIZ.inputBorder}`,
+  fontFamily: 'inherit', fontSize: 14, color: BIZ.ink, background: '#fff', width: '100%',
+}
 
 interface CoverageArea {
   pin_code: string
@@ -60,6 +67,9 @@ export default function BusinessRegister() {
   const [done, setDone] = useState(false)
   const [paid, setPaid] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
+  // Consultants, for a hospital. Each becomes an ordinary doctors row, so they
+  // get profiles, search results and their own appointments.
+  const [hospDoctors, setHospDoctors] = useState<HospitalDoctor[]>([])
   const [invoiceToken, setInvoiceToken] = useState<string | null>(null)
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null)
 
@@ -122,7 +132,15 @@ export default function BusinessRegister() {
   //    sum when the backend isn't configured or is unreachable. ──
   const localPrice: PriceResult = useMemo(() => {
     const chosen = coverage.filter(z => zips.includes(z.pin_code))
-    const monthlyTotal = monthlyApplies ? localMonthlyTotal(plan, tiers, chosen) : 0
+    // Consultants beyond the plan's included headcount. Mirrors the server so
+    // the number on screen matches what Razorpay is asked for.
+    const namedDoctors = vertical === 'hospital'
+      ? hospDoctors.filter(d => d.name.trim()).length : 0
+    const extraDoctors = namedDoctors > 0
+      ? Math.max(0, namedDoctors - (plan.included_doctors ?? 1)) : 0
+    const extraDoctorCost = extraDoctors * (plan.extra_doctor_price ?? 0)
+    const monthlyTotal = monthlyApplies
+      ? localMonthlyTotal(plan, tiers, chosen) + extraDoctorCost : 0
     const residents = chosen.reduce((a, z) => a + z.population, 0)
     // "Plan tier" only means something when pincodes are individually priced.
     const top = monthlyApplies && plan.mode === 'pincode_tiers'
@@ -135,6 +153,10 @@ export default function BusinessRegister() {
       planCode: plan.code, planLabel: plan.label, mode: plan.mode,
       monthlyTotal, months, total: monthlyTotal * months,
       defaultMonths: plan.default_months, minMonths: plan.min_months, maxMonths: plan.max_months,
+      doctorCount: namedDoctors,
+      includedDoctors: plan.included_doctors ?? 1,
+      extraDoctors,
+      extraDoctorCost,
       monthlyApplies,
       commissionPercent: commission.percent,
       commissionBasis: commission.basis,
@@ -142,7 +164,7 @@ export default function BusinessRegister() {
       tax: localTax(monthlyTotal * months, tax, form.gstin),
       priceIncludesGst: plan.price_includes_gst ?? false,
     }
-  }, [coverage, zips, plan, tiers, months, monthlyApplies, commission, tax, form.gstin])
+  }, [coverage, zips, plan, tiers, months, monthlyApplies, commission, tax, form.gstin, vertical, hospDoctors])
 
   const [serverPrice, setServerPrice] = useState<PriceResult | null>(null)
   const [pricing, setPricing] = useState(false)
@@ -165,7 +187,7 @@ export default function BusinessRegister() {
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [zips, vertical, months])
+  }, [zips, vertical, months, hospDoctors.length])
 
   // What the summary shows: server total when we have one, else the local sum.
   const price = serverPrice ?? localPrice
@@ -245,6 +267,24 @@ export default function BusinessRegister() {
     // fails as an RLS violation. create_listing is SECURITY DEFINER and
     // returns only the new id; it also forces status server-side, so a caller
     // cannot self-activate a listing. See migration 0002.
+    // A hospital is an organisation with consultants, not a single listing, so
+    // it takes a different RPC — one transaction for the org, its own listing
+    // and every consultant.
+    if (vertical === 'hospital') {
+      const { data: hid, error: hErr } = await supabase.rpc('sehat_create_hospital', {
+        p_name: form.business_name || form.owner_name || 'Hospital',
+        p_address: form.address || '',
+        p_pin_codes: zips,
+        p_phone: form.phone || '',
+        p_email: form.email || '',
+        p_reg_number: form.reg_number || null,
+        p_doctors: hospDoctors.filter(d => d.name.trim()),
+      })
+      if (hErr) { setError(`Could not save hospital: ${hErr.message}`); return null }
+      doctorIdRef.current = hid as string
+      return hid as string
+    }
+
     const { data, error: insErr } = await supabase.rpc('create_listing', {
       p_name: form.business_name || form.owner_name || 'Business',
       p_speciality: verticalObj.dbSpeciality,
@@ -476,6 +516,72 @@ export default function BusinessRegister() {
                           <Field label="Full address" placeholder="Shop / building, area, city" value={form.address} onChange={v => upd('address', v)} />
                         </div>
                       </div>
+
+                      {/* Consultants. Only hospitals: a solo practice is one
+                          doctor and must never be asked to list itself. Each
+                          becomes a real listing — searchable, with its own
+                          profile and appointment calendar. */}
+                      {vertical === 'hospital' && (
+                        <div style={{ marginTop: 28, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
+                          <div style={{ fontSize: 16, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
+                            Your doctors
+                          </div>
+                          <p style={{ fontSize: 13.5, color: BIZ.muted, margin: '0 0 16px', lineHeight: 1.6 }}>
+                            Add each consultant who sees patients here. Every one gets their own profile and
+                            appointment calendar, so a patient searching for a cardiologist in your area finds
+                            them by name.
+                            {(plan.extra_doctor_price ?? 0) > 0 && (
+                              <> Your plan includes <strong>{plan.included_doctors}</strong>; each additional
+                              doctor is ₹{(plan.extra_doctor_price).toLocaleString('en-IN')}/month.</>
+                            )}
+                          </p>
+
+                          {hospDoctors.map((doc, i) => (
+                            <div key={i} className="grid gap-2 grid-cols-1 sm:grid-cols-[1.4fr_1fr_1fr_auto]" style={{ marginBottom: 10 }}>
+                              <input placeholder="Doctor's name" value={doc.name}
+                                onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, name: e.target.value } : d))}
+                                style={hospInput} />
+                              <select value={doc.speciality}
+                                onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, speciality: e.target.value } : d))}
+                                style={hospInput}>
+                                {SPECIALITIES.map(sp => <option key={sp.id} value={sp.id}>{sp.en}</option>)}
+                              </select>
+                              <input placeholder="Qualification" value={doc.qualification ?? ''}
+                                onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, qualification: e.target.value } : d))}
+                                style={hospInput} />
+                              <button onClick={() => setHospDoctors(list => list.filter((_, j) => j !== i))}
+                                style={{ ...hospInput, width: 44, cursor: 'pointer', color: '#d94848', fontWeight: 800, borderColor: '#f0d9d9' }}
+                                title="Remove">×</button>
+                            </div>
+                          ))}
+
+                          <button
+                            onClick={() => setHospDoctors(list => [...list, { name: '', speciality: 'GEN', qualification: '' }])}
+                            style={{
+                              marginTop: 6, padding: '10px 18px', borderRadius: 11, cursor: 'pointer',
+                              border: `2px dashed ${BIZ.green}`, background: '#fff', color: BIZ.green,
+                              fontFamily: 'inherit', fontSize: 14, fontWeight: 800,
+                            }}>
+                            + Add a doctor
+                          </button>
+
+                          {hospDoctors.filter(d => d.name.trim()).length > 0 && (
+                            <div style={{ marginTop: 14, fontSize: 13.5, color: BIZ.ink }}>
+                              <strong>{hospDoctors.filter(d => d.name.trim()).length}</strong> doctor
+                              {hospDoctors.filter(d => d.name.trim()).length === 1 ? '' : 's'} added
+                              {price.extraDoctors > 0 && (
+                                <span style={{ color: BIZ.mutedWarm }}>
+                                  {' '}· {price.extraDoctors} beyond the {price.includedDoctors} included
+                                  {' '}= <strong style={{ color: BIZ.ink }}>+₹{price.extraDoctorCost.toLocaleString('en-IN')}/month</strong>
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <p style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 10, lineHeight: 1.6 }}>
+                            You can add or remove doctors later from your dashboard — the price follows.
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <FooterBar error={error}>
                       <button onClick={prevStep} style={btnBack}>← Back</button>
