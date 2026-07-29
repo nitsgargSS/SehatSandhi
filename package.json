@@ -15,6 +15,9 @@
     "sync:reference": "node scripts/sync-reference.mjs",
     "sync:reference:dry": "node scripts/sync-reference.mjs --dry-run",
 
+    "admin:password": "node scripts/admin-password.mjs --env both",
+    "admin:check": "node scripts/admin-password.mjs --env both --check",
+
     "schema:check": "node scripts/check-table-config.mjs && node scripts/gen-purge-manifest.mjs --check",
     "schema:gen": "node scripts/gen-purge-manifest.mjs",
     "schema:diff": "node scripts/schema-diff.mjs --env prod"
