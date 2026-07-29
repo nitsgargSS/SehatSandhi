@@ -339,6 +339,12 @@ export const translations: Tree = {
 
 
 
+  browsePage: {
+    title: { en: 'Find a doctor near you', hi: 'अपने पास डॉक्टर ढूँढें' },
+    subtitle: { en: 'Pick your area, then what you need. Every listing is verified before it appears.', hi: 'अपना इलाका चुनें, फिर जो चाहिए वह चुनें। हर लिस्टिंग जाँच के बाद ही दिखती है।' },
+    areaLabel: { en: 'YOUR AREA', hi: 'आपका इलाका' },
+    specialityLabel: { en: 'WHAT DO YOU NEED?', hi: 'आपको क्या चाहिए?' },
+  },
   specialityLandingPage: {
     notFoundSpeciality: { en: 'Speciality not found', hi: 'स्पेशलिटी नहीं मिली' },
     backToHome: { en: '← Back to Home', hi: '← होम पर वापस' },
@@ -352,6 +358,7 @@ export const translations: Tree = {
     beFirstToJoin: { en: 'Be the first to join and reach these patients', hi: 'पहले जॉइन करें और इन मरीज़ों तक पहुंचें' },
     registerLink: { en: 'Register here →', hi: 'यहां रजिस्टर करें →' },
     foundDoctorsIntro: { en: 'Verified doctors available:', hi: 'उपलब्ध वेरिफाइड डॉक्टर:' },
+    viewProfile: { en: 'View full profile →', hi: 'पूरी प्रोफाइल देखें →' },
     bookOnWhatsapp: { en: '📱 Book on WhatsApp', hi: '📱 WhatsApp पर बुक करें' },
     otherSpecialities: { en: 'Looking for a different speciality?', hi: 'कोई और स्पेशलिटी ढूंढ रहे हैं?' },
     viewAllLink: { en: 'View all specialities →', hi: 'सभी स्पेशलिटीज़ देखें →' },

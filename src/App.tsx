@@ -11,6 +11,7 @@ import { WA_NUMBER } from './types'
 // opening the homepage from a WhatsApp link downloaded the admin dashboard, the
 // billing screens and the signup wizard before seeing anything. PatientHome
 // stays eager — it is the first paint for almost everyone who arrives.
+const Browse = lazy(() => import('./pages/Browse'))
 const SpecialityLanding = lazy(() => import('./pages/SpecialityLanding'))
 const DoctorLogin = lazy(() => import('./pages/doctor/Login'))
 const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
@@ -115,6 +116,7 @@ export default function App() {
               taps through to it. One clean full-screen page, then the listing
               pages the search leads to — no site nav or footer anywhere in it. */}
           <Route path="/" element={<PatientHome />} />
+          <Route path="/browse" element={<Browse />} />
           <Route path="/speciality/:specId/:areaSlug" element={<SpecialityLanding />} />
           <Route path="/doctor/:slug" element={<DoctorProfile />} />
 
