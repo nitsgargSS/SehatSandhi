@@ -8,9 +8,8 @@ import { describeHeadcount } from '../../../supabase/functions/_shared/headcount
 import ScrollableTable from '../../components/ScrollableTable'
 import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
-import EnvSwitcher from '../../components/EnvSwitcher'
 import SandboxPanel from './SandboxPanel'
-import { isSandbox, SANDBOX_AVAILABLE } from '../../lib/env'
+import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 
 // Local type extension — organization_id / is_hospital_doctor were
@@ -749,7 +748,7 @@ export default function AdminDashboard() {
               { id: 'account', label: 'Account', count: 0, badge: false },
               // Only reachable while pointed at the sandbox backend — the purge
               // it exposes must never be one click away from production data.
-              ...(isSandbox() ? [{ id: 'sandbox', label: '🧪 Sandbox', count: 0, badge: false }] : []),
+              ...(IS_STAGING ? [{ id: 'sandbox', label: '🧪 Sandbox', count: 0, badge: false }] : []),
   ]
 
   return (
@@ -768,11 +767,6 @@ export default function AdminDashboard() {
           <div className="px-5 mb-4">
             <LanguageSwitcher dark />
           </div>
-          {SANDBOX_AVAILABLE && (
-            <div className="px-5 mb-4">
-              <EnvSwitcher compact />
-            </div>
-          )}
           <nav className="flex-1 px-3 space-y-1">
             {NAV_ITEMS.map(n => (
               <button key={n.id} onClick={() => { setTab(n.id as any); setSelectedOrgId(null) }}
@@ -2181,7 +2175,7 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {tab === 'sandbox' && isSandbox() && <SandboxPanel onPurged={load} />}
+          {tab === 'sandbox' && IS_STAGING && <SandboxPanel onPurged={load} />}
         </main>
       </div>
 

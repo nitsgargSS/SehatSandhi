@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { activeConfig } from '../../lib/env'
 import { useLanguage } from '../../i18n/LanguageContext'
+import { BIZ } from '../business/shared'
 
 // Log in with a code sent to the WhatsApp number the business registered with.
 //
@@ -71,7 +72,7 @@ export default function DoctorLogin() {
       // creates the session, so the browser ends up holding a normal login.
       const { error: vErr } = await supabase.auth.verifyOtp({ token_hash: r.tokenHash, type: 'email' })
       if (vErr) throw new Error('Could not start your session. Please try again.')
-      navigate('/doctor/dashboard')
+      navigate('/business/dashboard')
     } catch (err) {
       setError((err as Error).message)
     } finally { setBusy(false) }
@@ -82,14 +83,40 @@ export default function DoctorLogin() {
     setBusy(true); setError('')
     const { error: err } = await supabase.auth.signInWithPassword({ email, password })
     if (err) { setError(err.message); setBusy(false) }
-    else navigate('/doctor/dashboard')
+    else navigate('/business/dashboard')
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 pt-16">
+    // Same shell as the business wizard: cream page, dark rail carrying the
+    // logo, and no site navbar. This page used to render inside the marketing
+    // layout, whose fixed navbar overlapped the card — and a signed-out clinic
+    // does not need "Book on WhatsApp" or "Register Clinic" above its own login
+    // form anyway. See /business/register, which this mirrors.
+    <div style={{ background: BIZ.cream }} className="grid lg:grid-cols-[300px_1fr] min-h-screen">
+      <div className="hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-screen"
+        style={{ background: BIZ.ink, padding: '36px 30px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 36 }}>
+          <img src="/logo-tight.png" alt="Sehatsandhi"
+            style={{ height: 132, width: 'auto', objectFit: 'contain', borderRadius: 16, background: BIZ.cream, padding: '16px 20px' }} />
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 10 }}>
+          Your clinic dashboard
+        </div>
+        <div style={{ fontSize: 14, color: '#c9d6d0', lineHeight: 1.6 }}>
+          Appointments, hours, staff and your bills — all on the number patients already message you on.
+        </div>
+        <div style={{ marginTop: 'auto', background: 'rgba(255,255,255,.06)', borderRadius: 14, padding: 16 }}>
+          <div style={{ fontSize: 12, color: '#8fa89d', fontWeight: 700, marginBottom: 6 }}>NEED HELP?</div>
+          <div style={{ fontSize: 13, color: '#c9d6d0', lineHeight: 1.5 }}>
+            Our team can help you get in over a call in Hindi.
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center" style={{ padding: 'clamp(22px,5.5vw,48px) clamp(18px,5vw,56px)' }}>
       <div className="card max-w-md w-full shadow-xl">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Sehatsandhi" className="h-14 mx-auto mb-4" />
+          <img src="/logo.png" alt="Sehatsandhi" className="h-14 mx-auto mb-4 lg:hidden" />
           <h1 className="text-2xl font-bold text-navy-700">{t('loginPage.title')}</h1>
           <p className="text-gray-400 text-sm mt-1">
             {step === 'phone'
@@ -176,6 +203,7 @@ export default function DoctorLogin() {
             </button>
           )}
         </div>
+      </div>
       </div>
     </div>
   )

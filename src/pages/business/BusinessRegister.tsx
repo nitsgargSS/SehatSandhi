@@ -14,7 +14,6 @@ import {
 import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
 import { useTaxSettings, localTax, isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { track } from '../../lib/analytics'
-import { isSandbox } from '../../lib/env'
 // Same file the pricing engine uses, so the quote here and the amount charged
 // cannot describe different models.
 import { headcountFor, applyHeadcount, describeDoctorRate } from '../../../supabase/functions/_shared/headcount'
@@ -523,12 +522,10 @@ export default function BusinessRegister() {
                     <p style={{ fontSize: 13, color: BIZ.muted, margin: '4px 0 12px', lineHeight: 1.6 }}>
                       We've sent the link to your WhatsApp. You can open it any time and save it as a PDF.
                     </p>
-                    {/* Carry the backend choice across the tab boundary.
-                        target="_blank" opens a tab with its own sessionStorage,
-                        where getEnv() falls back to prod — so a sandbox invoice
-                        was being looked up in production and reported invalid.
-                        applyEnvFromUrl() consumes this param and strips it. */}
-                    <a href={`/invoice/${invoiceToken}${isSandbox() ? '?env=sandbox' : ''}`}
+                    {/* A plain link now: the new tab is the same build, so it
+                        resolves the same backend. This used to need ?env= to
+                        carry the choice across the tab boundary. */}
+                    <a href={`/invoice/${invoiceToken}`}
                        target="_blank" rel="noreferrer"
                        style={{ display: 'inline-block', background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 14, padding: '10px 18px', borderRadius: 11 }}>
                       View invoice

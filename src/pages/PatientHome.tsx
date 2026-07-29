@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
 import { WA_NUMBER } from '../types'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PAGE } from '../components/SiteHeader'
 
 // Design 1a / Turn-4 — patient homepage, "Warm Care".
 //
@@ -13,22 +14,23 @@ import { WA_NUMBER } from '../types'
 //     (copy+CTA+trust | ambulance + how-it-works cards), 6-across category row,
 //     full-width doctor teaser.
 // Both render from one component tree; Tailwind `lg:` visibility swaps them, so
-// the language toggle and area <select> drive both simultaneously.
+// the language toggle drives both simultaneously.
 
 const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 
 interface Strings {
-  brand: string; area_label: string; tagline: string; subtag: string; book: string
+  brand: string; tagline: string; subtag: string; book: string
   emergency_title: string; emergency_sub: string; emergency_btn: string; need: string
   doctors: string; hospitals: string; pharmacy: string; labs: string; insurance: string; ambulance: string
   doc_teaser_title: string; doc_teaser_sub: string; how: string; step1: string; step2: string; step3: string
   trust_verified: string; trust_free: string; trust_wa: string
   biz_cta: string; biz_title: string; biz_sub: string
+  faq_nav: string; faq_title: string; faq_sub: string; faqs: { q: string; a: string }[]
 }
 
 const DICT: Record<'en' | 'hi', Strings> = {
   en: {
-    brand: 'Sehatsandhi', area_label: 'Your area',
+    brand: 'Sehatsandhi',
     tagline: 'Family health help, on WhatsApp',
     subtag: 'Doctors, medicines, lab tests, ambulance & more — near you, free to use.',
     book: 'Book on WhatsApp',
@@ -40,12 +42,29 @@ const DICT: Record<'en' | 'hi', Strings> = {
     doc_teaser_title: 'Find the right doctor', doc_teaser_sub: 'Eye, ENT, Skin, Heart & 16 more',
     how: 'How it works', step1: 'Pick a service', step2: 'Chat on WhatsApp', step3: 'Booking confirmed',
     trust_verified: 'Verified providers', trust_free: 'Free for you', trust_wa: 'All on WhatsApp',
-    biz_cta: 'Register your business',
+    biz_cta: 'Manage Business',
     biz_title: 'Are you a healthcare provider?',
-    biz_sub: 'Doctors, hospitals, pharmacies, labs, insurance & ambulance — get found by families near you.',
+    biz_sub: 'Doctors, hospitals, pharmacies, labs, insurance & ambulance — list your business, or log in to manage it.',
+    faq_nav: 'Questions',
+    faq_title: 'Common Questions',
+    faq_sub: 'Everything families ask us before their first booking.',
+    faqs: [
+      { q: 'Is this free for patients?',
+        a: 'Yes, completely free. You are never charged for finding a provider or booking a time. You pay the clinic, pharmacy or lab directly for whatever you use, exactly as you would if you had walked in.' },
+      { q: 'Do I need to download an app?',
+        a: 'No. You only need WhatsApp, which is already on your phone. Message us and everything happens in that chat — there is nothing to install and no account to create.' },
+      { q: 'How does booking work?',
+        a: 'Message us on WhatsApp, choose what you need, pick a provider near you and confirm a time. It takes two or three minutes, and you get a confirmation in the same chat.' },
+      { q: 'Are the doctors verified?',
+        a: 'Yes. Our team checks every doctor\'s MCI or NMC registration number, and a pharmacy\'s or lab\'s licence, before their listing goes live. Nothing appears until it has been checked.' },
+      { q: 'What if I need an ambulance right now?',
+        a: 'Use the ambulance button at the top of this page. It opens WhatsApp with an emergency message ready to send, so help can be arranged without you typing anything.' },
+      { q: 'Which areas do you cover?',
+        a: 'We are live across Yamunanagar district — Yamunanagar, Jagadhri, Radaur, Bilaspur and Chhachhrauli — and adding towns steadily. Message us on WhatsApp and we will show you who is available near you.' },
+    ],
   },
   hi: {
-    brand: 'सेहतसंधि', area_label: 'आपका इलाका',
+    brand: 'सेहतसंधि',
     tagline: 'परिवार की सेहत, अब व्हाट्सएप पर',
     subtag: 'डॉक्टर, दवाई, लैब टेस्ट, एम्बुलेंस और भी बहुत कुछ — आपके पास, बिल्कुल मुफ़्त।',
     book: 'व्हाट्सएप पर बुक करें',
@@ -57,13 +76,28 @@ const DICT: Record<'en' | 'hi', Strings> = {
     doc_teaser_title: 'सही डॉक्टर चुनें', doc_teaser_sub: 'आँख, नाक-कान-गला, त्वचा, हृदय और 16 अन्य',
     how: 'यह कैसे काम करता है', step1: 'सेवा चुनें', step2: 'व्हाट्सएप पर बात करें', step3: 'बुकिंग पक्की',
     trust_verified: 'सत्यापित प्रोवाइडर', trust_free: 'आपके लिए मुफ़्त', trust_wa: 'सब कुछ व्हाट्सएप पर',
-    biz_cta: 'अपना बिज़नेस रजिस्टर करें',
+    biz_cta: 'बिज़नेस मैनेज करें',
     biz_title: 'आप हेल्थकेयर प्रोवाइडर हैं?',
-    biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब, बीमा और एम्बुलेंस — आपके इलाके के परिवार आपको ढूँढ पाएंगे।',
+    biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब, बीमा और एम्बुलेंस — अपना बिज़नेस लिस्ट करें, या लॉग इन करके मैनेज करें।',
+    faq_nav: 'सवाल',
+    faq_title: 'अक्सर पूछे जाने वाले सवाल',
+    faq_sub: 'पहली बुकिंग से पहले परिवार हमसे यही पूछते हैं।',
+    faqs: [
+      { q: 'क्या मरीज़ों के लिए यह मुफ़्त है?',
+        a: 'जी हाँ, बिल्कुल मुफ़्त। डॉक्टर ढूँढने या समय बुक करने का कोई शुल्क नहीं है। जो इलाज या दवाई आप लेते हैं, उसका पैसा सीधे क्लिनिक, दुकान या लैब को देते हैं — ठीक वैसे ही जैसे खुद जाकर देते।' },
+      { q: 'क्या कोई ऐप डाउनलोड करनी होगी?',
+        a: 'नहीं। सिर्फ़ व्हाट्सएप चाहिए, जो आपके फ़ोन में पहले से है। हमें मैसेज करें और सब कुछ उसी चैट में हो जाएगा — न कुछ इंस्टॉल करना है, न कोई अकाउंट बनाना है।' },
+      { q: 'बुकिंग कैसे होती है?',
+        a: 'व्हाट्सएप पर मैसेज करें, जो चाहिए वह चुनें, अपने पास का प्रोवाइडर चुनें और समय कन्फर्म करें। दो-तीन मिनट लगते हैं, और कन्फर्मेशन उसी चैट में मिल जाता है।' },
+      { q: 'क्या डॉक्टर वेरिफाई किए जाते हैं?',
+        a: 'जी हाँ। हमारी टीम हर डॉक्टर का MCI या NMC रजिस्ट्रेशन नंबर, और दवाई की दुकान या लैब का लाइसेंस जाँचती है। जाँच पूरी होने के बाद ही लिस्टिंग दिखती है।' },
+      { q: 'अगर अभी एम्बुलेंस चाहिए तो?',
+        a: 'ऊपर दिए एम्बुलेंस बटन का इस्तेमाल करें। यह व्हाट्सएप में इमरजेंसी मैसेज तैयार करके खोल देता है, ताकि बिना कुछ लिखे मदद भेजी जा सके।' },
+      { q: 'आप किन इलाकों में हैं?',
+        a: 'हम यमुनानगर ज़िले में उपलब्ध हैं — यमुनानगर, जगाधरी, रादौर, बिलासपुर और छछरौली — और लगातार नए कस्बे जोड़ रहे हैं। व्हाट्सएप पर मैसेज करें, हम आपके पास उपलब्ध प्रोवाइडर दिखा देंगे।' },
+    ],
   },
 }
-
-const AREAS = ['Yamunanagar', 'Jagadhri', 'Radaur', 'Bilaspur', 'Chhachhrauli']
 
 const iconProps = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
 const Icons = {
@@ -84,33 +118,8 @@ const WaGlyph = ({ size = 22 }: { size?: number }) => (
 
 // ── shared piece-components (used by BOTH layouts) ──
 
-function Brand({ size = 18 }: { size?: number }) {
-  // Horizontal lockup: heart symbol + wordmark, matched heights, plain centering.
-  const h = size * 2.7
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: size * 0.5, flex: '0 0 auto' }}>
-      <img src="/logo-only-symbol.png" alt="" aria-hidden style={{ height: h, width: 'auto', objectFit: 'contain' }} />
-      <img src="/logo-title.png" alt="Sehatsandhi" style={{ height: h, width: 'auto', objectFit: 'contain' }} />
-    </div>
-  )
-}
-
 function LangButton({ label, onClick }: { label: string; onClick: () => void }) {
   return <button onClick={onClick} style={{ border: '1.5px solid #0E9F6E', background: '#fff', color: '#0E9F6E', fontWeight: 700, fontSize: 13, padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit' }}>{label}</button>
-}
-
-function AreaSelect({ t, area, setArea, compact }: { t: Strings; area: string; setArea: (a: string) => void; compact?: boolean }) {
-  return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #e7e0d4', borderRadius: 14, padding: compact ? '8px 12px' : '9px 14px' }}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="#0E9F6E" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18, flex: '0 0 auto' }}><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg>
-      <div style={{ flex: 1 }}>
-        {!compact && <div style={{ fontSize: 11, color: '#8a8172', fontWeight: 600 }}>{t.area_label}</div>}
-        <select value={area} onChange={e => setArea(e.target.value)} style={{ border: 'none', background: 'transparent', fontSize: 15, fontWeight: 700, color: '#14201c', outline: 'none', width: '100%', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
-          {AREAS.map(a => <option key={a}>{a}</option>)}
-        </select>
-      </div>
-    </label>
-  )
 }
 
 function BookCta({ t, link, fullWidth }: { t: Strings; link: string; fullWidth?: boolean }) {
@@ -158,6 +167,31 @@ function BusinessCard({ t, row }: { t: Strings; row?: boolean }) {
         <div style={{ fontSize: row ? 14 : 12.5, color: '#7b8781', margin: row ? '4px 0 0' : '3px 0 12px', lineHeight: 1.5 }}>{t.biz_sub}</div>
       </div>
       <BusinessCta t={t} fullWidth={!row} />
+    </div>
+  )
+}
+
+// Answers to what families ask before their first booking. Rendered as native
+// <details> rather than useState: it is accessible, keyboard-operable and
+// findable by the browser's own in-page search without any of that being
+// written here, and one open question does not close another.
+function Faqs({ t, row }: { t: Strings; row?: boolean }) {
+  return (
+    <div style={{ scrollMarginTop: 24 }}>
+      <div style={{ fontSize: row ? 20 : 16, fontWeight: 800, color: '#14201c' }}>{t.faq_title}</div>
+      <div style={{ fontSize: row ? 14 : 12.5, color: '#7b8781', margin: '4px 0 14px', lineHeight: 1.5 }}>{t.faq_sub}</div>
+      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: row ? '1fr 1fr' : '1fr', alignItems: 'start' }}>
+        {t.faqs.map(f => (
+          <details key={f.q} style={{ background: '#fff', border: '1px solid #eee6d8', borderRadius: 14, padding: row ? '14px 18px' : '12px 14px' }}>
+            <summary style={{ fontSize: row ? 15 : 13.5, fontWeight: 700, color: '#14201c', cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              {f.q}
+              {/* glyph comes from CSS so open/closed can swap it — see index.css */}
+              <span aria-hidden style={{ color: '#0E9F6E', fontSize: 18, fontWeight: 700, flex: '0 0 auto', lineHeight: 1 }} />
+            </summary>
+            <div style={{ fontSize: row ? 14 : 12.5, color: '#5f6b64', lineHeight: 1.6, marginTop: 9 }}>{f.a}</div>
+          </details>
+        ))}
+      </div>
     </div>
   )
 }
@@ -233,11 +267,12 @@ function TrustRow({ t, row }: { t: Strings; row?: boolean }) {
 
 export default function PatientHome() {
   const { lang, setLang } = useLanguage()
-  const [area, setArea] = useState('Yamunanagar')
   const t = DICT[lang]
 
   const num = WA_NUMBER.replace(/[^0-9]/g, '') || '919999999999'
-  const mk = (msg: string) => `https://wa.me/${num}?text=${encodeURIComponent(`${msg} (${area})`)}`
+  // No area in the message: the header no longer asks for one, and appending a
+  // default would tell the bot a location the patient never chose.
+  const mk = (msg: string) => `https://wa.me/${num}?text=${encodeURIComponent(msg)}`
   const waLink = mk('Hi Sehatsandhi, I need help')
   const ambLink = mk('EMERGENCY: I need an ambulance')
   const langBtn = lang === 'en' ? 'हिंदी' : 'ENGLISH'
@@ -257,11 +292,11 @@ export default function PatientHome() {
       {/* ══════════ MOBILE / TABLET (< lg): stacked app column ══════════ */}
       <div className="flex lg:hidden" style={{ background: '#e7eaef', minHeight: '100vh', justifyContent: 'center' }}>
         <div style={{ width: '100%', maxWidth: 520, minHeight: '100vh', background: '#FBF7F0', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 4px' }}>
-            <Brand />
+          <SiteHeader>
+            <HeaderLink href="#faq-m">{t.faq_nav}</HeaderLink>
+            <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
             <LangButton label={langBtn} onClick={toggleLang} />
-          </div>
-          <div style={{ padding: '8px 20px 4px' }}><AreaSelect t={t} area={area} setArea={setArea} /></div>
+          </SiteHeader>
           <div style={{ padding: '16px 22px 6px' }}>
             <h1 style={{ fontSize: 26, lineHeight: 1.2, fontWeight: 800, color: '#14201c', margin: '0 0 8px', letterSpacing: '-.02em' }}>{t.tagline}</h1>
             <p style={{ fontSize: 14, color: '#5f6b64', margin: '0 0 14px', lineHeight: 1.5 }}>{t.subtag}</p>
@@ -277,22 +312,29 @@ export default function PatientHome() {
           </div>
           <div style={{ padding: '16px 20px 4px' }}><DoctorTeaser t={t} /></div>
           <div style={{ padding: '18px 22px 8px' }}><HowItWorksCard t={t} /></div>
+          {/* Distinct id per layout. Both are in the DOM and CSS hides one, so a
+              shared id would resolve to the mobile copy — invisible on desktop,
+              and the link would appear to do nothing. */}
+          <div id="faq-m" style={{ padding: '18px 20px 4px', scrollMarginTop: 12 }}><Faqs t={t} /></div>
           <div style={{ padding: '14px 20px 18px' }}><BusinessCard t={t} /></div>
           <div style={{ marginTop: 'auto' }}><TrustRow t={t} /></div>
         </div>
       </div>
 
       {/* ══════════ DESKTOP (≥ lg): contained landing ══════════ */}
-      <div className="hidden lg:block" style={{ maxWidth: 1120, margin: '0 auto', padding: '0 48px 64px' }}>
-        {/* slim header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '28px 0 8px' }}>
-          <Brand size={22} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <BusinessCta t={t} compact />
-            <div style={{ width: 240 }}><AreaSelect t={t} area={area} setArea={setArea} compact /></div>
-            <LangButton label={langBtn} onClick={toggleLang} />
-          </div>
-        </div>
+      {/* The header sits OUTSIDE the contained column: it carries its own
+          full-bleed band and centres its row on PAGE.maxWidth itself. Nested
+          inside a 1120px box with 48px padding, that band was clipped to
+          1024px and inset 220px, so the rule under it stopped short of the
+          window while /business ran edge to edge. */}
+      <div className="hidden lg:block">
+        <SiteHeader>
+          <HeaderLink href="#faq-d">{t.faq_nav}</HeaderLink>
+          <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
+          <LangButton label={langBtn} onClick={toggleLang} />
+        </SiteHeader>
+      </div>
+      <div className="hidden lg:block" style={{ maxWidth: PAGE.maxWidth, margin: '0 auto', padding: `0 ${PAGE.padX} 64px` }}>
 
         {/* two-column hero */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 44, alignItems: 'center', padding: '40px 0 8px' }}>
@@ -319,8 +361,11 @@ export default function PatientHome() {
         {/* full-width doctor teaser band */}
         <div style={{ padding: '20px 0 0' }}><DoctorTeaser t={t} /></div>
 
+        {/* questions, answered before the provider pitch below them */}
+        <div id="faq-d" style={{ padding: '40px 0 0', scrollMarginTop: 20 }}><Faqs t={t} row /></div>
+
         {/* provider band — second entry point for the header CTA */}
-        <div style={{ padding: '16px 0 0' }}><BusinessCard t={t} row /></div>
+        <div style={{ padding: '32px 0 0' }}><BusinessCard t={t} row /></div>
       </div>
     </div>
   )

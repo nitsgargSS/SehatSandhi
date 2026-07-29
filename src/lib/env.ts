@@ -1,30 +1,23 @@
-// Which backend is this session talking to?
+// Which backend this build talks to.
 //
-// The app can point at either the production Supabase project or an isolated
-// sandbox one. Sandbox exists so registration and payment can be tested end to
-// end — real forms, real Razorpay Checkout in test mode — without creating junk
-// rows in production or moving money.
+// It used to be a runtime choice: one bundle carried BOTH projects' credentials
+// and a switcher picked between them, storing the answer in sessionStorage. That
+// bought convenience — one URL, flip to sandbox, test, flip back — at a price
+// that got steeper the longer it stayed:
 //
-// Everything derives from getEnv(): the Supabase client, the edge-function URL,
-// and the anon key all read activeConfig(). That single authority is the point.
-// The failure mode worth designing against is a split brain — writing listing
-// rows to sandbox while calling production's payment functions — which is
-// exactly what happens when two modules each read import.meta.env for
-// themselves. They no longer do.
+//   • Both projects' anon keys shipped to every visitor, so production served
+//     the sandbox keys and sandbox served production's.
+//   • Which database you were writing to depended on a storage value you could
+//     not see. A tab that had ever visited ?env=sandbox stayed there, and a new
+//     tab silently did not.
+//   • Every module that touched a backend had to ask getEnv() and agree, or you
+//     got a split brain: listing rows written to one project while the payment
+//     functions were called on the other.
 //
-// Safety properties, in order of how much they matter:
-//
-//   1. Sandbox must be built in to be reachable. On a deployment with no
-//      VITE_SANDBOX_* vars, getEnv() can only ever return 'prod'.
-//   2. The choice lives in sessionStorage, so it dies with the tab. Nobody
-//      comes back a week later still pointed at sandbox.
-//   3. Anything unrecognised resolves to 'prod'. The safe value is the default.
-//   4. Switching reloads the page rather than mutating live state, because a
-//      half-swapped client is worse than either endpoint.
-
-export type EnvName = 'prod' | 'sandbox'
-
-const STORAGE_KEY = 'sehat_env'
+// Now the deployment decides. Each Vercel environment carries its own
+// VITE_SUPABASE_* pair — staging points at the sandbox project, production at
+// the production one — so a build has exactly one backend, and it is the one
+// whoever deployed it chose. Nothing in the browser can move it.
 
 export interface BackendConfig {
   url: string
@@ -32,101 +25,29 @@ export interface BackendConfig {
 }
 
 // Vite inlines import.meta.env at build time, so these are literals in the
-// bundle and the sandbox branch drops out entirely when the vars are unset.
-const CONFIGS: Record<EnvName, BackendConfig> = {
-  prod: {
-    url: (import.meta.env.VITE_SUPABASE_URL as string) || '',
-    anon: (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '',
-  },
-  sandbox: {
-    url: (import.meta.env.VITE_SANDBOX_SUPABASE_URL as string) || '',
-    anon: (import.meta.env.VITE_SANDBOX_SUPABASE_ANON_KEY as string) || '',
-  },
+// bundle: only the keys for this deployment's own project are ever shipped.
+const CONFIG: BackendConfig = {
+  url: (import.meta.env.VITE_SUPABASE_URL as string) || '',
+  anon: (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '',
 }
 
 /**
- * Is a sandbox backend configured at all?
+ * Is this a staging build?
  *
- * When false the switcher never renders and getEnv() is pinned to 'prod', so a
- * production deployment cannot be talked into sandbox mode by a stray query
- * param or a leftover storage value.
+ * Gates the testing affordances — signup autofill, the sandbox purge panel, the
+ * login code shown on screen — that must never appear in front of a real
+ * patient. Set VITE_IS_STAGING=true on the staging deployment only; anywhere
+ * else the checks below are false and the code they guard is dropped from the
+ * bundle by dead-code elimination.
+ *
+ * Deliberately not derived from the hostname: a preview URL, a custom domain or
+ * a local `vite preview` would each need their own special case, and getting one
+ * wrong shows test tooling to the public.
  */
-export const SANDBOX_AVAILABLE = Boolean(CONFIGS.sandbox.url && CONFIGS.sandbox.anon)
+export const IS_STAGING = String(import.meta.env.VITE_IS_STAGING) === 'true'
 
-/** Token for the sandbox-purge function. Meaningless without the sandbox project. */
+/** Token for the sandbox-purge function. Only meaningful on staging. */
 export const SANDBOX_PURGE_TOKEN = (import.meta.env.VITE_SANDBOX_PURGE_TOKEN as string) || ''
 
-function readStored(): EnvName {
-  try {
-    return sessionStorage.getItem(STORAGE_KEY) === 'sandbox' ? 'sandbox' : 'prod'
-  } catch {
-    // Safari private mode and some embedded webviews throw on storage access.
-    return 'prod'
-  }
-}
-
-/** The active backend for this session. Always 'prod' unless sandbox is both configured and chosen. */
-export function getEnv(): EnvName {
-  if (!SANDBOX_AVAILABLE) return 'prod'
-  return readStored()
-}
-
-export const isSandbox = (): boolean => getEnv() === 'sandbox'
-
-/** Config for the active backend — the only place clients should get URL/key from. */
-export const activeConfig = (): BackendConfig => CONFIGS[getEnv()]
-
-/**
- * Point this session at a different backend.
- *
- * Reloads rather than updating in place: the Supabase client, any open realtime
- * channel and every cached query would otherwise still be bound to the previous
- * project. A full reload rebuilds all of them from the new choice.
- */
-export function switchEnv(env: EnvName): void {
-  if (env === 'sandbox' && !SANDBOX_AVAILABLE) return
-  try {
-    sessionStorage.setItem(STORAGE_KEY, env)
-  } catch {
-    // If storage is unavailable the choice cannot persist across the reload,
-    // so leave the session where it is rather than reloading into confusion.
-    return
-  }
-  window.location.reload()
-}
-
-/**
- * Honour ?env=sandbox / ?env=prod once at startup, then strip it from the URL.
- *
- * Lets a tester open the sandbox directly from a link without hunting for the
- * switcher. Stripping matters: a shared or bookmarked URL carrying ?env=sandbox
- * would otherwise silently reselect sandbox on every visit. The param is a
- * request to switch, not a persistent mode.
- *
- * Returns true if a reload was triggered, so callers can skip rendering.
- */
-export function applyEnvFromUrl(): boolean {
-  if (!SANDBOX_AVAILABLE) return false
-
-  const params = new URLSearchParams(window.location.search)
-  const requested = params.get('env')
-  if (requested !== 'sandbox' && requested !== 'prod') return false
-
-  params.delete('env')
-  const qs = params.toString()
-  const cleanUrl = window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash
-
-  if (requested === getEnv()) {
-    // Already there — just tidy the URL, no reload needed.
-    window.history.replaceState({}, '', cleanUrl)
-    return false
-  }
-
-  try {
-    sessionStorage.setItem(STORAGE_KEY, requested)
-  } catch {
-    return false
-  }
-  window.location.replace(cleanUrl)
-  return true
-}
+/** The backend for this build — the only place clients should get URL/key from. */
+export const activeConfig = (): BackendConfig => CONFIG

@@ -6,6 +6,7 @@ import { MapPin, Clock, CheckCircle2, ArrowLeft, Share2, Copy, Star } from 'luci
 import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, WA_NUMBER } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../../components/SiteHeader'
 
 interface RatingAgg {
   avg_rating: number
@@ -92,13 +93,13 @@ export default function DoctorProfile() {
   )
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center pt-16">
+    <div className="min-h-screen flex items-center justify-center">
       <div className="text-gray-400 text-sm">{t('profilePage.loading')}</div>
     </div>
   )
 
   if (!doctor) return (
-    <div className="min-h-screen flex items-center justify-center pt-16 px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div className="text-center">
         <div className="text-6xl mb-4">🏥</div>
         <h2 className="text-xl font-bold text-navy-700 mb-2">{t('profilePage.notFoundTitle')}</h2>
@@ -133,19 +134,18 @@ export default function DoctorProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <div className="min-h-screen bg-gray-50">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
 
-      {/* Back */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-3xl mx-auto px-4 py-3">
-          <Link to="/" className="flex items-center gap-2 text-gray-500 hover:text-teal-600 text-sm transition">
-            <ArrowLeft className="w-4 h-4" /> {t('profilePage.backToHome')}
-          </Link>
-        </div>
-      </div>
+      {/* A patient usually lands here straight from a WhatsApp link, so this is
+          the page that has to look like us. */}
+      <SiteHeader>
+        <HeaderLink to="/">{t('profilePage.backToHome')}</HeaderLink>
+        <HeaderCta to="/business" icon={shopIcon}>List your business</HeaderCta>
+      </SiteHeader>
 
-      <div className="max-w-3xl mx-auto px-4 py-8 space-y-4">
+      <PageShell style={{ paddingTop: 32, paddingBottom: 32 }}>
+        <div className="max-w-3xl mx-auto space-y-4">
 
         {/* Main profile card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -351,6 +351,7 @@ export default function DoctorProfile() {
         </div>
 
       </div>
+      </PageShell>
     </div>
   )
 }

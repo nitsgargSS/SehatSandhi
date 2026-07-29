@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PAGE } from '../../components/SiteHeader'
 import { BIZ, VERTICALS } from './shared'
 import VerticalIcon from './VerticalIcon'
 import WhatsAppBotMock from './WhatsAppBotMock'
@@ -15,6 +16,23 @@ import { useTaxSettings } from '../../hooks/useTaxSettings'
 // only get a commission block when a commission is actually being charged.
 
 const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
+
+// What each category gets out of being listed. This is what the six separate
+// /for-* marketing pages said; they are gone, and the Partners section below
+// says it here instead. Keyed by VerticalKey so the cards stay in step with
+// VERTICALS rather than being a second list that can drift from it.
+const VERTICAL_TITLES: Record<string, string> = {
+  doctors: 'Doctors & clinics', hospital: 'Hospitals', pharmacy: 'Pharmacies',
+  lab: 'Diagnostic labs', insurance: 'Insurance agents', ambulance: 'Ambulance services',
+}
+const VERTICAL_BLURBS: Record<string, string> = {
+  doctors: 'Patients in your pincodes find you on WhatsApp and book a time — no app for them to install, no call for you to miss.',
+  hospital: 'Every consultant gets their own profile and calendar, under one hospital listing and one bill.',
+  pharmacy: 'Prescriptions come straight to you from patients nearby, to fill in store or deliver home.',
+  lab: 'Test bookings arrive with the patient details, and you can offer home sample collection.',
+  insurance: 'Warm leads from families already looking for cover — not cold calling.',
+  ambulance: 'Emergency and scheduled transport requests from your own area, the moment they are needed.',
+}
 
 export default function BusinessLanding() {
   const { plan, tiers, verticals } = usePricing()
@@ -43,22 +61,20 @@ export default function BusinessLanding() {
 
   return (
     <div style={{ background: BIZ.cream, fontFamily: font }}>
-      {/* nav — logos shrink and the link row wraps under them on narrow phones */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'clamp(12px,3vw,16px) clamp(16px,4vw,40px)', borderBottom: `1px solid ${BIZ.border}`, gap: 12 }} className="max-w-7xl mx-auto flex-wrap">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/logo-only-symbol.png" alt="" aria-hidden style={{ height: 'clamp(36px,9vw,50px)', width: 'auto', objectFit: 'contain' }} />
-          <img src="/logo-title.png" alt="Sehatsandhi" style={{ height: 'clamp(36px,9vw,50px)', width: 'auto', objectFit: 'contain' }} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(14px,3.5vw,28px)' }} className="flex-wrap">
-          <a href="#how" className="max-sm:hidden" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>How it works</a>
-          <a href="#pricing" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>Pricing</a>
-          <Link to="/doctor/login" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>Log in</Link>
-          <Link to="/business/register" style={{ background: BIZ.green, color: '#fff', fontWeight: 700, fontSize: 14, padding: '11px 20px', borderRadius: 12 }}>List your business</Link>
-        </div>
-      </div>
+      {/* Sticky, because every link but two is an anchor into this page:
+          scrolling to Pricing and then wanting Partners should not mean
+          scrolling back up. The logo goes home, to the patient side — it is how
+          someone who followed a business link gets across. */}
+      <SiteHeader sticky>
+        <HeaderLink href="#how">How it works</HeaderLink>
+        <HeaderLink href="#pricing">Pricing</HeaderLink>
+        <HeaderLink href="#partners">Partners</HeaderLink>
+        <HeaderLink to="/business/login">Log in</HeaderLink>
+        <HeaderCta to="/business/register" icon={shopIcon}>List your business</HeaderCta>
+      </SiteHeader>
 
       {/* hero */}
-      <div className="max-w-7xl mx-auto grid gap-10 items-center lg:grid-cols-[1.15fr_.85fr]" style={{ padding: 'clamp(28px,7vw,56px) clamp(16px,4vw,40px)' }}>
+      <div className="mx-auto grid gap-10 items-center lg:grid-cols-[1.15fr_.85fr]" style={{ maxWidth: PAGE.maxWidth, padding: 'clamp(28px,7vw,56px) ' + PAGE.padX }}>
         <div>
           <div style={{ display: 'inline-block', background: BIZ.chipBg, color: BIZ.chipText, fontSize: 13, fontWeight: 700, padding: '6px 12px', borderRadius: 999, marginBottom: 18 }}>Now live in Yamunanagar · rolling out across India</div>
           <h1 style={{ fontSize: 'clamp(30px,7.5vw,46px)', lineHeight: 1.1, fontWeight: 800, color: BIZ.ink, margin: '0 0 18px', letterSpacing: '-.03em' }}>Reach every patient in your pincodes.</h1>
@@ -87,7 +103,7 @@ export default function BusinessLanding() {
       </div>
 
       {/* how it works */}
-      <div id="how" className="max-w-7xl mx-auto" style={{ padding: 'clamp(28px,7vw,56px) clamp(16px,4vw,40px)' }}>
+      <div id="how" className="mx-auto" style={{ maxWidth: PAGE.maxWidth, padding: 'clamp(28px,7vw,56px) ' + PAGE.padX }}>
         <h2 style={{ fontSize: 'clamp(23px,5.5vw,28px)', fontWeight: 800, color: BIZ.ink, textAlign: 'center', margin: '0 0 8px', letterSpacing: '-.02em' }}>How zipcode reach works</h2>
         <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 0 36px' }}>Three steps to start appearing for patients around you.</p>
         <div className="grid gap-5 md:grid-cols-3">
@@ -107,21 +123,30 @@ export default function BusinessLanding() {
         </div>
       </div>
 
-      {/* verticals */}
-      <div className="max-w-7xl mx-auto pb-10" style={{ paddingLeft: 'clamp(16px,4vw,40px)', paddingRight: 'clamp(16px,4vw,40px)' }}>
-        <h3 style={{ fontSize: 'clamp(19px,4.5vw,22px)', fontWeight: 800, color: BIZ.ink, margin: '0 0 20px' }}>Who can list</h3>
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+      {/* verticals — this is what /partners used to be. That page was a second
+          six-card grid of the same categories, one click further from signing
+          up; these cards were the same six but inert. Merged: the cards carry
+          the line that said what each vertical gets, and link to the page
+          written for it. */}
+      <div id="partners" className="mx-auto pb-10" style={{ maxWidth: PAGE.maxWidth, paddingLeft: PAGE.padX, paddingRight: PAGE.padX, scrollMarginTop: 90 }}>
+        <h2 style={{ fontSize: 'clamp(23px,5.5vw,28px)', fontWeight: 800, color: BIZ.ink, textAlign: 'center', margin: '0 0 8px', letterSpacing: '-.02em' }}>Who can list</h2>
+        <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 0 28px' }}>
+          Six kinds of business, and what each one gets out of being listed.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {VERTICALS.map(v => (
-            <div key={v.key} style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: 16, textAlign: 'center' }}>
+            <div key={v.key}
+              style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 16, padding: 20 }}>
               <span style={{ color: v.color, display: 'inline-flex' }}><VerticalIcon vertical={v.key} /></span>
-              <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.ink, marginTop: 8 }}>{v.key === 'doctors' ? 'Doctors' : v.key === 'hospital' ? 'Hospitals' : v.key === 'pharmacy' ? 'Pharmacies' : v.key === 'lab' ? 'Labs' : v.key === 'insurance' ? 'Insurance' : 'Ambulance'}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: BIZ.ink, marginTop: 10 }}>{VERTICAL_TITLES[v.key]}</div>
+              <div style={{ fontSize: 14, color: BIZ.muted, marginTop: 6, lineHeight: 1.5 }}>{VERTICAL_BLURBS[v.key]}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* pricing — two models: per-pincode monthly, or commission on billing */}
-      <div id="pricing" className="max-w-7xl mx-auto pb-14" style={{ paddingLeft: 'clamp(16px,4vw,40px)', paddingRight: 'clamp(16px,4vw,40px)' }}>
+      <div id="pricing" className="mx-auto pb-14" style={{ maxWidth: PAGE.maxWidth, paddingLeft: PAGE.padX, paddingRight: PAGE.padX }}>
         <h2 style={{ fontSize: 'clamp(23px,5.5vw,28px)', fontWeight: 800, color: BIZ.ink, textAlign: 'center', margin: '0 0 8px', letterSpacing: '-.02em' }}>
           {flatPlan ? plan.label : 'Pay for reach, not clicks'}
         </h2>
@@ -247,7 +272,7 @@ export default function BusinessLanding() {
       </div>
 
       {/* WhatsApp booking demo (design 3a) */}
-      <div className="max-w-7xl mx-auto pb-6" style={{ paddingLeft: 'clamp(16px,4vw,40px)', paddingRight: 'clamp(16px,4vw,40px)' }}>
+      <div className="mx-auto pb-6" style={{ maxWidth: PAGE.maxWidth, paddingLeft: PAGE.padX, paddingRight: PAGE.padX }}>
         <div style={{ display: 'grid', gap: 40, alignItems: 'center' }} className="lg:grid-cols-[1fr_auto]">
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: '#4f7a68' }}>Patient booking flow</div>
@@ -259,7 +284,7 @@ export default function BusinessLanding() {
       </div>
 
       {/* cta band */}
-      <div className="max-w-7xl mx-auto pb-16" style={{ paddingLeft: 'clamp(16px,4vw,40px)', paddingRight: 'clamp(16px,4vw,40px)' }}>
+      <div className="mx-auto pb-16" style={{ maxWidth: PAGE.maxWidth, paddingLeft: PAGE.padX, paddingRight: PAGE.padX }}>
         <div style={{ background: 'linear-gradient(120deg,#14201c,#1f3a30)', borderRadius: 22, padding: 'clamp(28px,7vw,44px) clamp(20px,5vw,44px)', textAlign: 'center' }}>
           <h3 style={{ fontSize: 'clamp(23px,5.5vw,28px)', fontWeight: 800, color: '#fff', margin: '0 0 10px', letterSpacing: '-.02em' }}>Ready to reach patients near you?</h3>
           <p style={{ fontSize: 16, color: '#b9c9c1', margin: '0 0 24px' }}>Set up your listing in under 5 minutes. No upfront cost to register.</p>

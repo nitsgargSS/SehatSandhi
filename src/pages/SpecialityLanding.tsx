@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES, WA_NUMBER } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
 import { track, trackImpressions } from '../lib/analytics'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../components/SiteHeader'
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '-')
 
@@ -98,7 +99,7 @@ export default function SpecialityLanding() {
 
   if (!speciality || !area) {
     return (
-      <div className="min-h-screen flex items-center justify-center pt-16 px-4">
+      <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
           <h2 className="text-xl font-bold text-navy-700 mb-2">{t('specialityLandingPage.notFoundSpeciality')}</h2>
           <Link to="/" className="text-teal-600 hover:underline">{t('specialityLandingPage.backToHome')}</Link>
@@ -120,18 +121,19 @@ export default function SpecialityLanding() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <div className="min-h-screen bg-gray-50">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
 
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          <Link to="/" className="flex items-center gap-2 text-gray-500 hover:text-teal-600 text-sm transition">
-            <ArrowLeft className="w-4 h-4" /> {t('specialityLandingPage.backToHome')}
-          </Link>
-        </div>
-      </div>
+      {/* Most arrivals here are from a WhatsApp or search link rather than from
+          our own homepage, so this is the first Sehatsandhi page they see. The
+          bare back-link that used to sit here showed them no brand at all. */}
+      <SiteHeader>
+        <HeaderLink to="/">{t('specialityLandingPage.backToHome')}</HeaderLink>
+        <HeaderCta to="/business" icon={shopIcon}>List your business</HeaderCta>
+      </SiteHeader>
 
-      <div className="max-w-4xl mx-auto px-4 py-10">
+      <PageShell style={{ paddingTop: 40, paddingBottom: 40 }}>
+        <div className="max-w-4xl mx-auto">
         {/* Hero */}
         <div className="text-center mb-10">
           <span className="inline-flex items-center gap-2 bg-teal-50 text-teal-700 text-xs font-semibold px-4 py-1.5 rounded-full mb-4 border border-teal-100">
@@ -192,7 +194,7 @@ export default function SpecialityLanding() {
             <div className="border-t border-gray-100 pt-6 mt-2">
               <p className="text-sm font-medium text-navy-700 mb-1">{t('specialityLandingPage.areYouADoctor')}</p>
               <p className="text-gray-400 text-xs mb-3">{t('specialityLandingPage.beFirstToJoin')}</p>
-              <Link to="/doctor" className="text-teal-600 hover:underline text-sm font-medium">
+              <Link to="/business/register" className="text-teal-600 hover:underline text-sm font-medium">
                 {t('specialityLandingPage.registerLink')}
               </Link>
             </div>
@@ -206,6 +208,7 @@ export default function SpecialityLanding() {
           </Link>
         </div>
       </div>
+      </PageShell>
     </div>
   )
 }
