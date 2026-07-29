@@ -112,6 +112,11 @@ const WhatsAppFloat = () => {
   )
 }
 
+// The navbar is sticky rather than fixed, so it occupies real height and the
+// page below simply follows it. Pages used to reserve pt-16 (64px) by hand for
+// a bar that is h-20 (80px) tall — the top 16px of every page sat underneath
+// it, and in a sandbox session the banner hid ~40px of the navbar itself. Both
+// went away with the layout doing the spacing instead of each page guessing.
 const WithLayout = ({ children }: { children: React.ReactNode }) => (
   <>
     <Navbar />
@@ -162,7 +167,9 @@ export default function App() {
 
           {/* Doctor */}
           <Route path="/doctor" element={<WithLayout><Register /></WithLayout>} />
-          <Route path="/doctor/login" element={<WithLayout><DoctorLogin /></WithLayout>} />
+          {/* No marketing navbar: this page carries the business wizard's own
+              shell, the same as /business/register. */}
+          <Route path="/doctor/login" element={<DoctorLogin />} />
           <Route path="/doctor/dashboard" element={<WithLayout><DoctorDashboard /></WithLayout>} />
           <Route path="/doctor/:slug" element={<WithLayout><DoctorProfile /></WithLayout>} />
 

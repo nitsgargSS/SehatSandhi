@@ -112,7 +112,7 @@ export default function Points() {
   const progress = nextReward ? Math.min(100, ((patient?.total_points || 0) / nextReward.points) * 100) : 100
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <div className="min-h-screen bg-gray-50">
       <div className="max-w-lg mx-auto px-4 py-8">
 
         {/* Header */}

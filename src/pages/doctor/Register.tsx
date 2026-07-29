@@ -185,7 +185,7 @@ export default function Register() {
   }
 
   if (done) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 pt-16">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="card max-w-md w-full text-center shadow-xl">
         <CheckCircle2 className="w-16 h-16 text-teal-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-navy-700 mb-3">{t('registerPage.successTitle')}</h2>

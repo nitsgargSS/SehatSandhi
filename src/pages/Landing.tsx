@@ -48,7 +48,7 @@ export default function Landing() {
   const faqs = FAQS_BY_LANG[lang]
 
   return (
-    <div className="pt-16">
+    <div className="">
       <OfferBanner />
 
       {/* ── HERO ── */}

@@ -92,13 +92,13 @@ export default function DoctorProfile() {
   )
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center pt-16">
+    <div className="min-h-screen flex items-center justify-center">
       <div className="text-gray-400 text-sm">{t('profilePage.loading')}</div>
     </div>
   )
 
   if (!doctor) return (
-    <div className="min-h-screen flex items-center justify-center pt-16 px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div className="text-center">
         <div className="text-6xl mb-4">🏥</div>
         <h2 className="text-xl font-bold text-navy-700 mb-2">{t('profilePage.notFoundTitle')}</h2>
@@ -133,7 +133,7 @@ export default function DoctorProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <div className="min-h-screen bg-gray-50">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
 
       {/* Back */}

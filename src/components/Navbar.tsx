@@ -12,7 +12,11 @@ export default function Navbar() {
   const isDark = pathname.startsWith('/ng-ctrl-2026')
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 ${isDark ? 'bg-navy-700' : 'bg-white/95 backdrop-blur'} shadow-sm`}>
+    // sticky, not fixed: a fixed bar is taken out of flow and pinned to the
+    // viewport, so it rendered *underneath* the sandbox banner above it and
+    // lost its top 40px. Sticky keeps the same pinned-while-scrolling
+    // behaviour but respects whatever precedes it in the document.
+    <nav className={`sticky top-0 z-50 ${isDark ? 'bg-navy-700' : 'bg-white/95 backdrop-blur'} shadow-sm`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           <Link to="/" className="flex items-center">

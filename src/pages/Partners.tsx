@@ -47,7 +47,7 @@ export default function Partners() {
   const faqs = FAQS_BY_LANG[lang]
 
   return (
-    <div className="pt-16">
+    <div className="">
 
       {/* Hero */}
       <section className="py-20 bg-gradient-to-br from-white via-teal-50/30 to-white">

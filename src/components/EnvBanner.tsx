@@ -43,8 +43,12 @@ export default function EnvBanner() {
     <div
       role="status"
       style={{
-        position: 'sticky',
-        top: 0,
+        // Deliberately NOT sticky/fixed. The site navbar is `fixed top-0`, and
+        // a banner also claiming top:0 does not push it down — the navbar sits
+        // underneath, and its top ~40px is hidden behind this bar on every page
+        // of a sandbox session. In normal flow the banner occupies real height,
+        // and the spacer in WithLayout keeps the navbar clear of it.
+        position: 'relative',
         zIndex: 100,
         background: '#a21caf',
         color: '#fff',

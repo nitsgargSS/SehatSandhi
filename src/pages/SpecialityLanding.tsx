@@ -98,7 +98,7 @@ export default function SpecialityLanding() {
 
   if (!speciality || !area) {
     return (
-      <div className="min-h-screen flex items-center justify-center pt-16 px-4">
+      <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
           <h2 className="text-xl font-bold text-navy-700 mb-2">{t('specialityLandingPage.notFoundSpeciality')}</h2>
           <Link to="/" className="text-teal-600 hover:underline">{t('specialityLandingPage.backToHome')}</Link>
@@ -120,7 +120,7 @@ export default function SpecialityLanding() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <div className="min-h-screen bg-gray-50">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
 
       <div className="bg-white border-b border-gray-100">

@@ -11,7 +11,7 @@ export default function ForAmbulance() {
   }))
 
   return (
-    <div className="pt-16">
+    <div className="">
       <section className="py-20 bg-gradient-to-br from-white via-red-50/30 to-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <span className="text-5xl mb-4 inline-block">🚑</span>

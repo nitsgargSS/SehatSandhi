@@ -13,7 +13,7 @@ export default function ForHospitals() {
   const waLink = `https://wa.me/${WA_NUMBER}?text=Namaste!%20Hamara%20hospital%20Sehatsandhi%20se%20jud'na%20chahta%20hai.`
 
   return (
-    <div className="pt-16">
+    <div className="">
       <section className="py-20 bg-gradient-to-br from-white via-teal-50/30 to-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <span className="text-5xl mb-4 inline-block">🏨</span>
