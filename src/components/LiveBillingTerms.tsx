@@ -1,6 +1,7 @@
 import { usePricing, monthlyAppliesTo, commissionFor } from '../hooks/usePricing'
 import { describeDoctorRate } from '../../supabase/functions/_shared/headcount'
 import type { VerticalKey } from '../pages/business/shared'
+import { money } from '../lib/format'
 
 // What this category actually pays, right now.
 //
@@ -24,11 +25,11 @@ export default function LiveBillingTerms({ vertical }: { vertical: VerticalKey }
 
   if (monthly) {
     if (plan.mode === 'flat_all_pincodes') {
-      terms.push(`₹${(plan.monthly_price ?? 0).toLocaleString('en-IN')} a month — every pincode you pick is included`)
+      terms.push(`${money((plan.monthly_price ?? 0))} a month — every pincode you pick is included`)
     } else if (plan.mode === 'flat_per_pincode') {
-      terms.push(`₹${(plan.monthly_price ?? 0).toLocaleString('en-IN')} a month per pincode you choose`)
+      terms.push(`${money((plan.monthly_price ?? 0))} a month per pincode you choose`)
     } else if (Number.isFinite(cheapestTier)) {
-      terms.push(`Monthly listing from ₹${cheapestTier.toLocaleString('en-IN')} per pincode, set by its population`)
+      terms.push(`Monthly listing from ${money(cheapestTier)} per pincode, set by its population`)
     } else {
       terms.push('Monthly listing fee, set by the population of the pincodes you choose')
     }

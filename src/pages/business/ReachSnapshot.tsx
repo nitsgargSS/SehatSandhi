@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useServiceAreas, ServiceArea } from '../../hooks/useServiceAreas'
 import { BIZ, FALLBACK_AREAS } from './shared'
+import { money, num } from '../../lib/format'
 
 // "Your reach snapshot" — a population-density heat map of every pincode in the
 // active district, driven by Supabase service_areas + pricing_tiers. Tiles carry
@@ -105,8 +106,8 @@ export default function ReachSnapshot() {
               <span style={{ fontSize: 15, fontWeight: 800, color: '#14201c' }}>{active.area_name}</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#0E9F6E' }}>{active.pin_code}</span>
             </div>
-            <div style={{ fontSize: 12.5, color: '#5f6b64', marginTop: 4 }}>{active.population.toLocaleString('en-IN')} residents</div>
-            <div style={{ fontSize: 12, color: '#8a8172', marginTop: 2 }}>{active.tier_name} tier · ₹{active.monthly_price.toLocaleString('en-IN')}/mo</div>
+            <div style={{ fontSize: 12.5, color: '#5f6b64', marginTop: 4 }}>{num(active.population)} residents</div>
+            <div style={{ fontSize: 12, color: '#8a8172', marginTop: 2 }}>{active.tier_name} tier · {money(active.monthly_price)}/mo</div>
           </>
         ) : (
           <>

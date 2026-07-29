@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import StatusBadge from '../../components/StatusBadge'
+import { money, shortDate, isoDate } from '../../lib/format'
 import { verticalForSpeciality, takesAppointments, verticalFor } from '../business/shared'
 import { Doctor, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
@@ -44,7 +46,7 @@ export default function DoctorDashboard() {
   const [cancelling, setCancelling] = useState<Appointment | null>(null)
   const [cancelReason, setCancelReason] = useState('')
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null)
-  const [reschedDate, setReschedDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [reschedDate, setReschedDate] = useState(() => isoDate())
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [camps, setCamps] = useState<CampOffer[]>([])
   const [loading, setLoading] = useState(true)
@@ -85,8 +87,6 @@ export default function DoctorDashboard() {
     return () => { cancelled = true }
   }, [tab, doctor])
 
-  const money = (v: string | number | null) =>
-    `₹${Number(v ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
   // ── All appointments ──
   // The dashboard used to load 20 rows ordered by creation time and nothing
@@ -99,10 +99,10 @@ export default function DoctorDashboard() {
   const [allAppts, setAllAppts] = useState<Appointment[]>([])
   const [apptLoading, setApptLoading] = useState(false)
   const [apptFrom, setApptFrom] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10)
+    const d = new Date(); d.setDate(d.getDate() - 30); return isoDate(d)
   })
   const [apptTo, setApptTo] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10)
+    const d = new Date(); d.setDate(d.getDate() + 30); return isoDate(d)
   })
   const [apptStatus, setApptStatus] = useState<string>('all')
   const [apptSearch, setApptSearch] = useState('')
@@ -158,8 +158,6 @@ export default function DoctorDashboard() {
   }, [tab, doctor, reportDays])
 
   const rTotal = (k: keyof ReportRow) => report.reduce((a, r) => a + (Number(r[k]) || 0), 0)
-  const dayLabel = (iso: string) =>
-    new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
   // GSTIN, editable by the clinic itself. doctors_update_own already permits a
   // signed-in clinic to update its own row, so this needs no new policy.
@@ -719,9 +717,7 @@ export default function DoctorDashboard() {
                               </p>
                             )}
                           </div>
-                          <span className={a.status === 'completed' ? 'badge-active'
-                            : (a.status === 'cancelled' || a.status === 'no_show') ? 'badge-suspended'
-                            : 'badge-pending'}>{a.status === 'no_show' ? 'no show' : a.status}</span>
+                          <StatusBadge kind="appointment" value={a.status} />
                         </div>
 
                         {open && (
@@ -842,13 +838,7 @@ export default function DoctorDashboard() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                            a.status === 'completed' ? 'bg-teal-100 text-teal-700'
-                            : a.status === 'cancelled' ? 'bg-gray-200 text-gray-600'
-                            : a.status === 'no_show' ? 'bg-amber-100 text-amber-800'
-                            : 'bg-navy-50 text-navy-700'}`}>
-                            {a.status === 'no_show' ? 'DID NOT TURN UP' : a.status.toUpperCase()}
-                          </span>
+                          <StatusBadge kind="appointment" value={a.status} />
                           {a.cancelled_by && (
                             <span className="text-[11px] text-gray-400">cancelled by {a.cancelled_by}</span>
                           )}
@@ -1172,14 +1162,14 @@ export default function DoctorDashboard() {
 
                 <div className="card shadow-sm">
                   <ColumnChart title="Profile opens per day" height={140}
-                    data={report.map(r => ({ label: dayLabel(r.day), value: r.profile_views }))} />
+                    data={report.map(r => ({ label: shortDate(r.day), value: r.profile_views }))} />
                 </div>
 
                 <div className={`grid grid-cols-1 gap-4 ${booksAppointments ? 'lg:grid-cols-2' : ''}`}>
                   {booksAppointments && <>
                   <div className="card shadow-sm">
                     <ColumnChart title="Appointments booked per day" height={120}
-                      data={report.map(r => ({ label: dayLabel(r.day), value: r.bookings }))} />
+                      data={report.map(r => ({ label: shortDate(r.day), value: r.bookings }))} />
                   </div>
                   <div className="card shadow-sm">
                     <BarList title="What happened to those appointments"
@@ -1200,7 +1190,7 @@ export default function DoctorDashboard() {
                   {!booksAppointments && (
                     <div className="card shadow-sm">
                       <ColumnChart title="WhatsApp taps per day" height={120}
-                        data={report.map(r => ({ label: dayLabel(r.day), value: r.whatsapp_clicks }))} />
+                        data={report.map(r => ({ label: shortDate(r.day), value: r.whatsapp_clicks }))} />
                       <p className="text-xs text-gray-500 mt-4">
                         A tap is someone opening WhatsApp to contact you — the closest thing to an enquiry
                         we can see from here.
@@ -1260,7 +1250,7 @@ export default function DoctorDashboard() {
                     {marginalCost > 0 && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
                         Adding this doctor takes you to {billableDoctors + 1}, which adds
-                        ₹{marginalCost.toLocaleString('en-IN')}/month from your next renewal.
+                        {money(marginalCost)}/month from your next renewal.
                       </p>
                     )}
                     <div className="flex gap-2">
@@ -1597,7 +1587,7 @@ export default function DoctorDashboard() {
             </p>
             <label className="text-xs font-medium text-gray-600 mb-1 block">New date</label>
             <input type="date" className="input-field text-sm mb-4"
-              value={reschedDate} min={new Date().toISOString().slice(0, 10)}
+              value={reschedDate} min={isoDate()}
               onChange={e => setReschedDate(e.target.value)} />
 
             {reschedSlots.length === 0 ? (

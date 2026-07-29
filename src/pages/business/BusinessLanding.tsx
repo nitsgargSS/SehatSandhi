@@ -6,6 +6,7 @@ import WhatsAppBotMock from './WhatsAppBotMock'
 import ReachSnapshot from './ReachSnapshot'
 import { usePricing, commissionFor, monthlyAppliesTo } from '../../hooks/usePricing'
 import { useTaxSettings } from '../../hooks/useTaxSettings'
+import { money } from '../../lib/format'
 
 // Design 2a — "List your business" marketing landing, desktop-first, Warm Care look.
 // Colors are the exact design values (kept off the site's teal/navy theme on purpose).
@@ -81,7 +82,7 @@ export default function BusinessLanding() {
           <p style={{ fontSize: 'clamp(16px,4vw,18px)', color: BIZ.muted, lineHeight: 1.55, margin: '0 0 28px', maxWidth: 520 }}>
             Doctors, hospitals, pharmacies, labs, insurers and ambulance services get discovered by families nearby — over WhatsApp &amp; SMS.
             {flatPlan
-              ? ` Every pincode included for ₹${flatPrice.toLocaleString('en-IN')} a month.`
+              ? ` Every pincode included for ${money(flatPrice)} a month.`
               : ' Choose your pincodes, pay only for the audience you reach.'}
           </p>
           {/* on phones the CTA goes full-width so it's an easy thumb target */}
@@ -96,7 +97,7 @@ export default function BusinessLanding() {
       {/* trust strip */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: 'clamp(16px,5vw,48px)', padding: '20px clamp(16px,4vw,40px)', background: BIZ.creamAlt, borderTop: `1px solid ${BIZ.border}`, borderBottom: `1px solid ${BIZ.border}`, flexWrap: 'wrap', textAlign: 'center' }}>
         {['6 service categories',
-          flatPlan ? `₹${flatPrice.toLocaleString('en-IN')}/month, all pincodes` : 'Pay by audience, not per click',
+          flatPlan ? `${money(flatPrice)}/month, all pincodes` : 'Pay by audience, not per click',
           'WhatsApp & SMS delivery', 'Villages to tier-1 cities'].map(s => (
           <span key={s} style={{ fontSize: 14, fontWeight: 700, color: '#3f4a44' }}>{s}</span>
         ))}
@@ -111,7 +112,7 @@ export default function BusinessLanding() {
             { n: '1', t: 'Pick your pincodes', d: 'Select any number of pincodes — villages, towns or full cities — where you want patients to find you.' },
             { n: '2', t: 'We show you to those users', d: 'When a patient in your pincodes needs your category, you appear in their WhatsApp options.' },
             flatPlan
-              ? { n: '3', t: 'One flat monthly price', d: `₹${flatPrice.toLocaleString('en-IN')} a month covers every pincode you pick, for as many months as you pay upfront.` }
+              ? { n: '3', t: 'One flat monthly price', d: `${money(flatPrice)} a month covers every pincode you pick, for as many months as you pay upfront.` }
               : { n: '3', t: 'Pay by audience size', d: 'Your fee scales with how many users live in your chosen pincodes. Bigger reach, higher premium.' },
           ].map(s => (
             <div key={s.n} style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: 'clamp(20px,5vw,26px)' }}>
@@ -167,7 +168,7 @@ export default function BusinessLanding() {
                   {plan.mode === 'flat_all_pincodes' ? 'All pincodes included' : 'Per pincode'}
                 </div>
                 <div style={{ fontSize: 'clamp(40px,11vw,60px)', fontWeight: 800, color: '#fff', letterSpacing: '-.03em', marginTop: 10, lineHeight: 1 }}>
-                  ₹{flatPrice.toLocaleString('en-IN')}
+                  {money(flatPrice)}
                   <span style={{ fontSize: 'clamp(15px,4vw,18px)', fontWeight: 600, color: '#d6f2e6' }}>/month</span>
                   {gstNote && (
                     <span style={{ fontSize: 'clamp(13px,3.4vw,15px)', fontWeight: 600, color: '#d6f2e6' }}> {gstNote}</span>
@@ -210,7 +211,7 @@ export default function BusinessLanding() {
                     {hot && <div style={{ position: 'absolute', top: -11, left: 28, background: BIZ.ink, color: '#fff', fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 999 }}>MOST PICKED</div>}
                     <div style={{ fontSize: 15, fontWeight: 800, color: hot ? '#fff' : BIZ.green, marginBottom: 6 }}>{tier.tier_name} pincode</div>
                     <div style={{ fontSize: 13, color: hot ? '#d6f2e6' : BIZ.mutedWarm, marginBottom: 16 }}>{tier.popLabel}</div>
-                    <div style={{ fontSize: 'clamp(28px,7vw,34px)', fontWeight: 800, color: hot ? '#fff' : BIZ.ink, letterSpacing: '-.02em' }}>₹{tier.monthly_price.toLocaleString('en-IN')}<span style={{ fontSize: 15, fontWeight: 600, color: hot ? '#d6f2e6' : BIZ.mutedWarm }}>/mo</span></div>
+                    <div style={{ fontSize: 'clamp(28px,7vw,34px)', fontWeight: 800, color: hot ? '#fff' : BIZ.ink, letterSpacing: '-.02em' }}>{money(tier.monthly_price)}<span style={{ fontSize: 15, fontWeight: 600, color: hot ? '#d6f2e6' : BIZ.mutedWarm }}>/mo</span></div>
                     {tier.blurb && (
                       <div style={{ fontSize: 13, color: hot ? '#eafaf3' : BIZ.muted, marginTop: 16, lineHeight: 1.6 }}>{tier.blurb}</div>
                     )}
@@ -250,7 +251,7 @@ export default function BusinessLanding() {
                     </div>
                     <div style={{ fontSize: 13, color: BIZ.chipText, fontWeight: 800, background: BIZ.chipBg, display: 'inline-block', padding: '4px 10px', borderRadius: 999, marginTop: 12 }}>
                       {alsoMonthly
-                        ? (flatPlan ? `Plus ₹${flatPrice.toLocaleString('en-IN')}/mo listing` : 'Plus your monthly listing fee')
+                        ? (flatPlan ? `Plus ${money(flatPrice)}/mo listing` : 'Plus your monthly listing fee')
                         : '₹0 monthly listing fee'}
                     </div>
                     <div style={{ fontSize: 13.5, color: BIZ.muted, marginTop: 14, lineHeight: 1.6 }}>{v.commissionNote}</div>
@@ -265,8 +266,8 @@ export default function BusinessLanding() {
           <p style={{ fontSize: 13.5, color: BIZ.mutedWarm, textAlign: 'center', marginTop: 22, maxWidth: 720, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
             <strong style={{ color: BIZ.ink }}>Insurance example:</strong> at{' '}
             {commissionRows.find(x => x.v.key === 'insurance')!.c.percent}%, a policy with a ₹1,200 IRDA
-            commission means ₹{Math.round(1200 * (commissionRows.find(x => x.v.key === 'insurance')!.c.percent / 100)).toLocaleString('en-IN')} to
-            Sehatsandhi and ₹{(1200 - Math.round(1200 * (commissionRows.find(x => x.v.key === 'insurance')!.c.percent / 100))).toLocaleString('en-IN')} to you.
+            commission means {money(Math.round(1200 * (commissionRows.find(x => x.v.key === 'insurance')!.c.percent / 100)))} to
+            Sehatsandhi and {money((1200 - Math.round(1200 * (commissionRows.find(x => x.v.key === 'insurance')!.c.percent / 100))))} to you.
           </p>
         )}
       </div>
