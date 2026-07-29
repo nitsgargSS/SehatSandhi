@@ -28,9 +28,7 @@ export default function Navbar() {
             <Link to="/" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.home')}</Link>
             <Link to="/how-it-works" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.howItWorks')}</Link>
             <Link to="/for-doctors" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.forDoctors')}</Link>
-            <Link to="/partners" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.partners')}</Link>
             <Link to="/business" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>For Business</Link>
-            <Link to="/points" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.points')}</Link>
             {/* Clear, dedicated login link — the ONLY way for a doctor
                 or receptionist to find their dashboard was previously
                 buried at the bottom of the footer */}
@@ -62,9 +60,7 @@ export default function Navbar() {
           <Link to="/" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.home')}</Link>
           <Link to="/how-it-works" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.howItWorks')}</Link>
           <Link to="/for-doctors" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.forDoctors')}</Link>
-          <Link to="/partners" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.partners')}</Link>
           <Link to="/business" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">For Business</Link>
-          <Link to="/points" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.points')}</Link>
           <Link to="/doctor/login" onClick={() => setOpen(false)}
             className="flex items-center gap-2 text-teal-700 font-medium py-2 border-t border-gray-100 pt-3">
             <LogIn className="w-4 h-4" /> {t('nav.login')}

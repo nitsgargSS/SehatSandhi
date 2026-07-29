@@ -25,7 +25,6 @@ export default function Footer() {
             <ul className="space-y-2 text-sm text-white/60">
               <li><Link to="/" className="hover:text-white transition">{t('footer.findDoctor')}</Link></li>
               <li><Link to="/how-it-works" className="hover:text-white transition">{t('footer.howItWorks')}</Link></li>
-              <li><Link to="/points" className="hover:text-white transition">{t('footer.sehatPoints')}</Link></li>
               <li><a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer" className="hover:text-white transition">{t('footer.bookAppointment')}</a></li>
             </ul>
           </div>
@@ -33,7 +32,6 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold mb-4 text-white/90">{t('footer.partnersHeading')}</h4>
             <ul className="space-y-2 text-sm text-white/60">
-              <li><Link to="/partners" className="hover:text-white transition">{t('footer.partnerOverview')}</Link></li>
               <li><Link to="/business/register" className="hover:text-white transition">{t('footer.registerAsDoctor')}</Link></li>
               <li><Link to="/partner" className="hover:text-white transition">{t('footer.pharmacyLabAmbulance')}</Link></li>
               <li><Link to="/doctor/login" className="hover:text-white transition">{t('footer.partnerLogin')}</Link></li>

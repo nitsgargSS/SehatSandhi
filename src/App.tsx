@@ -15,7 +15,6 @@ import { WA_NUMBER } from './types'
 // stays eager — it is the first paint for almost everyone who arrives.
 const Landing = lazy(() => import('./pages/Landing'))
 const HowItWorks = lazy(() => import('./pages/HowItWorks'))
-const Partners = lazy(() => import('./pages/Partners'))
 const ForDoctors = lazy(() => import('./pages/ForDoctors'))
 const ForPharmacy = lazy(() => import('./pages/ForPharmacy'))
 const ForLabs = lazy(() => import('./pages/ForLabs'))
@@ -26,7 +25,6 @@ const SpecialityLanding = lazy(() => import('./pages/SpecialityLanding'))
 const DoctorLogin = lazy(() => import('./pages/doctor/Login'))
 const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
-const Points = lazy(() => import('./pages/Points'))
 const PartnerRegister = lazy(() => import('./pages/Partner'))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
 const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
@@ -144,7 +142,6 @@ export default function App() {
           {/* Previous landing, kept and reachable (not deleted) */}
           <Route path="/landing-old" element={<WithLayout><Landing /></WithLayout>} />
           <Route path="/how-it-works" element={<WithLayout><HowItWorks /></WithLayout>} />
-          <Route path="/partners" element={<WithLayout><Partners /></WithLayout>} />
           <Route path="/for-doctors" element={<WithLayout><ForDoctors /></WithLayout>} />
           <Route path="/for-pharmacy" element={<WithLayout><ForPharmacy /></WithLayout>} />
           <Route path="/for-labs" element={<WithLayout><ForLabs /></WithLayout>} />
@@ -152,7 +149,6 @@ export default function App() {
           <Route path="/for-insurance" element={<WithLayout><ForInsurance /></WithLayout>} />
           <Route path="/for-hospitals" element={<WithLayout><ForHospitals /></WithLayout>} />
           <Route path="/speciality/:specId/:areaSlug" element={<WithLayout><SpecialityLanding /></WithLayout>} />
-          <Route path="/points" element={<WithLayout><Points /></WithLayout>} />
           <Route path="/partner" element={<WithLayout><PartnerRegister /></WithLayout>} />
 
           {/* New design (Sehatsandhi.dc.html) — Warm Care look, own palette. */}

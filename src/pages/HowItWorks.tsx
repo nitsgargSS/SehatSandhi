@@ -136,16 +136,6 @@ export default function HowItWorks() {
         </div>
       </section>
 
-      {/* Sehat Points teaser */}
-      <section className="py-16 bg-gradient-to-r from-teal-600 to-navy-700">
-        <div className="max-w-3xl mx-auto px-4 text-center text-white">
-          <h2 className="text-3xl font-bold mb-3">{t('howItWorksPage.pointsTitle')}</h2>
-          <p className="text-white/80 mb-6">{t('howItWorksPage.pointsDesc')}</p>
-          <Link to="/points" className="bg-white text-teal-700 font-bold px-8 py-3 rounded-full hover:bg-gray-50 transition inline-block">
-            {t('howItWorksPage.pointsCta')}
-          </Link>
-        </div>
-      </section>
 
       <FAQSection items={faqs} subtitle={t('howItWorksPage.faqSubtitle')} />
 

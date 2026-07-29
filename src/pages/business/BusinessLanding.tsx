@@ -16,6 +16,26 @@ import { useTaxSettings } from '../../hooks/useTaxSettings'
 
 const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 
+// The per-vertical marketing pages, and the one-line pitch each used to carry on
+// /partners. Keyed by VerticalKey so the six cards stay in step with VERTICALS
+// rather than being a second list that can drift from it.
+const VERTICAL_PAGES: Record<string, string> = {
+  doctors: '/for-doctors', hospital: '/for-hospitals', pharmacy: '/for-pharmacy',
+  lab: '/for-labs', insurance: '/for-insurance', ambulance: '/for-ambulance',
+}
+const VERTICAL_TITLES: Record<string, string> = {
+  doctors: 'Doctors', hospital: 'Hospitals', pharmacy: 'Pharmacies',
+  lab: 'Labs', insurance: 'Insurance', ambulance: 'Ambulance',
+}
+const VERTICAL_BLURBS: Record<string, string> = {
+  doctors: 'Patients find you on WhatsApp',
+  hospital: 'Every consultant, one listing',
+  pharmacy: 'Prescriptions come straight to you',
+  lab: 'Test bookings and home collection',
+  insurance: 'Warm leads, not cold calling',
+  ambulance: 'Emergency response in your area',
+}
+
 export default function BusinessLanding() {
   const { plan, tiers, verticals } = usePricing()
   const tax = useTaxSettings()
@@ -107,15 +127,25 @@ export default function BusinessLanding() {
         </div>
       </div>
 
-      {/* verticals */}
+      {/* verticals — this is what /partners used to be. That page was a second
+          six-card grid of the same categories, one click further from signing
+          up; these cards were the same six but inert. Merged: the cards carry
+          the line that said what each vertical gets, and link to the page
+          written for it. */}
       <div className="max-w-7xl mx-auto pb-10" style={{ paddingLeft: 'clamp(16px,4vw,40px)', paddingRight: 'clamp(16px,4vw,40px)' }}>
-        <h3 style={{ fontSize: 'clamp(19px,4.5vw,22px)', fontWeight: 800, color: BIZ.ink, margin: '0 0 20px' }}>Who can list</h3>
+        <h3 style={{ fontSize: 'clamp(19px,4.5vw,22px)', fontWeight: 800, color: BIZ.ink, margin: '0 0 6px' }}>Who can list</h3>
+        <p style={{ fontSize: 14, color: BIZ.muted, margin: '0 0 20px' }}>
+          Six kinds of business, each with its own page — open one to see what it gets.
+        </p>
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
           {VERTICALS.map(v => (
-            <div key={v.key} style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: 16, textAlign: 'center' }}>
+            <Link key={v.key} to={VERTICAL_PAGES[v.key]}
+              style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: 16, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <span style={{ color: v.color, display: 'inline-flex' }}><VerticalIcon vertical={v.key} /></span>
-              <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.ink, marginTop: 8 }}>{v.key === 'doctors' ? 'Doctors' : v.key === 'hospital' ? 'Hospitals' : v.key === 'pharmacy' ? 'Pharmacies' : v.key === 'lab' ? 'Labs' : v.key === 'insurance' ? 'Insurance' : 'Ambulance'}</div>
-            </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.ink, marginTop: 8 }}>{VERTICAL_TITLES[v.key]}</div>
+              <div style={{ fontSize: 12, color: BIZ.muted, marginTop: 5, lineHeight: 1.45 }}>{VERTICAL_BLURBS[v.key]}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: BIZ.green, marginTop: 'auto', paddingTop: 10 }}>Learn more →</div>
+            </Link>
           ))}
         </div>
       </div>
