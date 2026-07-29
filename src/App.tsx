@@ -23,7 +23,6 @@ const ForAmbulance = lazy(() => import('./pages/ForAmbulance'))
 const ForInsurance = lazy(() => import('./pages/ForInsurance'))
 const ForHospitals = lazy(() => import('./pages/ForHospitals'))
 const SpecialityLanding = lazy(() => import('./pages/SpecialityLanding'))
-const Register = lazy(() => import('./pages/doctor/Register'))
 const DoctorLogin = lazy(() => import('./pages/doctor/Login'))
 const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
@@ -166,7 +165,14 @@ export default function App() {
           <Route path="/invoice/:token" element={<InvoicePage />} />
 
           {/* Doctor */}
-          <Route path="/doctor" element={<WithLayout><Register /></WithLayout>} />
+          {/* The old four-step doctor wizard lived here. It predates paid
+              listings: no price, no term, no GST, no Pay — it created a pending
+              row and stopped, so anyone who used it could never pay and never
+              reach a dashboard. /business/register does the whole job, doctors
+              included. Redirected rather than deleted because "Register Clinic"
+              in the navbar and footer, and nine other links, still point here —
+              and so do any printed or forwarded links already out there. */}
+          <Route path="/doctor" element={<Navigate to="/business/register" replace />} />
           {/* No marketing navbar: this page carries the business wizard's own
               shell, the same as /business/register. */}
           <Route path="/doctor/login" element={<DoctorLogin />} />
