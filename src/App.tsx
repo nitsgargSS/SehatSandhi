@@ -3,8 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { LanguageProvider } from './i18n/LanguageContext'
 import { supabase } from './lib/supabase'
 import { track } from './lib/analytics'
-import Navbar from './components/Navbar'
-import Footer from './components/Footer'
 import PatientHome from './pages/PatientHome'
 import EnvBanner from './components/EnvBanner'
 import { WA_NUMBER } from './types'
@@ -13,19 +11,10 @@ import { WA_NUMBER } from './types'
 // opening the homepage from a WhatsApp link downloaded the admin dashboard, the
 // billing screens and the signup wizard before seeing anything. PatientHome
 // stays eager — it is the first paint for almost everyone who arrives.
-const Landing = lazy(() => import('./pages/Landing'))
-const HowItWorks = lazy(() => import('./pages/HowItWorks'))
-const ForDoctors = lazy(() => import('./pages/ForDoctors'))
-const ForPharmacy = lazy(() => import('./pages/ForPharmacy'))
-const ForLabs = lazy(() => import('./pages/ForLabs'))
-const ForAmbulance = lazy(() => import('./pages/ForAmbulance'))
-const ForInsurance = lazy(() => import('./pages/ForInsurance'))
-const ForHospitals = lazy(() => import('./pages/ForHospitals'))
 const SpecialityLanding = lazy(() => import('./pages/SpecialityLanding'))
 const DoctorLogin = lazy(() => import('./pages/doctor/Login'))
 const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
-const PartnerRegister = lazy(() => import('./pages/Partner'))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
 const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
 const InvoicePage = lazy(() => import('./pages/InvoicePage'))
@@ -109,19 +98,6 @@ const WhatsAppFloat = () => {
   )
 }
 
-// The navbar is sticky rather than fixed, so it occupies real height and the
-// page below simply follows it. Pages used to reserve pt-16 (64px) by hand for
-// a bar that is h-20 (80px) tall — the top 16px of every page sat underneath
-// it, and in a sandbox session the banner hid ~40px of the navbar itself. Both
-// went away with the layout doing the spacing instead of each page guessing.
-const WithLayout = ({ children }: { children: React.ReactNode }) => (
-  <>
-    <Navbar />
-    {children}
-    <Footer />
-  </>
-)
-
 export default function App() {
   return (
     <LanguageProvider>
@@ -135,37 +111,31 @@ export default function App() {
           </div>
         }>
         <Routes>
-          {/* Public — new Warm Care customer homepage (Sehatsandhi.dc.html).
-              No site nav/footer: patients land here from a WhatsApp/SMS link
-              and need one clean, full-screen mobile page. */}
+          {/* ── Customer flow ───────────────────────────────────────────────
+              A patient arrives from a WhatsApp or SMS link, finds a clinic and
+              taps through to it. One clean full-screen page, then the listing
+              pages the search leads to — no site nav or footer anywhere in it. */}
           <Route path="/" element={<PatientHome />} />
-          {/* Previous landing, kept and reachable (not deleted) */}
-          <Route path="/landing-old" element={<WithLayout><Landing /></WithLayout>} />
-          <Route path="/how-it-works" element={<WithLayout><HowItWorks /></WithLayout>} />
-          <Route path="/for-doctors" element={<WithLayout><ForDoctors /></WithLayout>} />
-          <Route path="/for-pharmacy" element={<WithLayout><ForPharmacy /></WithLayout>} />
-          <Route path="/for-labs" element={<WithLayout><ForLabs /></WithLayout>} />
-          <Route path="/for-ambulance" element={<WithLayout><ForAmbulance /></WithLayout>} />
-          <Route path="/for-insurance" element={<WithLayout><ForInsurance /></WithLayout>} />
-          <Route path="/for-hospitals" element={<WithLayout><ForHospitals /></WithLayout>} />
-          <Route path="/speciality/:specId/:areaSlug" element={<WithLayout><SpecialityLanding /></WithLayout>} />
-          <Route path="/partner" element={<WithLayout><PartnerRegister /></WithLayout>} />
+          <Route path="/speciality/:specId/:areaSlug" element={<SpecialityLanding />} />
+          <Route path="/doctor/:slug" element={<DoctorProfile />} />
 
-          {/* New design (Sehatsandhi.dc.html) — Warm Care look, own palette. */}
-          <Route path="/home-v2" element={<Navigate to="/" replace />} />
+          {/* ── Business flow ───────────────────────────────────────────────
+              /business is the whole pitch on one page — how it works, pricing
+              and who can list are anchors within it, not separate routes. The
+              only places to go from there are register and log in. */}
           <Route path="/business" element={<BusinessLanding />} />
           <Route path="/business/register" element={<BusinessRegister />} />
+          <Route path="/business/login" element={<DoctorLogin />} />
+          <Route path="/business/dashboard" element={<DoctorDashboard />} />
 
           {/* Tax invoice, opened by unguessable token from a WhatsApp or email
               link — so deliberately no login and no site nav. */}
           <Route path="/invoice/:token" element={<InvoicePage />} />
 
-          {/* Doctor */}
-          {/* No marketing navbar: this page carries the business wizard's own
-              shell, the same as /business/register. */}
-          <Route path="/doctor/login" element={<DoctorLogin />} />
-          <Route path="/doctor/dashboard" element={<WithLayout><DoctorDashboard /></WithLayout>} />
-          <Route path="/doctor/:slug" element={<WithLayout><DoctorProfile /></WithLayout>} />
+          {/* Old paths, kept as redirects: they are in customers' WhatsApp
+              history and on anything already printed. */}
+          <Route path="/doctor/login" element={<Navigate to="/business/login" replace />} />
+          <Route path="/doctor/dashboard" element={<Navigate to="/business/dashboard" replace />} />
 
           {/* Admin — hidden, never linked publicly */}
           <Route path={`/${ADMIN_PATH}`} element={<AdminLogin />} />

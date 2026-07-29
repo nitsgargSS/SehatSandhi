@@ -16,24 +16,21 @@ import { useTaxSettings } from '../../hooks/useTaxSettings'
 
 const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 
-// The per-vertical marketing pages, and the one-line pitch each used to carry on
-// /partners. Keyed by VerticalKey so the six cards stay in step with VERTICALS
-// rather than being a second list that can drift from it.
-const VERTICAL_PAGES: Record<string, string> = {
-  doctors: '/for-doctors', hospital: '/for-hospitals', pharmacy: '/for-pharmacy',
-  lab: '/for-labs', insurance: '/for-insurance', ambulance: '/for-ambulance',
-}
+// What each category gets out of being listed. This is what the six separate
+// /for-* marketing pages said; they are gone, and the Partners section below
+// says it here instead. Keyed by VerticalKey so the cards stay in step with
+// VERTICALS rather than being a second list that can drift from it.
 const VERTICAL_TITLES: Record<string, string> = {
-  doctors: 'Doctors', hospital: 'Hospitals', pharmacy: 'Pharmacies',
-  lab: 'Labs', insurance: 'Insurance', ambulance: 'Ambulance',
+  doctors: 'Doctors & clinics', hospital: 'Hospitals', pharmacy: 'Pharmacies',
+  lab: 'Diagnostic labs', insurance: 'Insurance agents', ambulance: 'Ambulance services',
 }
 const VERTICAL_BLURBS: Record<string, string> = {
-  doctors: 'Patients find you on WhatsApp',
-  hospital: 'Every consultant, one listing',
-  pharmacy: 'Prescriptions come straight to you',
-  lab: 'Test bookings and home collection',
-  insurance: 'Warm leads, not cold calling',
-  ambulance: 'Emergency response in your area',
+  doctors: 'Patients in your pincodes find you on WhatsApp and book a time — no app for them to install, no call for you to miss.',
+  hospital: 'Every consultant gets their own profile and calendar, under one hospital listing and one bill.',
+  pharmacy: 'Prescriptions come straight to you from patients nearby, to fill in store or deliver home.',
+  lab: 'Test bookings arrive with the patient details, and you can offer home sample collection.',
+  insurance: 'Warm leads from families already looking for cover — not cold calling.',
+  ambulance: 'Emergency and scheduled transport requests from your own area, the moment they are needed.',
 }
 
 export default function BusinessLanding() {
@@ -63,17 +60,23 @@ export default function BusinessLanding() {
 
   return (
     <div style={{ background: BIZ.cream, fontFamily: font }}>
-      {/* nav — logos shrink and the link row wraps under them on narrow phones */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'clamp(12px,3vw,16px) clamp(16px,4vw,40px)', borderBottom: `1px solid ${BIZ.border}`, gap: 12 }} className="max-w-7xl mx-auto flex-wrap">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/logo-only-symbol.png" alt="" aria-hidden style={{ height: 'clamp(36px,9vw,50px)', width: 'auto', objectFit: 'contain' }} />
-          <img src="/logo-title.png" alt="Sehatsandhi" style={{ height: 'clamp(36px,9vw,50px)', width: 'auto', objectFit: 'contain' }} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(14px,3.5vw,28px)' }} className="flex-wrap">
-          <a href="#how" className="max-sm:hidden" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>How it works</a>
-          <a href="#pricing" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>Pricing</a>
-          <Link to="/doctor/login" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>Log in</Link>
-          <Link to="/business/register" style={{ background: BIZ.green, color: '#fff', fontWeight: 700, fontSize: 14, padding: '11px 20px', borderRadius: 12 }}>List your business</Link>
+      {/* nav — sticky, because every link but two is an anchor into this page:
+          scrolling to Pricing and then wanting Partners should not mean
+          scrolling back up. Logos shrink and the link row wraps under them on
+          narrow phones. */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 40, background: BIZ.cream, borderBottom: `1px solid ${BIZ.border}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'clamp(12px,3vw,16px) clamp(16px,4vw,40px)', gap: 12 }} className="max-w-7xl mx-auto flex-wrap">
+          <Link to="/business" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <img src="/logo-only-symbol.png" alt="" aria-hidden style={{ height: 'clamp(36px,9vw,50px)', width: 'auto', objectFit: 'contain' }} />
+            <img src="/logo-title.png" alt="Sehatsandhi" style={{ height: 'clamp(36px,9vw,50px)', width: 'auto', objectFit: 'contain' }} />
+          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(14px,3.5vw,28px)' }} className="flex-wrap">
+            <a href="#how" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>How it works</a>
+            <a href="#pricing" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>Pricing</a>
+            <a href="#partners" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>Partners</a>
+            <Link to="/business/login" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>Log in</Link>
+            <Link to="/business/register" style={{ background: BIZ.green, color: '#fff', fontWeight: 700, fontSize: 14, padding: '11px 20px', borderRadius: 12 }}>List your business</Link>
+          </div>
         </div>
       </div>
 
@@ -132,20 +135,19 @@ export default function BusinessLanding() {
           up; these cards were the same six but inert. Merged: the cards carry
           the line that said what each vertical gets, and link to the page
           written for it. */}
-      <div className="max-w-7xl mx-auto pb-10" style={{ paddingLeft: 'clamp(16px,4vw,40px)', paddingRight: 'clamp(16px,4vw,40px)' }}>
-        <h3 style={{ fontSize: 'clamp(19px,4.5vw,22px)', fontWeight: 800, color: BIZ.ink, margin: '0 0 6px' }}>Who can list</h3>
-        <p style={{ fontSize: 14, color: BIZ.muted, margin: '0 0 20px' }}>
-          Six kinds of business, each with its own page — open one to see what it gets.
+      <div id="partners" className="max-w-7xl mx-auto pb-10" style={{ paddingLeft: 'clamp(16px,4vw,40px)', paddingRight: 'clamp(16px,4vw,40px)', scrollMarginTop: 90 }}>
+        <h2 style={{ fontSize: 'clamp(23px,5.5vw,28px)', fontWeight: 800, color: BIZ.ink, textAlign: 'center', margin: '0 0 8px', letterSpacing: '-.02em' }}>Who can list</h2>
+        <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 0 28px' }}>
+          Six kinds of business, and what each one gets out of being listed.
         </p>
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {VERTICALS.map(v => (
-            <Link key={v.key} to={VERTICAL_PAGES[v.key]}
-              style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: 16, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div key={v.key}
+              style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 16, padding: 20 }}>
               <span style={{ color: v.color, display: 'inline-flex' }}><VerticalIcon vertical={v.key} /></span>
-              <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.ink, marginTop: 8 }}>{VERTICAL_TITLES[v.key]}</div>
-              <div style={{ fontSize: 12, color: BIZ.muted, marginTop: 5, lineHeight: 1.45 }}>{VERTICAL_BLURBS[v.key]}</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: BIZ.green, marginTop: 'auto', paddingTop: 10 }}>Learn more →</div>
-            </Link>
+              <div style={{ fontSize: 16, fontWeight: 800, color: BIZ.ink, marginTop: 10 }}>{VERTICAL_TITLES[v.key]}</div>
+              <div style={{ fontSize: 14, color: BIZ.muted, marginTop: 6, lineHeight: 1.5 }}>{VERTICAL_BLURBS[v.key]}</div>
+            </div>
           ))}
         </div>
       </div>

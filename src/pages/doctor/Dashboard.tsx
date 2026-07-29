@@ -337,7 +337,7 @@ export default function DoctorDashboard() {
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { window.location.href = '/doctor/login'; return }
+      if (!user) { window.location.href = '/business/login'; return }
       const { data: doc } = await supabase.from('doctors').select('*').eq('email', user.email).single()
       if (doc) {
         setDoctor(doc)
@@ -377,7 +377,7 @@ export default function DoctorDashboard() {
     }
   }, [doctor, tab])
 
-  const logout = async () => { await supabase.auth.signOut(); window.location.href = '/doctor/login' }
+  const logout = async () => { await supabase.auth.signOut(); window.location.href = '/business/login' }
 
   const submitStaff = async () => {
     if (!doctor || !staffForm.full_name || !staffForm.whatsapp_number) return

@@ -72,7 +72,7 @@ export default function DoctorLogin() {
       // creates the session, so the browser ends up holding a normal login.
       const { error: vErr } = await supabase.auth.verifyOtp({ token_hash: r.tokenHash, type: 'email' })
       if (vErr) throw new Error('Could not start your session. Please try again.')
-      navigate('/doctor/dashboard')
+      navigate('/business/dashboard')
     } catch (err) {
       setError((err as Error).message)
     } finally { setBusy(false) }
@@ -83,7 +83,7 @@ export default function DoctorLogin() {
     setBusy(true); setError('')
     const { error: err } = await supabase.auth.signInWithPassword({ email, password })
     if (err) { setError(err.message); setBusy(false) }
-    else navigate('/doctor/dashboard')
+    else navigate('/business/dashboard')
   }
 
   return (
