@@ -1,4 +1,5 @@
 import { usePricing, monthlyAppliesTo, commissionFor } from '../hooks/usePricing'
+import { describeDoctorRate } from '../../supabase/functions/_shared/headcount'
 import type { VerticalKey } from '../pages/business/shared'
 
 // What this category actually pays, right now.
@@ -31,6 +32,12 @@ export default function LiveBillingTerms({ vertical }: { vertical: VerticalKey }
     } else {
       terms.push('Monthly listing fee, set by the population of the pincodes you choose')
     }
+    // A hospital is billed per consultant, so the figure above is what ONE
+    // doctor costs. Saying only "₹1,000 a month" here and then quoting ₹3,000
+    // in the wizard is the drift _shared/headcount.ts exists to prevent — this
+    // page was the one screen still not asking it.
+    const perDoctor = vertical === 'hospital' ? describeDoctorRate(plan) : null
+    if (perDoctor) terms.push(perDoctor)
     if (plan.max_months > plan.min_months) {
       terms.push(`Pay for ${plan.min_months}–${plan.max_months} months — you pick the term, and your rate is held for whatever you pay`)
     }

@@ -41,7 +41,7 @@ const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 // What a doctor may pick. LAB and PHRM are excluded deliberately: they are
 // separate verticals with their own signup and their own billing, and choosing
 // one here would bill a doctor as a diagnostics centre.
-const DOCTOR_SPECIALITIES = SPECIALITIES.filter(s => s.id !== 'LAB' && s.id !== 'PHRM')
+const DOCTOR_SPECIALITIES = SPECIALITIES.filter(s => s.id !== 'LAB' && s.id !== 'PHARMACY')
 
 // Compact row input for the consultant list — narrower than the main Field so
 // four of them fit one line on a laptop.

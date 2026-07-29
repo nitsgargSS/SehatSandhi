@@ -1036,12 +1036,12 @@ export const translations: Tree = {
 
     pricingTitle: { en: 'How Hospital Pricing Works', hi: 'हॉस्पिटल प्राइसिंग कैसे काम करती है' },
     pricingDesc: {
-      en: "Hospitals are priced per speciality per PIN code — not per doctor. Adding a new doctor to an existing speciality costs nothing extra, and a doctor leaving doesn't disrupt your listing. Contact our team for a custom quote based on your specialities and coverage areas.",
-      hi: 'हॉस्पिटल्स की प्राइसिंग प्रति स्पेशलिटी प्रति PIN कोड होती है — प्रति डॉक्टर नहीं। एक एक्ज़िस्टिंग स्पेशलिटी में नया डॉक्टर जोड़ने का कोई एक्स्ट्रा कॉस्ट नहीं, और एक डॉक्टर के जाने से आपकी लिस्टिंग डिसरप्ट नहीं होती। अपनी स्पेशलिटीज़ और कवरेज एरिया के हिसाब से कस्टम कोट के लिए हमारी टीम से कॉन्टैक्ट करें।',
+      en: "Hospitals are priced per doctor, and every PIN code you pick is included. Each consultant you list gets their own profile and calendar, and the price follows the number you have — the wizard shows the exact total before you pay. Removing a doctor lowers it from your next renewal.",
+      hi: 'हॉस्पिटल्स की प्राइसिंग प्रति डॉक्टर होती है, और आपके चुने हुए सभी PIN कोड शामिल हैं। आपका हर कंसल्टेंट अपनी प्रोफाइल और कैलेंडर पाता है, और कीमत डॉक्टरों की संख्या के हिसाब से चलती है — पेमेंट से पहले विज़ार्ड पूरा टोटल दिखाता है। डॉक्टर हटाने पर अगले रिन्यूअल से कीमत कम हो जाती है।',
     },
 
     faqQ1: { en: 'How many doctors can we add?', hi: 'हम कितने डॉक्टर जोड़ सकते हैं?' },
-    faqA1: { en: 'Unlimited, across any speciality you offer.', hi: 'अनलिमिटेड, किसी भी स्पेशलिटी में जो आप ऑफर करते हैं।' },
+    faqA1: { en: 'As many as you like, across any speciality you offer. Each one is priced per doctor, so your total follows your roster — you can add or remove them later from your dashboard, and the cost of a change is shown before you confirm it.', hi: 'जितने चाहें, किसी भी स्पेशलिटी में जो आप ऑफर करते हैं। हर डॉक्टर की कीमत अलग जुड़ती है, तो आपका टोटल आपके रोस्टर के हिसाब से चलता है — बाद में डैशबोर्ड से जोड़ या हटा सकते हैं, और बदलाव की कीमत कन्फर्म करने से पहले दिखती है।' },
     faqQ2: { en: 'What happens when a doctor leaves?', hi: 'जब कोई डॉक्टर चला जाता है तो क्या होता है?' },
     faqA2: { en: 'Your admin simply updates the doctor list under that speciality — the listing, and its visibility, stays live without interruption.', hi: 'आपका एडमिन बस उस स्पेशलिटी के नीचे डॉक्टर लिस्ट अपडेट करता है — लिस्टिंग, और उसकी विज़िबिलिटी, बिना रुकावट के लाइव रहती है।' },
     faqQ3: { en: 'How is billing structured?', hi: 'बिलिंग कैसे स्ट्रक्चर्ड है?' },

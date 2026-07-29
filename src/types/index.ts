@@ -96,7 +96,11 @@ export const SPECIALITIES = [
   { id: 'PHYS', en: 'Physiotherapy',               hi: 'फिजियोथेरेपी' },
   { id: 'ALT',  en: 'Ayurveda / Homeopathy',       hi: 'आयुर्वेद' },
   { id: 'LAB',  en: 'Blood Test / Diagnostics',    hi: 'जांच' },
-  { id: 'PHRM', en: 'Pharmacy / Medicine',         hi: 'दवाई' },
+  // PHARMACY, not PHRM: this id is written to doctors.speciality, and the
+  // pricing engine resolves a listing's vertical from that value. A code it
+  // does not know is billed as a doctor, so a pharmacy picked here would have
+  // been charged monthly instead of commission.
+  { id: 'PHARMACY', en: 'Pharmacy / Medicine',     hi: 'दवाई' },
 ]
 
 export const PIN_CODES = [

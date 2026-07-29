@@ -2,6 +2,7 @@ import { useEffect, useState, Fragment } from 'react'
 import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Building2, Plus, Trash2, ChevronLeft, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
+import { verticalForSpeciality } from '../business/shared'
 import { StatTile, ColumnChart, BarList, RangePicker } from '../../components/Charts'
 import { describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import ScrollableTable from '../../components/ScrollableTable'
@@ -217,14 +218,16 @@ export default function AdminDashboard() {
   const [specBusy, setSpecBusy] = useState<string | null>(null)
   const [specMsg, setSpecMsg] = useState('')
 
-  // Specialities that ARE a business vertical. Moving a listing onto one of
-  // these changes how it is billed — a doctor set to PHARMACY stops paying
-  // monthly and starts owing commission — so it is confirmed, not silent.
-  const VERTICAL_SPECIALITIES: Record<string, string> = {
-    GEN: 'doctors', HOSPITAL: 'hospital', LAB: 'lab',
-    PHARMACY: 'pharmacy', INSURANCE: 'insurance', AMBULANCE: 'ambulance',
-  }
-  const verticalOf = (spec: string) => VERTICAL_SPECIALITIES[spec] ?? 'doctors'
+  // Moving a listing onto a business speciality changes how it is billed — a
+  // doctor set to PHARMACY stops paying monthly and starts owing commission —
+  // so it is confirmed, not silent.
+  //
+  // This asks verticalForSpeciality rather than keeping its own map. The map it
+  // used to hold spelled pharmacy "PHARMACY", while the dropdown writes "PHRM"
+  // from SPECIALITIES, so the two never matched: the confirmation silently did
+  // not fire for the one example it was written for, and the listing was not
+  // recognised as a pharmacy for billing either.
+  const verticalOf = (spec: string) => verticalForSpeciality(spec)
 
   const changeSpeciality = async (doc: Doctor, next: string) => {
     if (!next || next === doc.speciality) return
@@ -288,9 +291,6 @@ export default function AdminDashboard() {
     monthly_price: '', default_months: '1', min_months: '1', max_months: '12',
     max_signups: '', suspend_commission: false, sequence: '900',
   })
-  // The one number that changes most often, given its own field at the top of
-  // the tab rather than buried in a column of the plan table.
-  const [livePriceDraft, setLivePriceDraft] = useState('')
   const [taxSettings, setTaxSettings] = useState<TaxSettingsRow | null>(null)
   const [taxDraft, setTaxDraft] = useState<Record<string, string>>({})
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
@@ -1483,21 +1483,23 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
-                  {/* Change the price — the single most common edit, so it gets
-                      its own field instead of a column in the table below.
-                      Type a number, save, and /business shows it immediately;
-                      nothing about the price is written into code or copy. */}
+                  {/* What the live plan currently charges — read only. The price
+                      is edited in one place, the Plan queue below, so there is
+                      no second write path that can disagree with it. This card
+                      still earns its place: it names which plan is live, and it
+                      is where the seat-cap warning belongs. */}
                   {activePlan && activePlan.mode !== 'pincode_tiers' && (
                     <div className="card shadow-sm">
                       <h3 className="font-bold text-navy-700 mb-1">Price on the live plan</h3>
                       <p className="text-sm text-gray-500 mb-3">
-                        What a business pays per month on <strong>{activePlan.label}</strong>. Saving updates
-                        /business, the vertical pages and the signup wizard right away — no deploy. Businesses
-                        already paid keep their locked rate until their term ends.
+                        What a business pays per month on <strong>{activePlan.label}</strong>. Change it in the
+                        Plan queue below; /business, the vertical pages and the signup wizard follow
+                        immediately — no deploy. Businesses already paid keep their locked rate until their
+                        term ends.
                       </p>
                       {/* A seat cap makes the queue advance on its own, which
-                          moves the price with nobody deciding it. Say so where
-                          the price is edited, not three cards further down. */}
+                          moves the price with nobody deciding it. Say so beside
+                          the live price, where it is read. */}
                       {(() => {
                         const capped = planRows.find(p => p.code === activePlan.code && p.max_signups != null)
                         const next = planRows
@@ -1513,35 +1515,18 @@ export default function AdminDashboard() {
                           </div>
                         ) : (
                           <div className="bg-gray-50 text-gray-600 text-xs rounded-lg p-3 mb-3">
-                            No seat cap is set, so <strong>nothing changes this price but you</strong>. Change it as
-                            often as you like — it only ever affects businesses who sign up afterwards.
+                            No seat cap is set, so <strong>nothing changes this price but you</strong>. Change it in
+                            the Plan queue as often as you like — it only ever affects businesses who sign up
+                            afterwards.
                           </div>
                         )
                       })()}
-                      <div className="flex gap-2 flex-wrap items-center">
+                      <div className="flex gap-2 flex-wrap items-baseline">
                         <span className="text-2xl font-bold text-gray-400">₹</span>
-                        <input className="input-field w-40 text-lg font-bold" type="number" min={0} step={100}
-                          placeholder={String(activePlan.monthly_price ?? 0)}
-                          value={livePriceDraft}
-                          onChange={e => setLivePriceDraft(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter' && livePriceDraft !== '') {
-                            runPricingAction('updatePlan',
-                              { planCode: activePlan.code, patch: { monthly_price: Number(livePriceDraft) } },
-                              `${activePlan.label} is now ₹${Number(livePriceDraft).toLocaleString('en-IN')}/month.`)
-                            setLivePriceDraft('')
-                          } }} />
+                        <span className="text-3xl font-bold text-navy-700 tabular-nums">
+                          {Number(activePlan.monthly_price ?? 0).toLocaleString('en-IN')}
+                        </span>
                         <span className="text-sm text-gray-500">per month</span>
-                        <button
-                          disabled={pricingBusy || livePriceDraft === '' || Number(livePriceDraft) === activePlan.monthly_price}
-                          onClick={() => {
-                            runPricingAction('updatePlan',
-                              { planCode: activePlan.code, patch: { monthly_price: Number(livePriceDraft) } },
-                              `${activePlan.label} is now ₹${Number(livePriceDraft).toLocaleString('en-IN')}/month.`)
-                            setLivePriceDraft('')
-                          }}
-                          className="btn-teal text-sm py-2 px-5 disabled:opacity-50">
-                          {pricingBusy ? 'Saving…' : 'Save price'}
-                        </button>
                       </div>
                       {/* How a hospital's headcount multiplies that price. Sits
                           beside the price because the two together are the bill,
@@ -1571,16 +1556,14 @@ export default function AdminDashboard() {
                         </p>
                       </div>
 
-                      {/* Show the business's-eye view of the number being typed,
-                          so GST is never a surprise at the payment screen. */}
-                      {livePriceDraft !== '' && Number(livePriceDraft) >= 0 && (
-                        <p className="text-xs text-gray-500 mt-3">
-                          A business would see <strong>₹{Number(livePriceDraft).toLocaleString('en-IN')}/month</strong>
-                          {taxSettings?.gst_enabled && taxSettings?.gstin
-                            ? <> and pay <strong>₹{Math.round(Number(livePriceDraft) * (1 + Number(taxSettings.gst_rate ?? 18) / 100)).toLocaleString('en-IN')}</strong> for one month, including {Number(taxSettings.gst_rate ?? 18)}% GST.</>
-                            : <> — GST is currently switched off, so that is the whole amount charged.</>}
-                        </p>
-                      )}
+                      {/* The business's-eye view of the live price, so GST is
+                          never a surprise at the payment screen. */}
+                      <p className="text-xs text-gray-500 mt-3">
+                        A business sees <strong>₹{Number(activePlan.monthly_price ?? 0).toLocaleString('en-IN')}/month</strong>
+                        {taxSettings?.gst_enabled && taxSettings?.gstin
+                          ? <> and pays <strong>₹{Math.round(Number(activePlan.monthly_price ?? 0) * (1 + Number(taxSettings.gst_rate ?? 18) / 100)).toLocaleString('en-IN')}</strong> for one month, including {Number(taxSettings.gst_rate ?? 18)}% GST.</>
+                          : <> — GST is currently switched off, so that is the whole amount charged.</>}
+                      </p>
                     </div>
                   )}
 
