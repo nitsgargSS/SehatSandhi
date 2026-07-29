@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
 import { WA_NUMBER } from '../types'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon } from '../components/SiteHeader'
 
 // Design 1a / Turn-4 — patient homepage, "Warm Care".
 //
@@ -116,17 +117,6 @@ const WaGlyph = ({ size = 22 }: { size?: number }) => (
 )
 
 // ── shared piece-components (used by BOTH layouts) ──
-
-function Brand({ size = 18 }: { size?: number }) {
-  // Horizontal lockup: heart symbol + wordmark, matched heights, plain centering.
-  const h = size * 2.7
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: size * 0.5, flex: '0 0 auto' }}>
-      <img src="/logo-only-symbol.png" alt="" aria-hidden style={{ height: h, width: 'auto', objectFit: 'contain' }} />
-      <img src="/logo-title.png" alt="Sehatsandhi" style={{ height: h, width: 'auto', objectFit: 'contain' }} />
-    </div>
-  )
-}
 
 function LangButton({ label, onClick }: { label: string; onClick: () => void }) {
   return <button onClick={onClick} style={{ border: '1.5px solid #0E9F6E', background: '#fff', color: '#0E9F6E', fontWeight: 700, fontSize: 13, padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit' }}>{label}</button>
@@ -302,14 +292,11 @@ export default function PatientHome() {
       {/* ══════════ MOBILE / TABLET (< lg): stacked app column ══════════ */}
       <div className="flex lg:hidden" style={{ background: '#e7eaef', minHeight: '100vh', justifyContent: 'center' }}>
         <div style={{ width: '100%', maxWidth: 520, minHeight: '100vh', background: '#FBF7F0', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 4px' }}>
-            <Brand />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <a href="#faq-m" style={{ fontSize: 13, fontWeight: 700, color: '#5f6b64' }}>{t.faq_nav}</a>
-              <BusinessCta t={t} compact />
-              <LangButton label={langBtn} onClick={toggleLang} />
-            </div>
-          </div>
+          <SiteHeader>
+            <HeaderLink href="#faq-m">{t.faq_nav}</HeaderLink>
+            <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
+            <LangButton label={langBtn} onClick={toggleLang} />
+          </SiteHeader>
           <div style={{ padding: '16px 22px 6px' }}>
             <h1 style={{ fontSize: 26, lineHeight: 1.2, fontWeight: 800, color: '#14201c', margin: '0 0 8px', letterSpacing: '-.02em' }}>{t.tagline}</h1>
             <p style={{ fontSize: 14, color: '#5f6b64', margin: '0 0 14px', lineHeight: 1.5 }}>{t.subtag}</p>
@@ -337,14 +324,11 @@ export default function PatientHome() {
       {/* ══════════ DESKTOP (≥ lg): contained landing ══════════ */}
       <div className="hidden lg:block" style={{ maxWidth: 1120, margin: '0 auto', padding: '0 48px 64px' }}>
         {/* slim header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '28px 0 8px' }}>
-          <Brand size={22} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <a href="#faq-d" style={{ fontSize: 14, fontWeight: 700, color: '#5f6b64' }}>{t.faq_nav}</a>
-            <BusinessCta t={t} compact />
-            <LangButton label={langBtn} onClick={toggleLang} />
-          </div>
-        </div>
+        <SiteHeader>
+          <HeaderLink href="#faq-d">{t.faq_nav}</HeaderLink>
+          <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
+          <LangButton label={langBtn} onClick={toggleLang} />
+        </SiteHeader>
 
         {/* two-column hero */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 44, alignItems: 'center', padding: '40px 0 8px' }}>

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon } from '../../components/SiteHeader'
 import { BIZ, VERTICALS } from './shared'
 import VerticalIcon from './VerticalIcon'
 import WhatsAppBotMock from './WhatsAppBotMock'
@@ -60,27 +61,17 @@ export default function BusinessLanding() {
 
   return (
     <div style={{ background: BIZ.cream, fontFamily: font }}>
-      {/* nav — sticky, because every link but two is an anchor into this page:
+      {/* Sticky, because every link but two is an anchor into this page:
           scrolling to Pricing and then wanting Partners should not mean
-          scrolling back up. Logos shrink and the link row wraps under them on
-          narrow phones. */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 40, background: BIZ.cream, borderBottom: `1px solid ${BIZ.border}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'clamp(12px,3vw,16px) clamp(16px,4vw,40px)', gap: 12 }} className="max-w-7xl mx-auto flex-wrap">
-          {/* Home, not /business: the logo is how someone who followed a
-              business link gets across to the patient side of the site. */}
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <img src="/logo-only-symbol.png" alt="" aria-hidden style={{ height: 'clamp(36px,9vw,50px)', width: 'auto', objectFit: 'contain' }} />
-            <img src="/logo-title.png" alt="Sehatsandhi" style={{ height: 'clamp(36px,9vw,50px)', width: 'auto', objectFit: 'contain' }} />
-          </Link>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(14px,3.5vw,28px)' }} className="flex-wrap">
-            <a href="#how" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>How it works</a>
-            <a href="#pricing" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>Pricing</a>
-            <a href="#partners" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>Partners</a>
-            <Link to="/business/login" style={{ fontSize: 14, fontWeight: 600, color: BIZ.muted }}>Log in</Link>
-            <Link to="/business/register" style={{ background: BIZ.green, color: '#fff', fontWeight: 700, fontSize: 14, padding: '11px 20px', borderRadius: 12 }}>List your business</Link>
-          </div>
-        </div>
-      </div>
+          scrolling back up. The logo goes home, to the patient side — it is how
+          someone who followed a business link gets across. */}
+      <SiteHeader sticky>
+        <HeaderLink href="#how">How it works</HeaderLink>
+        <HeaderLink href="#pricing">Pricing</HeaderLink>
+        <HeaderLink href="#partners">Partners</HeaderLink>
+        <HeaderLink to="/business/login">Log in</HeaderLink>
+        <HeaderCta to="/business/register" icon={shopIcon}>List your business</HeaderCta>
+      </SiteHeader>
 
       {/* hero */}
       <div className="max-w-7xl mx-auto grid gap-10 items-center lg:grid-cols-[1.15fr_.85fr]" style={{ padding: 'clamp(28px,7vw,56px) clamp(16px,4vw,40px)' }}>
