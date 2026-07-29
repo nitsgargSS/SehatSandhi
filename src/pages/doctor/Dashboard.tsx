@@ -340,28 +340,38 @@ export default function DoctorDashboard() {
       const { data: doc } = await supabase.from('doctors').select('*').eq('email', user.email).single()
       if (doc) {
         setDoctor(doc)
-        const { data: appts } = await supabase.from('appointments').select('*').eq('doctor_id', doc.id).order('created_at', { ascending: false }).limit(20)
-        setAppointments(appts || [])
 
-        // Counted in the database. Counting the 20 rows above under-reported
-        // every clinic past its twentieth booking.
+        // Everything below depends only on the listing we just fetched, not on
+        // each other — so it goes out at once. Awaited one at a time, these were
+        // eight serial round trips before the dashboard could paint; on a rural
+        // connection that is the difference between "slow" and "broken".
+        //
+        // Counts are read in the database. Counting the 20 rows loaded here
+        // under-reported every clinic past its twentieth booking.
         const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
-        const [{ count: total }, { count: month }] = await Promise.all([
+        const [appts, total, month] = await Promise.all([
+          supabase.from('appointments').select('*').eq('doctor_id', doc.id)
+            .order('created_at', { ascending: false }).limit(20),
           supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('doctor_id', doc.id),
           supabase.from('appointments').select('id', { count: 'exact', head: true })
             .eq('doctor_id', doc.id).gte('created_at', monthStart.toISOString()),
+          loadStaff(doc.id),
+          loadCamps(doc.id),
+          loadLocations(doc.id),
+          loadAvailability(doc.id),
+          // A solo practice has no roster and no headcount plan to read.
+          doc.organization_id
+            ? Promise.all([
+                loadRoster(doc.organization_id),
+                supabase.from('active_pricing_plan')
+                  .select('doctor_billing, monthly_price, included_doctors, extra_doctor_price')
+                  .maybeSingle()
+                  .then(({ data: p }) => { if (p) setPlan(p as PlanTerms) }),
+              ])
+            : null,
         ])
-        setCounts({ total: total ?? 0, month: month ?? 0 })
-        await loadStaff(doc.id)
-        await loadCamps(doc.id)
-        await loadLocations(doc.id)
-        if (doc.organization_id) {
-          await loadRoster(doc.organization_id)
-          const { data: p } = await supabase.from('active_pricing_plan')
-            .select('doctor_billing, monthly_price, included_doctors, extra_doctor_price').maybeSingle()
-          if (p) setPlan(p as PlanTerms)
-        }
-        await loadAvailability(doc.id)
+        setAppointments(appts.data || [])
+        setCounts({ total: total.count ?? 0, month: month.count ?? 0 })
       }
       setLoading(false)
     }

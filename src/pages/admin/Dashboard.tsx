@@ -368,29 +368,33 @@ export default function AdminDashboard() {
       if (err) console.warn(`[admin] ${table} query failed — tab will render empty:`, err.message)
     }
 
-    const { data, error: docErr } = await supabase.from('doctors').select('*').order('created_at', { ascending: false })
-    warn('doctors', docErr)
-    setDoctors((data as DoctorWithOrg[]) || [])
-    const { data: campData, error: campErr } = await supabase
-      .from('camps_offers')
-      .select('*, doctors(name, clinic_name)')
-      .order('created_at', { ascending: false })
-    warn('camps_offers', campErr)
-    setCamps((campData as any) || [])
-    const { data: orgData, error: orgErr } = await supabase.from('organizations').select('*').order('created_at', { ascending: false })
-    warn('organizations', orgErr)
-    setOrganizations(orgData || [])
-    const { data: couponData, error: coupErr } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false })
-    warn('discount_codes', coupErr)
-    setCoupons(couponData || [])
-    // Per-vertical billing plans. Read-only here: rates are the authority the
-    // edge functions price against, so they change in the SQL editor, not
-    // behind an admin password.
-    const { data: billingData, error: billErr } = await supabase.from('vertical_billing').select('*')
-    warn('vertical_billing', billErr)
-    setBillingPlans((billingData as VerticalBillingRow[]) || [])
-    const { data: planData } = await supabase.from('active_pricing_plan').select('*').maybeSingle()
-    setActivePlan((planData as PlanRow) || null)
+    // Six independent tables. Awaited in turn these were six serial round trips
+    // before any tab could render; none of them depends on another's result.
+    //
+    // vertical_billing is read-only here: the rates are the authority the edge
+    // functions price against, so they change in the SQL editor, not behind an
+    // admin password.
+    const [doctorsRes, campsRes, orgsRes, couponsRes, billingRes, planRes] = await Promise.all([
+      supabase.from('doctors').select('*').order('created_at', { ascending: false }),
+      supabase.from('camps_offers').select('*, doctors(name, clinic_name)').order('created_at', { ascending: false }),
+      supabase.from('organizations').select('*').order('created_at', { ascending: false }),
+      supabase.from('discount_codes').select('*').order('created_at', { ascending: false }),
+      supabase.from('vertical_billing').select('*'),
+      supabase.from('active_pricing_plan').select('*').maybeSingle(),
+    ])
+
+    warn('doctors', doctorsRes.error)
+    setDoctors((doctorsRes.data as DoctorWithOrg[]) || [])
+    warn('camps_offers', campsRes.error)
+    setCamps((campsRes.data as any) || [])
+    warn('organizations', orgsRes.error)
+    setOrganizations(orgsRes.data || [])
+    warn('discount_codes', couponsRes.error)
+    setCoupons(couponsRes.data || [])
+    warn('vertical_billing', billingRes.error)
+    setBillingPlans((billingRes.data as VerticalBillingRow[]) || [])
+    warn('active_pricing_plan', planRes.error)
+    setActivePlan((planRes.data as PlanRow) || null)
     setLoading(false)
   }
 
