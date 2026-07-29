@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES, WA_NUMBER } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
 import { track, trackImpressions } from '../lib/analytics'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon } from '../components/SiteHeader'
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '-')
 
@@ -123,13 +124,13 @@ export default function SpecialityLanding() {
     <div className="min-h-screen bg-gray-50">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
 
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          <Link to="/" className="flex items-center gap-2 text-gray-500 hover:text-teal-600 text-sm transition">
-            <ArrowLeft className="w-4 h-4" /> {t('specialityLandingPage.backToHome')}
-          </Link>
-        </div>
-      </div>
+      {/* Most arrivals here are from a WhatsApp or search link rather than from
+          our own homepage, so this is the first Sehatsandhi page they see. The
+          bare back-link that used to sit here showed them no brand at all. */}
+      <SiteHeader>
+        <HeaderLink to="/">{t('specialityLandingPage.backToHome')}</HeaderLink>
+        <HeaderCta to="/business" icon={shopIcon}>List your business</HeaderCta>
+      </SiteHeader>
 
       <div className="max-w-4xl mx-auto px-4 py-10">
         {/* Hero */}

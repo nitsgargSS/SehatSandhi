@@ -6,6 +6,7 @@ import { MapPin, Clock, CheckCircle2, ArrowLeft, Share2, Copy, Star } from 'luci
 import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, WA_NUMBER } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon } from '../../components/SiteHeader'
 
 interface RatingAgg {
   avg_rating: number
@@ -136,14 +137,12 @@ export default function DoctorProfile() {
     <div className="min-h-screen bg-gray-50">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
 
-      {/* Back */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-3xl mx-auto px-4 py-3">
-          <Link to="/" className="flex items-center gap-2 text-gray-500 hover:text-teal-600 text-sm transition">
-            <ArrowLeft className="w-4 h-4" /> {t('profilePage.backToHome')}
-          </Link>
-        </div>
-      </div>
+      {/* A patient usually lands here straight from a WhatsApp link, so this is
+          the page that has to look like us. */}
+      <SiteHeader>
+        <HeaderLink to="/">{t('profilePage.backToHome')}</HeaderLink>
+        <HeaderCta to="/business" icon={shopIcon}>List your business</HeaderCta>
+      </SiteHeader>
 
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-4">
 
