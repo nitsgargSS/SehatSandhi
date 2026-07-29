@@ -6,7 +6,7 @@ import { MapPin, Clock, CheckCircle2, ArrowLeft, Share2, Copy, Star } from 'luci
 import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, WA_NUMBER } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
-import SiteHeader, { HeaderLink, HeaderCta, shopIcon } from '../../components/SiteHeader'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../../components/SiteHeader'
 
 interface RatingAgg {
   avg_rating: number
@@ -144,7 +144,8 @@ export default function DoctorProfile() {
         <HeaderCta to="/business" icon={shopIcon}>List your business</HeaderCta>
       </SiteHeader>
 
-      <div className="max-w-3xl mx-auto px-4 py-8 space-y-4">
+      <PageShell style={{ paddingTop: 32, paddingBottom: 32 }}>
+        <div className="max-w-3xl mx-auto space-y-4">
 
         {/* Main profile card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -350,6 +351,7 @@ export default function DoctorProfile() {
         </div>
 
       </div>
+      </PageShell>
     </div>
   )
 }

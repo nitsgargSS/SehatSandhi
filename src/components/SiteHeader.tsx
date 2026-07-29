@@ -21,6 +21,34 @@ export const HEADER = {
   logoHeight: 50,
 } as const
 
+/**
+ * The page gutter, shared by the header and whatever a page puts under it.
+ *
+ * Every page used to pick its own: the patient home 1120px, /business
+ * max-w-7xl (1280), the speciality results max-w-4xl (896), a doctor's profile
+ * max-w-3xl (768) — while the header stayed 1280 on all of them. So on three
+ * pages out of four the logo sat some 250px to the left of the content it was
+ * supposed to be sitting above.
+ *
+ * One width, applied in both places, so the left edge is a straight line down
+ * the page. Reading measures still differ where they should — a profile keeps
+ * its narrow column — but by capping the content INSIDE this shell, not by
+ * moving the shell.
+ */
+export const PAGE = {
+  maxWidth: 1120,
+  padX: 'clamp(16px,4vw,40px)',
+} as const
+
+/** The shell every page's own sections should sit in, so edges line up. */
+export function PageShell({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{ maxWidth: PAGE.maxWidth, margin: '0 auto', paddingLeft: PAGE.padX, paddingRight: PAGE.padX, ...style }}>
+      {children}
+    </div>
+  )
+}
+
 /** The brand lockup: symbol + wordmark at one matched height. */
 export function BrandMark({ height = HEADER.logoHeight, to = '/' }: { height?: number; to?: string }) {
   return (
@@ -77,10 +105,12 @@ export default function SiteHeader(
       ...(sticky ? { position: 'sticky' as const, top: 0, zIndex: 40 } : null),
       background: HEADER.cream, borderBottom: `1px solid ${HEADER.border}`,
     }}>
-      <div className="max-w-7xl mx-auto flex-wrap"
+      <div className="flex-wrap"
         style={{
+          maxWidth: PAGE.maxWidth, margin: '0 auto',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: 12, padding: 'clamp(12px,3vw,16px) clamp(16px,4vw,40px)',
+          gap: 12, paddingLeft: PAGE.padX, paddingRight: PAGE.padX,
+          paddingTop: 'clamp(12px,3vw,16px)', paddingBottom: 'clamp(12px,3vw,16px)',
         }}>
         <BrandMark to={logoTo} />
         <div className="flex-wrap" style={{ display: 'flex', alignItems: 'center', gap: 'clamp(12px,3vw,22px)' }}>

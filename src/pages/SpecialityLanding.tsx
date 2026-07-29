@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES, WA_NUMBER } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
 import { track, trackImpressions } from '../lib/analytics'
-import SiteHeader, { HeaderLink, HeaderCta, shopIcon } from '../components/SiteHeader'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../components/SiteHeader'
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '-')
 
@@ -132,7 +132,8 @@ export default function SpecialityLanding() {
         <HeaderCta to="/business" icon={shopIcon}>List your business</HeaderCta>
       </SiteHeader>
 
-      <div className="max-w-4xl mx-auto px-4 py-10">
+      <PageShell style={{ paddingTop: 40, paddingBottom: 40 }}>
+        <div className="max-w-4xl mx-auto">
         {/* Hero */}
         <div className="text-center mb-10">
           <span className="inline-flex items-center gap-2 bg-teal-50 text-teal-700 text-xs font-semibold px-4 py-1.5 rounded-full mb-4 border border-teal-100">
@@ -207,6 +208,7 @@ export default function SpecialityLanding() {
           </Link>
         </div>
       </div>
+      </PageShell>
     </div>
   )
 }
