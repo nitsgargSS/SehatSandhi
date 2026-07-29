@@ -70,7 +70,7 @@ export default function Landing() {
                  target="_blank" rel="noreferrer" className="btn-teal text-base px-8 py-4 shadow-lg shadow-teal-100">
                 {t('landing.heroCtaWhatsapp')}
               </a>
-              <Link to="/doctor" className="btn-navy text-base px-8 py-4">
+              <Link to="/business/register" className="btn-navy text-base px-8 py-4">
                 {t('landing.heroCtaDoctor')}
               </Link>
             </div>
@@ -192,7 +192,7 @@ export default function Landing() {
                   </li>
                 ))}
               </ul>
-              <Link to="/doctor" className="btn-teal mt-8 px-10 py-4 text-base shadow-lg shadow-teal-100">
+              <Link to="/business/register" className="btn-teal mt-8 px-10 py-4 text-base shadow-lg shadow-teal-100">
                 {t('landing.forDocCta')}
               </Link>
               <p className="text-gray-400 text-sm mt-4">
@@ -251,7 +251,7 @@ export default function Landing() {
                className="bg-white text-teal-700 font-bold px-10 py-4 rounded-full hover:bg-gray-50 transition shadow-lg">
               {t('landing.ctaBook')}
             </a>
-            <Link to="/doctor" className="border-2 border-white text-white px-10 py-4 rounded-full font-semibold hover:bg-white/10 transition">
+            <Link to="/business/register" className="border-2 border-white text-white px-10 py-4 rounded-full font-semibold hover:bg-white/10 transition">
               {t('landing.ctaRegister')}
             </Link>
           </div>

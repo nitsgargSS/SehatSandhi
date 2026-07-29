@@ -27,7 +27,7 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-2">
             <Link to="/" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.home')}</Link>
             <Link to="/how-it-works" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.howItWorks')}</Link>
-            <Link to="/doctor" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.forDoctors')}</Link>
+            <Link to="/for-doctors" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.forDoctors')}</Link>
             <Link to="/partners" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.partners')}</Link>
             <Link to="/business" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>For Business</Link>
             <Link to="/points" className={`text-sm font-medium px-3 py-1.5 rounded-lg transition ${isDark ? 'text-white/80 hover:text-white' : 'text-gray-600 hover:text-teal-600'}`}>{t('nav.points')}</Link>
@@ -43,7 +43,7 @@ export default function Navbar() {
                className="btn-teal text-sm py-2 px-5">
               {t('nav.bookWhatsapp')}
             </a>
-            <Link to="/doctor" className="btn-navy text-sm py-2 px-5">{t('nav.registerClinic')}</Link>
+            <Link to="/business/register" className="btn-navy text-sm py-2 px-5">{t('nav.registerClinic')}</Link>
           </div>
 
           {/* Mobile hamburger */}
@@ -61,7 +61,7 @@ export default function Navbar() {
           </div>
           <Link to="/" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.home')}</Link>
           <Link to="/how-it-works" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.howItWorks')}</Link>
-          <Link to="/doctor" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.forDoctors')}</Link>
+          <Link to="/for-doctors" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.forDoctors')}</Link>
           <Link to="/partners" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.partners')}</Link>
           <Link to="/business" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">For Business</Link>
           <Link to="/points" onClick={() => setOpen(false)} className="text-gray-700 font-medium py-2">{t('nav.points')}</Link>
@@ -74,7 +74,7 @@ export default function Navbar() {
              className="btn-teal text-sm justify-center">
             {t('nav.bookWhatsapp')}
           </a>
-          <Link to="/doctor" onClick={() => setOpen(false)} className="btn-navy text-sm justify-center">{t('nav.registerClinic')}</Link>
+          <Link to="/business/register" onClick={() => setOpen(false)} className="btn-navy text-sm justify-center">{t('nav.registerClinic')}</Link>
         </div>
       )}
     </nav>

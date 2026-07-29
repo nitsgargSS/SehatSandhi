@@ -34,7 +34,7 @@ export default function Footer() {
             <h4 className="font-semibold mb-4 text-white/90">{t('footer.partnersHeading')}</h4>
             <ul className="space-y-2 text-sm text-white/60">
               <li><Link to="/partners" className="hover:text-white transition">{t('footer.partnerOverview')}</Link></li>
-              <li><Link to="/doctor" className="hover:text-white transition">{t('footer.registerAsDoctor')}</Link></li>
+              <li><Link to="/business/register" className="hover:text-white transition">{t('footer.registerAsDoctor')}</Link></li>
               <li><Link to="/partner" className="hover:text-white transition">{t('footer.pharmacyLabAmbulance')}</Link></li>
               <li><Link to="/doctor/login" className="hover:text-white transition">{t('footer.partnerLogin')}</Link></li>
             </ul>

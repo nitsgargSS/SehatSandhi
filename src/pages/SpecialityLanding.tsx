@@ -192,7 +192,7 @@ export default function SpecialityLanding() {
             <div className="border-t border-gray-100 pt-6 mt-2">
               <p className="text-sm font-medium text-navy-700 mb-1">{t('specialityLandingPage.areYouADoctor')}</p>
               <p className="text-gray-400 text-xs mb-3">{t('specialityLandingPage.beFirstToJoin')}</p>
-              <Link to="/doctor" className="text-teal-600 hover:underline text-sm font-medium">
+              <Link to="/business/register" className="text-teal-600 hover:underline text-sm font-medium">
                 {t('specialityLandingPage.registerLink')}
               </Link>
             </div>

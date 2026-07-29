@@ -27,7 +27,7 @@ export default function ForDoctors() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <h1 className="text-4xl sm:text-5xl font-bold text-navy-700 mb-4">{t('forDoctorsPage.heroTitle')}</h1>
           <p className="text-gray-500 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed mb-8">{t('forDoctorsPage.heroDesc')}</p>
-          <Link to="/doctor" className="btn-teal px-10 py-4 text-base shadow-lg shadow-teal-100 inline-flex">
+          <Link to="/business/register" className="btn-teal px-10 py-4 text-base shadow-lg shadow-teal-100 inline-flex">
             {t('forDoctorsPage.heroCta')}
           </Link>
         </div>
@@ -118,7 +118,7 @@ export default function ForDoctors() {
       <section className="py-16 bg-gray-50 text-center">
         <div className="max-w-2xl mx-auto px-4">
           <h2 className="text-2xl sm:text-3xl font-bold text-navy-700 mb-6">{t('forDoctorsPage.ctaTitle')}</h2>
-          <Link to="/doctor" className="btn-teal px-10 py-4 text-base shadow-lg shadow-teal-100 inline-flex">
+          <Link to="/business/register" className="btn-teal px-10 py-4 text-base shadow-lg shadow-teal-100 inline-flex">
             {t('forDoctorsPage.ctaButton')}
           </Link>
         </div>
