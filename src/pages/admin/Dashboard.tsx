@@ -2,6 +2,7 @@ import { useEffect, useState, Fragment } from 'react'
 import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Building2, Plus, Trash2, ChevronLeft, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
+import { verticalForSpeciality } from '../business/shared'
 import { StatTile, ColumnChart, BarList, RangePicker } from '../../components/Charts'
 import { describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import ScrollableTable from '../../components/ScrollableTable'
@@ -217,14 +218,16 @@ export default function AdminDashboard() {
   const [specBusy, setSpecBusy] = useState<string | null>(null)
   const [specMsg, setSpecMsg] = useState('')
 
-  // Specialities that ARE a business vertical. Moving a listing onto one of
-  // these changes how it is billed — a doctor set to PHARMACY stops paying
-  // monthly and starts owing commission — so it is confirmed, not silent.
-  const VERTICAL_SPECIALITIES: Record<string, string> = {
-    GEN: 'doctors', HOSPITAL: 'hospital', LAB: 'lab',
-    PHARMACY: 'pharmacy', INSURANCE: 'insurance', AMBULANCE: 'ambulance',
-  }
-  const verticalOf = (spec: string) => VERTICAL_SPECIALITIES[spec] ?? 'doctors'
+  // Moving a listing onto a business speciality changes how it is billed — a
+  // doctor set to PHARMACY stops paying monthly and starts owing commission —
+  // so it is confirmed, not silent.
+  //
+  // This asks verticalForSpeciality rather than keeping its own map. The map it
+  // used to hold spelled pharmacy "PHARMACY", while the dropdown writes "PHRM"
+  // from SPECIALITIES, so the two never matched: the confirmation silently did
+  // not fire for the one example it was written for, and the listing was not
+  // recognised as a pharmacy for billing either.
+  const verticalOf = (spec: string) => verticalForSpeciality(spec)
 
   const changeSpeciality = async (doc: Doctor, next: string) => {
     if (!next || next === doc.speciality) return

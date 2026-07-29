@@ -10,7 +10,7 @@ const SPEC_ICONS: Record<string, string> = {
   GEN:'🏥', SKIN:'🌿', DENT:'🦷', EYE:'👁️', PAED:'👶',
   GYN:'🌸', IVF:'🍀', ORTH:'🦴', CARD:'❤️', ENT:'👂',
   GAST:'🫁', NEUR:'🧠', URO:'🫘', ONC:'🎗️', PSY:'🧘',
-  DIAB:'💉', PHYS:'💪', ALT:'🌱', LAB:'🔬', PHRM:'💊'
+  DIAB:'💉', PHYS:'💪', ALT:'🌱', LAB:'🔬', PHARMACY:'💊'
 }
 
 const FAQS_BY_LANG: Record<Lang, { q: string; a: string }[]> = {
