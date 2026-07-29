@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
 import { WA_NUMBER } from '../types'
-import SiteHeader, { HeaderLink, HeaderCta, shopIcon } from '../components/SiteHeader'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PAGE } from '../components/SiteHeader'
 
 // Design 1a / Turn-4 — patient homepage, "Warm Care".
 //
@@ -322,13 +322,19 @@ export default function PatientHome() {
       </div>
 
       {/* ══════════ DESKTOP (≥ lg): contained landing ══════════ */}
-      <div className="hidden lg:block" style={{ maxWidth: 1120, margin: '0 auto', padding: '0 48px 64px' }}>
-        {/* slim header */}
+      {/* The header sits OUTSIDE the contained column: it carries its own
+          full-bleed band and centres its row on PAGE.maxWidth itself. Nested
+          inside a 1120px box with 48px padding, that band was clipped to
+          1024px and inset 220px, so the rule under it stopped short of the
+          window while /business ran edge to edge. */}
+      <div className="hidden lg:block">
         <SiteHeader>
           <HeaderLink href="#faq-d">{t.faq_nav}</HeaderLink>
           <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
           <LangButton label={langBtn} onClick={toggleLang} />
         </SiteHeader>
+      </div>
+      <div className="hidden lg:block" style={{ maxWidth: PAGE.maxWidth, margin: '0 auto', padding: `0 ${PAGE.padX} 64px` }}>
 
         {/* two-column hero */}
         <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 44, alignItems: 'center', padding: '40px 0 8px' }}>
