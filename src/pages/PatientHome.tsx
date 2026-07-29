@@ -24,6 +24,7 @@ interface Strings {
   doc_teaser_title: string; doc_teaser_sub: string; how: string; step1: string; step2: string; step3: string
   trust_verified: string; trust_free: string; trust_wa: string
   biz_cta: string; biz_title: string; biz_sub: string
+  faq_title: string; faq_sub: string; faqs: { q: string; a: string }[]
 }
 
 const DICT: Record<'en' | 'hi', Strings> = {
@@ -43,6 +44,22 @@ const DICT: Record<'en' | 'hi', Strings> = {
     biz_cta: 'Register your business',
     biz_title: 'Are you a healthcare provider?',
     biz_sub: 'Doctors, hospitals, pharmacies, labs, insurance & ambulance — get found by families near you.',
+    faq_title: 'Common questions',
+    faq_sub: 'Everything families ask us before their first booking.',
+    faqs: [
+      { q: 'Is this free for patients?',
+        a: 'Yes, completely free. You are never charged for finding a provider or booking a time. You pay the clinic, pharmacy or lab directly for whatever you use, exactly as you would if you had walked in.' },
+      { q: 'Do I need to download an app?',
+        a: 'No. You only need WhatsApp, which is already on your phone. Message us and everything happens in that chat — there is nothing to install and no account to create.' },
+      { q: 'How does booking work?',
+        a: 'Message us on WhatsApp, choose what you need, pick a provider near you and confirm a time. It takes two or three minutes, and you get a confirmation in the same chat.' },
+      { q: 'Are the doctors verified?',
+        a: 'Yes. Our team checks every doctor\'s MCI or NMC registration number, and a pharmacy\'s or lab\'s licence, before their listing goes live. Nothing appears until it has been checked.' },
+      { q: 'What if I need an ambulance right now?',
+        a: 'Use the ambulance button at the top of this page. It opens WhatsApp with an emergency message ready to send, so help can be arranged without you typing anything.' },
+      { q: 'Which areas do you cover?',
+        a: 'We are live across Yamunanagar district and adding towns steadily. Pick your area at the top of the page to see who is available near you.' },
+    ],
   },
   hi: {
     brand: 'सेहतसंधि', area_label: 'आपका इलाका',
@@ -60,6 +77,22 @@ const DICT: Record<'en' | 'hi', Strings> = {
     biz_cta: 'अपना बिज़नेस रजिस्टर करें',
     biz_title: 'आप हेल्थकेयर प्रोवाइडर हैं?',
     biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब, बीमा और एम्बुलेंस — आपके इलाके के परिवार आपको ढूँढ पाएंगे।',
+    faq_title: 'अक्सर पूछे जाने वाले सवाल',
+    faq_sub: 'पहली बुकिंग से पहले परिवार हमसे यही पूछते हैं।',
+    faqs: [
+      { q: 'क्या मरीज़ों के लिए यह मुफ़्त है?',
+        a: 'जी हाँ, बिल्कुल मुफ़्त। डॉक्टर ढूँढने या समय बुक करने का कोई शुल्क नहीं है। जो इलाज या दवाई आप लेते हैं, उसका पैसा सीधे क्लिनिक, दुकान या लैब को देते हैं — ठीक वैसे ही जैसे खुद जाकर देते।' },
+      { q: 'क्या कोई ऐप डाउनलोड करनी होगी?',
+        a: 'नहीं। सिर्फ़ व्हाट्सएप चाहिए, जो आपके फ़ोन में पहले से है। हमें मैसेज करें और सब कुछ उसी चैट में हो जाएगा — न कुछ इंस्टॉल करना है, न कोई अकाउंट बनाना है।' },
+      { q: 'बुकिंग कैसे होती है?',
+        a: 'व्हाट्सएप पर मैसेज करें, जो चाहिए वह चुनें, अपने पास का प्रोवाइडर चुनें और समय कन्फर्म करें। दो-तीन मिनट लगते हैं, और कन्फर्मेशन उसी चैट में मिल जाता है।' },
+      { q: 'क्या डॉक्टर वेरिफाई किए जाते हैं?',
+        a: 'जी हाँ। हमारी टीम हर डॉक्टर का MCI या NMC रजिस्ट्रेशन नंबर, और दवाई की दुकान या लैब का लाइसेंस जाँचती है। जाँच पूरी होने के बाद ही लिस्टिंग दिखती है।' },
+      { q: 'अगर अभी एम्बुलेंस चाहिए तो?',
+        a: 'ऊपर दिए एम्बुलेंस बटन का इस्तेमाल करें। यह व्हाट्सएप में इमरजेंसी मैसेज तैयार करके खोल देता है, ताकि बिना कुछ लिखे मदद भेजी जा सके।' },
+      { q: 'आप किन इलाकों में हैं?',
+        a: 'हम यमुनानगर ज़िले में उपलब्ध हैं और लगातार नए कस्बे जोड़ रहे हैं। ऊपर अपना इलाका चुनकर देखें कि आपके पास कौन उपलब्ध है।' },
+    ],
   },
 }
 
@@ -158,6 +191,31 @@ function BusinessCard({ t, row }: { t: Strings; row?: boolean }) {
         <div style={{ fontSize: row ? 14 : 12.5, color: '#7b8781', margin: row ? '4px 0 0' : '3px 0 12px', lineHeight: 1.5 }}>{t.biz_sub}</div>
       </div>
       <BusinessCta t={t} fullWidth={!row} />
+    </div>
+  )
+}
+
+// Answers to what families ask before their first booking. Rendered as native
+// <details> rather than useState: it is accessible, keyboard-operable and
+// findable by the browser's own in-page search without any of that being
+// written here, and one open question does not close another.
+function Faqs({ t, row }: { t: Strings; row?: boolean }) {
+  return (
+    <div>
+      <div style={{ fontSize: row ? 20 : 16, fontWeight: 800, color: '#14201c' }}>{t.faq_title}</div>
+      <div style={{ fontSize: row ? 14 : 12.5, color: '#7b8781', margin: '4px 0 14px', lineHeight: 1.5 }}>{t.faq_sub}</div>
+      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: row ? '1fr 1fr' : '1fr', alignItems: 'start' }}>
+        {t.faqs.map(f => (
+          <details key={f.q} style={{ background: '#fff', border: '1px solid #eee6d8', borderRadius: 14, padding: row ? '14px 18px' : '12px 14px' }}>
+            <summary style={{ fontSize: row ? 15 : 13.5, fontWeight: 700, color: '#14201c', cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              {f.q}
+              {/* glyph comes from CSS so open/closed can swap it — see index.css */}
+              <span aria-hidden style={{ color: '#0E9F6E', fontSize: 18, fontWeight: 700, flex: '0 0 auto', lineHeight: 1 }} />
+            </summary>
+            <div style={{ fontSize: row ? 14 : 12.5, color: '#5f6b64', lineHeight: 1.6, marginTop: 9 }}>{f.a}</div>
+          </details>
+        ))}
+      </div>
     </div>
   )
 }
@@ -277,6 +335,7 @@ export default function PatientHome() {
           </div>
           <div style={{ padding: '16px 20px 4px' }}><DoctorTeaser t={t} /></div>
           <div style={{ padding: '18px 22px 8px' }}><HowItWorksCard t={t} /></div>
+          <div style={{ padding: '18px 20px 4px' }}><Faqs t={t} /></div>
           <div style={{ padding: '14px 20px 18px' }}><BusinessCard t={t} /></div>
           <div style={{ marginTop: 'auto' }}><TrustRow t={t} /></div>
         </div>
@@ -319,8 +378,11 @@ export default function PatientHome() {
         {/* full-width doctor teaser band */}
         <div style={{ padding: '20px 0 0' }}><DoctorTeaser t={t} /></div>
 
+        {/* questions, answered before the provider pitch below them */}
+        <div style={{ padding: '40px 0 0' }}><Faqs t={t} row /></div>
+
         {/* provider band — second entry point for the header CTA */}
-        <div style={{ padding: '16px 0 0' }}><BusinessCard t={t} row /></div>
+        <div style={{ padding: '32px 0 0' }}><BusinessCard t={t} row /></div>
       </div>
     </div>
   )

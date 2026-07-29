@@ -22,3 +22,12 @@ html { scroll-behavior: smooth; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #f1f1f1; }
 ::-webkit-scrollbar-thumb { background: #1BA37A; border-radius: 3px; }
+
+/* FAQ disclosures on the patient homepage.
+   Safari still paints its own triangle unless the webkit pseudo-element is
+   hidden too, which would sit beside our own marker. The marker's glyph comes
+   entirely from CSS — the span is empty in the markup — so open and closed can
+   swap it without leaving both on screen. */
+details > summary::-webkit-details-marker { display: none; }
+details > summary span[aria-hidden]::before { content: '+'; }
+details[open] > summary span[aria-hidden]::before { content: '\2212'; }
