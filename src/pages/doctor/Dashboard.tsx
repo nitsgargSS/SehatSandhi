@@ -38,6 +38,17 @@ interface CampOffer {
 export default function DoctorDashboard() {
   const { t } = useLanguage()
   const [doctor, setDoctor] = useState<Doctor | null>(null)
+  // Every listing this login reaches. One WhatsApp number can carry more than
+  // one — a clinic and a pharmacy run by the same family — and before this the
+  // dashboard could only ever show one of them.
+  const [listings, setListings] = useState<Doctor[]>([])
+  // Which listing the dashboard is showing. Switching sets this, and the load
+  // effect keys on it, so appointments/staff/hours all follow — setting only
+  // `doctor` would have left one listing's name above another's data.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // A failed lookup used to be indistinguishable from having no listing, so a
+  // paying customer was told to go and register again.
+  const [loadError, setLoadError] = useState(false)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   // Appointment actions. Cancelling asks for a reason and rescheduling shows the
   // doctor's real open slots, so neither is a blind click.
@@ -335,7 +346,35 @@ export default function DoctorDashboard() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { window.location.href = '/business/login'; return }
-      const { data: doc } = await supabase.from('doctors').select('*').eq('email', user.email).single()
+
+      // Ask which listings this session may act on, rather than matching an
+      // email.
+      //
+      // Phone login mints a synthetic auth user, <phone>@wa.sehatsandhi.in, and
+      // deliberately never writes that address to doctors.email — 0023 moved
+      // clinic identity onto auth_uid precisely because the signup wizard
+      // collects email only optionally. So `.eq('email', user.email)` matched
+      // nothing for every business that joined through the wizard and logged in
+      // by code: they signed in successfully, landed here, and got an empty
+      // dashboard with no error to explain it.
+      //
+      // Not simply dropping the filter: allow_read_active_doctors lets any
+      // caller read EVERY active listing, so an unfiltered select would show a
+      // clinic somebody else's business. sehat_caller_listing_ids() is the
+      // function the RLS policies themselves use.
+      const { data: myIds, error: idsErr } = await supabase.rpc('sehat_caller_listing_ids')
+      if (idsErr) {
+        console.warn('[dashboard] could not resolve listings:', idsErr.message)
+        setLoadError(true); setLoading(false); return
+      }
+      const ids = (myIds as unknown as string[]) ?? []
+
+      // One number can carry several listings — a clinic and a pharmacy on the
+      // same phone. Show the first and offer the rest.
+      const { data: mine } = await supabase.from('doctors').select('*')
+        .in('id', ids).order('created_at', { ascending: true })
+      setListings(mine || [])
+      const doc = (selectedId && mine?.find(l => l.id === selectedId)) || mine?.[0] || null
       if (doc) {
         setDoctor(doc)
 
@@ -374,7 +413,7 @@ export default function DoctorDashboard() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [selectedId])
 
   // 'today' does not exist for a pharmacy or an agent, so it would render an
   // empty page on their first visit.
@@ -575,10 +614,25 @@ export default function DoctorDashboard() {
   const roleLabel = (r: string) => r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">{t('dashboardPage.loading')}</div></div>
+  // A lookup that failed is not the same as having no listing. Telling a paying
+  // customer to go and register again because a query 500'd is the worse of the
+  // two mistakes, so they are now separate screens.
+  if (loadError) return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="text-center max-w-sm">
+        <p className="text-navy-700 font-semibold mb-1">{t('dashboardPage.loadFailedTitle')}</p>
+        <p className="text-gray-500 text-sm mb-4">{t('dashboardPage.loadFailedBody')}</p>
+        <button onClick={() => window.location.reload()} className="btn-teal text-sm">
+          {t('dashboardPage.loadFailedRetry')}
+        </button>
+      </div>
+    </div>
+  )
   if (!doctor) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-400">
-        {t('dashboardPage.noProfileFound')} <a href="/doctor" className="text-teal-600">{t('dashboardPage.registerHereLink')}</a>
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="text-gray-500 text-center text-sm">
+        {t('dashboardPage.noProfileFound')}{' '}
+        <a href="/business/register" className="text-teal-600 hover:underline">{t('dashboardPage.registerHereLink')}</a>
       </div>
     </div>
   )
@@ -616,10 +670,28 @@ export default function DoctorDashboard() {
             </div>
             <div>
               <h1 className="text-xl font-bold">{doctor.name}</h1>
-              <p className="text-white/60 text-sm">{doctor.qualification} · {doctor.speciality} · {doctor.clinic_name}</p>
-              <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${doctor.status === 'active' ? 'bg-teal-500/30 text-teal-300' : 'bg-amber-500/30 text-amber-300'}`}>
-                {doctor.status === 'active' ? t('dashboardPage.statusActive') : t('dashboardPage.statusPending')}
-              </span>
+              <p className="text-white/60 text-sm">
+                {[doctor.qualification, doctor.clinic_name !== doctor.name ? doctor.clinic_name : null]
+                  .filter(Boolean).join(' · ')}
+              </p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className={`text-xs px-2 py-0.5 rounded-full inline-block ${doctor.status === 'active' ? 'bg-teal-500/30 text-teal-300' : 'bg-amber-500/30 text-amber-300'}`}>
+                  {doctor.status === 'active' ? t('dashboardPage.statusActive') : t('dashboardPage.statusPending')}
+                </span>
+                {/* One WhatsApp number can carry a clinic and a pharmacy. The
+                    login reaches both; before this only the first was visible. */}
+                {listings.length > 1 && (
+                  <select
+                    value={doctor.id}
+                    onChange={e => { setLoading(true); setSelectedId(e.target.value) }}
+                    aria-label={t('dashboardPage.switchListing')}
+                    className="text-xs bg-white/10 text-white border border-white/20 rounded-full px-2 py-0.5 cursor-pointer">
+                    {listings.map(l => (
+                      <option key={l.id} value={l.id} className="text-gray-800">{l.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
           </div>
           <button onClick={logout} className="flex items-center gap-2 text-white/60 hover:text-white text-sm transition">

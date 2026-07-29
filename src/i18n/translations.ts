@@ -46,6 +46,10 @@ export const translations: Tree = {
 
   dashboardPage: {
     loading: { en: 'Loading...', hi: 'लोड हो रहा है...' },
+    loadFailedTitle: { en: 'We could not load your listing', hi: 'आपकी लिस्टिंग लोड नहीं हो सकी' },
+    loadFailedBody: { en: 'Your account is fine — this was a problem at our end. Try again in a moment.', hi: 'आपका अकाउंट ठीक है — दिक्कत हमारी तरफ से थी। थोड़ी देर में दोबारा कोशिश करें।' },
+    loadFailedRetry: { en: 'Try again', hi: 'दोबारा कोशिश करें' },
+    switchListing: { en: 'Switch listing', hi: 'लिस्टिंग बदलें' },
     noProfileFound: { en: 'No doctor profile found.', hi: 'डॉक्टर प्रोफाइल नहीं मिला।' },
     registerHereLink: { en: 'Register here', hi: 'यहां रजिस्टर करें' },
     statusActive: { en: '✓ Listing Active', hi: '✓ लिस्टिंग एक्टिव' },
