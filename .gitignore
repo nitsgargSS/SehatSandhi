@@ -21,3 +21,9 @@ supabase/.temp/
 *.swn
 *~
 .*.sw?
+
+# Per-mode local env files. These carry real anon keys for a specific project,
+# so they are ignored exactly like .env — see .env.example for the shape.
+.env.sandbox
+.env.production.local
+.env.*.local

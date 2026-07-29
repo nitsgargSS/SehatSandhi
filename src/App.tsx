@@ -4,7 +4,7 @@ import { LanguageProvider } from './i18n/LanguageContext'
 import { supabase } from './lib/supabase'
 import { track } from './lib/analytics'
 import PatientHome from './pages/PatientHome'
-import EnvBanner from './components/EnvBanner'
+import StagingBanner from './components/StagingBanner'
 import { WA_NUMBER } from './types'
 
 // Loaded on demand. Everything used to ship in one 865 kB chunk, so a patient
@@ -102,9 +102,8 @@ export default function App() {
   return (
     <LanguageProvider>
       <BrowserRouter>
-        {/* Outside <Routes> so the sandbox warning is present on every page,
-            including the full-bleed ones that opt out of Navbar/Footer. */}
-        <EnvBanner />
+        {/* Outside <Routes> so the staging warning is present on every page. */}
+        <StagingBanner />
         <Suspense fallback={
           <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">
             Loading…

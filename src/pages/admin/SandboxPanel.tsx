@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Loader2, Trash2, AlertTriangle } from 'lucide-react'
 import { purgeSandbox } from '../../lib/businessApi'
-import { SANDBOX_PURGE_TOKEN, isSandbox } from '../../lib/env'
+import { SANDBOX_PURGE_TOKEN, IS_STAGING } from '../../lib/env'
 
 // Sandbox maintenance. Rendered only while the app is pointed at the sandbox
-// backend (Dashboard gates on isSandbox()), and guarded again here so a routing
+// backend (Dashboard gates on IS_STAGING), and guarded again here so a routing
 // mistake cannot put a purge button in front of production data.
 //
 // The purge is irreversible, so the UI asks for the phrase to be typed rather
@@ -23,7 +23,7 @@ export default function SandboxPanel({ onPurged }: { onPurged: () => void }) {
 
   // Defence in depth: the tab is already gated, but never render a purge
   // control if anything about the env resolves unexpectedly.
-  if (!isSandbox()) return null
+  if (!IS_STAGING) return null
 
   const armed = confirmText.trim() === CONFIRM_PHRASE && !busy
 

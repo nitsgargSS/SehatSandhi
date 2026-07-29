@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { isSandbox } from '../lib/env'
+import { IS_STAGING } from '../lib/env'
 
 // "Fill this form with valid test data" — sandbox only.
 //
@@ -27,7 +27,7 @@ interface Props {
 
 export default function SandboxAutofill({ onFill, hint }: Props) {
   const [filled, setFilled] = useState(false)
-  if (!isSandbox()) return null
+  if (!IS_STAGING) return null
 
   const handle = () => {
     onFill()

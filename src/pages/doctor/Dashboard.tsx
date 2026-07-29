@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { isSandbox } from '../../lib/env'
 import { verticalForSpeciality, takesAppointments, verticalFor } from '../business/shared'
 import { Doctor, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
@@ -1099,7 +1098,7 @@ export default function DoctorDashboard() {
                         </div>
 
                         {b.public_token && (
-                          <a href={`/invoice/${b.public_token}${isSandbox() ? '?env=sandbox' : ''}`}
+                          <a href={`/invoice/${b.public_token}`}
                              target="_blank" rel="noreferrer"
                              className="inline-block text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700">
                             Open invoice
