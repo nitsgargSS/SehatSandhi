@@ -13,23 +13,23 @@ import { WA_NUMBER } from '../types'
 //     (copy+CTA+trust | ambulance + how-it-works cards), 6-across category row,
 //     full-width doctor teaser.
 // Both render from one component tree; Tailwind `lg:` visibility swaps them, so
-// the language toggle and area <select> drive both simultaneously.
+// the language toggle drives both simultaneously.
 
 const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 
 interface Strings {
-  brand: string; area_label: string; tagline: string; subtag: string; book: string
+  brand: string; tagline: string; subtag: string; book: string
   emergency_title: string; emergency_sub: string; emergency_btn: string; need: string
   doctors: string; hospitals: string; pharmacy: string; labs: string; insurance: string; ambulance: string
   doc_teaser_title: string; doc_teaser_sub: string; how: string; step1: string; step2: string; step3: string
   trust_verified: string; trust_free: string; trust_wa: string
   biz_cta: string; biz_title: string; biz_sub: string
-  faq_title: string; faq_sub: string; faqs: { q: string; a: string }[]
+  faq_nav: string; faq_title: string; faq_sub: string; faqs: { q: string; a: string }[]
 }
 
 const DICT: Record<'en' | 'hi', Strings> = {
   en: {
-    brand: 'Sehatsandhi', area_label: 'Your area',
+    brand: 'Sehatsandhi',
     tagline: 'Family health help, on WhatsApp',
     subtag: 'Doctors, medicines, lab tests, ambulance & more — near you, free to use.',
     book: 'Book on WhatsApp',
@@ -41,10 +41,11 @@ const DICT: Record<'en' | 'hi', Strings> = {
     doc_teaser_title: 'Find the right doctor', doc_teaser_sub: 'Eye, ENT, Skin, Heart & 16 more',
     how: 'How it works', step1: 'Pick a service', step2: 'Chat on WhatsApp', step3: 'Booking confirmed',
     trust_verified: 'Verified providers', trust_free: 'Free for you', trust_wa: 'All on WhatsApp',
-    biz_cta: 'Register your business',
+    biz_cta: 'Manage Business',
     biz_title: 'Are you a healthcare provider?',
-    biz_sub: 'Doctors, hospitals, pharmacies, labs, insurance & ambulance — get found by families near you.',
-    faq_title: 'Common questions',
+    biz_sub: 'Doctors, hospitals, pharmacies, labs, insurance & ambulance — list your business, or log in to manage it.',
+    faq_nav: 'Questions',
+    faq_title: 'Common Questions',
     faq_sub: 'Everything families ask us before their first booking.',
     faqs: [
       { q: 'Is this free for patients?',
@@ -58,11 +59,11 @@ const DICT: Record<'en' | 'hi', Strings> = {
       { q: 'What if I need an ambulance right now?',
         a: 'Use the ambulance button at the top of this page. It opens WhatsApp with an emergency message ready to send, so help can be arranged without you typing anything.' },
       { q: 'Which areas do you cover?',
-        a: 'We are live across Yamunanagar district and adding towns steadily. Pick your area at the top of the page to see who is available near you.' },
+        a: 'We are live across Yamunanagar district — Yamunanagar, Jagadhri, Radaur, Bilaspur and Chhachhrauli — and adding towns steadily. Message us on WhatsApp and we will show you who is available near you.' },
     ],
   },
   hi: {
-    brand: 'सेहतसंधि', area_label: 'आपका इलाका',
+    brand: 'सेहतसंधि',
     tagline: 'परिवार की सेहत, अब व्हाट्सएप पर',
     subtag: 'डॉक्टर, दवाई, लैब टेस्ट, एम्बुलेंस और भी बहुत कुछ — आपके पास, बिल्कुल मुफ़्त।',
     book: 'व्हाट्सएप पर बुक करें',
@@ -74,9 +75,10 @@ const DICT: Record<'en' | 'hi', Strings> = {
     doc_teaser_title: 'सही डॉक्टर चुनें', doc_teaser_sub: 'आँख, नाक-कान-गला, त्वचा, हृदय और 16 अन्य',
     how: 'यह कैसे काम करता है', step1: 'सेवा चुनें', step2: 'व्हाट्सएप पर बात करें', step3: 'बुकिंग पक्की',
     trust_verified: 'सत्यापित प्रोवाइडर', trust_free: 'आपके लिए मुफ़्त', trust_wa: 'सब कुछ व्हाट्सएप पर',
-    biz_cta: 'अपना बिज़नेस रजिस्टर करें',
+    biz_cta: 'बिज़नेस मैनेज करें',
     biz_title: 'आप हेल्थकेयर प्रोवाइडर हैं?',
-    biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब, बीमा और एम्बुलेंस — आपके इलाके के परिवार आपको ढूँढ पाएंगे।',
+    biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब, बीमा और एम्बुलेंस — अपना बिज़नेस लिस्ट करें, या लॉग इन करके मैनेज करें।',
+    faq_nav: 'सवाल',
     faq_title: 'अक्सर पूछे जाने वाले सवाल',
     faq_sub: 'पहली बुकिंग से पहले परिवार हमसे यही पूछते हैं।',
     faqs: [
@@ -91,12 +93,10 @@ const DICT: Record<'en' | 'hi', Strings> = {
       { q: 'अगर अभी एम्बुलेंस चाहिए तो?',
         a: 'ऊपर दिए एम्बुलेंस बटन का इस्तेमाल करें। यह व्हाट्सएप में इमरजेंसी मैसेज तैयार करके खोल देता है, ताकि बिना कुछ लिखे मदद भेजी जा सके।' },
       { q: 'आप किन इलाकों में हैं?',
-        a: 'हम यमुनानगर ज़िले में उपलब्ध हैं और लगातार नए कस्बे जोड़ रहे हैं। ऊपर अपना इलाका चुनकर देखें कि आपके पास कौन उपलब्ध है।' },
+        a: 'हम यमुनानगर ज़िले में उपलब्ध हैं — यमुनानगर, जगाधरी, रादौर, बिलासपुर और छछरौली — और लगातार नए कस्बे जोड़ रहे हैं। व्हाट्सएप पर मैसेज करें, हम आपके पास उपलब्ध प्रोवाइडर दिखा देंगे।' },
     ],
   },
 }
-
-const AREAS = ['Yamunanagar', 'Jagadhri', 'Radaur', 'Bilaspur', 'Chhachhrauli']
 
 const iconProps = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
 const Icons = {
@@ -130,20 +130,6 @@ function Brand({ size = 18 }: { size?: number }) {
 
 function LangButton({ label, onClick }: { label: string; onClick: () => void }) {
   return <button onClick={onClick} style={{ border: '1.5px solid #0E9F6E', background: '#fff', color: '#0E9F6E', fontWeight: 700, fontSize: 13, padding: '6px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit' }}>{label}</button>
-}
-
-function AreaSelect({ t, area, setArea, compact }: { t: Strings; area: string; setArea: (a: string) => void; compact?: boolean }) {
-  return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #e7e0d4', borderRadius: 14, padding: compact ? '8px 12px' : '9px 14px' }}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="#0E9F6E" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18, flex: '0 0 auto' }}><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg>
-      <div style={{ flex: 1 }}>
-        {!compact && <div style={{ fontSize: 11, color: '#8a8172', fontWeight: 600 }}>{t.area_label}</div>}
-        <select value={area} onChange={e => setArea(e.target.value)} style={{ border: 'none', background: 'transparent', fontSize: 15, fontWeight: 700, color: '#14201c', outline: 'none', width: '100%', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>
-          {AREAS.map(a => <option key={a}>{a}</option>)}
-        </select>
-      </div>
-    </label>
-  )
 }
 
 function BookCta({ t, link, fullWidth }: { t: Strings; link: string; fullWidth?: boolean }) {
@@ -201,7 +187,7 @@ function BusinessCard({ t, row }: { t: Strings; row?: boolean }) {
 // written here, and one open question does not close another.
 function Faqs({ t, row }: { t: Strings; row?: boolean }) {
   return (
-    <div>
+    <div style={{ scrollMarginTop: 24 }}>
       <div style={{ fontSize: row ? 20 : 16, fontWeight: 800, color: '#14201c' }}>{t.faq_title}</div>
       <div style={{ fontSize: row ? 14 : 12.5, color: '#7b8781', margin: '4px 0 14px', lineHeight: 1.5 }}>{t.faq_sub}</div>
       <div style={{ display: 'grid', gap: 10, gridTemplateColumns: row ? '1fr 1fr' : '1fr', alignItems: 'start' }}>
@@ -291,11 +277,12 @@ function TrustRow({ t, row }: { t: Strings; row?: boolean }) {
 
 export default function PatientHome() {
   const { lang, setLang } = useLanguage()
-  const [area, setArea] = useState('Yamunanagar')
   const t = DICT[lang]
 
   const num = WA_NUMBER.replace(/[^0-9]/g, '') || '919999999999'
-  const mk = (msg: string) => `https://wa.me/${num}?text=${encodeURIComponent(`${msg} (${area})`)}`
+  // No area in the message: the header no longer asks for one, and appending a
+  // default would tell the bot a location the patient never chose.
+  const mk = (msg: string) => `https://wa.me/${num}?text=${encodeURIComponent(msg)}`
   const waLink = mk('Hi Sehatsandhi, I need help')
   const ambLink = mk('EMERGENCY: I need an ambulance')
   const langBtn = lang === 'en' ? 'हिंदी' : 'ENGLISH'
@@ -317,9 +304,12 @@ export default function PatientHome() {
         <div style={{ width: '100%', maxWidth: 520, minHeight: '100vh', background: '#FBF7F0', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 4px' }}>
             <Brand />
-            <LangButton label={langBtn} onClick={toggleLang} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <a href="#faq-m" style={{ fontSize: 13, fontWeight: 700, color: '#5f6b64' }}>{t.faq_nav}</a>
+              <BusinessCta t={t} compact />
+              <LangButton label={langBtn} onClick={toggleLang} />
+            </div>
           </div>
-          <div style={{ padding: '8px 20px 4px' }}><AreaSelect t={t} area={area} setArea={setArea} /></div>
           <div style={{ padding: '16px 22px 6px' }}>
             <h1 style={{ fontSize: 26, lineHeight: 1.2, fontWeight: 800, color: '#14201c', margin: '0 0 8px', letterSpacing: '-.02em' }}>{t.tagline}</h1>
             <p style={{ fontSize: 14, color: '#5f6b64', margin: '0 0 14px', lineHeight: 1.5 }}>{t.subtag}</p>
@@ -335,7 +325,10 @@ export default function PatientHome() {
           </div>
           <div style={{ padding: '16px 20px 4px' }}><DoctorTeaser t={t} /></div>
           <div style={{ padding: '18px 22px 8px' }}><HowItWorksCard t={t} /></div>
-          <div style={{ padding: '18px 20px 4px' }}><Faqs t={t} /></div>
+          {/* Distinct id per layout. Both are in the DOM and CSS hides one, so a
+              shared id would resolve to the mobile copy — invisible on desktop,
+              and the link would appear to do nothing. */}
+          <div id="faq-m" style={{ padding: '18px 20px 4px', scrollMarginTop: 12 }}><Faqs t={t} /></div>
           <div style={{ padding: '14px 20px 18px' }}><BusinessCard t={t} /></div>
           <div style={{ marginTop: 'auto' }}><TrustRow t={t} /></div>
         </div>
@@ -347,8 +340,8 @@ export default function PatientHome() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '28px 0 8px' }}>
           <Brand size={22} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <a href="#faq-d" style={{ fontSize: 14, fontWeight: 700, color: '#5f6b64' }}>{t.faq_nav}</a>
             <BusinessCta t={t} compact />
-            <div style={{ width: 240 }}><AreaSelect t={t} area={area} setArea={setArea} compact /></div>
             <LangButton label={langBtn} onClick={toggleLang} />
           </div>
         </div>
@@ -379,7 +372,7 @@ export default function PatientHome() {
         <div style={{ padding: '20px 0 0' }}><DoctorTeaser t={t} /></div>
 
         {/* questions, answered before the provider pitch below them */}
-        <div style={{ padding: '40px 0 0' }}><Faqs t={t} row /></div>
+        <div id="faq-d" style={{ padding: '40px 0 0', scrollMarginTop: 20 }}><Faqs t={t} row /></div>
 
         {/* provider band — second entry point for the header CTA */}
         <div style={{ padding: '32px 0 0' }}><BusinessCard t={t} row /></div>

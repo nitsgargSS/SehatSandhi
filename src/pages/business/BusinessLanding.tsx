@@ -66,7 +66,9 @@ export default function BusinessLanding() {
           narrow phones. */}
       <div style={{ position: 'sticky', top: 0, zIndex: 40, background: BIZ.cream, borderBottom: `1px solid ${BIZ.border}` }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'clamp(12px,3vw,16px) clamp(16px,4vw,40px)', gap: 12 }} className="max-w-7xl mx-auto flex-wrap">
-          <Link to="/business" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Home, not /business: the logo is how someone who followed a
+              business link gets across to the patient side of the site. */}
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <img src="/logo-only-symbol.png" alt="" aria-hidden style={{ height: 'clamp(36px,9vw,50px)', width: 'auto', objectFit: 'contain' }} />
             <img src="/logo-title.png" alt="Sehatsandhi" style={{ height: 'clamp(36px,9vw,50px)', width: 'auto', objectFit: 'contain' }} />
           </Link>
