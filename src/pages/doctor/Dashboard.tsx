@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
 import { money, shortDate, isoDate } from '../../lib/format'
-import { verticalForSpeciality, takesAppointments, verticalFor } from '../business/shared'
+import { BIZ, verticalForSpeciality, takesAppointments, verticalFor } from '../business/shared'
 import { Doctor, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -667,48 +667,166 @@ export default function DoctorDashboard() {
     { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
   ]
 
+  // Same shell as the /business/register wizard: dark ink rail down the left
+  // holding the nav, cream content pane beside it. The rail replaces what used
+  // to be a navy banner across the top plus a row of pill tabs underneath —
+  // with six tabs that row wrapped onto two lines on a laptop, and the banner
+  // pushed the actual work below the fold. Below lg the rail can't fit, so the
+  // nav becomes a horizontally scrolling ink strip in the same colours.
   return (
-    <div className="min-h-screen bg-gray-50 pt-20">
-      {/* Header */}
-      <div className="bg-navy-700 text-white py-6">
-        <div className="max-w-6xl mx-auto px-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-teal-500/30 flex items-center justify-center">
-              <User className="w-7 h-7 text-white" />
+    <div style={{ background: BIZ.cream, minHeight: '100vh' }}
+         className="grid lg:grid-cols-[300px_1fr] lg:min-h-screen">
+      {/* ── desktop rail — sticky, so it stays put while the pane scrolls ── */}
+      <div className="hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto"
+           style={{ background: BIZ.ink, padding: '28px 22px' }}>
+        {/* The logo is transparent and its blue marks need a light backing on
+            the dark rail, so it sits on a cream chip — as on the wizard. */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 26 }}>
+          <img src="/logo-tight.png" alt="Sehatsandhi"
+               style={{ height: 96, width: 'auto', objectFit: 'contain', borderRadius: 16, background: BIZ.cream, padding: '12px 16px' }} />
+        </div>
+
+        {/* Who is logged in. This is the header's identity block, moved into the
+            rail — name, what they are, status, and the listing switcher. */}
+        <div style={{ borderBottom: '1px solid rgba(255,255,255,.1)', paddingBottom: 18, marginBottom: 18 }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center flex-none"
+                 style={{ background: 'rgba(255,255,255,.1)' }}>
+              <User className="w-4 h-4 text-white" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold">{doctor.name}</h1>
-              <p className="text-white/60 text-sm">
-                {[doctor.qualification, doctor.clinic_name !== doctor.name ? doctor.clinic_name : null]
-                  .filter(Boolean).join(' · ')}
-              </p>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={`text-xs px-2 py-0.5 rounded-full inline-block ${doctor.status === 'active' ? 'bg-teal-500/30 text-teal-300' : 'bg-amber-500/30 text-amber-300'}`}>
-                  {doctor.status === 'active' ? t('dashboardPage.statusActive') : t('dashboardPage.statusPending')}
-                </span>
-                {/* One WhatsApp number can carry a clinic and a pharmacy. The
-                    login reaches both; before this only the first was visible. */}
-                {listings.length > 1 && (
-                  <select
-                    value={doctor.id}
-                    onChange={e => { setLoading(true); setSelectedId(e.target.value) }}
-                    aria-label={t('dashboardPage.switchListing')}
-                    className="text-xs bg-white/10 text-white border border-white/20 rounded-full px-2 py-0.5 cursor-pointer">
-                    {listings.map(l => (
-                      <option key={l.id} value={l.id} className="text-gray-800">{l.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ fontSize: 14, fontWeight: 800, color: '#fff', margin: 0, lineHeight: 1.3 }}>{doctor.name}</h1>
+              {[doctor.qualification, doctor.clinic_name !== doctor.name ? doctor.clinic_name : null].filter(Boolean).length > 0 && (
+                <p style={{ fontSize: 12, color: '#8fa89d', margin: '2px 0 0', lineHeight: 1.4 }}>
+                  {[doctor.qualification, doctor.clinic_name !== doctor.name ? doctor.clinic_name : null]
+                    .filter(Boolean).join(' · ')}
+                </p>
+              )}
             </div>
           </div>
-          <button onClick={logout} className="flex items-center gap-2 text-white/60 hover:text-white text-sm transition">
-            <LogOut className="w-4 h-4" /> {t('dashboardPage.logout')}
-          </button>
+          <div className="flex flex-wrap items-center gap-2" style={{ marginTop: 11 }}>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
+              background: doctor.status === 'active' ? 'rgba(14,159,110,.22)' : 'rgba(245,158,11,.22)',
+              color: doctor.status === 'active' ? '#5fd6a8' : '#fbbf6e',
+            }}>
+              {doctor.status === 'active' ? t('dashboardPage.statusActive') : t('dashboardPage.statusPending')}
+            </span>
+            {/* One WhatsApp number can carry a clinic and a pharmacy. The
+                login reaches both; before this only the first was visible. */}
+            {listings.length > 1 && (
+              <select
+                value={doctor.id}
+                onChange={e => { setLoading(true); setSelectedId(e.target.value) }}
+                aria-label={t('dashboardPage.switchListing')}
+                style={{
+                  fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', maxWidth: '100%',
+                  background: 'rgba(255,255,255,.1)', color: '#fff',
+                  border: '1px solid rgba(255,255,255,.2)', borderRadius: 999, padding: '3px 8px',
+                }}>
+                {listings.map(l => (
+                  <option key={l.id} value={l.id} className="text-gray-800">{l.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
+
+        {/* nav */}
+        <nav aria-label="Dashboard sections" className="flex flex-col" style={{ gap: 2 }}>
+          {tabs.map(tb => {
+            const active = tab === tb.id
+            return (
+              <button key={tb.id} onClick={() => setTab(tb.id as any)}
+                aria-current={active ? 'page' : undefined}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left',
+                  fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                  padding: '11px 13px', borderRadius: 11, border: 'none',
+                  background: active ? BIZ.green : 'transparent',
+                  color: active ? '#fff' : '#e8efeb',
+                  transition: 'background .15s ease',
+                }}>
+                {tb.icon} {tb.label}
+              </button>
+            )
+          })}
+        </nav>
+
+        {/* marginTop:auto pins log-out to the bottom of the full-height rail,
+            where the wizard puts its "need help?" card. */}
+        <button onClick={logout}
+          style={{
+            marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+            fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            padding: '11px 13px', borderRadius: 11,
+            background: 'rgba(255,255,255,.06)', border: 'none', color: '#c9d6d0',
+          }}>
+          <LogOut className="w-4 h-4" /> {t('dashboardPage.logout')}
+        </button>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* ── tablet/mobile: ink bar with the same nav, scrolled sideways ── */}
+      <div className="lg:hidden" style={{ background: BIZ.ink }}>
+        <div className="flex items-center justify-between gap-3" style={{ padding: '10px 16px 0' }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: 15, fontWeight: 800, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doctor.name}</h1>
+            <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 3 }}>
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                background: doctor.status === 'active' ? 'rgba(14,159,110,.22)' : 'rgba(245,158,11,.22)',
+                color: doctor.status === 'active' ? '#5fd6a8' : '#fbbf6e',
+              }}>
+                {doctor.status === 'active' ? t('dashboardPage.statusActive') : t('dashboardPage.statusPending')}
+              </span>
+              {listings.length > 1 && (
+                <select
+                  value={doctor.id}
+                  onChange={e => { setLoading(true); setSelectedId(e.target.value) }}
+                  aria-label={t('dashboardPage.switchListing')}
+                  style={{
+                    fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', maxWidth: 150,
+                    background: 'rgba(255,255,255,.1)', color: '#fff',
+                    border: '1px solid rgba(255,255,255,.2)', borderRadius: 999, padding: '2px 8px',
+                  }}>
+                  {listings.map(l => (
+                    <option key={l.id} value={l.id} className="text-gray-800">{l.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+          <button onClick={logout} aria-label={t('dashboardPage.logout')}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, flex: '0 0 auto', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, color: '#8fa89d', padding: 4 }}>
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+        {/* overflow-x-auto rather than wrapping: six tabs wrap to three lines on
+            a phone, which buries the content the nav is meant to reach. */}
+        <nav aria-label="Dashboard sections" className="flex overflow-x-auto"
+             style={{ gap: 4, padding: '10px 16px 0', scrollbarWidth: 'none' }}>
+          {tabs.map(tb => {
+            const active = tab === tb.id
+            return (
+              <button key={tb.id} onClick={() => setTab(tb.id as any)}
+                aria-current={active ? 'page' : undefined}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7, flex: '0 0 auto',
+                  fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  padding: '9px 14px', border: 'none', whiteSpace: 'nowrap',
+                  borderRadius: '10px 10px 0 0',
+                  background: active ? BIZ.cream : 'transparent',
+                  color: active ? BIZ.ink : '#c9d6d0',
+                }}>
+                {tb.icon} {tb.label}
+              </button>
+            )
+          })}
+        </nav>
+      </div>
+
+      {/* ── content pane ── */}
+      <div style={{ padding: 'clamp(20px,4vw,40px) clamp(16px,4vw,44px)', minWidth: 0 }}>
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
@@ -727,16 +845,6 @@ export default function DoctorDashboard() {
               <div className="flex items-center gap-2 mb-1">{s.icon}<span className="text-sm text-gray-500">{s.label}</span></div>
               <p className="text-2xl font-bold text-navy-700">{s.value}</p>
             </div>
-          ))}
-        </div>
-
-        {/* Tabs — just 3 now, Today selected by default */}
-        <div className="flex gap-1 bg-gray-200 rounded-xl p-1 mb-6 w-fit flex-wrap">
-          {tabs.map(tb => (
-            <button key={tb.id} onClick={() => setTab(tb.id as any)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition ${tab === tb.id ? 'bg-white text-navy-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              {tb.icon} {tb.label}
-            </button>
           ))}
         </div>
 
