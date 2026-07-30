@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
+import { Spinner } from '../../components/Loading'
 import { money, shortDate, isoDate } from '../../lib/format'
 import { verticalForSpeciality, takesAppointments, verticalFor } from '../business/shared'
 import { Doctor, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
@@ -613,7 +614,14 @@ export default function DoctorDashboard() {
 
   const roleLabel = (r: string) => r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">{t('dashboardPage.loading')}</div></div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <Spinner size={40} label={t('dashboardPage.loading')} />
+        <span className="text-gray-400 text-sm">{t('dashboardPage.loading')}</span>
+      </div>
+    </div>
+  )
   // A lookup that failed is not the same as having no listing. Telling a paying
   // customer to go and register again because a query 500'd is the worse of the
   // two mistakes, so they are now separate screens.

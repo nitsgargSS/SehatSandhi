@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { activeConfig } from '../../lib/env'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { BIZ } from '../business/shared'
+import { Spinner } from '../../components/Loading'
 
 // Log in with a code sent to the WhatsApp number the business registered with.
 //
@@ -139,7 +140,7 @@ export default function DoctorLogin() {
             </div>
             {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
             <button type="submit" disabled={busy} className="btn-teal w-full justify-center py-3 text-base disabled:opacity-60">
-              {busy ? t('loginPage.btnSigningIn') : t('loginPage.btnLogin')}
+              {busy ? <><Spinner size={18} onDark label={t('loginPage.btnSigningIn')} /> {t('loginPage.btnSigningIn')}</> : t('loginPage.btnLogin')}
             </button>
             <button type="button" onClick={() => { setShowLegacy(false); setError('') }}
               className="w-full text-sm text-teal-600 py-1">
@@ -157,7 +158,7 @@ export default function DoctorLogin() {
             {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
             <button type="submit" disabled={busy || phone.replace(/\D/g, '').length < 10}
               className="btn-teal w-full justify-center py-3 text-base disabled:opacity-60">
-              {busy ? 'Sending…' : 'Send code'}
+              {busy ? <><Spinner size={18} onDark label="Sending" /> Sending…</> : 'Send code'}
             </button>
           </form>
         ) : (
@@ -180,7 +181,7 @@ export default function DoctorLogin() {
             {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
             <button type="submit" disabled={busy || code.length !== 6}
               className="btn-teal w-full justify-center py-3 text-base disabled:opacity-60">
-              {busy ? 'Checking…' : 'Log in'}
+              {busy ? <><Spinner size={18} onDark label="Checking" /> Checking…</> : 'Log in'}
             </button>
             <button type="button" onClick={() => { setStep('phone'); setCode(''); setError('') }}
               className="w-full text-sm text-gray-500 py-1">

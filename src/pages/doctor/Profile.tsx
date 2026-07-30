@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, WA_NUMBER } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../../components/SiteHeader'
+import { Spinner } from '../../components/Loading'
 
 interface RatingAgg {
   avg_rating: number
@@ -121,7 +122,10 @@ export default function DoctorProfile() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-400 text-sm">{t('profilePage.loading')}</div>
+      <div className="flex flex-col items-center gap-3">
+        <Spinner size={28} label={t('profilePage.loading')} />
+        <span className="text-gray-400 text-sm">{t('profilePage.loading')}</span>
+      </div>
     </div>
   )
 

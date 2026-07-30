@@ -3,6 +3,7 @@ import { useServiceAreas, ServiceArea } from '../../hooks/useServiceAreas'
 import { BIZ, FALLBACK_AREAS } from './shared'
 import { money, num } from '../../lib/format'
 import CountUp from '../../components/CountUp'
+import { Skeleton } from '../../components/Loading'
 
 // "Your reach snapshot" — a population-density heat map of every pincode in the
 // active district, driven by Supabase service_areas + pricing_tiers. Tiles carry
@@ -68,7 +69,7 @@ export default function ReachSnapshot() {
         {loading ? (
           // Reserve the line rather than collapsing it, so nothing below jumps
           // when the figure lands.
-          <span aria-hidden style={{ display: 'inline-block', width: '3.2ch', height: 'clamp(30px,8vw,38px)', borderRadius: 8, background: BIZ.creamAlt }} />
+          <Skeleton width="3.2ch" height={34} radius={8} />
         ) : (
           <span style={{ fontSize: 'clamp(34px,9vw,44px)', fontWeight: 800, color: '#0E9F6E', letterSpacing: '-.02em' }}>
             <CountUp value={totalPop} format={inShort} />

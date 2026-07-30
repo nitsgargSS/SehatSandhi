@@ -7,6 +7,7 @@ import { useLanguage } from '../i18n/LanguageContext'
 import { track, trackImpressions } from '../lib/analytics'
 import { doctorUrl, slugify } from '../lib/links'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../components/SiteHeader'
+import { DoctorListSkeleton } from '../components/Loading'
 
 interface DoctorWithRating extends Doctor {
   avg_rating?: number
@@ -143,7 +144,9 @@ export default function SpecialityLanding() {
         </div>
 
         {loading ? (
-          <p className="text-center text-gray-400 text-sm py-12">...</p>
+          // Doctor-shaped rows rather than a spinner: the patient already
+          // knows a list is coming, so show its shape and let it fill in.
+          <DoctorListSkeleton rows={3} />
         ) : doctors.length > 0 ? (
           <div>
             <p className="text-gray-500 text-sm mb-4">{t('specialityLandingPage.foundDoctorsIntro')}</p>
