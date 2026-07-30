@@ -1,6 +1,8 @@
 import { useEffect, useState, Fragment } from 'react'
 import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Building2, Plus, Trash2, ChevronLeft, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import StatusBadge from '../../components/StatusBadge'
+import { money, num, shortDate, dateTime, isoDate } from '../../lib/format'
 import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
 import { verticalForSpeciality } from '../business/shared'
 import { StatTile, ColumnChart, BarList, RangePicker } from '../../components/Charts'
@@ -207,7 +209,6 @@ export default function AdminDashboard() {
   }, [tab, repDays])
 
   const pTotal = (k: keyof PlatformRow) => platform.reduce((a, r) => a + (Number(r[k]) || 0), 0)
-  const dLabel = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
   const specName = (id: string | null) => SPECIALITIES.find(s => s.id === id)?.en ?? id ?? 'Any'
 
   // ── Changing a listing's speciality ──
@@ -354,7 +355,7 @@ export default function AdminDashboard() {
   const [couponForm, setCouponForm] = useState({
     code: '', discount_type: 'percentage', discount_value: '',
     applies_to: 'first_payment', duration_months: '',
-    max_uses: '', valid_from: new Date().toISOString().split('T')[0], valid_until: '',
+    max_uses: '', valid_from: isoDate(), valid_until: '',
     show_on_banner: false, banner_text_en: '', banner_text_hi: '', notes: '',
   })
 
@@ -368,29 +369,33 @@ export default function AdminDashboard() {
       if (err) console.warn(`[admin] ${table} query failed — tab will render empty:`, err.message)
     }
 
-    const { data, error: docErr } = await supabase.from('doctors').select('*').order('created_at', { ascending: false })
-    warn('doctors', docErr)
-    setDoctors((data as DoctorWithOrg[]) || [])
-    const { data: campData, error: campErr } = await supabase
-      .from('camps_offers')
-      .select('*, doctors(name, clinic_name)')
-      .order('created_at', { ascending: false })
-    warn('camps_offers', campErr)
-    setCamps((campData as any) || [])
-    const { data: orgData, error: orgErr } = await supabase.from('organizations').select('*').order('created_at', { ascending: false })
-    warn('organizations', orgErr)
-    setOrganizations(orgData || [])
-    const { data: couponData, error: coupErr } = await supabase.from('discount_codes').select('*').order('created_at', { ascending: false })
-    warn('discount_codes', coupErr)
-    setCoupons(couponData || [])
-    // Per-vertical billing plans. Read-only here: rates are the authority the
-    // edge functions price against, so they change in the SQL editor, not
-    // behind an admin password.
-    const { data: billingData, error: billErr } = await supabase.from('vertical_billing').select('*')
-    warn('vertical_billing', billErr)
-    setBillingPlans((billingData as VerticalBillingRow[]) || [])
-    const { data: planData } = await supabase.from('active_pricing_plan').select('*').maybeSingle()
-    setActivePlan((planData as PlanRow) || null)
+    // Six independent tables. Awaited in turn these were six serial round trips
+    // before any tab could render; none of them depends on another's result.
+    //
+    // vertical_billing is read-only here: the rates are the authority the edge
+    // functions price against, so they change in the SQL editor, not behind an
+    // admin password.
+    const [doctorsRes, campsRes, orgsRes, couponsRes, billingRes, planRes] = await Promise.all([
+      supabase.from('doctors').select('*').order('created_at', { ascending: false }),
+      supabase.from('camps_offers').select('*, doctors(name, clinic_name)').order('created_at', { ascending: false }),
+      supabase.from('organizations').select('*').order('created_at', { ascending: false }),
+      supabase.from('discount_codes').select('*').order('created_at', { ascending: false }),
+      supabase.from('vertical_billing').select('*'),
+      supabase.from('active_pricing_plan').select('*').maybeSingle(),
+    ])
+
+    warn('doctors', doctorsRes.error)
+    setDoctors((doctorsRes.data as DoctorWithOrg[]) || [])
+    warn('camps_offers', campsRes.error)
+    setCamps((campsRes.data as any) || [])
+    warn('organizations', orgsRes.error)
+    setOrganizations(orgsRes.data || [])
+    warn('discount_codes', couponsRes.error)
+    setCoupons(couponsRes.data || [])
+    warn('vertical_billing', billingRes.error)
+    setBillingPlans((billingRes.data as VerticalBillingRow[]) || [])
+    warn('active_pricing_plan', planRes.error)
+    setActivePlan((planRes.data as PlanRow) || null)
     setLoading(false)
   }
 
@@ -493,7 +498,7 @@ export default function AdminDashboard() {
     setCouponForm({
       code: '', discount_type: 'percentage', discount_value: '',
       applies_to: 'first_payment', duration_months: '',
-      max_uses: '', valid_from: new Date().toISOString().split('T')[0], valid_until: '',
+      max_uses: '', valid_from: isoDate(), valid_until: '',
       show_on_banner: false, banner_text_en: '', banner_text_hi: '', notes: '',
     })
     setShowAddCoupon(false)
@@ -512,7 +517,7 @@ export default function AdminDashboard() {
   }
 
   const couponStatusLabel = (c: any) => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = isoDate()
     if (!c.is_active) return { label: t('adminDashboardPage.couponInactive'), cls: 'badge-suspended' }
     if (c.valid_until && c.valid_until < today) return { label: t('adminDashboardPage.couponExpired'), cls: 'badge-suspended' }
     if (c.valid_from && c.valid_from > today) return { label: t('adminDashboardPage.couponScheduled'), cls: 'badge-pending' }
@@ -729,11 +734,6 @@ export default function AdminDashboard() {
     </div>
   )
 
-  const StatusBadge = ({ status }: { status: string }) => (
-    <span className={status === 'active' ? 'badge-active' : status === 'suspended' ? 'badge-suspended' : 'badge-pending'}>
-      {status}
-    </span>
-  )
 
   // One definition, rendered twice — as the desktop rail and as the mobile strip.
   const NAV_ITEMS = [
@@ -853,7 +853,7 @@ export default function AdminDashboard() {
                         </p>
                         <p className="text-xs text-gray-400">{d.qualification} · {d.phone}</p>
                       </div>
-                      <StatusBadge status={d.status} />
+                      <StatusBadge kind="listing" value={d.status} />
                     </div>
 
                     <div className="mb-2"><SpecialitySelect d={d} /></div>
@@ -930,7 +930,7 @@ export default function AdminDashboard() {
                       <td className="py-3 px-2 text-xs text-gray-500">
                         {new Date(d.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                       </td>
-                      <td className="py-3 px-2"><StatusBadge status={d.status} /></td>
+                      <td className="py-3 px-2"><StatusBadge kind="listing" value={d.status} /></td>
                       <td className="py-3 px-2"><DoctorActions d={d} /></td>
                     </tr>
                     {expandedDoctorId === d.id && (
@@ -1107,7 +1107,7 @@ export default function AdminDashboard() {
                           <Building2 className="w-3.5 h-3.5 text-navy-600 shrink-0" />
                           <span className="truncate">{o.name}</span>
                         </p>
-                        <StatusBadge status={o.status} />
+                        <StatusBadge kind="listing" value={o.status} />
                       </div>
                       <p className="text-xs text-gray-500 capitalize mb-2">
                         {o.type.replace('_', ' ')}
@@ -1137,7 +1137,7 @@ export default function AdminDashboard() {
                         </td>
                         <td className="py-3 px-2 text-gray-600 capitalize">{o.type.replace('_', ' ')}</td>
                         <td className="py-3 px-2">
-                          <span className={o.status === 'active' ? 'badge-active' : o.status === 'suspended' ? 'badge-suspended' : 'badge-pending'}>{o.status}</span>
+                          <StatusBadge kind="listing" value={o.status} />
                         </td>
                         <td className="py-3 px-2 text-gray-600">{doctors.filter(d => d.organization_id === o.id).length}</td>
                         <td className="py-3 px-2"><OrgActions o={o} /></td>
@@ -1163,7 +1163,7 @@ export default function AdminDashboard() {
                     <h2 className="font-bold text-navy-700 text-lg flex items-center gap-2"><Building2 className="w-5 h-5" /> {selectedOrg.name}</h2>
                     <p className="text-gray-400 text-xs">{selectedOrg.address}</p>
                   </div>
-                  <span className={selectedOrg.status === 'active' ? 'badge-active' : selectedOrg.status === 'suspended' ? 'badge-suspended' : 'badge-pending'}>{selectedOrg.status}</span>
+                  <StatusBadge kind="listing" value={selectedOrg.status} />
                 </div>
               </div>
 
@@ -1215,7 +1215,7 @@ export default function AdminDashboard() {
                         <div key={s.id} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
                           <p className="text-sm text-gray-700">{spec?.en || s.speciality} — {pin?.area || s.pin_code}</p>
                           <div className="flex items-center gap-3">
-                            <span className="text-sm font-semibold text-teal-600">{s.monthly_price ? `₹${s.monthly_price.toLocaleString('en-IN')}/mo` : '—'}</span>
+                            <span className="text-sm font-semibold text-teal-600">{s.monthly_price ? `${money(s.monthly_price)}/mo` : '—'}</span>
                             <button onClick={() => removeSubscription(s.id)}><Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
                           </div>
                         </div>
@@ -1430,7 +1430,7 @@ export default function AdminDashboard() {
                       <div className="text-2xl font-bold text-teal-600">
                         {activePlan.mode === 'pincode_tiers'
                           ? 'By pincode tier'
-                          : `₹${Number(activePlan.monthly_price ?? 0).toLocaleString('en-IN')}/mo`}
+                          : `${money(Number(activePlan.monthly_price ?? 0))}/mo`}
                       </div>
                       <div className="text-xs text-gray-500">
                         business picks {activePlan.min_months}–{activePlan.max_months} months
@@ -1504,7 +1504,7 @@ export default function AdminDashboard() {
                             <strong>This price will change by itself.</strong> After {capped.seats_left ?? 0} more
                             signup{(capped.seats_left ?? 0) === 1 ? '' : 's'} this plan stops being offered
                             {next && <> and new businesses are quoted <strong>{next.mode === 'pincode_tiers'
-                              ? 'the per-pincode tiers' : `₹${Number(next.monthly_price ?? 0).toLocaleString('en-IN')}/mo`}</strong> on {next.label}</>}.
+                              ? 'the per-pincode tiers' : `${money(Number(next.monthly_price ?? 0))}/mo`}</strong> on {next.label}</>}.
                             {' '}Clear the seat cap in the table below to stop that.
                           </div>
                         ) : (
@@ -1518,7 +1518,7 @@ export default function AdminDashboard() {
                       <div className="flex gap-2 flex-wrap items-baseline">
                         <span className="text-2xl font-bold text-gray-400">₹</span>
                         <span className="text-3xl font-bold text-navy-700 tabular-nums">
-                          {Number(activePlan.monthly_price ?? 0).toLocaleString('en-IN')}
+                          {num(activePlan.monthly_price ?? 0)}
                         </span>
                         <span className="text-sm text-gray-500">per month</span>
                       </div>
@@ -1553,9 +1553,9 @@ export default function AdminDashboard() {
                       {/* The business's-eye view of the live price, so GST is
                           never a surprise at the payment screen. */}
                       <p className="text-xs text-gray-500 mt-3">
-                        A business sees <strong>₹{Number(activePlan.monthly_price ?? 0).toLocaleString('en-IN')}/month</strong>
+                        A business sees <strong>{money(Number(activePlan.monthly_price ?? 0))}/month</strong>
                         {taxSettings?.gst_enabled && taxSettings?.gstin
-                          ? <> and pays <strong>₹{Math.round(Number(activePlan.monthly_price ?? 0) * (1 + Number(taxSettings.gst_rate ?? 18) / 100)).toLocaleString('en-IN')}</strong> for one month, including {Number(taxSettings.gst_rate ?? 18)}% GST.</>
+                          ? <> and pays <strong>{money(Math.round(Number(activePlan.monthly_price ?? 0) * (1 + Number(taxSettings.gst_rate ?? 18) / 100)))}</strong> for one month, including {Number(taxSettings.gst_rate ?? 18)}% GST.</>
                           : <> — GST is currently switched off, so that is the whole amount charged.</>}
                       </p>
                     </div>
@@ -1812,7 +1812,7 @@ export default function AdminDashboard() {
                                 const v = Number(tierDraft[tr.tier_number])
                                 setTierDraft(s => { const n = { ...s }; delete n[tr.tier_number]; return n })
                                 runPricingAction('updateTier', { tierNumber: tr.tier_number, monthlyPrice: v },
-                                  `${tr.tier_name} set to ₹${v.toLocaleString('en-IN')}/mo.`)
+                                  `${tr.tier_name} set to ${money(v)}/mo.`)
                               }} disabled={pricingBusy}
                                 className="text-xs font-bold px-2 rounded-lg bg-navy-700 text-white disabled:opacity-50">Save</button>
                             )}
@@ -1959,9 +1959,9 @@ export default function AdminDashboard() {
                         {invoiceMonths.slice(0, 4).map(m => (
                           <div key={m.month} className="border border-gray-200 rounded-xl p-3">
                             <div className="text-xs text-gray-500">{m.month}</div>
-                            <div className="font-bold text-navy-700">₹{Number(m.total_collected ?? 0).toLocaleString('en-IN')}</div>
+                            <div className="font-bold text-navy-700">{money(Number(m.total_collected ?? 0))}</div>
                             <div className="text-[11px] text-gray-400">
-                              {m.invoices} invoices · ₹{Number(m.tax_collected ?? 0).toLocaleString('en-IN')} tax
+                              {m.invoices} invoices · {money(Number(m.tax_collected ?? 0))} tax
                             </div>
                           </div>
                         ))}
@@ -1997,13 +1997,13 @@ export default function AdminDashboard() {
                                 <td className="py-2.5 px-2 font-mono text-[11px] text-gray-500">
                                   {iv.recipient_gstin || <span className="text-gray-300">B2C</span>}
                                 </td>
-                                <td className="py-2.5 px-2 text-right">₹{Number(iv.taxable_value).toLocaleString('en-IN')}</td>
+                                <td className="py-2.5 px-2 text-right">{money(Number(iv.taxable_value))}</td>
                                 <td className="py-2.5 px-2 text-right text-gray-500">
                                   {Number(iv.tax_total) > 0
-                                    ? `₹${Number(iv.tax_total).toLocaleString('en-IN')}`
+                                    ? `${money(Number(iv.tax_total))}`
                                     : <span className="text-gray-300">—</span>}
                                 </td>
-                                <td className="py-2.5 px-2 text-right font-semibold">₹{Number(iv.total_amount).toLocaleString('en-IN')}</td>
+                                <td className="py-2.5 px-2 text-right font-semibold">{money(Number(iv.total_amount))}</td>
                                 <td className="py-2.5 px-2 text-[11px] text-gray-400">
                                   {iv.sent_whatsapp_at ? 'WA' : ''}{iv.sent_whatsapp_at && iv.sent_email_at ? ' + ' : ''}{iv.sent_email_at ? 'email' : ''}
                                   {!iv.sent_whatsapp_at && !iv.sent_email_at ? 'not sent' : ''}
@@ -2028,7 +2028,7 @@ export default function AdminDashboard() {
                       <div className="space-y-1.5">
                         {planEvents.map(ev => (
                           <div key={ev.id} className="flex gap-3 text-xs text-gray-600 border-b border-gray-100 pb-1.5 last:border-0">
-                            <span className="text-gray-400 whitespace-nowrap">{new Date(ev.created_at).toLocaleString('en-IN')}</span>
+                            <span className="text-gray-400 whitespace-nowrap">{dateTime(ev.created_at)}</span>
                             <span className="font-semibold">{ev.action}</span>
                             {ev.plan_code && <span className="font-mono text-gray-400">{ev.plan_code}</span>}
                             <span className="text-gray-400">by {ev.actor || 'admin'}</span>
@@ -2073,17 +2073,17 @@ export default function AdminDashboard() {
 
                   <div className="card shadow-sm">
                     <ColumnChart title="Visitors per day" height={150}
-                      data={platform.map(r => ({ label: dLabel(r.day), value: r.visitors }))} />
+                      data={platform.map(r => ({ label: shortDate(r.day), value: r.visitors }))} />
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="card shadow-sm">
                       <ColumnChart title="Searches per day" height={120}
-                        data={platform.map(r => ({ label: dLabel(r.day), value: r.searches }))} />
+                        data={platform.map(r => ({ label: shortDate(r.day), value: r.searches }))} />
                     </div>
                     <div className="card shadow-sm">
                       <ColumnChart title="Business signups started per day" height={120}
-                        data={platform.map(r => ({ label: dLabel(r.day), value: r.business_leads }))} />
+                        data={platform.map(r => ({ label: shortDate(r.day), value: r.business_leads }))} />
                     </div>
                   </div>
 

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import StatusBadge from '../../components/StatusBadge'
+import { Spinner } from '../../components/Loading'
+import { money, shortDate, isoDate } from '../../lib/format'
 import { verticalForSpeciality, takesAppointments, verticalFor } from '../business/shared'
 import { Doctor, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
@@ -36,6 +39,17 @@ interface CampOffer {
 export default function DoctorDashboard() {
   const { t } = useLanguage()
   const [doctor, setDoctor] = useState<Doctor | null>(null)
+  // Every listing this login reaches. One WhatsApp number can carry more than
+  // one — a clinic and a pharmacy run by the same family — and before this the
+  // dashboard could only ever show one of them.
+  const [listings, setListings] = useState<Doctor[]>([])
+  // Which listing the dashboard is showing. Switching sets this, and the load
+  // effect keys on it, so appointments/staff/hours all follow — setting only
+  // `doctor` would have left one listing's name above another's data.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // A failed lookup used to be indistinguishable from having no listing, so a
+  // paying customer was told to go and register again.
+  const [loadError, setLoadError] = useState(false)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   // Appointment actions. Cancelling asks for a reason and rescheduling shows the
   // doctor's real open slots, so neither is a blind click.
@@ -44,7 +58,7 @@ export default function DoctorDashboard() {
   const [cancelling, setCancelling] = useState<Appointment | null>(null)
   const [cancelReason, setCancelReason] = useState('')
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null)
-  const [reschedDate, setReschedDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [reschedDate, setReschedDate] = useState(() => isoDate())
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [camps, setCamps] = useState<CampOffer[]>([])
   const [loading, setLoading] = useState(true)
@@ -85,8 +99,6 @@ export default function DoctorDashboard() {
     return () => { cancelled = true }
   }, [tab, doctor])
 
-  const money = (v: string | number | null) =>
-    `₹${Number(v ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
   // ── All appointments ──
   // The dashboard used to load 20 rows ordered by creation time and nothing
@@ -99,10 +111,10 @@ export default function DoctorDashboard() {
   const [allAppts, setAllAppts] = useState<Appointment[]>([])
   const [apptLoading, setApptLoading] = useState(false)
   const [apptFrom, setApptFrom] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10)
+    const d = new Date(); d.setDate(d.getDate() - 30); return isoDate(d)
   })
   const [apptTo, setApptTo] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10)
+    const d = new Date(); d.setDate(d.getDate() + 30); return isoDate(d)
   })
   const [apptStatus, setApptStatus] = useState<string>('all')
   const [apptSearch, setApptSearch] = useState('')
@@ -158,8 +170,6 @@ export default function DoctorDashboard() {
   }, [tab, doctor, reportDays])
 
   const rTotal = (k: keyof ReportRow) => report.reduce((a, r) => a + (Number(r[k]) || 0), 0)
-  const dayLabel = (iso: string) =>
-    new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
   // GSTIN, editable by the clinic itself. doctors_update_own already permits a
   // signed-in clinic to update its own row, so this needs no new policy.
@@ -337,36 +347,74 @@ export default function DoctorDashboard() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { window.location.href = '/business/login'; return }
-      const { data: doc } = await supabase.from('doctors').select('*').eq('email', user.email).single()
+
+      // Ask which listings this session may act on, rather than matching an
+      // email.
+      //
+      // Phone login mints a synthetic auth user, <phone>@wa.sehatsandhi.in, and
+      // deliberately never writes that address to doctors.email — 0023 moved
+      // clinic identity onto auth_uid precisely because the signup wizard
+      // collects email only optionally. So `.eq('email', user.email)` matched
+      // nothing for every business that joined through the wizard and logged in
+      // by code: they signed in successfully, landed here, and got an empty
+      // dashboard with no error to explain it.
+      //
+      // Not simply dropping the filter: allow_read_active_doctors lets any
+      // caller read EVERY active listing, so an unfiltered select would show a
+      // clinic somebody else's business. sehat_caller_listing_ids() is the
+      // function the RLS policies themselves use.
+      const { data: myIds, error: idsErr } = await supabase.rpc('sehat_caller_listing_ids')
+      if (idsErr) {
+        console.warn('[dashboard] could not resolve listings:', idsErr.message)
+        setLoadError(true); setLoading(false); return
+      }
+      const ids = (myIds as unknown as string[]) ?? []
+
+      // One number can carry several listings — a clinic and a pharmacy on the
+      // same phone. Show the first and offer the rest.
+      const { data: mine } = await supabase.from('doctors').select('*')
+        .in('id', ids).order('created_at', { ascending: true })
+      setListings(mine || [])
+      const doc = (selectedId && mine?.find(l => l.id === selectedId)) || mine?.[0] || null
       if (doc) {
         setDoctor(doc)
-        const { data: appts } = await supabase.from('appointments').select('*').eq('doctor_id', doc.id).order('created_at', { ascending: false }).limit(20)
-        setAppointments(appts || [])
 
-        // Counted in the database. Counting the 20 rows above under-reported
-        // every clinic past its twentieth booking.
+        // Everything below depends only on the listing we just fetched, not on
+        // each other — so it goes out at once. Awaited one at a time, these were
+        // eight serial round trips before the dashboard could paint; on a rural
+        // connection that is the difference between "slow" and "broken".
+        //
+        // Counts are read in the database. Counting the 20 rows loaded here
+        // under-reported every clinic past its twentieth booking.
         const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
-        const [{ count: total }, { count: month }] = await Promise.all([
+        const [appts, total, month] = await Promise.all([
+          supabase.from('appointments').select('*').eq('doctor_id', doc.id)
+            .order('created_at', { ascending: false }).limit(20),
           supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('doctor_id', doc.id),
           supabase.from('appointments').select('id', { count: 'exact', head: true })
             .eq('doctor_id', doc.id).gte('created_at', monthStart.toISOString()),
+          loadStaff(doc.id),
+          loadCamps(doc.id),
+          loadLocations(doc.id),
+          loadAvailability(doc.id),
+          // A solo practice has no roster and no headcount plan to read.
+          doc.organization_id
+            ? Promise.all([
+                loadRoster(doc.organization_id),
+                supabase.from('active_pricing_plan')
+                  .select('doctor_billing, monthly_price, included_doctors, extra_doctor_price')
+                  .maybeSingle()
+                  .then(({ data: p }) => { if (p) setPlan(p as PlanTerms) }),
+              ])
+            : null,
         ])
-        setCounts({ total: total ?? 0, month: month ?? 0 })
-        await loadStaff(doc.id)
-        await loadCamps(doc.id)
-        await loadLocations(doc.id)
-        if (doc.organization_id) {
-          await loadRoster(doc.organization_id)
-          const { data: p } = await supabase.from('active_pricing_plan')
-            .select('doctor_billing, monthly_price, included_doctors, extra_doctor_price').maybeSingle()
-          if (p) setPlan(p as PlanTerms)
-        }
-        await loadAvailability(doc.id)
+        setAppointments(appts.data || [])
+        setCounts({ total: total.count ?? 0, month: month.count ?? 0 })
       }
       setLoading(false)
     }
     load()
-  }, [])
+  }, [selectedId])
 
   // 'today' does not exist for a pharmacy or an agent, so it would render an
   // empty page on their first visit.
@@ -566,11 +614,33 @@ export default function DoctorDashboard() {
 
   const roleLabel = (r: string) => r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">{t('dashboardPage.loading')}</div></div>
-  if (!doctor) return (
+  if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-400">
-        {t('dashboardPage.noProfileFound')} <a href="/doctor" className="text-teal-600">{t('dashboardPage.registerHereLink')}</a>
+      <div className="flex flex-col items-center gap-3">
+        <Spinner size={40} label={t('dashboardPage.loading')} />
+        <span className="text-gray-400 text-sm">{t('dashboardPage.loading')}</span>
+      </div>
+    </div>
+  )
+  // A lookup that failed is not the same as having no listing. Telling a paying
+  // customer to go and register again because a query 500'd is the worse of the
+  // two mistakes, so they are now separate screens.
+  if (loadError) return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="text-center max-w-sm">
+        <p className="text-navy-700 font-semibold mb-1">{t('dashboardPage.loadFailedTitle')}</p>
+        <p className="text-gray-500 text-sm mb-4">{t('dashboardPage.loadFailedBody')}</p>
+        <button onClick={() => window.location.reload()} className="btn-teal text-sm">
+          {t('dashboardPage.loadFailedRetry')}
+        </button>
+      </div>
+    </div>
+  )
+  if (!doctor) return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="text-gray-500 text-center text-sm">
+        {t('dashboardPage.noProfileFound')}{' '}
+        <a href="/business/register" className="text-teal-600 hover:underline">{t('dashboardPage.registerHereLink')}</a>
       </div>
     </div>
   )
@@ -608,10 +678,28 @@ export default function DoctorDashboard() {
             </div>
             <div>
               <h1 className="text-xl font-bold">{doctor.name}</h1>
-              <p className="text-white/60 text-sm">{doctor.qualification} · {doctor.speciality} · {doctor.clinic_name}</p>
-              <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${doctor.status === 'active' ? 'bg-teal-500/30 text-teal-300' : 'bg-amber-500/30 text-amber-300'}`}>
-                {doctor.status === 'active' ? t('dashboardPage.statusActive') : t('dashboardPage.statusPending')}
-              </span>
+              <p className="text-white/60 text-sm">
+                {[doctor.qualification, doctor.clinic_name !== doctor.name ? doctor.clinic_name : null]
+                  .filter(Boolean).join(' · ')}
+              </p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className={`text-xs px-2 py-0.5 rounded-full inline-block ${doctor.status === 'active' ? 'bg-teal-500/30 text-teal-300' : 'bg-amber-500/30 text-amber-300'}`}>
+                  {doctor.status === 'active' ? t('dashboardPage.statusActive') : t('dashboardPage.statusPending')}
+                </span>
+                {/* One WhatsApp number can carry a clinic and a pharmacy. The
+                    login reaches both; before this only the first was visible. */}
+                {listings.length > 1 && (
+                  <select
+                    value={doctor.id}
+                    onChange={e => { setLoading(true); setSelectedId(e.target.value) }}
+                    aria-label={t('dashboardPage.switchListing')}
+                    className="text-xs bg-white/10 text-white border border-white/20 rounded-full px-2 py-0.5 cursor-pointer">
+                    {listings.map(l => (
+                      <option key={l.id} value={l.id} className="text-gray-800">{l.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
           </div>
           <button onClick={logout} className="flex items-center gap-2 text-white/60 hover:text-white text-sm transition">
@@ -709,9 +797,7 @@ export default function DoctorDashboard() {
                               </p>
                             )}
                           </div>
-                          <span className={a.status === 'completed' ? 'badge-active'
-                            : (a.status === 'cancelled' || a.status === 'no_show') ? 'badge-suspended'
-                            : 'badge-pending'}>{a.status === 'no_show' ? 'no show' : a.status}</span>
+                          <StatusBadge kind="appointment" value={a.status} />
                         </div>
 
                         {open && (
@@ -832,13 +918,7 @@ export default function DoctorDashboard() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                            a.status === 'completed' ? 'bg-teal-100 text-teal-700'
-                            : a.status === 'cancelled' ? 'bg-gray-200 text-gray-600'
-                            : a.status === 'no_show' ? 'bg-amber-100 text-amber-800'
-                            : 'bg-navy-50 text-navy-700'}`}>
-                            {a.status === 'no_show' ? 'DID NOT TURN UP' : a.status.toUpperCase()}
-                          </span>
+                          <StatusBadge kind="appointment" value={a.status} />
                           {a.cancelled_by && (
                             <span className="text-[11px] text-gray-400">cancelled by {a.cancelled_by}</span>
                           )}
@@ -1162,14 +1242,14 @@ export default function DoctorDashboard() {
 
                 <div className="card shadow-sm">
                   <ColumnChart title="Profile opens per day" height={140}
-                    data={report.map(r => ({ label: dayLabel(r.day), value: r.profile_views }))} />
+                    data={report.map(r => ({ label: shortDate(r.day), value: r.profile_views }))} />
                 </div>
 
                 <div className={`grid grid-cols-1 gap-4 ${booksAppointments ? 'lg:grid-cols-2' : ''}`}>
                   {booksAppointments && <>
                   <div className="card shadow-sm">
                     <ColumnChart title="Appointments booked per day" height={120}
-                      data={report.map(r => ({ label: dayLabel(r.day), value: r.bookings }))} />
+                      data={report.map(r => ({ label: shortDate(r.day), value: r.bookings }))} />
                   </div>
                   <div className="card shadow-sm">
                     <BarList title="What happened to those appointments"
@@ -1190,7 +1270,7 @@ export default function DoctorDashboard() {
                   {!booksAppointments && (
                     <div className="card shadow-sm">
                       <ColumnChart title="WhatsApp taps per day" height={120}
-                        data={report.map(r => ({ label: dayLabel(r.day), value: r.whatsapp_clicks }))} />
+                        data={report.map(r => ({ label: shortDate(r.day), value: r.whatsapp_clicks }))} />
                       <p className="text-xs text-gray-500 mt-4">
                         A tap is someone opening WhatsApp to contact you — the closest thing to an enquiry
                         we can see from here.
@@ -1250,7 +1330,7 @@ export default function DoctorDashboard() {
                     {marginalCost > 0 && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
                         Adding this doctor takes you to {billableDoctors + 1}, which adds
-                        ₹{marginalCost.toLocaleString('en-IN')}/month from your next renewal.
+                        {money(marginalCost)}/month from your next renewal.
                       </p>
                     )}
                     <div className="flex gap-2">
@@ -1587,7 +1667,7 @@ export default function DoctorDashboard() {
             </p>
             <label className="text-xs font-medium text-gray-600 mb-1 block">New date</label>
             <input type="date" className="input-field text-sm mb-4"
-              value={reschedDate} min={new Date().toISOString().slice(0, 10)}
+              value={reschedDate} min={isoDate()}
               onChange={e => setReschedDate(e.target.value)} />
 
             {reschedSlots.length === 0 ? (

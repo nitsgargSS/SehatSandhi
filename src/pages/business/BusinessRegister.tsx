@@ -17,6 +17,7 @@ import { track } from '../../lib/analytics'
 // Same file the pricing engine uses, so the quote here and the amount charged
 // cannot describe different models.
 import { headcountFor, applyHeadcount, describeDoctorRate } from '../../../supabase/functions/_shared/headcount'
+import { money, num } from '../../lib/format'
 
 // Design 2b — 4-step onboarding wizard.
 // Layout: desktop = dark left step-rail + content pane; tablet (<900px) =
@@ -688,14 +689,14 @@ export default function BusinessRegister() {
                               {hospDoctors.filter(d => d.name.trim()).length === 1 ? '' : 's'} added
                               {price.doctorBilling === 'per_doctor' && price.doctorMultiplier > 1 && (
                                 <span style={{ color: BIZ.mutedWarm }}>
-                                  {' '}· {price.doctorMultiplier} × ₹{(plan.monthly_price ?? 0).toLocaleString('en-IN')}
-                                  {' '}= <strong style={{ color: BIZ.ink }}>₹{price.monthlyTotal.toLocaleString('en-IN')}/month</strong>
+                                  {' '}· {price.doctorMultiplier} × {money((plan.monthly_price ?? 0))}
+                                  {' '}= <strong style={{ color: BIZ.ink }}>{money(price.monthlyTotal)}/month</strong>
                                 </span>
                               )}
                               {price.extraDoctors > 0 && (
                                 <span style={{ color: BIZ.mutedWarm }}>
                                   {' '}· {price.extraDoctors} beyond the {price.includedDoctors} included
-                                  {' '}= <strong style={{ color: BIZ.ink }}>+₹{price.extraDoctorCost.toLocaleString('en-IN')}/month</strong>
+                                  {' '}= <strong style={{ color: BIZ.ink }}>+{money(price.extraDoctorCost)}/month</strong>
                                 </span>
                               )}
                             </div>
@@ -794,7 +795,7 @@ export default function BusinessRegister() {
                                     <span style={{ fontSize: 14.5, fontWeight: 700, color: BIZ.ink }}>{z.area_name}</span>
                                     <span style={{ fontSize: 12.5, color: BIZ.mutedWarm }}> · {z.pin_code}</span>
                                     <span style={{ display: 'block', fontSize: 12, color: BIZ.mutedWarm, marginTop: 2 }}>
-                                      {z.population.toLocaleString('en-IN')} residents
+                                      {num(z.population)} residents
                                     </span>
                                   </span>
                                   {/* Only show a per-area price when the plan
@@ -806,8 +807,8 @@ export default function BusinessRegister() {
                                       : plan.mode === 'flat_all_pincodes'
                                         ? 'included'
                                         : plan.mode === 'flat_per_pincode'
-                                          ? `₹${(plan.monthly_price ?? 0).toLocaleString('en-IN')}/mo`
-                                          : `₹${z.monthly_price.toLocaleString('en-IN')}/mo`}
+                                          ? `${money((plan.monthly_price ?? 0))}/mo`
+                                          : `${money(z.monthly_price)}/mo`}
                                   </span>
                                 </button>
                               )
@@ -820,7 +821,7 @@ export default function BusinessRegister() {
                             {pricing && <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: BIZ.green }} />}
                           </div>
                           <SummaryRow label="Pincodes" value={String(price.count)} />
-                          <SummaryRow label="Residents reached" value={price.residents.toLocaleString('en-IN')} />
+                          <SummaryRow label="Residents reached" value={num(price.residents)} />
                           {onCommission ? (
                             <div style={{ borderTop: `1px dashed ${BIZ.inputBorder}`, paddingTop: 16 }}>
                               <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 2 }}>Monthly listing fee</div>
@@ -842,7 +843,7 @@ export default function BusinessRegister() {
                                 <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 2 }}>
                                   {flatPlan ? plan.label : 'Estimated monthly'}
                                 </div>
-                                <div style={{ fontSize: 32, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>₹{price.monthlyTotal.toLocaleString('en-IN')}<span style={{ fontSize: 15, color: BIZ.mutedWarm, fontWeight: 600 }}>/mo</span></div>
+                                <div style={{ fontSize: 32, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>{money(price.monthlyTotal)}<span style={{ fontSize: 15, color: BIZ.mutedWarm, fontWeight: 600 }}>/mo</span></div>
                                 {flatPlan && (
                                   <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 4, lineHeight: 1.5 }}>
                                     Every pincode you pick is included — the price does not change with coverage.
@@ -850,14 +851,14 @@ export default function BusinessRegister() {
                                 )}
                                 {months > 1 && (
                                   <div style={{ fontSize: 13, color: BIZ.ink, fontWeight: 700, marginTop: 10 }}>
-                                    ₹{(price.monthlyTotal * months).toLocaleString('en-IN')} for {months} months
+                                    {money((price.monthlyTotal * months))} for {months} months
                                   </div>
                                 )}
                                 {price.tax?.applied && (
                                   <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 8, lineHeight: 1.6 }}>
-                                    + {price.tax.rate}% GST ₹{price.tax.taxTotal.toLocaleString('en-IN')}
+                                    + {price.tax.rate}% GST {money(price.tax.taxTotal)}
                                     <div style={{ fontSize: 13, fontWeight: 800, color: BIZ.ink, marginTop: 2 }}>
-                                      ₹{price.tax.grandTotal.toLocaleString('en-IN')} payable
+                                      {money(price.tax.grandTotal)} payable
                                     </div>
                                   </div>
                                 )}
@@ -884,28 +885,28 @@ export default function BusinessRegister() {
                         <ReviewRow label="Service type" value={verticalObj.label} />
                         <ReviewRow label="Business name" value={form.business_name || form.owner_name || '—'} />
                         <ReviewRow label="Pincodes selected" value={String(price.count)} />
-                        <ReviewRow label="Total reach" value={`${price.residents.toLocaleString('en-IN')} residents`} />
+                        <ReviewRow label="Total reach" value={`${num(price.residents)} residents`} />
                         {onCommission
                           ? <ReviewRow label="Plan" value={`${commissionPct}% of ${commissionBasis}`} />
                           : <ReviewRow label="Plan" value={flatPlan ? plan.label : (price.topTier?.tier_name ?? '—')} />}
                         {!onCommission && (
-                          <ReviewRow label="Monthly price" value={`₹${price.monthlyTotal.toLocaleString('en-IN')}/mo × ${months} month${months === 1 ? '' : 's'}`} />
+                          <ReviewRow label="Monthly price" value={`${money(price.monthlyTotal)}/mo × ${months} month${months === 1 ? '' : 's'}`} />
                         )}
                         {!onCommission && price.tax?.applied && (
                           <>
-                            <ReviewRow label="Taxable value" value={`₹${(price.monthlyTotal * months).toLocaleString('en-IN')}`} />
+                            <ReviewRow label="Taxable value" value={`${money((price.monthlyTotal * months))}`} />
                             {price.tax.interState
-                              ? <ReviewRow label={`IGST @ ${price.tax.rate}%`} value={`₹${price.tax.igst.toLocaleString('en-IN')}`} />
+                              ? <ReviewRow label={`IGST @ ${price.tax.rate}%`} value={`${money(price.tax.igst)}`} />
                               : <>
-                                  <ReviewRow label={`CGST @ ${price.tax.rate / 2}%`} value={`₹${price.tax.cgst.toLocaleString('en-IN')}`} />
-                                  <ReviewRow label={`SGST @ ${price.tax.rate / 2}%`} value={`₹${price.tax.sgst.toLocaleString('en-IN')}`} />
+                                  <ReviewRow label={`CGST @ ${price.tax.rate / 2}%`} value={`${money(price.tax.cgst)}`} />
+                                  <ReviewRow label={`SGST @ ${price.tax.rate / 2}%`} value={`${money(price.tax.sgst)}`} />
                                 </>}
                           </>
                         )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 22px', background: '#f7f3ea' }}>
                           <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>Due today</span>
                           <span style={{ fontSize: 26, fontWeight: 800, color: BIZ.green }}>
-                            ₹{(onCommission ? 0 : (price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months)).toLocaleString('en-IN')}
+                            {money((onCommission ? 0 : (price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months)))}
                           </span>
                         </div>
                         {!onCommission && price.tax?.applied && (
@@ -927,7 +928,7 @@ export default function BusinessRegister() {
                           </div>
                           <p style={{ fontSize: 13, color: BIZ.muted, margin: '0 0 12px', lineHeight: 1.6 }}>
                             If your business is GST registered, add it and we will print it on your tax invoice.
-                            You can then claim the ₹{(price.tax?.taxTotal ?? 0).toLocaleString('en-IN')} GST back as
+                            You can then claim the {money((price.tax?.taxTotal ?? 0))} GST back as
                             input credit. Leave it blank if you are not registered — the price does not change either way.
                           </p>
                           <input
@@ -967,7 +968,7 @@ export default function BusinessRegister() {
                           <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>How many months would you like to pay for?</div>
                           <p style={{ fontSize: 13, color: BIZ.muted, margin: '0 0 14px', lineHeight: 1.6 }}>
                             Start with {plan.min_months} month{plan.min_months === 1 ? '' : 's'} if you prefer — it is entirely your choice.
-                            Your rate is locked for the months you pay now, so a longer term holds ₹{price.monthlyTotal.toLocaleString('en-IN')}/mo for longer.
+                            Your rate is locked for the months you pay now, so a longer term holds {money(price.monthlyTotal)}/mo for longer.
                           </p>
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             {monthOptions.map(m => {
@@ -989,12 +990,12 @@ export default function BusinessRegister() {
                               is the taxable value, not the amount charged — one
                               "=" across both would be wrong by the tax. */}
                           <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginTop: 12, lineHeight: 1.7 }}>
-                            {months} month{months === 1 ? '' : 's'} × ₹{price.monthlyTotal.toLocaleString('en-IN')} ={' '}
-                            ₹{(price.monthlyTotal * months).toLocaleString('en-IN')}
-                            {price.tax?.applied && <> + {price.tax.rate}% GST ₹{price.tax.taxTotal.toLocaleString('en-IN')}</>}
+                            {months} month{months === 1 ? '' : 's'} × {money(price.monthlyTotal)} ={' '}
+                            {money((price.monthlyTotal * months))}
+                            {price.tax?.applied && <> + {price.tax.rate}% GST {money(price.tax.taxTotal)}</>}
                             <br />
                             <strong style={{ color: BIZ.ink, fontSize: 15 }}>
-                              ₹{(price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months).toLocaleString('en-IN')}
+                              {money((price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months))}
                             </strong> payable today
                             {plan.default_months > plan.min_months && ` · ★ = best value at ${plan.default_months} months`}
                           </div>

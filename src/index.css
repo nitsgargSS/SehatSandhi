@@ -31,3 +31,31 @@ html { scroll-behavior: smooth; }
 details > summary::-webkit-details-marker { display: none; }
 details > summary span[aria-hidden]::before { content: '+'; }
 details[open] > summary span[aria-hidden]::before { content: '\2212'; }
+
+/* ── Loading states ─────────────────────────────────────────────────────────
+   From the Sehatsandhi design doc, "Turn 5 · Loading states". Keyframes live
+   here rather than inline so every indicator shares one timing vocabulary:
+   .8s for a spinning ring, 1.2s for the bot's typing dots, 1.3s for a shimmer.
+
+   Honouring prefers-reduced-motion at the bottom rather than per component —
+   a skeleton still needs to read as "not yet content" when it stops moving, so
+   the animation is dropped but the tinted block stays. */
+@keyframes ss-spin    { to { transform: rotate(360deg) } }
+@keyframes ss-dot     { 0%,80%,100% { transform: translateY(0); opacity:.35 }
+                        40%         { transform: translateY(-6px); opacity:1 } }
+@keyframes ss-shimmer { 0%   { background-position: -320px 0 }
+                        100% { background-position:  320px 0 } }
+@keyframes ss-bar     { 0%   { left: -38% }
+                        100% { left: 100% } }
+
+.ss-skeleton {
+  background: linear-gradient(90deg, #f2ede2 25%, #e7f6ef 50%, #f2ede2 75%);
+  background-size: 320px 100%;
+  animation: ss-shimmer 1.3s linear infinite;
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ss-skeleton { animation: none }
+  [class*="ss-"], [style*="ss-spin"], [style*="ss-dot"] { animation-duration: .001ms !important }
+}

@@ -219,15 +219,18 @@ function CategoryTile({ c, big }: { c: Cat; big?: boolean }) {
   )
 }
 
+// Was a <div>. Gradient, chevron, sat under "What do you need?" as the most
+// action-shaped thing on the page — and did nothing when tapped. It now goes to
+// the browse page, which is what it always looked like it would do.
 function DoctorTeaser({ t }: { t: Strings }) {
   return (
-    <div style={{ background: 'linear-gradient(120deg,#0E9F6E,#0b7d57)', borderRadius: 18, padding: '16px 18px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
+    <Link to="/browse" style={{ background: 'linear-gradient(120deg,#0E9F6E,#0b7d57)', borderRadius: 18, padding: '16px 18px', color: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 15, fontWeight: 800 }}>{t.doc_teaser_title}</div>
         <div style={{ fontSize: 12.5, opacity: 0.9, marginTop: 2 }}>{t.doc_teaser_sub}</div>
       </div>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" style={{ width: 22, height: 22, opacity: 0.9 }}><path d="m9 6 6 6-6 6" /></svg>
-    </div>
+    </Link>
   )
 }
 
@@ -278,12 +281,16 @@ export default function PatientHome() {
   const langBtn = lang === 'en' ? 'हिंदी' : 'ENGLISH'
   const toggleLang = () => setLang(lang === 'en' ? 'hi' : 'en')
 
+  // One message per category. All six used to send the identical string —
+  // "Hi Sehatsandhi, I need help" — so the bot could not tell someone who
+  // tapped Medicines from someone who tapped Insurance, and the tap the patient
+  // made was thrown away before it reached anyone.
   const CATS: Cat[] = [
-    { key: 'doctors', label: t.doctors, tint: 'rgba(14,159,110,.12)', color: '#0E9F6E', link: waLink },
-    { key: 'hospitals', label: t.hospitals, tint: 'rgba(37,99,235,.12)', color: '#2563EB', link: waLink },
-    { key: 'pharmacy', label: t.pharmacy, tint: 'rgba(219,39,119,.12)', color: '#DB2777', link: waLink },
-    { key: 'labs', label: t.labs, tint: 'rgba(124,58,237,.12)', color: '#7C3AED', link: waLink },
-    { key: 'insurance', label: t.insurance, tint: 'rgba(8,145,178,.12)', color: '#0891B2', link: waLink },
+    { key: 'doctors', label: t.doctors, tint: 'rgba(14,159,110,.12)', color: '#0E9F6E', link: mk('Hi Sehatsandhi, I need to see a doctor') },
+    { key: 'hospitals', label: t.hospitals, tint: 'rgba(37,99,235,.12)', color: '#2563EB', link: mk('Hi Sehatsandhi, I need a hospital') },
+    { key: 'pharmacy', label: t.pharmacy, tint: 'rgba(219,39,119,.12)', color: '#DB2777', link: mk('Hi Sehatsandhi, I need medicines') },
+    { key: 'labs', label: t.labs, tint: 'rgba(124,58,237,.12)', color: '#7C3AED', link: mk('Hi Sehatsandhi, I need a lab test') },
+    { key: 'insurance', label: t.insurance, tint: 'rgba(8,145,178,.12)', color: '#0891B2', link: mk('Hi Sehatsandhi, I want help with health insurance') },
     { key: 'ambulance', label: t.ambulance, tint: 'rgba(220,38,38,.12)', color: '#DC2626', link: ambLink },
   ]
 

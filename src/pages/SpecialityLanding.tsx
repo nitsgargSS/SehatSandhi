@@ -5,9 +5,9 @@ import { supabase } from '../lib/supabase'
 import { Doctor, SPECIALITIES, PIN_CODES, WA_NUMBER } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
 import { track, trackImpressions } from '../lib/analytics'
+import { doctorUrl, slugify } from '../lib/links'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../components/SiteHeader'
-
-const slugify = (s: string) => s.toLowerCase().trim().replace(/\s+/g, '-')
+import { DoctorListSkeleton } from '../components/Loading'
 
 interface DoctorWithRating extends Doctor {
   avg_rating?: number
@@ -144,7 +144,9 @@ export default function SpecialityLanding() {
         </div>
 
         {loading ? (
-          <p className="text-center text-gray-400 text-sm py-12">...</p>
+          // Doctor-shaped rows rather than a spinner: the patient already
+          // knows a list is coming, so show its shape and let it fill in.
+          <DoctorListSkeleton rows={3} />
         ) : doctors.length > 0 ? (
           <div>
             <p className="text-gray-500 text-sm mb-4">{t('specialityLandingPage.foundDoctorsIntro')}</p>
@@ -153,7 +155,12 @@ export default function SpecialityLanding() {
                 <div key={d.id} className="card flex items-center justify-between flex-wrap gap-3">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-navy-700">{d.name}</p>
+                      {/* The profile page carries hours, every clinic location,
+                          reviews and a share link. Nothing linked to it before,
+                          so a patient could only ever see this one-line summary. */}
+                      <Link to={doctorUrl(d)} className="font-bold text-navy-700 hover:text-teal-600 hover:underline">
+                        {d.name}
+                      </Link>
                       {d.is_top_rated && (
                         <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
                           ⭐ Top Rated
@@ -170,8 +177,17 @@ export default function SpecialityLanding() {
                         <span className="text-xs text-gray-400">{d.avg_rating} ({d.total_reviews})</span>
                       </div>
                     ) : null}
-                    <p className="text-gray-500 text-sm mt-1">{d.qualification} · {d.clinic_name}</p>
+                    {/* clinic_name repeats the listing name for a solo practice,
+                        which read as "Clinic · Kaur Clinic" — so only show it
+                        when it actually says something new. */}
+                    <p className="text-gray-500 text-sm mt-1">
+                      {[d.qualification, d.clinic_name !== d.name ? d.clinic_name : null]
+                        .filter(Boolean).join(' · ')}
+                    </p>
                     <p className="text-gray-400 text-xs">{d.address}</p>
+                    <Link to={doctorUrl(d)} className="text-teal-600 text-xs font-medium hover:underline inline-block mt-1.5">
+                      {t('specialityLandingPage.viewProfile')}
+                    </Link>
                   </div>
                   <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Namaste! Main ${d.name} se appointment book karna chahta hoon.`)}`}
                      target="_blank" rel="noreferrer" className="btn-teal text-sm">
@@ -203,7 +219,7 @@ export default function SpecialityLanding() {
 
         <div className="text-center mt-10">
           <p className="text-gray-400 text-sm mb-2">{t('specialityLandingPage.otherSpecialities')}</p>
-          <Link to="/" className="text-teal-600 hover:underline text-sm font-medium">
+          <Link to="/browse" className="text-teal-600 hover:underline text-sm font-medium">
             {t('specialityLandingPage.viewAllLink')}
           </Link>
         </div>

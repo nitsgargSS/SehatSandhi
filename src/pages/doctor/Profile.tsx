@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, WA_NUMBER } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../../components/SiteHeader'
+import { Spinner } from '../../components/Loading'
 
 interface RatingAgg {
   avg_rating: number
@@ -43,14 +44,41 @@ export default function DoctorProfile() {
 
   useEffect(() => {
     const load = async () => {
-      if (!slug) return
-      const namePart = slug.split('-').slice(0, -1).join(' ').replace('dr ', 'Dr. ')
-      const { data } = await supabase
-        .from('doctors')
-        .select('*')
-        .ilike('name', `%${namePart.replace('Dr. ', '')}%`)
-        .eq('status', 'active')
-        .single()
+      if (!slug) { setLoading(false); return }
+
+      // Resolve by the id fragment the URL carries, not by the name.
+      //
+      // This used to derive a name from the slug and .ilike('%name%').single().
+      // Three ways that failed: a two-word slug produced an empty search that
+      // matched every active listing; an unanchored substring matched any name
+      // containing another ("Sharma" inside "Sharmarani"); and .single() throws
+      // on more than one row, so two similarly-named clinics meant NEITHER
+      // profile loaded — both patients got "Doctor not found", and the error was
+      // discarded so nobody found out. The page invites patients to share and
+      // print these links, so a URL that rots when an unrelated clinic signs up
+      // is not a small thing.
+      //
+      // doctorUrl() ends the slug with the first 8 characters of the id. Match
+      // on that: exact, and two listings cannot collide.
+      const idFragment = slug.split('-').pop() ?? ''
+      const looksLikeId = /^[0-9a-f]{8}$/.test(idFragment)
+
+      // `id` is a uuid column, and Postgres has no ilike for uuid
+      // ("operator does not exist: uuid ~~*"), so the prefix match is expressed
+      // as a range over the text form instead: everything from the fragment up
+      // to the next value. Uses the primary key index rather than a scan.
+      let query = supabase.from('doctors').select('*').eq('status', 'active')
+      query = looksLikeId
+        ? query.gte('id', `${idFragment}-0000-0000-0000-000000000000`)
+               .lte('id', `${idFragment}-ffff-ffff-ffff-ffffffffffff`)
+        // Links shared before ids were in the slug. Best effort on the name,
+        // and limit(1) rather than .single() so a near-miss shows SOMETHING
+        // rather than 404ing both listings.
+        : query.ilike('name', `%${slug.replace(/-/g, ' ')}%`)
+
+      const { data: rows, error } = await query.limit(1)
+      if (error) console.warn('[profile] lookup failed:', error.message)
+      const data = rows?.[0] ?? null
 
       setDoctor(data)
       // A profile open is the signal a business cares most about, and the
@@ -94,7 +122,10 @@ export default function DoctorProfile() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-400 text-sm">{t('profilePage.loading')}</div>
+      <div className="flex flex-col items-center gap-3">
+        <Spinner size={28} label={t('profilePage.loading')} />
+        <span className="text-gray-400 text-sm">{t('profilePage.loading')}</span>
+      </div>
     </div>
   )
 
@@ -104,7 +135,7 @@ export default function DoctorProfile() {
         <div className="text-6xl mb-4">🏥</div>
         <h2 className="text-xl font-bold text-navy-700 mb-2">{t('profilePage.notFoundTitle')}</h2>
         <p className="text-gray-500 text-sm mb-6">{t('profilePage.notFoundDesc')}</p>
-        <Link to="/" className="btn-teal">{t('profilePage.findAnother')}</Link>
+        <Link to="/browse" className="btn-teal">{t('profilePage.findAnother')}</Link>
       </div>
     </div>
   )
@@ -347,7 +378,7 @@ export default function DoctorProfile() {
         {/* Find more */}
         <div className="text-center py-4">
           <p className="text-gray-500 text-sm mb-3">{t('profilePage.findMoreText')}</p>
-          <Link to="/" className="btn-navy text-sm">{t('profilePage.findMoreLink')}</Link>
+          <Link to="/browse" className="btn-navy text-sm">{t('profilePage.findMoreLink')}</Link>
         </div>
 
       </div>
