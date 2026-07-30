@@ -20,6 +20,10 @@ import { Spinner } from '../../components/Loading'
 
 type Step = 'phone' | 'code'
 
+// Sentinel from clinic-otp, not prose: the wording below belongs to the screen,
+// so the function returns a code and the copy stays here.
+const WHATSAPP_UNREACHABLE = 'WHATSAPP_UNREACHABLE'
+
 export default function DoctorLogin() {
   const { t } = useLanguage()
   const navigate = useNavigate()
@@ -60,7 +64,13 @@ export default function DoctorLogin() {
       setDevCode(r.devCode ?? null)
       setStep('code')
     } catch (err) {
-      setError((err as Error).message)
+      const message = (err as Error).message
+      // Login is WhatsApp-only and has no SMS fallback, so this is a dead end
+      // rather than something retrying fixes. Name the cause: the number needs a
+      // WhatsApp account, and nothing the business does on this screen will help.
+      setError(message === WHATSAPP_UNREACHABLE
+        ? "We couldn't reach that number on WhatsApp. Sign-in requires a WhatsApp account on this number."
+        : message)
     } finally { setBusy(false) }
   }
 

@@ -11,10 +11,16 @@
 // Deploy with --no-verify-jwt: the caller is by definition not logged in yet.
 //
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-//      MSG91_AUTHKEY, MSG91_SENDER_ID, MSG91_LOGIN_DLT_TEMPLATE  (optional)
+//      META_PHONE_NUMBER_ID, META_ACCESS_TOKEN                   (optional)
+//      META_TEMPLATE_NAME, META_TEMPLATE_LANG                    (optional)
 //      AISENSY_API_KEY, AISENSY_LOGIN_CAMPAIGN                   (optional)
 //      CLINIC_OTP_ECHO — sandbox only; returns the code in the response so the
 //                        flow can be tested before any provider is wired up.
+//
+// WhatsApp only, by design: the number is collected at signup as a WhatsApp
+// number and that is the one channel we know reaches this audience. There is no
+// SMS fallback — a business whose number is not on WhatsApp cannot log in, so
+// that case gets its own message rather than a silent failure.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
@@ -51,9 +57,81 @@ function timingSafeEqual(a: string, b: string): boolean {
   return d === 0
 }
 
-/** Best-effort delivery: WhatsApp first, SMS as the fallback. */
-async function sendCode(phone: string, code: string): Promise<boolean> {
-  const text = `${code} is your Sehatsandhi login code. It expires in ${CODE_TTL_MINUTES} minutes. Do not share it with anyone.`
+/**
+ * `sent` is whether a provider accepted the message. `unreachable` means the
+ * number is not on WhatsApp — a permanent failure, distinct from "nothing is
+ * configured", because retrying will never help and the caller must say so.
+ */
+type SendResult = { sent: boolean; unreachable?: boolean }
+
+const GRAPH = 'https://graph.facebook.com/v21.0'
+
+/**
+ * Meta WhatsApp Cloud API, called directly — no BSP in the path for login codes.
+ *
+ * Authentication-category templates carry Meta's own fixed copy; we supply only
+ * the code. It goes in the BODY *and* in the button: the copy-code button reads
+ * its own parameter, and a template sent without it arrives with a button that
+ * does nothing.
+ */
+async function sendViaMeta(phone: string, code: string): Promise<SendResult | null> {
+  const phoneId = Deno.env.get('META_PHONE_NUMBER_ID')
+  const token = Deno.env.get('META_ACCESS_TOKEN')
+  if (!phoneId || !token) return null   // not configured — let the caller fall through
+
+  let res: Response
+  try {
+    res = await fetch(`${GRAPH}/${phoneId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: phone,                       // digits only, no '+' — normalisePhone's shape
+        type: 'template',
+        template: {
+          name: Deno.env.get('META_TEMPLATE_NAME') ?? 'login_code',
+          language: { code: Deno.env.get('META_TEMPLATE_LANG') ?? 'en' },
+          components: [
+            { type: 'body', parameters: [{ type: 'text', text: code }] },
+            {
+              type: 'button',
+              // 'url' even though the button is COPY_CODE. Meta rejects the
+              // send outright if this says 'copy_code'.
+              sub_type: 'url',
+              index: 0,
+              parameters: [{ type: 'text', text: code }],
+            },
+          ],
+        },
+      }),
+    })
+  } catch {
+    return { sent: false }
+  }
+
+  if (res.ok) return { sent: true }
+
+  const body = await res.json().catch(() => ({})) as { error?: { code?: number } }
+  const metaCode = body?.error?.code
+  // 131026: cannot deliver — most often the number has no WhatsApp account.
+  // 131047: outside the allowed window for a non-template send.
+  if (metaCode === 131026 || metaCode === 131047) return { sent: false, unreachable: true }
+  return { sent: false }
+}
+
+/**
+ * WhatsApp delivery: Meta directly, with AISensy behind it.
+ *
+ * AISensy is kept only because the rest of the platform already sends through it
+ * (appointment-notify, invoice-send) and it needs no business verification, so it
+ * can carry login while the Meta sender number and template clear approval. Both
+ * are WhatsApp — there is no SMS path here.
+ */
+async function sendCode(phone: string, code: string): Promise<SendResult> {
+  const viaMeta = await sendViaMeta(phone, code)
+  // A number that is not on WhatsApp will not become reachable via another
+  // provider, so stop rather than retrying the same failure through AISensy.
+  if (viaMeta?.sent || viaMeta?.unreachable) return viaMeta
 
   const waKey = Deno.env.get('AISENSY_API_KEY')
   const waCampaign = Deno.env.get('AISENSY_LOGIN_CAMPAIGN')
@@ -67,28 +145,11 @@ async function sendCode(phone: string, code: string): Promise<boolean> {
           userName: 'Sehatsandhi', templateParams: [code],
         }),
       })
-      if (res.ok) return true
-    } catch { /* fall through to SMS */ }
-  }
-
-  const smsKey = Deno.env.get('MSG91_AUTHKEY')
-  const smsSender = Deno.env.get('MSG91_SENDER_ID')
-  const smsTemplate = Deno.env.get('MSG91_LOGIN_DLT_TEMPLATE')
-  if (smsKey && smsSender && smsTemplate) {
-    try {
-      const res = await fetch('https://control.msg91.com/api/v5/flow/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', authkey: smsKey },
-        body: JSON.stringify({
-          template_id: smsTemplate, sender: smsSender,
-          recipients: [{ mobiles: phone, CODE: code }],
-        }),
-      })
-      if (res.ok) return true
+      if (res.ok) return { sent: true }
     } catch { /* nothing left to try */ }
   }
 
-  return false
+  return { sent: false }
 }
 
 Deno.serve(async (req) => {
@@ -139,12 +200,22 @@ Deno.serve(async (req) => {
       expires_at: new Date(Date.now() + CODE_TTL_MINUTES * 60_000).toISOString(),
     })
 
-    const sent = await sendCode(phone, code)
+    const result = await sendCode(phone, code)
+
+    // The one place this endpoint stops answering identically. With no SMS
+    // fallback, a number that is not on WhatsApp can never log in, and "a code
+    // is on its way" would leave them waiting for something that will never
+    // arrive. Saying so does tell a prober that this number is registered —
+    // accepted deliberately, and narrowed to numbers that already matched a
+    // listing AND that WhatsApp positively rejected.
+    if (result.unreachable) {
+      return json({ error: 'WHATSAPP_UNREACHABLE' }, 422)
+    }
 
     // Sandbox convenience only, and gated on an env var that production must
-    // never carry: returns the code so the flow is testable before AISensy or
-    // MSG91 exist. Guarded again below by refusing when a provider IS live.
-    const echo = Deno.env.get('CLINIC_OTP_ECHO') === 'true' && !sent
+    // never carry: returns the code so the flow is testable before Meta or
+    // AISensy exist. Guarded again by refusing when a provider IS live.
+    const echo = Deno.env.get('CLINIC_OTP_ECHO') === 'true' && !result.sent
     return json(echo ? { ...sameAnswer, devCode: code, delivered: false } : sameAnswer)
   }
 

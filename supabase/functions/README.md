@@ -45,12 +45,39 @@ supabase secrets set \
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically by the
 Supabase runtime — do not set them yourself.
 
+### Clinic login codes (`clinic-otp`)
+
+Delivered over WhatsApp through Meta's Cloud API, called directly:
+
+```bash
+supabase secrets set \
+  META_PHONE_NUMBER_ID=<phone number ID, not the phone number> \
+  META_ACCESS_TOKEN=<System User token, expiry Never> \
+  META_TEMPLATE_NAME=login_code \
+  META_TEMPLATE_LANG=en
+```
+
+`META_ACCESS_TOKEN` must be a permanent **System User** token with
+`whatsapp_business_messaging`. The token shown in WhatsApp → API Setup expires in
+24 hours: use it and every login breaks a day later. The template must be
+category **AUTHENTICATION** and approved, and the WABA's country must be India —
+a WABA registered elsewhere is billed the international authentication rate,
+roughly 22× the domestic one.
+
+Until these exist, `clinic-otp` falls back to `AISENSY_API_KEY` +
+`AISENSY_LOGIN_CAMPAIGN`; with neither configured and `CLINIC_OTP_ECHO=true`, the
+login screen shows the code instead of sending it. `CLINIC_OTP_ECHO` returns a
+live credential in the HTTP response and must never be set in production.
+
 ## 4. Deploy
 
 ```bash
 supabase functions deploy compute-price
 supabase functions deploy razorpay-order
 supabase functions deploy razorpay-verify
+
+# --no-verify-jwt is required: the caller is logging in and has no session yet.
+supabase functions deploy clinic-otp --no-verify-jwt
 ```
 
 ## 5. Frontend env (`.env`, never committed)
