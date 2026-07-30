@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useServiceAreas, ServiceArea } from '../../hooks/useServiceAreas'
 import { BIZ, FALLBACK_AREAS } from './shared'
 import { money, num } from '../../lib/format'
+import CountUp from '../../components/CountUp'
 
 // "Your reach snapshot" — a population-density heat map of every pincode in the
 // active district, driven by Supabase service_areas + pricing_tiers. Tiles carry
@@ -29,12 +30,19 @@ function tileAlpha(population: number, maxPopulation: number): number {
 const MAX_TILES = 12
 
 export default function ReachSnapshot() {
-  const { areas } = useServiceAreas()
+  const { areas, loading } = useServiceAreas()
   const [hoveredPin, setHoveredPin] = useState<string | null>(null)
   // whether the tapped tile was active at pointer-down (see onPointerDown below)
   const preActiveRef = useRef(false)
 
-  // Real data when available, else the design fallback (never blank in dev).
+  // Real data when available, else the design fallback.
+  //
+  // The fallback is a DIFFERENT district-wide total from the real one — 6.2L
+  // against 3.5L — so rendering it while the query was still in flight made the
+  // headline figure visibly correct itself a moment after load. A number that
+  // changes in front of you is worse than a number that arrives late,
+  // especially this one: it is the reach a business is being asked to pay for.
+  // `loading` below holds the figure until it is true.
   const pins = useMemo(() => {
     const source: ServiceArea[] = areas.length
       ? areas
@@ -56,11 +64,21 @@ export default function ReachSnapshot() {
     <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 22, padding: 'clamp(18px,5vw,26px)', boxShadow: '0 30px 60px -35px rgba(20,32,28,.35)' }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#8a8172', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 18 }}>Your reach snapshot</div>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-        <span style={{ fontSize: 'clamp(34px,9vw,44px)', fontWeight: 800, color: '#0E9F6E', letterSpacing: '-.02em' }}>{inShort(totalPop)}</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, minHeight: 'clamp(40px,10vw,52px)' }}>
+        {loading ? (
+          // Reserve the line rather than collapsing it, so nothing below jumps
+          // when the figure lands.
+          <span aria-hidden style={{ display: 'inline-block', width: '3.2ch', height: 'clamp(30px,8vw,38px)', borderRadius: 8, background: BIZ.creamAlt }} />
+        ) : (
+          <span style={{ fontSize: 'clamp(34px,9vw,44px)', fontWeight: 800, color: '#0E9F6E', letterSpacing: '-.02em' }}>
+            <CountUp value={totalPop} format={inShort} />
+          </span>
+        )}
         <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.muted }}>residents</span>
       </div>
-      <div style={{ fontSize: 13, color: '#8a8172', marginBottom: 20 }}>across {pins.length} pincodes in {district} district</div>
+      <div style={{ fontSize: 13, color: '#8a8172', marginBottom: 20 }}>
+        {loading ? '\u00a0' : `across ${pins.length} pincodes in ${district} district`}
+      </div>
 
       {/* heat grid — clearing hover on the container, not per tile, avoids flicker */}
       <div
