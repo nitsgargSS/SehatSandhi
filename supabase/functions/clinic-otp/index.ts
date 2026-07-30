@@ -259,21 +259,42 @@ Deno.serve(async (req) => {
     // the project level, which is a separate dependency.
     const syntheticEmail = `${phone}@wa.sehatsandhi.in`
 
-    let userId: string | null = null
-    const { data: created, error: createErr } = await supabase.auth.admin.createUser({
-      email: syntheticEmail, email_confirm: true, user_metadata: { phone, via: 'clinic-otp' },
-    })
-    if (created?.user) userId = created.user.id
-    else if (createErr) {
-      // Already exists — find them rather than failing a valid login.
-      const { data: list } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 })
-      userId = list?.users?.find(u => u.email === syntheticEmail)?.id ?? null
+    // Every listing on this number, so one login reaches all of them. Read before
+    // the user is resolved: the auth_uid already on these rows is how a returning
+    // clinic is recognised.
+    const { data: all } = await supabase.from('doctors').select('id, phone, auth_uid').not('phone', 'is', null)
+    const ours = (all ?? []).filter(d => normalisePhone(String(d.phone)) === phone)
+    const mine = ours.map(d => d.id)
+
+    // auth_uid is deliberately not unique (0024) — one number may own a clinic and
+    // a pharmacy — so take the first non-null rather than expecting a single row.
+    let userId: string | null =
+      (ours.find(d => d.auth_uid) as { auth_uid?: string } | undefined)?.auth_uid ?? null
+
+    if (!userId) {
+      const { data: created } = await supabase.auth.admin.createUser({
+        email: syntheticEmail, email_confirm: true, user_metadata: { phone, via: 'clinic-otp' },
+      })
+      userId = created?.user?.id ?? null
     }
+
+    // No auth_uid on any listing and createUser refused: the auth user exists but
+    // nothing points at it — a clinic that logged in before 0024 linked listings,
+    // or a row whose auth_uid was cleared by the on-delete-set-null FK. The
+    // synthetic email is derived from the phone, so generateLink below finds them
+    // by email regardless; it is the id we cannot get that way. Listing every auth
+    // user to search for it does not scale, and used to cap this at 200 accounts.
+    if (!userId) {
+      const { data: link } = await supabase.auth.admin.generateLink({
+        type: 'magiclink', email: syntheticEmail,
+      })
+      userId = link?.user?.id ?? null
+    }
+
     if (!userId) return json({ error: 'Could not start your session. Please try again.' }, 500)
 
-    // Link every listing on this number, so one login reaches all of them.
-    const { data: all } = await supabase.from('doctors').select('id, phone').not('phone', 'is', null)
-    const mine = (all ?? []).filter(d => normalisePhone(String(d.phone)) === phone).map(d => d.id)
+    // Re-link on every login, not just the first: it repairs the rows above and
+    // picks up listings registered on this number since last time.
     if (mine.length) await supabase.from('doctors').update({ auth_uid: userId }).in('id', mine)
 
     // A magic-link token the browser exchanges for a real session. Supabase has
