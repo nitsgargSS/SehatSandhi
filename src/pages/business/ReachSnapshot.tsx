@@ -65,28 +65,41 @@ export default function ReachSnapshot() {
     <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 22, padding: 'clamp(18px,5vw,26px)', boxShadow: '0 30px 60px -35px rgba(20,32,28,.35)' }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#8a8172', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 18 }}>Your reach snapshot</div>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, minHeight: 'clamp(40px,10vw,52px)' }}>
-        {loading ? (
-          // Reserve the line rather than collapsing it, so nothing below jumps
-          // when the figure lands.
-          <Skeleton width="3.2ch" height={34} radius={8} />
-        ) : (
-          <span style={{ fontSize: 'clamp(34px,9vw,44px)', fontWeight: 800, color: '#0E9F6E', letterSpacing: '-.02em' }}>
-            <CountUp value={totalPop} format={inShort} />
-          </span>
-        )}
-        <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.muted }}>residents</span>
-      </div>
-      <div style={{ fontSize: 13, color: '#8a8172', marginBottom: 20 }}>
-        {loading ? '\u00a0' : `across ${pins.length} pincodes in ${district} district`}
-      </div>
+      {/* Loading follows the design doc's rule: a skeleton is a block the size
+          and shape of the thing it stands in for, not a marker beside it. So
+          the headline and its caption become two shimmering bars at their own
+          dimensions, and the grid below shimmers as tiles. */}
+      {loading ? (
+        <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
+          <Skeleton width={168} height={44} radius={10} />
+          <Skeleton width="72%" height={13} radius={6} delay={0.08} />
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 'clamp(34px,9vw,44px)', fontWeight: 800, color: '#0E9F6E', letterSpacing: '-.02em' }}>
+              <CountUp value={totalPop} format={inShort} />
+            </span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.muted }}>residents</span>
+          </div>
+          <div style={{ fontSize: 13, color: '#8a8172', marginBottom: 20 }}>
+            across {pins.length} pincodes in {district} district
+          </div>
+        </>
+      )}
 
       {/* heat grid — clearing hover on the container, not per tile, avoids flicker */}
       <div
         onMouseLeave={() => setHoveredPin(null)}
         style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}
       >
-        {pins.map(p => {
+        {loading && Array.from({ length: MAX_TILES }, (_, i) => (
+          // aspect-ratio:1 and a 0.08s cascade, per the doc's heat-grid state:
+          // the grid keeps its exact footprint, so nothing moves when data lands.
+          <span key={i} aria-hidden className="ss-skeleton"
+            style={{ aspectRatio: '1', minHeight: 44, borderRadius: 10, animationDelay: `${i * 0.08}s` }} />
+        ))}
+        {!loading && pins.map(p => {
           const on = p.pin_code === hoveredPin
           const alpha = tileAlpha(p.population, maxPop)
           return (
