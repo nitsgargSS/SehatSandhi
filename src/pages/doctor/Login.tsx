@@ -20,9 +20,20 @@ import { Spinner } from '../../components/Loading'
 
 type Step = 'phone' | 'code'
 
-// Sentinel from clinic-otp, not prose: the wording below belongs to the screen,
-// so the function returns a code and the copy stays here.
-const WHATSAPP_UNREACHABLE = 'WHATSAPP_UNREACHABLE'
+// Sentinels from clinic-otp, not prose: the wording belongs to the screen, so
+// the function returns a code and the copy stays here.
+const SEND_ERRORS: Record<string, string> = {
+  // The number has no WhatsApp account. Nothing they can do on this screen.
+  WHATSAPP_UNREACHABLE:
+    "We couldn't reach that number on WhatsApp. Sign-in requires a WhatsApp account on this number.",
+  // Our side is not set up to send. Do not tell them to try again — it will
+  // fail identically until someone configures a provider.
+  DELIVERY_UNAVAILABLE:
+    'We cannot send login codes right now. This is a problem at our end, not with your number — please call us and we will get you in.',
+  // A provider was reachable but refused. This one might genuinely be transient.
+  DELIVERY_FAILED:
+    'We could not send your code just now. Please try again in a minute, or call us if it keeps happening.',
+}
 
 export default function DoctorLogin() {
   const { t } = useLanguage()
@@ -65,12 +76,10 @@ export default function DoctorLogin() {
       setStep('code')
     } catch (err) {
       const message = (err as Error).message
-      // Login is WhatsApp-only and has no SMS fallback, so this is a dead end
-      // rather than something retrying fixes. Name the cause: the number needs a
-      // WhatsApp account, and nothing the business does on this screen will help.
-      setError(message === WHATSAPP_UNREACHABLE
-        ? "We couldn't reach that number on WhatsApp. Sign-in requires a WhatsApp account on this number."
-        : message)
+      // Login is WhatsApp-only with no SMS fallback, so a failed send is a dead
+      // end rather than something retrying fixes. Say which kind it is: whether
+      // the number needs WhatsApp, or whether the fault is ours.
+      setError(SEND_ERRORS[message] ?? message)
     } finally { setBusy(false) }
   }
 

@@ -62,7 +62,13 @@ function timingSafeEqual(a: string, b: string): boolean {
  * number is not on WhatsApp — a permanent failure, distinct from "nothing is
  * configured", because retrying will never help and the caller must say so.
  */
-type SendResult = { sent: boolean; unreachable?: boolean }
+type SendResult = {
+  sent: boolean
+  /** The number is not on WhatsApp. Permanent — retrying cannot fix it. */
+  unreachable?: boolean
+  /** No provider credentials at all, so nothing was even attempted. */
+  unconfigured?: boolean
+}
 
 const GRAPH = 'https://graph.facebook.com/v21.0'
 
@@ -149,7 +155,11 @@ async function sendCode(phone: string, code: string): Promise<SendResult> {
     } catch { /* nothing left to try */ }
   }
 
-  return { sent: false }
+  // Nothing was even attempted: no Meta credentials and no AISensy ones. Worth
+  // separating from a provider that tried and failed, because the fix is ours
+  // and the business can do nothing about it.
+  const configured = viaMeta !== null || Boolean(waKey && waCampaign)
+  return configured ? { sent: false } : { sent: false, unconfigured: true }
 }
 
 Deno.serve(async (req) => {
@@ -216,7 +226,23 @@ Deno.serve(async (req) => {
     // never carry: returns the code so the flow is testable before Meta or
     // AISensy exist. Guarded again by refusing when a provider IS live.
     const echo = Deno.env.get('CLINIC_OTP_ECHO') === 'true' && !result.sent
-    return json(echo ? { ...sameAnswer, devCode: code, delivered: false } : sameAnswer)
+    if (echo) return json({ ...sameAnswer, devCode: code, delivered: false })
+
+    // Nothing was delivered and nothing is on screen. Saying "a code is on its
+    // way" here is simply false, and it costs the business ten minutes of
+    // waiting before they conclude something is broken. The distinction matters
+    // to whoever reads the report: unconfigured is our outage, a failed send
+    // might be transient.
+    if (!result.sent) {
+      console.error(
+        result.unconfigured
+          ? 'clinic-otp: no messaging provider configured — login code generated but not sent'
+          : 'clinic-otp: every configured provider refused the send',
+      )
+      return json({ error: result.unconfigured ? 'DELIVERY_UNAVAILABLE' : 'DELIVERY_FAILED' }, 502)
+    }
+
+    return json(sameAnswer)
   }
 
   // ── verify ───────────────────────────────────────────────────────────────
