@@ -45,6 +45,30 @@ export interface Vertical {
 // the design's "Who can list" grid and the wizard's step-1 cards.
 // `billing` mirrors the supabase vertical_billing table, which is what the edge
 // functions actually price against — this copy is for display and offline dev.
+/**
+ * Medical qualifications a doctor can hold, for the step 2 dropdown.
+ *
+ * Split matters downstream: the admin verification panel sends the first group
+ * to the NMC's Indian Medical Register and the second to the relevant state
+ * Dental or AYUSH council, because the IMR does not list them. Keep the `nmc`
+ * flag honest — mis-flagging one sends a reviewer to a registry that will never
+ * contain the doctor they are checking.
+ */
+export const DOCTOR_QUALIFICATIONS: { value: string; label: string; nmc: boolean }[] = [
+  { value: 'MBBS', label: 'MBBS', nmc: true },
+  { value: 'MD',   label: 'MD',   nmc: true },
+  { value: 'MS',   label: 'MS',   nmc: true },
+  { value: 'DNB',  label: 'DNB',  nmc: true },
+  { value: 'DM',   label: 'DM',   nmc: true },
+  { value: 'MCh',  label: 'MCh',  nmc: true },
+  { value: 'BDS',  label: 'BDS (Dental)',      nmc: false },
+  { value: 'MDS',  label: 'MDS (Dental)',      nmc: false },
+  { value: 'BAMS', label: 'BAMS (Ayurveda)',   nmc: false },
+  { value: 'BHMS', label: 'BHMS (Homeopathy)', nmc: false },
+  { value: 'BUMS', label: 'BUMS (Unani)',      nmc: false },
+  { value: 'BNYS', label: 'BNYS (Naturopathy)', nmc: false },
+]
+
 export const VERTICALS: Vertical[] = [
   { key: 'doctors',   label: 'Doctors / Clinic',           sub: '20 specialities',        color: '#0E9F6E', dbSpeciality: 'GEN',       qualification: 'Clinic',            billing: 'pincode_monthly' },
   { key: 'hospital',  label: 'Hospital',                   sub: 'Multi-speciality',       color: '#2563EB', dbSpeciality: 'HOSPITAL',  qualification: 'Hospital',          billing: 'pincode_monthly' },

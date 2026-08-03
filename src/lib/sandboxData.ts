@@ -135,6 +135,9 @@ export function generateBusiness(vertical: VerticalKey): BusinessFill {
       owner_name: v.key === 'doctors' ? `Dr. ${owner}` : owner,
       phone: testPhone(),
       category: pick(CATEGORY_BY_VERTICAL[vertical] ?? ['General']),
+      // Doctors only: step 2 requires it for that vertical, and a value outside
+      // DOCTOR_QUALIFICATIONS would not select in the dropdown.
+      ...(vertical === 'doctors' ? { qualification: pick(['MBBS', 'MD', 'MS', 'DNB']) } : {}),
       reg_number: businessRegNumber(),
       email: testEmail(runId),
       address: address(),

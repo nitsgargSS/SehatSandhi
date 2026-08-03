@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { money, num, shortDate, dateTime, isoDate } from '../../lib/format'
 import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
-import { verticalForSpeciality } from '../business/shared'
+import { verticalForSpeciality, DOCTOR_QUALIFICATIONS } from '../business/shared'
 import { StatTile, ColumnChart, BarList, RangePicker } from '../../components/Charts'
 import { describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import ScrollableTable from '../../components/ScrollableTable'
@@ -26,8 +26,10 @@ interface DoctorWithOrg extends Doctor {
 
 // Qualifications actually covered by NMC's Indian Medical
 // Register — dental/homeopathy/ayurveda have their own
-// separate councils, so the NMC link isn't relevant for them
-const NMC_QUALIFICATIONS = ['MBBS', 'MD', 'MS', 'DNB', 'DM', 'MCh']
+// separate councils, so the NMC link isn't relevant for them.
+// Derived from the list the signup dropdown offers, so a
+// qualification cannot be selectable there and unknown here.
+const NMC_QUALIFICATIONS = DOCTOR_QUALIFICATIONS.filter(q => q.nmc).map(q => q.value)
 
 interface CampOfferRow {
   id: string
