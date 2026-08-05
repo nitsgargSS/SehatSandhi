@@ -11,9 +11,9 @@
 // Deploy with --no-verify-jwt: the caller is by definition not logged in yet.
 //
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+//      AISENSY_API_KEY, AISENSY_LOGIN_CAMPAIGN   — the live sender
 //      META_PHONE_NUMBER_ID, META_ACCESS_TOKEN                   (optional)
 //      META_TEMPLATE_NAME, META_TEMPLATE_LANG                    (optional)
-//      AISENSY_API_KEY, AISENSY_LOGIN_CAMPAIGN                   (optional)
 //      CLINIC_OTP_ECHO — sandbox only; returns the code in the response so the
 //                        flow can be tested before any provider is wired up.
 //
@@ -126,39 +126,66 @@ async function sendViaMeta(phone: string, code: string): Promise<SendResult | nu
 }
 
 /**
- * WhatsApp delivery: Meta directly, with AISensy behind it.
+ * AISensy, the sender the platform actually runs on.
  *
- * AISensy is kept only because the rest of the platform already sends through it
- * (appointment-notify, invoice-send) and it needs no business verification, so it
- * can carry login while the Meta sender number and template clear approval. Both
- * are WhatsApp — there is no SMS path here.
+ * Same endpoint and payload shape as appointment-notify and invoice-send, so
+ * login codes go out over the number those already use. `templateParams` is
+ * positional: the login campaign's approved template must take the code as its
+ * single variable.
+ *
+ * Returns null when unconfigured, so the caller can tell "nothing was tried"
+ * apart from "tried and refused" — those need different messages on screen.
  */
-async function sendCode(phone: string, code: string): Promise<SendResult> {
-  const viaMeta = await sendViaMeta(phone, code)
-  // A number that is not on WhatsApp will not become reachable via another
-  // provider, so stop rather than retrying the same failure through AISensy.
-  if (viaMeta?.sent || viaMeta?.unreachable) return viaMeta
+async function sendViaAisensy(phone: string, code: string): Promise<SendResult | null> {
+  const key = Deno.env.get('AISENSY_API_KEY')
+  const campaign = Deno.env.get('AISENSY_LOGIN_CAMPAIGN')
+  if (!key || !campaign) return null
 
-  const waKey = Deno.env.get('AISENSY_API_KEY')
-  const waCampaign = Deno.env.get('AISENSY_LOGIN_CAMPAIGN')
-  if (waKey && waCampaign) {
-    try {
-      const res = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey: waKey, campaignName: waCampaign, destination: phone,
-          userName: 'Sehatsandhi', templateParams: [code],
-        }),
-      })
-      if (res.ok) return { sent: true }
-    } catch { /* nothing left to try */ }
+  let res: Response
+  try {
+    res = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiKey: key, campaignName: campaign, destination: phone,
+        userName: 'Sehatsandhi', templateParams: [code],
+      }),
+    })
+  } catch (e) {
+    console.error(`clinic-otp: aisensy unreachable: ${String((e as Error).message ?? e)}`)
+    return { sent: false }
   }
 
-  // Nothing was even attempted: no Meta credentials and no AISensy ones. Worth
+  if (res.ok) return { sent: true }
+
+  // The body carries the reason — a wrong campaign name, an unapproved
+  // template, an exhausted wallet. Without it every failure looks identical in
+  // the logs and the fix is guesswork. Never log `code`: it is a live credential.
+  const detail = (await res.text().catch(() => '')).slice(0, 200)
+  console.error(`clinic-otp: aisensy refused ${res.status}: ${detail}`)
+  return { sent: false }
+}
+
+/**
+ * WhatsApp delivery: AISensy first, Meta behind it.
+ *
+ * AISensy leads because that is the number this deployment is configured with
+ * and the one the rest of the platform already sends through. Meta stays as a
+ * fallback for if this moves to a directly-owned sender later; with no META_*
+ * secrets set it returns null and costs nothing. Both are WhatsApp — there is
+ * no SMS path here.
+ */
+async function sendCode(phone: string, code: string): Promise<SendResult> {
+  const viaAisensy = await sendViaAisensy(phone, code)
+  if (viaAisensy?.sent) return viaAisensy
+
+  const viaMeta = await sendViaMeta(phone, code)
+  if (viaMeta?.sent || viaMeta?.unreachable) return viaMeta
+
+  // Nothing was even attempted: neither provider has credentials. Worth
   // separating from a provider that tried and failed, because the fix is ours
   // and the business can do nothing about it.
-  const configured = viaMeta !== null || Boolean(waKey && waCampaign)
+  const configured = viaAisensy !== null || viaMeta !== null
   return configured ? { sent: false } : { sent: false, unconfigured: true }
 }
 
