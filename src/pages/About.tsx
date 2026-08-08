@@ -10,7 +10,7 @@ const content = {
     subtitle: "Health's New Partnership",
     p1: 'Sehatsandhi (सेहतसंधि) connects patients across Yamuna Nagar and Jagadhri with verified doctors and healthcare partners — right on WhatsApp, with no app to download and no forms to fill.',
     p2: 'We built Sehatsandhi because finding a trustworthy doctor in a smaller town shouldn\'t mean relying on word of mouth alone, or navigating platforms built for metro cities that don\'t understand local needs.',
-    legalLine: 'Sehatsandhi is operated by NG Technologies, based in Jagadhri, Yamuna Nagar, Haryana.',
+    legalLine: 'Sehatsandhi is operated by NG Technologies, registered at 1743 Vishnu Garden, Jagadhri – 135003, Haryana, India.',
     valuesTitle: 'What We Stand For',
     values: [
       { icon: 'shield', title: 'Real Verification', desc: 'Every doctor is checked against official medical council registration before being listed — not a self-reported checkbox.' },
@@ -26,7 +26,7 @@ const content = {
     subtitle: 'स्वास्थ्य की नई साझेदारी',
     p1: 'Sehatsandhi (सेहतसंधि) यमुना नगर और जगाधरी के मरीज़ों को वेरिफाइड डॉक्टरों और हेल्थकेयर पार्टनर्स से जोड़ता है — सीधे WhatsApp पर, कोई ऐप डाउनलोड नहीं, कोई फॉर्म नहीं।',
     p2: 'हमने Sehatsandhi इसलिए बनाया क्योंकि एक छोटे शहर में भरोसेमंद डॉक्टर ढूंढने का मतलब सिर्फ वर्ड ऑफ माउथ पर निर्भर रहना, या मेट्रो शहरों के लिए बने प्लेटफॉर्म इस्तेमाल करना नहीं होना चाहिए जो लोकल ज़रूरतें नहीं समझते।',
-    legalLine: 'Sehatsandhi NG Technologies द्वारा संचालित है, जगाधरी, यमुना नगर, हरियाणा में स्थित।',
+    legalLine: 'Sehatsandhi NG Technologies द्वारा संचालित है, रजिस्टर्ड पता: 1743 Vishnu Garden, Jagadhri – 135003, Haryana, India।',
     valuesTitle: 'हम किस बात के लिए खड़े हैं',
     values: [
       { icon: 'shield', title: 'रियल वेरिफिकेशन', desc: 'हर डॉक्टर को लिस्ट करने से पहले ऑफिशियल मेडिकल काउंसिल रजिस्ट्रेशन के खिलाफ चेक किया जाता है — सिर्फ एक सेल्फ-रिपोर्टेड चेकबॉक्स नहीं।' },

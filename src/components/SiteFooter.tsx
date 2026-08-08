@@ -52,11 +52,15 @@ export default function SiteFooter() {
         </div>
 
         {/* Legal entity, spelled out because the brand name and the registered
-            name differ — Meta asks for this explicitly when they do. */}
+            name differ — Meta asks for this explicitly when they do, and matches
+            the address below against the GST certificate. So this is the
+            registered principal place of business, not a mailing address, and it
+            stays in English in both languages because that is how it is written
+            on the document. */}
         <p style={{ fontSize: 12.5, color: HEADER.muted, lineHeight: 1.7, margin: '0 0 6px' }}>
-          {hi
-            ? 'सेहतसंधि, NG Technologies द्वारा संचालित — जगाधरी, यमुना नगर, हरियाणा'
-            : 'Sehatsandhi is operated by NG Technologies — Jagadhri, Yamuna Nagar, Haryana'}
+          {hi ? 'सेहतसंधि, NG Technologies द्वारा संचालित' : 'Sehatsandhi is operated by NG Technologies'}
+          <br />
+          1743 Vishnu Garden, Jagadhri – 135003, Haryana, India
         </p>
 
         <p style={{ fontSize: 12.5, color: HEADER.muted, lineHeight: 1.7, margin: '0 0 10px' }}>
