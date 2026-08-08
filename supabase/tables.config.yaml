@@ -212,6 +212,20 @@ tables:
     class: isolated
     purgeOrder: 260
 
+  # ── The Indian Medical Register mirror ──────────────────────────────────
+  # Neither synced nor purged. Not `sync`: it is not ours and does not come from
+  # prod — both environments rebuild it from the register itself. Not `isolated`:
+  # a sandbox purge that dropped 1.5M rows would cost an hour of re-import to
+  # clear data no test ever wrote.
+
+  imr_doctors:
+    class: never_purge
+    # Public register data (NMC Act 2019 s.31), rebuilt by the import job.
+
+  imr_sync_state:
+    class: never_purge
+    # Import progress. Purging it would strand a half-finished run.
+
   # ── Views: neither synced nor purged ────────────────────────────────────
 
   rating_aggregate:
