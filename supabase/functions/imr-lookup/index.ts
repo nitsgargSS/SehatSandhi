@@ -36,6 +36,15 @@ const TIMEOUT_MS = 8_000
 const MAX_CANDIDATES = 12
 const MIN_NAME_CHARS = 3
 
+// Built once per instance, not once per request. The lookup itself is well under
+// a millisecond — the register mirror is indexed — so anything set up per call
+// is pure overhead sitting in front of a search someone is waiting on.
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  { auth: { persistSession: false } },
+)
+
 export interface ImrRecord {
   regNo: string
   name: string
@@ -172,11 +181,6 @@ Deno.serve(async (req) => {
   let body: { mode?: string; regNo?: string; smcId?: number; query?: string }
   try { body = await req.json() } catch { return json({ error: 'invalid JSON' }, 400) }
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  )
-
   const smcId = Number(body.smcId)
   const hasCouncil = Number.isInteger(smcId) && smcId > 0
 
@@ -188,10 +192,27 @@ Deno.serve(async (req) => {
     // Short fragments match tens of thousands of people and help nobody choose.
     if (query.length < MIN_NAME_CHARS) return json({ status: 'no_match' })
 
+    // Every word must appear, in any order. The register writes names both ways
+    // round — reg 27776 is 'Goyal, Swati' and reg 13-47707 is 'Swati Goyal', two
+    // different doctors — and a doctor typing their own name has no idea which
+    // way their council recorded it. Matching the phrase would find one of them
+    // and tell the other they are not registered.
+    //
+    // Punctuation goes too: 'Goyal, Swati' must be reachable by typing the comma
+    // or not. Each term is a separate ILIKE, which the trigram index serves.
+    const terms = query
+      .split(/[\s,.]+/)
+      .map(t => t.trim())
+      .filter(t => t.length >= 2)
+      .slice(0, 4)   // four words is a long name; more is someone pasting junk
+
     let q = supabase.from('imr_doctors')
       .select('reg_no, name, year, council, smc_id')
-      .ilike('name', `%${query}%`)
       .limit(MAX_CANDIDATES)
+
+    for (const t of (terms.length ? terms : [query])) {
+      q = q.ilike('name', `%${t}%`)
+    }
     // A council narrows 20,601 Sharmas to something a person can read. Optional,
     // because someone who cannot remember their council should still get results.
     if (hasCouncil) q = q.eq('smc_id', smcId)

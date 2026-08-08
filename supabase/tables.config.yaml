@@ -246,6 +246,9 @@ tables:
   wa_service_window_open: { class: view }
   wa_entry_point_stats:   { class: view }
 
+  # The doctors shown under a clinic listing — name and qualification only.
+  public_listing_doctors: { class: view }
+
   # ── Infrastructure ──────────────────────────────────────────────────────
 
   schema_migrations:
