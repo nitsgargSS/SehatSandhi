@@ -7,6 +7,7 @@ import { useLanguage } from '../i18n/LanguageContext'
 import { track, trackImpressions } from '../lib/analytics'
 import { doctorUrl, slugify } from '../lib/links'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 import { DoctorListSkeleton } from '../components/Loading'
 
 interface DoctorWithRating extends Doctor {
@@ -225,6 +226,8 @@ export default function SpecialityLanding() {
         </div>
       </div>
       </PageShell>
+
+      <SiteFooter />
     </div>
   )
 }

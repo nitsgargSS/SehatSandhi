@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PAGE } from '../../components/SiteHeader'
+import SiteFooter from '../../components/SiteFooter'
 import { BIZ, VERTICALS } from './shared'
 import VerticalIcon from './VerticalIcon'
 import WhatsAppBotMock from './WhatsAppBotMock'
@@ -292,6 +293,8 @@ export default function BusinessLanding() {
           <Link to="/business/register" className="max-sm:block" style={{ display: 'inline-block', background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 16, padding: '15px 30px', borderRadius: 14 }}>Start onboarding</Link>
         </div>
       </div>
+
+      <SiteFooter />
     </div>
   )
 }

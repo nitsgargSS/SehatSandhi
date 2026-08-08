@@ -21,6 +21,12 @@ const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
 const InvoicePage = lazy(() => import('./pages/InvoicePage'))
 const AdminLogin = lazy(() => import('./pages/admin/Login'))
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
+// Legal/company pages. Linked from SiteFooter on every public page, and
+// submitted directly to Meta and Razorpay, so each needs a stable public URL.
+const About = lazy(() => import('./pages/About'))
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'))
+const Terms = lazy(() => import('./pages/Terms'))
+const RefundPolicy = lazy(() => import('./pages/RefundPolicy'))
 
 // ── SECURITY: Admin URL is intentionally non-obvious ──
 // Never link this path from Navbar, Footer, sitemap,
@@ -132,6 +138,23 @@ export default function App() {
           {/* Tax invoice, opened by unguessable token from a WhatsApp or email
               link — so deliberately no login and no site nav. */}
           <Route path="/invoice/:token" element={<InvoicePage />} />
+
+          {/* ── Legal ──────────────────────────────────────────────────────
+              Reachable from SiteFooter on every public page. Meta's business
+              verification and Razorpay's merchant checks both open these
+              directly, so the paths are stable and each page stands alone. */}
+          <Route path="/about" element={<About />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/refund" element={<RefundPolicy />} />
+          {/* Aliases. The catch-all below sends an unknown path to the homepage,
+              so a reviewer typing the long form of one of these would land on a
+              landing page and conclude the policy does not exist. */}
+          <Route path="/privacy-policy" element={<Navigate to="/privacy" replace />} />
+          <Route path="/terms-and-conditions" element={<Navigate to="/terms" replace />} />
+          <Route path="/terms-of-service" element={<Navigate to="/terms" replace />} />
+          <Route path="/refund-policy" element={<Navigate to="/refund" replace />} />
+          <Route path="/cancellation-policy" element={<Navigate to="/refund" replace />} />
 
           {/* Old paths, kept as redirects: they are in customers' WhatsApp
               history and on anything already printed. */}

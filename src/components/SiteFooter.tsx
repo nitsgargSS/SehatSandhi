@@ -1,0 +1,79 @@
+import { Link } from 'react-router-dom'
+import { useLanguage } from '../i18n/LanguageContext'
+import { WA_NUMBER } from '../types'
+import { HEADER, PAGE } from './SiteHeader'
+
+// One footer for every public page, and the counterpart to SiteHeader.
+//
+// The site had no footer at all, which meant no public page named the legal
+// entity behind the brand, gave a contact, or linked to a policy. Meta's
+// business verification and Razorpay's merchant checks both look for exactly
+// that, and the policy pages themselves point people at "the contact details on
+// our homepage" — which was not true until this existed.
+//
+// Unlike SiteHeader, the content belongs here rather than to the caller: every
+// page wants the same links, so `<SiteFooter />` takes no props. It reads the
+// language itself for the same reason.
+
+const LINKS = [
+  { to: '/about', en: 'About Us', hi: 'हमारे बारे में' },
+  { to: '/privacy', en: 'Privacy Policy', hi: 'गोपनीयता नीति' },
+  { to: '/terms', en: 'Terms', hi: 'नियम व शर्तें' },
+  { to: '/refund', en: 'Refund Policy', hi: 'रिफंड नीति' },
+]
+
+/** Digits to the display form: 917015399355 → +91 70153 99355. */
+const prettyPhone = (digits: string) =>
+  /^91\d{10}$/.test(digits)
+    ? `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`
+    : `+${digits}`
+
+export default function SiteFooter() {
+  const { lang } = useLanguage()
+  const hi = lang === 'hi'
+
+  return (
+    <div style={{ background: HEADER.cream, borderTop: `1px solid ${HEADER.border}`, marginTop: 'auto' }}>
+      <div style={{
+        maxWidth: PAGE.maxWidth, margin: '0 auto',
+        paddingLeft: PAGE.padX, paddingRight: PAGE.padX,
+        paddingTop: 28, paddingBottom: 32, textAlign: 'center',
+      }}>
+        <div className="flex-wrap" style={{
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          gap: '10px 22px', marginBottom: 16,
+        }}>
+          {LINKS.map(l => (
+            <Link key={l.to} to={l.to}
+              style={{ fontSize: 13.5, fontWeight: 700, color: HEADER.muted, whiteSpace: 'nowrap' }}>
+              {hi ? l.hi : l.en}
+            </Link>
+          ))}
+        </div>
+
+        {/* Legal entity, spelled out because the brand name and the registered
+            name differ — Meta asks for this explicitly when they do. */}
+        <p style={{ fontSize: 12.5, color: HEADER.muted, lineHeight: 1.7, margin: '0 0 6px' }}>
+          {hi
+            ? 'सेहतसंधि, NG Technologies द्वारा संचालित — जगाधरी, यमुना नगर, हरियाणा'
+            : 'Sehatsandhi is operated by NG Technologies — Jagadhri, Yamuna Nagar, Haryana'}
+        </p>
+
+        <p style={{ fontSize: 12.5, color: HEADER.muted, lineHeight: 1.7, margin: '0 0 10px' }}>
+          <a href="mailto:hello@sehatsandhi.com" style={{ color: HEADER.green, fontWeight: 700 }}>
+            hello@sehatsandhi.com
+          </a>
+          <span style={{ opacity: .5 }}>{'  ·  '}</span>
+          <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer"
+            style={{ color: HEADER.green, fontWeight: 700 }}>
+            {prettyPhone(WA_NUMBER)}
+          </a>
+        </p>
+
+        <p style={{ fontSize: 11.5, color: HEADER.muted, opacity: .75, margin: 0 }}>
+          © 2026 NG Technologies. {hi ? 'सभी अधिकार सुरक्षित।' : 'All rights reserved.'}
+        </p>
+      </div>
+    </div>
+  )
+}

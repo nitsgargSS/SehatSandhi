@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { Doctor, SPECIALITIES, WA_NUMBER } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../../components/SiteHeader'
+import SiteFooter from '../../components/SiteFooter'
 import { Spinner } from '../../components/Loading'
 
 interface RatingAgg {
@@ -383,6 +384,8 @@ export default function DoctorProfile() {
 
       </div>
       </PageShell>
+
+      <SiteFooter />
     </div>
   )
 }
