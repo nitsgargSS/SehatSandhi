@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER, SPECIALITIES } from '../../types'
 import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, DOCTOR_QUALIFICATIONS } from './shared'
+import { RegistrySearch } from './RegistrySearch'
+import { searchClinicsByName, searchDoctorsByName } from '../../lib/registryLookup'
 import VerticalIcon from './VerticalIcon'
 import SandboxAutofill from '../../components/SandboxAutofill'
 import SiteFooter from '../../components/SiteFooter'
@@ -584,7 +586,31 @@ export default function BusinessRegister() {
                       <h3 style={h3Style}>Tell us about your business</h3>
                       <p style={pStyle}>Listing as <strong style={{ color: BIZ.green }}>{verticalObj.label}</strong>. This is what patients will see.</p>
                       <div className="grid gap-[18px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-                        <Field label="Business name *" placeholder="e.g. Aggarwal Eye Care" value={form.business_name} onChange={v => upd('business_name', v)} />
+                        {/* Searches the clinics we already know about, from the
+                            National Hospital Directory. A match fills in the
+                            address, which is the field nobody wants to type on a
+                            phone — and the published one is likelier to be right
+                            than a thumb-typed one. Everything stays editable. */}
+                        <RegistrySearch
+                          label="Business name *"
+                          placeholder="e.g. Aggarwal Eye Care"
+                          hint="Type a few letters and press Find — we may already have your address."
+                          value={form.business_name ?? ''}
+                          onChange={v => upd('business_name', v)}
+                          onSearch={async q => {
+                            const found = await searchClinicsByName(q)
+                            return found.map(c => ({
+                              ...c,
+                              title: c.name,
+                              subtitle: [c.address, c.pincode].filter(Boolean).join(' — ') || 'No address on record',
+                            }))
+                          }}
+                          onPick={c => {
+                            upd('business_name', c.name)
+                            if (c.address) upd('address', c.address)
+                          }}
+                          emptyNote="No match — just carry on and type your details."
+                        />
                         <Field label="Owner / contact name" placeholder="e.g. Dr. Ramesh Aggarwal" value={form.owner_name} onChange={v => upd('owner_name', v)} />
                         <Field label="WhatsApp number *" placeholder="+91 " value={form.phone} onChange={v => upd('phone', v)} type="tel" inputMode="tel" autoComplete="tel" />
                         {/* A dropdown, and it is now saved. This was free text
@@ -643,7 +669,44 @@ export default function BusinessRegister() {
                             </p>
                           </div>
                         )}
-                        <Field label="Registration number" placeholder="e.g. HR-12345 (optional)" value={form.reg_number} onChange={v => upd('reg_number', v)} />
+                        {/* Doctors search the Indian Medical Register by name and
+                            get their own registration number back, which is
+                            easier than finding the certificate. Everyone else
+                            types a licence number we cannot check. */}
+                        {vertical === 'doctors' ? (
+                          <RegistrySearch
+                            label="Find your registration"
+                            placeholder="Your name, as registered"
+                            hint="Search the medical register by name — or leave this blank."
+                            value={form.doctor_search ?? ''}
+                            onChange={v => upd('doctor_search', v)}
+                            onSearch={async q => {
+                              const found = await searchDoctorsByName(q)
+                              return found.map(d => ({
+                                ...d,
+                                title: d.name,
+                                subtitle: `${d.council} · Reg ${d.regNo}${d.year ? ` · ${d.year}` : ''}`,
+                              }))
+                            }}
+                            onPick={d => {
+                              upd('reg_number', d.regNo)
+                              upd('smc_id', String(d.smcId))
+                              upd('doctor_search', d.name)
+                            }}
+                            emptyNote="Not found — type it in the box below instead."
+                          />
+                        ) : (
+                          <Field label="Registration number" placeholder="e.g. HR-12345 (optional)" value={form.reg_number} onChange={v => upd('reg_number', v)} />
+                        )}
+                        {/* The register is not complete — it has nobody who
+                            qualified in the last few months, and the search only
+                            matches how a council chose to spell someone. Typing
+                            the number has to stay possible. */}
+                        {vertical === 'doctors' && (
+                          <Field label="Registration number"
+                            placeholder={form.reg_number ? '' : 'or type it — e.g. HR-12345 (optional)'}
+                            value={form.reg_number} onChange={v => upd('reg_number', v)} />
+                        )}
                         <Field label="Email" placeholder="you@example.com (optional)" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />
                         <div className="sm:col-span-2 xl:col-span-3">
                           <Field label="Full address" placeholder="Shop / building, area, city" value={form.address} onChange={v => upd('address', v)} />
