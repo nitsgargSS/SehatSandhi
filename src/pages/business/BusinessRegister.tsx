@@ -3,7 +3,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER, SPECIALITIES } from '../../types'
-import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor } from './shared'
+import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, DOCTOR_QUALIFICATIONS } from './shared'
 import VerticalIcon from './VerticalIcon'
 import SandboxAutofill from '../../components/SandboxAutofill'
 import { generateBusiness } from '../../lib/sandboxData'
@@ -228,7 +228,7 @@ export default function BusinessRegister() {
     // A doctor without a speciality is unsearchable — patients match on it
     // exactly — so it is required rather than defaulted to something wrong.
     if (s === 2) return !!(form.business_name?.trim() && form.phone?.trim()
-      && (vertical !== 'doctors' || form.speciality))
+      && (vertical !== 'doctors' || (form.speciality && form.qualification)))
     if (s === 3) return zips.length > 0
     return true
   }
@@ -237,6 +237,8 @@ export default function BusinessRegister() {
       setError(step === 2
         ? (vertical === 'doctors' && !form.speciality
             ? 'Please choose a speciality — it is how patients find you.'
+            : vertical === 'doctors' && !form.qualification
+            ? 'Please choose your qualification — it appears on your profile.'
             : 'Please enter at least a business name and WhatsApp number.')
         : step === 3 ? 'Select at least one pincode to continue.' : 'Please complete this step.')
       return
@@ -333,8 +335,17 @@ export default function BusinessRegister() {
       p_pin_codes: zips,
       p_phone: form.phone || '',
       p_email: form.email || '',
-      p_qualification: verticalObj.qualification,
+      // A doctor's own degree when they gave one; the vertical's label otherwise,
+      // which is what identifies a pharmacy or a lab. Sending the label for a
+      // doctor stored every one of them as "Clinic".
+      p_qualification: vertical === 'doctors' && form.qualification
+        ? form.qualification
+        : verticalObj.qualification,
       p_consultation_fee: 0,
+      // Collected on step 2 since the wizard was written and passed by the
+      // hospital branch, but never by this one — so the number a doctor typed
+      // was discarded, and the admin verifying them saw an empty Reg field.
+      p_reg_number: form.reg_number || null,
     })
     if (insErr) { setError(`Could not save listing: ${insErr.message}`); return null }
     doctorIdRef.current = data as string
@@ -602,6 +613,34 @@ export default function BusinessRegister() {
                           </div>
                         ) : (
                           <Field label="Category / speciality" placeholder="e.g. Ophthalmology" value={form.category} onChange={v => upd('category', v)} />
+                        )}
+                        {/* Same story as speciality above: this used to be the
+                            vertical's label — every doctor was stored as
+                            "Clinic", which is what their public profile showed
+                            where a degree belongs, and what sent the admin
+                            verification panel to the AYUSH council instead of
+                            the NMC register. */}
+                        {vertical === 'doctors' && (
+                          <div>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: BIZ.ink, marginBottom: 7 }}>
+                              Qualification *
+                            </label>
+                            <select value={form.qualification ?? ''}
+                              onChange={e => upd('qualification', e.target.value)}
+                              style={{
+                                width: '100%', padding: '13px 14px', borderRadius: 12,
+                                border: `1.5px solid ${BIZ.inputBorder}`, fontFamily: 'inherit',
+                                fontSize: 15, color: form.qualification ? BIZ.ink : BIZ.mutedWarm, background: '#fff',
+                              }}>
+                              <option value="">Choose your qualification…</option>
+                              {DOCTOR_QUALIFICATIONS.map(q => (
+                                <option key={q.value} value={q.value}>{q.label}</option>
+                              ))}
+                            </select>
+                            <p style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 6 }}>
+                              Shown on your public profile, and what we check your registration against.
+                            </p>
+                          </div>
                         )}
                         <Field label="Registration number" placeholder="e.g. HR-12345 (optional)" value={form.reg_number} onChange={v => upd('reg_number', v)} />
                         <Field label="Email" placeholder="you@example.com (optional)" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
 import { WA_NUMBER } from '../types'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PAGE } from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 
 // Design 1a / Turn-4 — patient homepage, "Warm Care".
 //
@@ -325,6 +326,7 @@ export default function PatientHome() {
           <div id="faq-m" style={{ padding: '18px 20px 4px', scrollMarginTop: 12 }}><Faqs t={t} /></div>
           <div style={{ padding: '14px 20px 18px' }}><BusinessCard t={t} /></div>
           <div style={{ marginTop: 'auto' }}><TrustRow t={t} /></div>
+          <SiteFooter />
         </div>
       </div>
 
@@ -374,6 +376,10 @@ export default function PatientHome() {
         {/* provider band — second entry point for the header CTA */}
         <div style={{ padding: '32px 0 0' }}><BusinessCard t={t} row /></div>
       </div>
+
+      {/* Outside the contained column, like the header: SiteFooter carries its
+          own full-bleed band and centres its row on PAGE.maxWidth itself. */}
+      <div className="hidden lg:block"><SiteFooter /></div>
     </div>
   )
 }

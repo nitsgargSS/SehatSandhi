@@ -4,6 +4,7 @@ import { SPECIALITIES, PIN_CODES } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
 import { specialityUrl } from '../lib/links'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell, HEADER } from '../components/SiteHeader'
+import SiteFooter from '../components/SiteFooter'
 
 // Pick a speciality and an area, and go to the listings.
 //
@@ -81,6 +82,8 @@ export default function Browse() {
           </div>
         </div>
       </PageShell>
+
+      <SiteFooter />
     </div>
   )
 }

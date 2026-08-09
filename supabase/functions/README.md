@@ -45,12 +45,58 @@ supabase secrets set \
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically by the
 Supabase runtime — do not set them yourself.
 
+### Clinic login codes (`clinic-otp`)
+
+Delivered over WhatsApp through **AISensy**, on the same number and API key the
+rest of the platform already sends through:
+
+```bash
+supabase secrets set \
+  AISENSY_API_KEY=<the same key appointment-notify and invoice-send use> \
+  AISENSY_LOGIN_CAMPAIGN=<the live campaign name, exactly as spelled in AISensy>
+```
+
+Both are required — with either missing the function does not send at all and the
+login screen shows "we cannot send login codes right now".
+
+The campaign must be **live** (not draft) in AISensy, and its approved template
+must take the code as its **single variable**, because the function sends
+`templateParams: [code]` positionally. A template with a different variable count
+is rejected at send time, not at deploy time — the campaign name being right is
+not sufficient.
+
+Two things worth knowing before relying on this for login:
+
+- **Category.** A code delivered through a UTILITY or MARKETING template is
+  deliverable but not what WhatsApp intends for credentials; an AUTHENTICATION
+  template also renders the tap-to-copy button. Ask AISensy to submit the login
+  campaign under AUTHENTICATION.
+- **Opt-in.** AISensy applies opt-in rules to campaign sends. A business logging
+  in for the first time may never have messaged your number, so confirm with
+  AISensy that this campaign reaches numbers with no prior inbound message —
+  otherwise the first login of every new signup is the one that fails.
+
+Failures are logged with the provider's own response body
+(`supabase functions logs clinic-otp`), which is where a wrong campaign name, an
+unapproved template, or an exhausted wallet will name itself. The code itself is
+never logged.
+
+`META_PHONE_NUMBER_ID` + `META_ACCESS_TOKEN` (plus optional `META_TEMPLATE_NAME`,
+`META_TEMPLATE_LANG`) remain as a fallback for a directly-owned Meta sender
+later; unset, that path costs nothing. With neither provider configured and
+`CLINIC_OTP_ECHO=true`, the login screen shows the code instead of sending it.
+`CLINIC_OTP_ECHO` returns a live credential in the HTTP response and must never
+be set in production.
+
 ## 4. Deploy
 
 ```bash
 supabase functions deploy compute-price
 supabase functions deploy razorpay-order
 supabase functions deploy razorpay-verify
+
+# --no-verify-jwt is required: the caller is logging in and has no session yet.
+supabase functions deploy clinic-otp --no-verify-jwt
 ```
 
 ## 5. Frontend env (`.env`, never committed)
