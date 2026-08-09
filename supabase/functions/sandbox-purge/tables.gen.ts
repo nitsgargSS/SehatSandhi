@@ -48,4 +48,5 @@ export const PURGE_TABLES: PurgeTable[] = [
   { name: 'wa_contacts', purgeOrder: 250, pk: 'phone' },
   { name: 'site_visits', purgeOrder: 255, pk: 'id' },
   { name: 'opt_outs', purgeOrder: 260, pk: 'id' },
+  { name: 'seed_clinics', purgeOrder: 270, pk: 'id' },
 ]
