@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { LanguageProvider } from './i18n/LanguageContext'
 import { supabase } from './lib/supabase'
 import { track } from './lib/analytics'
+import { gaPageView } from './lib/ga'
+import { startLocationTracking } from './lib/location'
 import PatientHome from './pages/PatientHome'
 import StagingBanner from './components/StagingBanner'
 import { WA_NUMBER } from './types'
@@ -82,10 +84,27 @@ const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/']
 
 const PageViewTracker = () => {
   const { pathname } = useLocation()
+  const excluded = TRACK_EXCLUDED.some(p => pathname.startsWith(p))
+
   useEffect(() => {
-    if (TRACK_EXCLUDED.some(p => pathname.startsWith(p))) return
+    if (excluded) return
     track('page_view', { path: pathname })
-  }, [pathname])
+    // GA4's snippet in index.html fires one page_view on load and never again,
+    // so every client navigation after the first would be missing from GA
+    // without this. Sent as a manual event with the path we resolved, not the
+    // one gtag would read off the URL, so the two systems agree on what a page
+    // view is and the admin/invoice exclusions above hold on both.
+    gaPageView(pathname)
+  }, [pathname, excluded])
+
+  // Location is per visit, not per page, so this runs once and the module keeps
+  // its own heartbeat afterwards. Not started at all if the visitor's first
+  // landing is an excluded path — an admin session is not a visitor to map.
+  useEffect(() => {
+    if (excluded) return
+    startLocationTracking()
+  }, [excluded])
+
   return null
 }
 

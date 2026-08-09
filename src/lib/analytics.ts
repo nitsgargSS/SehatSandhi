@@ -33,7 +33,7 @@ interface EventFields {
  * visits on different days are not linkable to each other. It exists only to
  * separate "one person opened six listings" from "six people opened one".
  */
-function sessionId(): string {
+export function sessionId(): string {
   const KEY = 'ss_sid'
   try {
     let id = sessionStorage.getItem(KEY)
@@ -68,7 +68,7 @@ function referrerHost(): string | null {
 }
 
 /** Honour Do Not Track. These numbers are not worth overriding someone's choice. */
-function optedOut(): boolean {
+export function optedOut(): boolean {
   const dnt = (navigator as unknown as { doNotTrack?: string }).doNotTrack
     ?? (window as unknown as { doNotTrack?: string }).doNotTrack
   return dnt === '1' || dnt === 'yes'

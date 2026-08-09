@@ -125,3 +125,23 @@ curl -X POST http://localhost:54321/functions/v1/compute-price \
   -H 'Content-Type: application/json' \
   -d '{"pincodes":["135001","135101"]}'
 ```
+
+### Visitor location (`record-visitor-location`)
+
+Records where each visit is, for expansion planning. City-level from the request
+IP via [ipwho.is](https://ipwho.is) (https, no key, commercial use allowed); exact
+coordinates only when the visitor granted the browser permission prompt.
+
+Deploy with `--no-verify-jwt` — patients are anonymous:
+
+```bash
+supabase functions deploy record-visitor-location --no-verify-jwt
+```
+
+No secrets needed. `IPGEO_ENDPOINT` optionally overrides the lookup provider.
+
+Writes `visitor_locations` (migration 0034) under the service role — the table
+grants the browser no insert policy on purpose, so a client cannot place a
+session anywhere it likes. Rows are purged after 90 days idle by
+`sehat_purge_stale_visitor_locations()`; schedule it in pg_cron beside
+`sehat_purge_old_site_events()`.
