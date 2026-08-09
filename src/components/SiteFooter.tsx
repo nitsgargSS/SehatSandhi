@@ -28,9 +28,13 @@ const LINKS = [
 // checks that the site and the Page point at each other, so a link to a profile
 // that isn't there is worse than no link at all — it reads as a dead claim.
 // Adding YouTube or X later is one more row.
-const SOCIALS = [
-  { href: 'https://www.facebook.com/sehatsandhi', label: 'Facebook', Icon: Facebook },
-  { href: 'https://www.instagram.com/sehatsandhi/', label: 'Instagram', Icon: Instagram },
+//
+// Exported because the Contact page lists the same accounts by name. One list,
+// so a handle that changes cannot end up right in one place and stale in the
+// other — which is exactly the mismatch a verification reviewer looks for.
+export const SOCIALS = [
+  { href: 'https://www.facebook.com/sehatsandhi', label: 'Facebook', handle: '@sehatsandhi', Icon: Facebook },
+  { href: 'https://www.instagram.com/sehatsandhi/', label: 'Instagram', handle: '@sehatsandhi', Icon: Instagram },
 ]
 
 /** Digits to the display form: 917015399355 → +91 70153 99355. */

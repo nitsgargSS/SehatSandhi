@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
 import { WA_NUMBER } from '../types'
 import SiteHeader from '../components/SiteHeader'
-import SiteFooter from '../components/SiteFooter'
+import SiteFooter, { SOCIALS } from '../components/SiteFooter'
 
 // A contact page with an address on it, because the footer alone is not what
 // gets checked.
@@ -35,6 +35,7 @@ type Copy = {
   mailTitle: string; mailDesc: string
   hoursTitle: string; hoursDesc: string
   addressTitle: string; addressDesc: string
+  socialTitle: string; socialDesc: string
   forTitle: string
   forItems: { h: string; p: string; refund?: boolean }[]
   legalTitle: string; legalName: string; tradeName: string
@@ -54,6 +55,8 @@ const content: Record<'en' | 'hi', Copy> = {
     hoursDesc: 'Monday to Saturday, 9:00 AM to 7:00 PM IST. We aim to answer WhatsApp messages the same day, and email within 2 business days.',
     addressTitle: 'Registered office',
     addressDesc: 'Correspondence address and registered principal place of business.',
+    socialTitle: 'Find us elsewhere',
+    socialDesc: 'These are our only official accounts. We never ask for payment or personal details over social media.',
     forTitle: 'What to contact us about',
     forItems: [
       {
@@ -93,6 +96,8 @@ const content: Record<'en' | 'hi', Copy> = {
     hoursDesc: 'सोमवार से शनिवार, सुबह 9:00 से शाम 7:00 बजे तक (IST)। WhatsApp मैसेज का जवाब हम उसी दिन देने की कोशिश करते हैं, और ईमेल का 2 बिज़नेस दिनों के अंदर।',
     addressTitle: 'रजिस्टर्ड ऑफिस',
     addressDesc: 'पत्राचार का पता और रजिस्टर्ड प्रिंसिपल प्लेस ऑफ बिज़नेस।',
+    socialTitle: 'हमें यहां भी पाएं',
+    socialDesc: 'यही हमारे एकमात्र आधिकारिक अकाउंट हैं। हम सोशल मीडिया पर कभी पेमेंट या निजी जानकारी नहीं मांगते।',
     forTitle: 'किस बारे में संपर्क करें',
     forItems: [
       {
@@ -178,6 +183,26 @@ export default function Contact() {
              className="bg-white text-navy-700 font-semibold px-6 py-2.5 rounded-full text-sm hover:bg-gray-50 transition inline-block">
             {c.waCta}
           </a>
+        </div>
+
+        {/* Named, not just iconned — the footer's glyph row says "we have a
+            Facebook"; a reviewer opening the contact page wants to see which
+            account, and a patient wants to know an impostor from us. The rows
+            take p-4 over .card's p-6: two short lines do not need the padding
+            the taller cards above do. */}
+        <h2 className="text-xl font-bold text-navy-700 mb-2">{c.socialTitle}</h2>
+        <p className="text-gray-500 text-sm mb-4">{c.socialDesc}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
+          {SOCIALS.map(({ href, label, handle, Icon }) => (
+            <a key={label} href={href} target="_blank" rel="noreferrer"
+               className="card p-4 flex items-center gap-3 hover:border-teal-200 transition">
+              <Icon className="w-5 h-5 text-teal-500 flex-none" aria-hidden />
+              <span className="min-w-0">
+                <span className="block font-bold text-navy-700 text-sm">{label}</span>
+                <span className="block text-gray-500 text-xs truncate">{handle}</span>
+              </span>
+            </a>
+          ))}
         </div>
 
         <h2 className="text-xl font-bold text-navy-700 mb-4">{c.forTitle}</h2>
