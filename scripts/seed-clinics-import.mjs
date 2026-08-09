@@ -42,6 +42,14 @@ const ATTRIBUTION =
 // The API ignores larger values and returns ten at a time regardless.
 const PAGE = 10
 
+/** Carries the rows fetched before the limit hit, so a partial run still saves. */
+class RateLimited extends Error {
+  constructor(rows) {
+    super('rate limited')
+    this.rows = [...rows.values()]
+  }
+}
+
 const args = process.argv.slice(2)
 const flag = (n, d = null) => {
   const i = args.indexOf(`--${n}`)
@@ -108,6 +116,16 @@ async function fetchAll() {
     try {
       page = await get(url)
     } catch (e) {
+      // Rate limiting is not the end of the data, and treating it as one is how
+      // you get a run that reports success having written nothing. Say what
+      // happened, keep what we have, and exit non-zero.
+      if (String(e.message).includes('429')) {
+        process.stdout.write('\n')
+        console.error(`  Rate limited by data.gov.in after ${rows.size} records.`)
+        console.error('  The key in DATA_GOV_IN_KEY is shared if it is the public demo one.')
+        console.error('  Register your own (free): https://data.gov.in/user/register\n')
+        throw new RateLimited(rows)
+      }
       console.error(`\n  Failed at offset ${offset}: ${e.message}`)
       break
     }
@@ -150,7 +168,17 @@ async function main() {
   console.log(`\n  ${ATTRIBUTION}`)
   console.log(`  ${district ? `district ${district}` : `state ${state}`} → ${env}${dryRun ? '  (dry run)' : ''}\n`)
 
-  const raw = await fetchAll()
+  // A partial fetch is still worth writing — the run is resumable by re-running,
+  // and rows already collected should not be thrown away because the next page
+  // was refused.
+  let raw, partial = false
+  try {
+    raw = await fetchAll()
+  } catch (e) {
+    if (!(e instanceof RateLimited)) throw e
+    raw = e.rows
+    partial = true
+  }
   const rows = raw.map(normalise).filter(r => r.name)
 
   const withAddr = rows.filter(r => r.address).length
@@ -198,8 +226,15 @@ async function main() {
     if (existing) updated += rowCount; else inserted += rowCount
   }
 
-  console.log(`\n  ${inserted} new, ${updated} updated, ${skipped} left alone (claimed or rejected)\n`)
+  console.log(`\n  ${inserted} new, ${updated} updated, ${skipped} left alone (claimed or rejected)`)
   await client.end()
+
+  if (partial) {
+    console.log('\n  Incomplete — re-run to continue from where the rate limit stopped it.\n')
+    process.exitCode = 1
+  } else {
+    console.log()
+  }
 }
 
 main().catch(e => { console.error(`\n  ${e.message}\n`); process.exit(1) })

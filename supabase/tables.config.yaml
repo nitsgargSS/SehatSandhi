@@ -256,6 +256,10 @@ tables:
   # The doctors shown under a clinic listing — name and qualification only.
   public_listing_doctors: { class: view }
 
+  # Seed clinics offered as suggestions at signup — name and address only,
+  # with our pipeline status and notes left behind in seed_clinics.
+  findable_clinics:       { class: view }
+
   # ── Infrastructure ──────────────────────────────────────────────────────
 
   schema_migrations:
