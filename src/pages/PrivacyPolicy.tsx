@@ -50,7 +50,7 @@ const content = {
       },
       {
         h: '11. Contact Us',
-        p: 'For any privacy-related questions or requests, message us on WhatsApp or reach us via the contact details on our homepage.',
+        p: 'For any privacy-related questions or requests, message us on WhatsApp or reach us via the details on our Contact page.',
       },
     ],
   },
@@ -101,7 +101,7 @@ const content = {
       },
       {
         h: '11. हमसे संपर्क करें',
-        p: 'किसी भी प्राइवेसी-रिलेटेड सवाल या रिक्वेस्ट के लिए, हमें WhatsApp पर मैसेज करें या हमारी होमपेज पर दी गई कॉन्टैक्ट डिटेल्स से संपर्क करें।',
+        p: 'किसी भी प्राइवेसी-रिलेटेड सवाल या रिक्वेस्ट के लिए, हमें WhatsApp पर मैसेज करें या हमारे संपर्क पेज पर दी गई डिटेल्स से संपर्क करें।',
       },
     ],
   },

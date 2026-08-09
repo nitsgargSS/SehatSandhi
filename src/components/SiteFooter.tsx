@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { Facebook, Instagram } from 'lucide-react'
 import { useLanguage } from '../i18n/LanguageContext'
 import { WA_NUMBER } from '../types'
 import { HEADER, PAGE } from './SiteHeader'
@@ -17,9 +18,19 @@ import { HEADER, PAGE } from './SiteHeader'
 
 const LINKS = [
   { to: '/about', en: 'About Us', hi: 'हमारे बारे में' },
+  { to: '/contact', en: 'Contact Us', hi: 'संपर्क करें' },
   { to: '/privacy', en: 'Privacy Policy', hi: 'गोपनीयता नीति' },
   { to: '/terms', en: 'Terms', hi: 'नियम व शर्तें' },
   { to: '/refund', en: 'Refund Policy', hi: 'रिफंड नीति' },
+]
+
+// Only accounts that actually exist go here. Meta's business verification
+// checks that the site and the Page point at each other, so a link to a profile
+// that isn't there is worse than no link at all — it reads as a dead claim.
+// Adding YouTube or X later is one more row.
+const SOCIALS = [
+  { href: 'https://www.facebook.com/sehatsandhi', label: 'Facebook', Icon: Facebook },
+  { href: 'https://www.instagram.com/sehatsandhi/', label: 'Instagram', Icon: Instagram },
 ]
 
 /** Digits to the display form: 917015399355 → +91 70153 99355. */
@@ -73,6 +84,21 @@ export default function SiteFooter() {
             {prettyPhone(WA_NUMBER)}
           </a>
         </p>
+
+        {/* The icon is 19px, so each link pads out to a ~40px tap target and the
+            row uses negative margin to stay visually tight despite it. */}
+        <div style={{
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          gap: 4, margin: '0 -10px 12px',
+        }}>
+          {SOCIALS.map(({ href, label, Icon }) => (
+            <a key={label} href={href} target="_blank" rel="noreferrer"
+              aria-label={label} title={label}
+              style={{ display: 'inline-flex', padding: 10, color: HEADER.muted, lineHeight: 0 }}>
+              <Icon size={19} strokeWidth={1.9} aria-hidden />
+            </a>
+          ))}
+        </div>
 
         <p style={{ fontSize: 11.5, color: HEADER.muted, opacity: .75, margin: 0 }}>
           © 2026 NG Technologies. {hi ? 'सभी अधिकार सुरक्षित।' : 'All rights reserved.'}

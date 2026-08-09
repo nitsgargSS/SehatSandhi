@@ -5,6 +5,7 @@ import { activeConfig } from '../../lib/env'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
+import SiteFooter from '../../components/SiteFooter'
 
 // Log in with a code sent to the WhatsApp number the business registered with.
 //
@@ -112,7 +113,12 @@ export default function DoctorLogin() {
     // layout, whose fixed navbar overlapped the card — and a signed-out clinic
     // does not need "Book on WhatsApp" or "Register Clinic" above its own login
     // form anyway. See /business/register, which this mirrors.
-    <div style={{ background: BIZ.cream }} className="grid lg:grid-cols-[300px_1fr] min-h-screen">
+    //
+    // The rail and the form stay a two-column grid; the page around them is a
+    // flex column, so the footer sits below both at full width rather than
+    // inside either column.
+    <div style={{ background: BIZ.cream }} className="min-h-screen flex flex-col">
+      <div className="grid lg:grid-cols-[300px_1fr] flex-1">
       <div className="hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-screen"
         style={{ background: BIZ.ink, padding: '36px 30px' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 36 }}>
@@ -225,6 +231,9 @@ export default function DoctorLogin() {
         </div>
       </div>
       </div>
+      </div>
+
+      <SiteFooter />
     </div>
   )
 }

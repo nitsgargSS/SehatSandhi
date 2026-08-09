@@ -30,7 +30,7 @@ const content = {
       },
       {
         h: '6. How to Request a Refund',
-        p: 'Message us on WhatsApp or use the contact details on our homepage, along with your registered phone number and reason for the request. We aim to respond within 2 business days.',
+        p: 'Message us on WhatsApp or email us — the details are on our Contact page — along with your registered phone number and reason for the request. We aim to respond within 2 business days.',
       },
       {
         h: '7. Processing Time',
@@ -65,7 +65,7 @@ const content = {
       },
       {
         h: '6. रिफंड कैसे रिक्वेस्ट करें',
-        p: 'हमें WhatsApp पर मैसेज करें या हमारी होमपेज पर दी गई कॉन्टैक्ट डिटेल्स इस्तेमाल करें, अपने रजिस्टर्ड फ़ोन नंबर और रिक्वेस्ट के कारण के साथ। हम 2 बिज़नेस दिनों के अंदर रिस्पॉन्ड करने का लक्ष्य रखते हैं।',
+        p: 'हमें WhatsApp पर मैसेज करें या ईमेल करें — डिटेल्स हमारे संपर्क पेज पर हैं — अपने रजिस्टर्ड फ़ोन नंबर और रिक्वेस्ट के कारण के साथ। हम 2 बिज़नेस दिनों के अंदर रिस्पॉन्ड करने का लक्ष्य रखते हैं।',
       },
       {
         h: '7. प्रोसेसिंग टाइम',

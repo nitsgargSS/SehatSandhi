@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { fetchInvoice, Invoice } from '../lib/invoiceApi'
+import SiteFooter from '../components/SiteFooter'
 
 // A GST-compliant tax invoice, rendered from stored data.
 //
@@ -46,7 +47,7 @@ export default function InvoicePage() {
   const cancelled = invoice.status === 'cancelled'
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8 px-4 print:bg-white print:p-0">
+    <div className="min-h-screen bg-gray-100 py-8 px-4 print:bg-white print:p-0 flex flex-col">
       {/* Screen-only actions — hidden in print */}
       <div className="max-w-3xl mx-auto mb-4 flex justify-between items-center print:hidden">
         <span className="text-sm text-gray-500">
@@ -166,6 +167,13 @@ export default function InvoicePage() {
             <p className="mt-1">GST is not charged on this invoice.</p>
           )}
         </div>
+      </div>
+
+      {/* Screen only — the footer is navigation, and a saved PDF of a tax
+          invoice should carry nothing but the invoice. The negative margins
+          undo this page's gutter so the band still runs edge to edge. */}
+      <div className="print:hidden mt-auto pt-8 -mx-4 -mb-8">
+        <SiteFooter />
       </div>
     </div>
   )

@@ -6,6 +6,7 @@ import { WA_NUMBER, SPECIALITIES } from '../../types'
 import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, DOCTOR_QUALIFICATIONS } from './shared'
 import VerticalIcon from './VerticalIcon'
 import SandboxAutofill from '../../components/SandboxAutofill'
+import SiteFooter from '../../components/SiteFooter'
 import { generateBusiness } from '../../lib/sandboxData'
 import {
   computePrice, createRazorpayOrder, verifyRazorpayPayment,
@@ -1096,6 +1097,11 @@ export default function BusinessRegister() {
           </div>
         </div>
       </div>
+
+      {/* Below the wizard, not inside it: this is the page that takes payment,
+          so the refund policy and the entity being paid have to be reachable
+          from it without leaving the flow. */}
+      <SiteFooter />
     </div>
   )
 }
