@@ -156,7 +156,9 @@ export default function App() {
           <Route path="/business/dashboard" element={<DoctorDashboard />} />
 
           {/* Tax invoice, opened by unguessable token from a WhatsApp or email
-              link — so deliberately no login and no site nav. */}
+              link — so deliberately no login and no header. It carries the
+              footer, but print:hidden: a saved PDF should be the invoice and
+              nothing else. */}
           <Route path="/invoice/:token" element={<InvoicePage />} />
 
           {/* ── Legal ──────────────────────────────────────────────────────
