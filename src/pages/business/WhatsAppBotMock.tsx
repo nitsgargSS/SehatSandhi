@@ -6,33 +6,37 @@ import { useState } from 'react'
 
 interface Doctor { name: string; spec: string; fee: number; clinic: string }
 
+// Illustrative only — none of these clinics exist. The localities are the
+// generic ones found in almost every Indian town (Model Town, Civil Lines,
+// Main Market) rather than real towns of ours, so the demo reads the same to a
+// business in any district we open in.
 const DOCS: Record<string, Doctor[]> = {
   Eye: [
     { name: 'Dr. Meena Aggarwal', spec: 'Ophthalmologist', fee: 300, clinic: 'Aggarwal Eye Care, Model Town' },
-    { name: 'Dr. Vivek Jain', spec: 'Eye Surgeon', fee: 350, clinic: 'Jain Netralaya, Jagadhri' },
+    { name: 'Dr. Vivek Jain', spec: 'Eye Surgeon', fee: 350, clinic: 'Jain Netralaya, Civil Lines' },
   ],
   ENT: [
-    { name: 'Dr. Rakesh Sethi', spec: 'ENT Specialist', fee: 250, clinic: 'Sethi ENT Clinic, Jagadhri' },
-    { name: 'Dr. Anita Rao', spec: 'ENT Surgeon', fee: 300, clinic: 'City ENT, Yamunanagar' },
+    { name: 'Dr. Rakesh Sethi', spec: 'ENT Specialist', fee: 250, clinic: 'Sethi ENT Clinic, Main Market' },
+    { name: 'Dr. Anita Rao', spec: 'ENT Surgeon', fee: 300, clinic: 'City ENT, Station Road' },
   ],
   Skin: [
-    { name: 'Dr. Priya Bansal', spec: 'Dermatologist', fee: 400, clinic: 'SkinGlow Clinic, Yamunanagar' },
+    { name: 'Dr. Priya Bansal', spec: 'Dermatologist', fee: 400, clinic: 'SkinGlow Clinic, Ram Nagar' },
     { name: 'Dr. Karan Mehta', spec: 'Skin & Hair', fee: 350, clinic: 'DermaCare, Model Town' },
   ],
   Heart: [
-    { name: 'Dr. S. K. Gupta', spec: 'Cardiologist', fee: 600, clinic: 'Gupta Heart Centre, Yamunanagar' },
-    { name: 'Dr. Neha Verma', spec: 'Cardiologist', fee: 550, clinic: 'LifeLine Heart, Jagadhri' },
+    { name: 'Dr. S. K. Gupta', spec: 'Cardiologist', fee: 600, clinic: 'Gupta Heart Centre, Civil Lines' },
+    { name: 'Dr. Neha Verma', spec: 'Cardiologist', fee: 550, clinic: 'LifeLine Heart, Sector 17' },
   ],
   Cancer: [
-    { name: 'Dr. A. Khanna', spec: 'Oncologist', fee: 700, clinic: 'City Cancer Care, Jagadhri' },
-    { name: 'Dr. R. Iyer', spec: 'Medical Oncologist', fee: 750, clinic: 'Hope Onco Centre, Yamunanagar' },
+    { name: 'Dr. A. Khanna', spec: 'Oncologist', fee: 700, clinic: 'City Cancer Care, Main Market' },
+    { name: 'Dr. R. Iyer', spec: 'Medical Oncologist', fee: 750, clinic: 'Hope Onco Centre, Station Road' },
   ],
 }
 
 interface Msg { text: string; time: string; mine: boolean }
 interface Chip { label: string; onClick: () => void }
 
-export default function WhatsAppBotMock({ area = 'Yamunanagar' }: { area?: string }) {
+export default function WhatsAppBotMock({ area = 'your area' }: { area?: string }) {
   const [step, setStep] = useState(0)
   const [cat, setCat] = useState<string | null>(null)
   const [spec, setSpec] = useState<string | null>(null)
@@ -52,7 +56,7 @@ export default function WhatsAppBotMock({ area = 'Yamunanagar' }: { area?: strin
   if (step >= 1 && step !== 99) {
     bot('Sure. Which kind of doctor do you need? We have 20 specialities.', '10:01')
     if (spec) me(spec, '10:02')
-    if (step >= 2) bot(`Here are verified ${spec} doctors near ${area}:`, '10:02')
+    if (step >= 2) bot(`Here are verified ${spec} doctors in ${area}:`, '10:02')
     if (doc) me(`Book ${doc.name}`, '10:02')
     if (step >= 3 && doc) bot(`${doc.name} is available at these times. Pick one:`, '10:02')
     if (slot) me(slot, '10:03')

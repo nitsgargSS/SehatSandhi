@@ -43,15 +43,17 @@ export const testEmail = (run: number): string => `sandbox+${run}@sehatsandhi.te
 export const TEST_PASSWORD = 'Sandbox@123'
 
 // ── name pools ───────────────────────────────────────────────────────────────
-// Yamunanagar-flavoured, matching the service areas the app actually covers.
+// North-Indian-flavoured but town-agnostic: the localities are the ones found
+// in almost any district, so generated fixtures do not have to be revisited
+// each time we open somewhere new.
 
 const SURNAMES = ['Aggarwal', 'Sharma', 'Verma', 'Gupta', 'Singh', 'Kaur', 'Bansal', 'Chopra', 'Mehra', 'Saini', 'Goyal', 'Arora']
 const GIVEN_NAMES = ['Ramesh', 'Priya', 'Anil', 'Sunita', 'Vikram', 'Meena', 'Rajesh', 'Kavita', 'Suresh', 'Neha', 'Deepak', 'Pooja']
-const LOCALITIES = ['Model Town', 'Jagadhri Road', 'Civil Lines', 'Sector 17', 'Workshop Road', 'Professor Colony', 'Camp Area', 'Radaur Road']
+const LOCALITIES = ['Model Town', 'Station Road', 'Civil Lines', 'Sector 17', 'Workshop Road', 'Professor Colony', 'Camp Area', 'Mall Road']
 const STREET_TYPES = ['Main Market', 'Chowk', 'Bazaar', 'Road']
 
 const personName = () => `${pick(GIVEN_NAMES)} ${pick(SURNAMES)}`
-const address = () => `${int(1, 299)}, ${pick(LOCALITIES)}, ${pick(STREET_TYPES)}, Yamunanagar, Haryana`
+const address = () => `${int(1, 299)}, ${pick(LOCALITIES)}, ${pick(STREET_TYPES)}, Haryana`
 
 /** Business names that read like the vertical they belong to. */
 const BUSINESS_SUFFIX: Record<VerticalKey, string[]> = {
