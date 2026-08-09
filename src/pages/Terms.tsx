@@ -72,7 +72,7 @@ const content: Record<'en' | 'hi', Content> = {
       },
       {
         h: '12. Contact Us',
-        p: 'For questions about these terms, message us on WhatsApp or reach us via the contact details on our homepage.',
+        p: 'For questions about these terms, message us on WhatsApp or reach us via the details on our Contact page.',
       },
     ],
   },
@@ -128,7 +128,7 @@ const content: Record<'en' | 'hi', Content> = {
       },
       {
         h: '12. हमसे संपर्क करें',
-        p: 'इन शर्तों के बारे में सवालों के लिए, हमें WhatsApp पर मैसेज करें या हमारी होमपेज पर दी गई कॉन्टैक्ट डिटेल्स से संपर्क करें।',
+        p: 'इन शर्तों के बारे में सवालों के लिए, हमें WhatsApp पर मैसेज करें या हमारे संपर्क पेज पर दी गई डिटेल्स से संपर्क करें।',
       },
     ],
   },

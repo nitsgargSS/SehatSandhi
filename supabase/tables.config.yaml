@@ -212,6 +212,13 @@ tables:
     class: isolated
     purgeOrder: 260
 
+  # Clinics we know exist but who have not signed up, from open government
+  # data. Isolated rather than sync: sandbox rebuilds it from the same public
+  # source, and it is not reference data copied down from prod.
+  seed_clinics:
+    class: isolated
+    purgeOrder: 270
+
   # ── The Indian Medical Register mirror ──────────────────────────────────
   # Neither synced nor purged. Not `sync`: it is not ours and does not come from
   # prod — both environments rebuild it from the register itself. Not `isolated`:
@@ -248,6 +255,10 @@ tables:
 
   # The doctors shown under a clinic listing — name and qualification only.
   public_listing_doctors: { class: view }
+
+  # Seed clinics offered as suggestions at signup — name and address only,
+  # with our pipeline status and notes left behind in seed_clinics.
+  findable_clinics:       { class: view }
 
   # ── Infrastructure ──────────────────────────────────────────────────────
 
