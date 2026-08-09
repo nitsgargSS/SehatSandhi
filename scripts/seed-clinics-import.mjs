@@ -3,6 +3,12 @@
 //
 //   node scripts/seed-clinics-import.mjs --env sandbox --district Yamunanagar
 //   node scripts/seed-clinics-import.mjs --env sandbox --state Haryana --dry-run
+//   node scripts/seed-clinics-import.mjs --env sandbox --state Haryana \
+//     --csv ~/Downloads/hospital_directory.csv
+//
+// Prefer --csv for anything larger than a district. The API hands out ten rows a
+// call and rate-limits well before a state is done; the same data downloaded
+// whole from the catalogue page is one file and no quota.
 //
 // Source: the National Hospital Directory published by MoHFW / NIHFW on
 // data.gov.in, under the Government Open Data License – India. GODL grants a
@@ -58,6 +64,7 @@ const flag = (n, d = null) => {
 const env = flag('env')
 const district = flag('district')
 const state = flag('state', 'Haryana')
+const csvPath = flag('csv')
 const dryRun = args.includes('--dry-run')
 
 if (env !== 'prod' && env !== 'sandbox') {
@@ -66,9 +73,10 @@ if (env !== 'prod' && env !== 'sandbox') {
 }
 
 const KEY = process.env.DATA_GOV_IN_KEY
-if (!KEY) {
+if (!KEY && !csvPath) {
   console.error('\n  DATA_GOV_IN_KEY is not set in .env.supabase.')
-  console.error('  Register free at https://data.gov.in/user/register\n')
+  console.error('  Register free at https://data.gov.in/user/register,')
+  console.error('  or download the CSV from the catalogue and pass --csv <path>.\n')
   process.exit(1)
 }
 
@@ -143,6 +151,68 @@ async function fetchAll() {
   return [...rows.values()]
 }
 
+/**
+ * Minimal RFC 4180 reader — quoted fields, escaped quotes, newlines inside
+ * quotes. The file is one download of a published dataset, not arbitrary input,
+ * and pulling in a CSV dependency for one script is not worth it.
+ */
+function parseCsv(text) {
+  const rows = []
+  let row = [], field = '', quoted = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (quoted) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++ } else quoted = false
+      } else field += c
+    } else if (c === '"') quoted = true
+    else if (c === ',') { row.push(field); field = '' }
+    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = '' }
+    else if (c !== '\r') field += c
+  }
+  if (field || row.length) { row.push(field); rows.push(row) }
+  if (!rows.length) return []
+  const head = rows[0].map(h => h.trim())
+  return rows.slice(1)
+    .filter(r => r.length >= head.length - 2)
+    .map(r => Object.fromEntries(head.map((h, i) => [h, r[i] ?? ''])))
+}
+
+/**
+ * The CSV names its columns in TitleCase where the API returns snake_case, and
+ * carries a few the API never exposes. Mapped to the API's shape so both routes
+ * feed the same normalise().
+ */
+function fromCsvRow(r) {
+  return {
+    _sr_no: r.Sr_No,
+    hospital_name: r.Hospital_Name,
+    _address_original_first_line: r.Address_Original_First_Line,
+    _location: r.Location,
+    _location_coordinates: r.Location_Coordinates,
+    _pincode: r.Pincode,
+    district: r.District,
+    state: r.State,
+    telephone: r.Telephone,
+    mobile_number: r.Mobile_Number,
+    hospital_category: r.Hospital_Category,
+  }
+}
+
+async function fetchCsv() {
+  const { readFile } = await import('node:fs/promises')
+  const path = String(csvPath).replace(/^~/, process.env.HOME ?? '~')
+  const text = await readFile(path, 'utf8')
+  const all = parseCsv(text)
+
+  const want = (v, target) => String(v ?? '').trim().toLowerCase() === target.toLowerCase()
+  const rows = all.filter(r =>
+    district ? want(r.District, district) : want(r.State, state))
+
+  console.log(`  ${all.length.toLocaleString()} rows in the file, ${rows.length} matching`)
+  return rows.map(fromCsvRow)
+}
+
 function normalise(r) {
   const [lat, lng] = coords(r._location_coordinates)
   return {
@@ -173,7 +243,7 @@ async function main() {
   // was refused.
   let raw, partial = false
   try {
-    raw = await fetchAll()
+    raw = csvPath ? await fetchCsv() : await fetchAll()
   } catch (e) {
     if (!(e instanceof RateLimited)) throw e
     raw = e.rows
