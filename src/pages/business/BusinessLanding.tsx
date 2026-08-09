@@ -78,7 +78,7 @@ export default function BusinessLanding() {
       {/* hero */}
       <div className="mx-auto grid gap-10 items-center lg:grid-cols-[1.15fr_.85fr]" style={{ maxWidth: PAGE.maxWidth, padding: 'clamp(28px,7vw,56px) ' + PAGE.padX }}>
         <div>
-          <div style={{ display: 'inline-block', background: BIZ.chipBg, color: BIZ.chipText, fontSize: 13, fontWeight: 700, padding: '6px 12px', borderRadius: 999, marginBottom: 18 }}>Now live in Yamunanagar · rolling out across India</div>
+          <div style={{ display: 'inline-block', background: BIZ.chipBg, color: BIZ.chipText, fontSize: 13, fontWeight: 700, padding: '6px 12px', borderRadius: 999, marginBottom: 18 }}>Live now · rolling out across India, pincode by pincode</div>
           <h1 style={{ fontSize: 'clamp(30px,7.5vw,46px)', lineHeight: 1.1, fontWeight: 800, color: BIZ.ink, margin: '0 0 18px', letterSpacing: '-.03em' }}>Reach every patient in your pincodes.</h1>
           <p style={{ fontSize: 'clamp(16px,4vw,18px)', color: BIZ.muted, lineHeight: 1.55, margin: '0 0 28px', maxWidth: 520 }}>
             Doctors, hospitals, pharmacies, labs, insurers and ambulance services get discovered by families nearby — over WhatsApp &amp; SMS.

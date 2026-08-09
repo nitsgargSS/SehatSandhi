@@ -45,7 +45,7 @@ type Copy = {
 const content: Record<'en' | 'hi', Copy> = {
   en: {
     title: 'Contact Us',
-    subtitle: "We're a small team in Jagadhri, and a person reads every message.",
+    subtitle: "We're a small team, and a person reads every message.",
     waTitle: 'WhatsApp',
     waDesc: 'The fastest way to reach us — for patients booking an appointment and for businesses alike.',
     waCta: 'Message us on WhatsApp',
@@ -86,7 +86,7 @@ const content: Record<'en' | 'hi', Copy> = {
   },
   hi: {
     title: 'संपर्क करें',
-    subtitle: 'हम जगाधरी में एक छोटी टीम हैं, और हर मैसेज एक इंसान पढ़ता है।',
+    subtitle: 'हम एक छोटी टीम हैं, और हर मैसेज एक इंसान पढ़ता है।',
     waTitle: 'WhatsApp',
     waDesc: 'हम तक पहुंचने का सबसे तेज़ तरीका — अपॉइंटमेंट बुक करने वाले मरीज़ों और बिज़नेस, दोनों के लिए।',
     waCta: 'WhatsApp पर मैसेज करें',

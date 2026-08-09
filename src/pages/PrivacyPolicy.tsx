@@ -6,7 +6,7 @@ const content = {
   en: {
     title: 'Privacy Policy',
     updated: 'Last updated: August 2026',
-    intro: 'Sehatsandhi ("we," "us," "our") is operated by NG Technologies. This policy explains what information we collect, how we use it, and your rights regarding it. Sehatsandhi is a WhatsApp-first platform connecting patients with verified doctors and healthcare partners in Yamuna Nagar district, Haryana.',
+    intro: 'Sehatsandhi ("we," "us," "our") is operated by NG Technologies. This policy explains what information we collect, how we use it, and your rights regarding it. Sehatsandhi is a WhatsApp-first platform connecting patients with verified doctors and healthcare partners in the pincodes we serve.',
     sections: [
       {
         h: '1. Information We Collect',
@@ -57,7 +57,7 @@ const content = {
   hi: {
     title: 'गोपनीयता नीति',
     updated: 'आखिरी अपडेट: अगस्त 2026',
-    intro: 'Sehatsandhi ("हम", "हमारा") NG Technologies द्वारा संचालित है। यह नीति बताती है कि हम कौनसी जानकारी इकट्ठा करते हैं, उसका इस्तेमाल कैसे करते हैं, और इस बारे में आपके अधिकार क्या हैं। Sehatsandhi यमुना नगर ज़िले, हरियाणा में मरीज़ों को वेरिफाइड डॉक्टरों और हेल्थकेयर पार्टनर्स से जोड़ने वाला एक WhatsApp-फर्स्ट प्लेटफॉर्म है।',
+    intro: 'Sehatsandhi ("हम", "हमारा") NG Technologies द्वारा संचालित है। यह नीति बताती है कि हम कौनसी जानकारी इकट्ठा करते हैं, उसका इस्तेमाल कैसे करते हैं, और इस बारे में आपके अधिकार क्या हैं। Sehatsandhi उन पिनकोड्स में मरीज़ों को वेरिफाइड डॉक्टरों और हेल्थकेयर पार्टनर्स से जोड़ने वाला एक WhatsApp-फर्स्ट प्लेटफॉर्म है जहां हम उपलब्ध हैं।',
     sections: [
       {
         h: '1. हम कौनसी जानकारी इकट्ठा करते हैं',

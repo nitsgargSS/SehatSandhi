@@ -27,7 +27,7 @@ const content: Record<'en' | 'hi', Content> = {
     sections: [
       {
         h: '1. What Sehatsandhi Is',
-        p: 'Sehatsandhi is a platform that aggregates independent, verified doctors and clinics, and helps patients book appointments with them — in Yamuna Nagar district. We are a booking facilitator, not a healthcare provider: we do not employ doctors, provide medical advice, make treatment decisions, or maintain any patient\'s medical records.',
+        p: 'Sehatsandhi is a platform that aggregates independent, verified doctors and clinics, and helps patients book appointments with them, in the pincodes we currently serve. We are a booking facilitator, not a healthcare provider: we do not employ doctors, provide medical advice, make treatment decisions, or maintain any patient\'s medical records.',
       },
       {
         h: '2. Verification, Not Guarantee',
@@ -83,7 +83,7 @@ const content: Record<'en' | 'hi', Content> = {
     sections: [
       {
         h: '1. Sehatsandhi क्या है',
-        p: 'Sehatsandhi एक प्लेटफॉर्म है जो यमुना नगर ज़िले में मरीज़ों को इंडिपेंडेंट, वेरिफाइड डॉक्टरों और हेल्थकेयर पार्टनर्स (फार्मेसी, लैब, एम्बुलेंस सर्विस, इंश्योरेंस एजेंट) से जोड़ता है। हम एक फैसिलिटेटर हैं, हेल्थकेयर प्रोवाइडर नहीं — हम डॉक्टरों को एम्प्लॉय नहीं करते, मेडिकल एडवाइस नहीं देते, या ट्रीटमेंट डिसीज़न नहीं लेते।',
+        p: 'Sehatsandhi एक प्लेटफॉर्म है जो उन पिनकोड्स में, जहां हम फ़िलहाल उपलब्ध हैं, मरीज़ों को इंडिपेंडेंट, वेरिफाइड डॉक्टरों और हेल्थकेयर पार्टनर्स (फार्मेसी, लैब, एम्बुलेंस सर्विस, इंश्योरेंस एजेंट) से जोड़ता है। हम एक फैसिलिटेटर हैं, हेल्थकेयर प्रोवाइडर नहीं — हम डॉक्टरों को एम्प्लॉय नहीं करते, मेडिकल एडवाइस नहीं देते, या ट्रीटमेंट डिसीज़न नहीं लेते।',
       },
       {
         h: '2. वेरिफिकेशन, गारंटी नहीं',

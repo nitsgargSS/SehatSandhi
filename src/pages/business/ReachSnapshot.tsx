@@ -48,7 +48,10 @@ export default function ReachSnapshot() {
     const source: ServiceArea[] = areas.length
       ? areas
       : FALLBACK_AREAS.map(a => ({
-          pin_code: a.pin_code, area_name: a.area_name, district: 'Yamunanagar', state: 'Haryana',
+          // No district on the fallback rows: it is only reached when the DB is
+          // unavailable, and naming a town there is exactly the hardcode this
+          // page is meant not to carry. `inDistrict` below words around it.
+          pin_code: a.pin_code, area_name: a.area_name, district: '', state: 'Haryana',
           population: a.pop, tier_number: a.tier_number, tier_name: a.tier_name, monthly_price: a.monthly_price,
           premium_slot_1_weekly: 0, premium_slot_2_weekly: 0, premium_slot_3_weekly: 0,
         }))
@@ -56,7 +59,12 @@ export default function ReachSnapshot() {
     return [...source].sort((a, b) => b.population - a.population).slice(0, MAX_TILES)
   }, [areas])
 
-  const district = pins[0]?.district || 'Yamunanagar'
+  // The district name comes from the service_areas row, so this widens on its
+  // own as new districts go live — nothing here to keep in sync by hand. Only
+  // the no-data fallback needed a word, and it must not name a town: a page
+  // that hardcodes one is wrong the week we open somewhere else.
+  const district = pins[0]?.district
+  const inDistrict = district ? `in ${district} district` : 'in your district'
   const totalPop = pins.reduce((s, p) => s + p.population, 0)
   const maxPop = pins.reduce((m, p) => Math.max(m, p.population), 0)
   const active = pins.find(p => p.pin_code === hoveredPin) || null
@@ -83,7 +91,7 @@ export default function ReachSnapshot() {
             <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.muted }}>residents</span>
           </div>
           <div style={{ fontSize: 13, color: '#8a8172', marginBottom: 20 }}>
-            across {pins.length} pincodes in {district} district
+            across {pins.length} pincodes {inDistrict}
           </div>
         </>
       )}
@@ -145,7 +153,7 @@ export default function ReachSnapshot() {
           <>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#14201c' }}>Tap a pincode</div>
             <div style={{ fontSize: 12.5, color: '#5f6b64', marginTop: 4 }}>Darker = more residents</div>
-            <div style={{ fontSize: 12, color: '#8a8172', marginTop: 2 }}>{pins.length} pincodes live in {district} district</div>
+            <div style={{ fontSize: 12, color: '#8a8172', marginTop: 2 }}>{pins.length} pincodes live {inDistrict}</div>
           </>
         )}
       </div>

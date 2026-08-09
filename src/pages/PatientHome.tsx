@@ -61,7 +61,7 @@ const DICT: Record<'en' | 'hi', Strings> = {
       { q: 'What if I need an ambulance right now?',
         a: 'Use the ambulance button at the top of this page. It opens WhatsApp with an emergency message ready to send, so help can be arranged without you typing anything.' },
       { q: 'Which areas do you cover?',
-        a: 'We are live across Yamunanagar district — Yamunanagar, Jagadhri, Radaur, Bilaspur and Chhachhrauli — and adding towns steadily. Message us on WhatsApp and we will show you who is available near you.' },
+        a: 'We are live in a growing list of pincodes and adding more steadily. Send us your pincode on WhatsApp — we will tell you straight away whether we cover your area, and show you who is available near you.' },
     ],
   },
   hi: {
@@ -95,7 +95,7 @@ const DICT: Record<'en' | 'hi', Strings> = {
       { q: 'अगर अभी एम्बुलेंस चाहिए तो?',
         a: 'ऊपर दिए एम्बुलेंस बटन का इस्तेमाल करें। यह व्हाट्सएप में इमरजेंसी मैसेज तैयार करके खोल देता है, ताकि बिना कुछ लिखे मदद भेजी जा सके।' },
       { q: 'आप किन इलाकों में हैं?',
-        a: 'हम यमुनानगर ज़िले में उपलब्ध हैं — यमुनानगर, जगाधरी, रादौर, बिलासपुर और छछरौली — और लगातार नए कस्बे जोड़ रहे हैं। व्हाट्सएप पर मैसेज करें, हम आपके पास उपलब्ध प्रोवाइडर दिखा देंगे।' },
+        a: 'हम लगातार बढ़ते हुए पिनकोड्स में उपलब्ध हैं और नए इलाके जोड़ते रहते हैं। व्हाट्सएप पर अपना पिनकोड भेजिए — हम तुरंत बता देंगे कि आपका इलाका कवर होता है या नहीं, और आपके पास उपलब्ध प्रोवाइडर दिखा देंगे।' },
     ],
   },
 }
