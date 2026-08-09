@@ -1,5 +1,7 @@
 node_modules
 dist
+# Intermediate SSR bundle for scripts/prerender.mjs — a build artifact like dist.
+dist-ssr
 .env
 .env.local
 *.local
