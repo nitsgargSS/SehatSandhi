@@ -5,6 +5,8 @@ import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER, SPECIALITIES } from '../../types'
 import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, DOCTOR_QUALIFICATIONS } from './shared'
 import { RegistrySearch } from './RegistrySearch'
+import { PlacesSearch } from './PlacesSearch'
+import { placesConfigured } from '../../lib/placesLookup'
 import { searchClinicsByName, searchDoctorsByName } from '../../lib/registryLookup'
 import VerticalIcon from './VerticalIcon'
 import SandboxAutofill from '../../components/SandboxAutofill'
@@ -586,11 +588,33 @@ export default function BusinessRegister() {
                       <h3 style={h3Style}>Tell us about your business</h3>
                       <p style={pStyle}>Listing as <strong style={{ color: BIZ.green }}>{verticalObj.label}</strong>. This is what patients will see.</p>
                       <div className="grid gap-[18px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-                        {/* Searches the clinics we already know about, from the
-                            National Hospital Directory. A match fills in the
-                            address, which is the field nobody wants to type on a
-                            phone — and the published one is likelier to be right
-                            than a thumb-typed one. Everything stays editable. */}
+                        {/* Google Places when it is configured, the clinic
+                            directory when it is not. Places wins where it can:
+                            it is current, and it carries the phone number and
+                            opening hours that the government directory simply
+                            does not have — 1,655 addresses and not one phone.
+                            The fallback is not a lesser feature so much as the
+                            thing that keeps signup working if the key is missing
+                            or Google is unreachable. */}
+                        {placesConfigured() ? (
+                          <PlacesSearch
+                            label="Business name *"
+                            placeholder="Start typing — e.g. Garg ENT"
+                            hint="Pick your clinic and we will fill in the rest."
+                            value={form.business_name ?? ''}
+                            onChange={v => upd('business_name', v)}
+                            onPick={d => {
+                              upd('business_name', d.name)
+                              upd('address', d.address)
+                              upd('place_id', d.placeId)
+                              // Suggested, not assumed: the number Google lists
+                              // is often a reception landline, and this field is
+                              // the WhatsApp number we send login codes to.
+                              if (d.phone && !form.phone) upd('phone', d.phone)
+                              if (d.hours?.length) upd('working_hours', d.hours.join('; '))
+                            }}
+                          />
+                        ) : (
                         <RegistrySearch
                           label="Business name *"
                           placeholder="e.g. Aggarwal Eye Care"
@@ -611,6 +635,7 @@ export default function BusinessRegister() {
                           }}
                           emptyNote="No match — just carry on and type your details."
                         />
+                        )}
                         <Field label="Owner / contact name" placeholder="e.g. Dr. Ramesh Aggarwal" value={form.owner_name} onChange={v => upd('owner_name', v)} />
                         <Field label="WhatsApp number *" placeholder="+91 " value={form.phone} onChange={v => upd('phone', v)} type="tel" inputMode="tel" autoComplete="tel" />
                         {/* A dropdown, and it is now saved. This was free text
