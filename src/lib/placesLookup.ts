@@ -84,9 +84,11 @@ export async function suggestPlaces(
         input,
         sessionToken,
         includedRegionCodes: ['in'],
-        // Places' own categories for the businesses we list. Anything not on
-        // this list still appears; it just ranks lower.
-        includedPrimaryTypes: ['doctor', 'hospital', 'pharmacy', 'dentist', 'physiotherapist', 'medical_lab'],
+        // Places' own categories for the businesses we list. Five is the most
+        // the API accepts — a sixth is a 400, not a warning — so dentists and
+        // physiotherapists are left off and reached through 'doctor', which
+        // Places treats as the broader medical category.
+        includedPrimaryTypes: ['doctor', 'hospital', 'pharmacy', 'medical_lab', 'health'],
       }),
     })
   } catch {

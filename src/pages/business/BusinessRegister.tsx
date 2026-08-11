@@ -351,6 +351,18 @@ export default function BusinessRegister() {
       // hospital branch, but never by this one — so the number a doctor typed
       // was discarded, and the admin verifying them saw an empty Reg field.
       p_reg_number: form.reg_number || null,
+      // Everything below is whatever is in the field at submit, not what was
+      // suggested: prefill only seeds the inputs, and an edit overwrites the
+      // suggestion long before this runs.
+      p_working_hours: form.working_hours || null,
+      // Which council issued reg_number. A registration number means nothing
+      // without it — the same digits belong to a different doctor in each of
+      // seventeen councils.
+      p_smc_id: form.smc_id ? Number(form.smc_id) : null,
+      // Google's id for the business, kept so a listing can be refreshed from
+      // Places later. Their terms allow storing this indefinitely, unlike the
+      // coordinates, which is why those are not here.
+      p_place_id: form.place_id || null,
     })
     if (insErr) { setError(`Could not save listing: ${insErr.message}`); return null }
     doctorIdRef.current = data as string
