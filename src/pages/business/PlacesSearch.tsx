@@ -18,6 +18,7 @@ import {
   suggestPlaces, fetchPlaceDetails, newSessionToken,
   type PlaceSuggestion, type PlaceDetails,
 } from '../../lib/placesLookup'
+import { useNearbyBias } from '../../lib/useNearbyBias'
 
 const DEBOUNCE_MS = 300
 
@@ -36,6 +37,10 @@ export function PlacesSearch({
   const [picked, setPicked] = useState<PlaceDetails | null>(null)
   const [open, setOpen] = useState(false)
 
+  // Asked for as soon as the form is on screen, so the answer is in hand by the
+  // time anyone has typed three characters.
+  const { bias, status: geo } = useNearbyBias()
+
   // One token spans the keystrokes and the details call that ends them. A fresh
   // one is minted after each pick, because a used token bills as if absent.
   const session = useRef<string>(newSessionToken())
@@ -47,12 +52,14 @@ export function PlacesSearch({
     const seq = ++latest.current
     const t = setTimeout(async () => {
       setBusy(true)
-      const found = await suggestPlaces(value, session.current)
+      const found = await suggestPlaces(value, session.current, bias)
       if (seq === latest.current) { setSuggestions(found); setOpen(true) }
       setBusy(false)
     }, DEBOUNCE_MS)
     return () => clearTimeout(t)
-  }, [value, picked])
+    // bias is a dependency: a fix that arrives after the first keystroke should
+    // re-run the search rather than leave a nationwide list on screen.
+  }, [value, picked, bias])
 
   const choose = async (s: PlaceSuggestion) => {
     setOpen(false)
@@ -100,7 +107,17 @@ export function PlacesSearch({
         )}
       </div>
 
-      {hint && !picked && <p style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 6 }}>{hint}</p>}
+      {/* Say when the list is nationwide, because otherwise it just looks
+          wrong: typing "sn eye" without a location returns clinics in Delhi,
+          Chennai and Patna, and nothing on screen explains why. Declining is a
+          fine answer — search still works, it is just less use. */}
+      {!picked && (geo === 'denied' || geo === 'unavailable') ? (
+        <p style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 6 }}>
+          Showing results from all of India — allow location to see clinics near you first.
+        </p>
+      ) : hint && !picked ? (
+        <p style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 6 }}>{hint}</p>
+      ) : null}
 
       {picked && (
         <div style={{

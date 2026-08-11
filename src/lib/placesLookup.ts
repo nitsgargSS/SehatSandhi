@@ -69,6 +69,7 @@ export function newSessionToken(): string {
 export async function suggestPlaces(
   input: string,
   sessionToken: string,
+  bias?: { latitude: number; longitude: number; radius: number } | null,
 ): Promise<PlaceSuggestion[]> {
   if (!placesConfigured() || input.trim().length < 3) return []
 
@@ -84,6 +85,22 @@ export async function suggestPlaces(
         input,
         sessionToken,
         includedRegionCodes: ['in'],
+        // Prefer what is near the person filling in the form. Without this,
+        // "sn eye" returns clinics in Delhi, Chennai, Patna and Panvel with
+        // equal confidence — a nationwide list for someone registering one
+        // clinic on one street.
+        //
+        // locationBias, not locationRestriction: a preference rather than a
+        // fence. A doctor registering a second branch in the next district over
+        // still finds it, just below the ones on their doorstep.
+        ...(bias ? {
+          locationBias: {
+            circle: {
+              center: { latitude: bias.latitude, longitude: bias.longitude },
+              radius: bias.radius,
+            },
+          },
+        } : {}),
         // Places' own categories for the businesses we list. Five is the most
         // the API accepts — a sixth is a 400, not a warning — so dentists and
         // physiotherapists are left off and reached through 'doctor', which
