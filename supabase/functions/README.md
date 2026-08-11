@@ -6,7 +6,7 @@ the browser bundle.
 
 | Function | Purpose | Called by |
 |---|---|---|
-| `compute-price` | Authoritative price for a set of pincodes (joins `service_areas → pricing_tiers`, applies `doctor_pricing_overrides`). | Wizard step 3 live summary (`src/lib/businessApi.ts`) |
+| `compute-price` | Authoritative price for a set of pincodes (joins `service_areas → pricing_tiers`, applies `business_pricing_overrides`). | Wizard live summary (`src/lib/businessApi.ts`) |
 | `razorpay-order` | Creates a Razorpay order; **amount is computed server-side** from the pincodes, never trusted from the client. Writes a `pending` `payments` row. | Wizard step 4 → "Pay with Razorpay" |
 | `razorpay-verify` | Verifies the Razorpay HMAC signature, marks the payment `paid`/`failed`, activates the listing (`doctors.status = active`). | Razorpay Checkout success handler |
 
@@ -29,7 +29,7 @@ Run `supabase/schema.sql` in the Supabase SQL Editor (or `supabase db push`).
 It creates/extends `service_areas` (+`population`), `pricing_tiers` (seeded with
 the four tiers), `clinic_users`, `payments` (+`listing` type, `pin_codes`,
 `razorpay_order_id`), plus the booking-side tables (`patients`, `ratings`,
-`discount_codes`, `doctor_pricing_overrides`).
+`discount_codes`, `business_pricing_overrides`).
 
 > `population` is additive — if the live `service_areas` predates it, the app
 > falls back to a per-tier estimate until you backfill the column.

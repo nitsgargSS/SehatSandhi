@@ -13,7 +13,7 @@ export default function VerticalIcon({ vertical, size = 28 }: { vertical: Vertic
     style: { width: size, height: size },
   }
   switch (vertical) {
-    case 'doctors':
+    case 'clinic':
       return <svg {...common}><path d="M6 3v5a4 4 0 0 0 8 0V3" /><path d="M10 15a5 5 0 0 0 5 5 4 4 0 0 0 4-4v-2" /><circle cx="19" cy="10" r="2" /></svg>
     case 'hospital':
       return <svg {...common}><path d="M4 21V7l8-4 8 4v14" /><path d="M9 21v-4h6v4" /><path d="M12 8v4M10 10h4" /></svg>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { MapPin, ArrowLeft, Star } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { Doctor, SPECIALITIES, PIN_CODES, WA_NUMBER } from '../types'
+import { SPECIALITIES, PIN_CODES, WA_NUMBER } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
 import { track, trackImpressions } from '../lib/analytics'
 import { doctorUrl, slugify } from '../lib/links'
@@ -10,7 +10,24 @@ import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../compo
 import SiteFooter from '../components/SiteFooter'
 import { DoctorListSkeleton } from '../components/Loading'
 
-interface DoctorWithRating extends Doctor {
+/**
+ * A doctor in a search result, and where they sit.
+ *
+ * A row per (doctor, business): a cardiologist who consults at two hospitals in
+ * the same pincode is genuinely two places a patient could go to see her, and
+ * collapsing them would hide one. Ratings are the business's — patients rate
+ * where they were seen.
+ */
+interface DoctorResult {
+  practitioner_id: string
+  full_name: string
+  speciality: string | null
+  qualification: string | null
+  business_id: string
+  business_name: string
+  address: string | null
+  consultation_fee: number
+  is_primary: boolean
   avg_rating?: number
   total_reviews?: number
   is_top_rated?: boolean
@@ -19,7 +36,7 @@ interface DoctorWithRating extends Doctor {
 export default function SpecialityLanding() {
   const { specId, areaSlug } = useParams()
   const { t, lang } = useLanguage()
-  const [doctors, setDoctors] = useState<DoctorWithRating[]>([])
+  const [doctors, setDoctors] = useState<DoctorResult[]>([])
   const [loading, setLoading] = useState(true)
 
   const speciality = SPECIALITIES.find(s => s.id.toLowerCase() === (specId || '').toLowerCase())
@@ -34,14 +51,18 @@ export default function SpecialityLanding() {
   useEffect(() => {
     const load = async () => {
       if (!speciality || !area) { setLoading(false); return }
+      // Doctors, not listings. The old query filtered `doctors` — which was
+      // really a table of businesses — by speciality, so a clinic matched only
+      // if the one person who signed it up happened to practise what the patient
+      // searched for. Now the speciality is the doctor's own and the business is
+      // where they sit.
       const { data } = await supabase
-        .from('doctors')
+        .from('public_practitioner_businesses')
         .select('*')
         .eq('speciality', speciality.id)
-        .eq('status', 'active')
         .contains('pin_codes', [area.code])
 
-      const docs = data || []
+      const docs = (data ?? []) as DoctorResult[]
       // Every search, whether or not it found anyone. The zero-result ones are
       // the most valuable: they are demand_by_area's unserved markets.
       track('search', { speciality: speciality.id, pinCode: area.code })
@@ -49,16 +70,18 @@ export default function SpecialityLanding() {
       // views" into "12 out of 240", which is what tells a business the problem
       // is their photo rather than their pricing.
       if (docs.length) {
-        trackImpressions(docs.map(d => d.id), { speciality: speciality.id, pinCode: area.code })
+        // The business is what an impression is FOR: it is what was listed, and
+        // what the "12 views out of 240" number on their dashboard counts.
+        trackImpressions(docs.map(d => d.business_id), { speciality: speciality.id, pinCode: area.code })
       }
       if (docs.length > 0) {
         const { data: ratings } = await supabase
           .from('rating_aggregate')
           .select('*')
-          .in('doctor_id', docs.map(d => d.id))
+          .in('business_id', docs.map(d => d.business_id))
 
-        const merged: DoctorWithRating[] = docs.map(d => {
-          const r = ratings?.find(rr => rr.doctor_id === d.id)
+        const merged: DoctorResult[] = docs.map(d => {
+          const r = ratings?.find(rr => rr.business_id === d.business_id)
           return { ...d, avg_rating: r?.avg_rating, total_reviews: r?.total_reviews, is_top_rated: r?.is_top_rated }
         })
         // Top Rated doctors first, then by rating, then newest
@@ -153,14 +176,15 @@ export default function SpecialityLanding() {
             <p className="text-gray-500 text-sm mb-4">{t('specialityLandingPage.foundDoctorsIntro')}</p>
             <div className="space-y-3">
               {doctors.map(d => (
-                <div key={d.id} className="card flex items-center justify-between flex-wrap gap-3">
+                <div key={`${d.practitioner_id}-${d.business_id}`} className="card flex items-center justify-between flex-wrap gap-3">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       {/* The profile page carries hours, every clinic location,
                           reviews and a share link. Nothing linked to it before,
                           so a patient could only ever see this one-line summary. */}
-                      <Link to={doctorUrl(d)} className="font-bold text-navy-700 hover:text-teal-600 hover:underline">
-                        {d.name}
+                      <Link to={doctorUrl({ id: d.practitioner_id, name: d.full_name })}
+                        className="font-bold text-navy-700 hover:text-teal-600 hover:underline">
+                        {d.full_name}
                       </Link>
                       {d.is_top_rated && (
                         <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
@@ -178,19 +202,23 @@ export default function SpecialityLanding() {
                         <span className="text-xs text-gray-400">{d.avg_rating} ({d.total_reviews})</span>
                       </div>
                     ) : null}
-                    {/* clinic_name repeats the listing name for a solo practice,
-                        which read as "Clinic · Kaur Clinic" — so only show it
-                        when it actually says something new. */}
+                    {/* Where they sit. The whole point of the split: a patient
+                        looking for a cardiologist is told which clinic to go to,
+                        and a visiting consultant shows up under each place they
+                        actually work rather than only where they signed up. */}
                     <p className="text-gray-500 text-sm mt-1">
-                      {[d.qualification, d.clinic_name !== d.name ? d.clinic_name : null]
-                        .filter(Boolean).join(' · ')}
+                      {[d.qualification, d.business_name].filter(Boolean).join(' · ')}
                     </p>
                     <p className="text-gray-400 text-xs">{d.address}</p>
-                    <Link to={doctorUrl(d)} className="text-teal-600 text-xs font-medium hover:underline inline-block mt-1.5">
+                    {d.consultation_fee > 0 && (
+                      <p className="text-gray-400 text-xs">₹{d.consultation_fee} consultation</p>
+                    )}
+                    <Link to={doctorUrl({ id: d.practitioner_id, name: d.full_name })}
+                      className="text-teal-600 text-xs font-medium hover:underline inline-block mt-1.5">
                       {t('specialityLandingPage.viewProfile')}
                     </Link>
                   </div>
-                  <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Namaste! Main ${d.name} se appointment book karna chahta hoon.`)}`}
+                  <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Namaste! Main ${d.full_name} (${d.business_name}) se appointment book karna chahta hoon.`)}`}
                      target="_blank" rel="noreferrer" className="btn-teal text-sm">
                     {t('specialityLandingPage.bookOnWhatsapp')}
                   </a>

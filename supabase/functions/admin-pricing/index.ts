@@ -244,7 +244,7 @@ Deno.serve(async (req) => {
       // anyone has ever been on should be disabled, so its history stays
       // readable on their listing and payments.
       const { count } = await supabase
-        .from('doctors').select('id', { count: 'exact', head: true }).eq('pricing_plan_code', planCode)
+        .from('businesses').select('id', { count: 'exact', head: true }).eq('pricing_plan_code', planCode)
       if ((count ?? 0) > 0) {
         return json({
           error: `${count} listing(s) are on ${planCode}. Disable it instead — deleting would break their billing history.`,

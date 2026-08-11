@@ -17,7 +17,7 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 export interface FulfilResult {
   ok: boolean
   alreadyPaid: boolean
-  doctorId: string | null
+  businessId: string | null
   invoiceNumber: string | null
   invoiceToken: string | null
   invoiceError: string | null
@@ -39,20 +39,20 @@ export async function fulfilPayment(
 
   const { data: existing } = await supabase
     .from('payments')
-    .select('id, status, doctor_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end')
+    .select('id, status, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end')
     .eq(paymentRowId ? 'id' : 'razorpay_order_id', paymentRowId ?? orderId)
     .maybeSingle()
 
   if (!existing) {
     return {
-      ok: false, alreadyPaid: false, doctorId: null,
+      ok: false, alreadyPaid: false, businessId: null,
       invoiceNumber: null, invoiceToken: null, invoiceError: null,
       error: `no payment row for order ${orderId}`,
     }
   }
 
   const pay = existing as {
-    id: string; status: string; doctor_id: string | null
+    id: string; status: string; business_id: string | null
     pricing_plan_code: string | null; pricing_mode: string | null
     monthly_price: number | null; period_months: number | null
     term_start: string | null; term_end: string | null
@@ -64,7 +64,7 @@ export async function fulfilPayment(
     .eq('id', pay.id)
   if (uErr) {
     return {
-      ok: false, alreadyPaid, doctorId: pay.doctor_id,
+      ok: false, alreadyPaid, businessId: pay.business_id,
       invoiceNumber: null, invoiceToken: null, invoiceError: null, error: uErr.message,
     }
   }
@@ -73,8 +73,8 @@ export async function fulfilPayment(
   // price, mode and term are copied onto the listing, so re-pricing the platform
   // never re-prices a business mid-term. At term_end they are quoted whatever is
   // active then — see subscription_renewals_due.
-  if (pay.doctor_id) {
-    await supabase.from('doctors').update({
+  if (pay.business_id) {
+    await supabase.from('businesses').update({
       status: 'active',
       pricing_plan_code: pay.pricing_plan_code,
       locked_monthly_price: pay.monthly_price,
@@ -83,7 +83,7 @@ export async function fulfilPayment(
       term_start: pay.term_start,
       term_end: pay.term_end,
       locked_at: new Date().toISOString(),
-    }).eq('id', pay.doctor_id)
+    }).eq('id', pay.business_id)
   }
 
   // After the payment is marked paid and the listing activated, deliberately: if
@@ -120,7 +120,7 @@ export async function fulfilPayment(
   return {
     ok: true,
     alreadyPaid,
-    doctorId: pay.doctor_id,
+    businessId: pay.business_id,
     invoiceNumber: invoice?.invoice_number ?? null,
     invoiceToken: invoice?.public_token ?? null,
     invoiceError,

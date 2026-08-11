@@ -79,7 +79,7 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => {
 // reason with sharper consequences — that page has its own "Book on WhatsApp"
 // button, and a demo derails completely if the presenter taps the floater and
 // gets bounced out to real WhatsApp mid-walkthrough.
-const FLOAT_HIDDEN_PATHS = ['/business/register', '/business/booking-demo']
+const FLOAT_HIDDEN_PATHS = ['/business/register', '/doctor/register', '/business/booking-demo']
 
 // One page_view per route change. Placed inside the router so it sees client
 // navigations, which never reload the page and would otherwise go uncounted.
@@ -156,6 +156,10 @@ export default function App() {
               only places to go from there are register and log in. */}
           <Route path="/business" element={<BusinessLanding />} />
           <Route path="/business/register" element={<BusinessRegister />} />
+          {/* The other door. Same wizard, but it registers the PERSON and gives
+              them a listing of their own, rather than registering an
+              establishment and attaching whoever works there. */}
+          <Route path="/doctor/register" element={<BusinessRegister mode="doctor" />} />
           <Route path="/business/login" element={<DoctorLogin />} />
           <Route path="/business/dashboard" element={<DoctorDashboard />} />
 

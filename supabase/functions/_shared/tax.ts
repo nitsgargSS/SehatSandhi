@@ -72,11 +72,11 @@ export async function resolveTaxSettings(supabase: SupabaseClient): Promise<TaxS
 /** The recipient's state, preferred from their GSTIN. Null when we know neither. */
 export async function resolveRecipientState(
   supabase: SupabaseClient,
-  doctorId?: string | null,
+  businessId?: string | null,
 ): Promise<string | null> {
-  if (!doctorId) return null
+  if (!businessId) return null
   const { data } = await supabase
-    .from('doctors').select('gstin, state_code').eq('id', doctorId).maybeSingle()
+    .from('businesses').select('gstin, state_code').eq('id', businessId).maybeSingle()
   const d = data as { gstin?: string | null; state_code?: string | null } | null
   if (d?.gstin && d.gstin.length === 15) return d.gstin.slice(0, 2)
   return d?.state_code ?? null

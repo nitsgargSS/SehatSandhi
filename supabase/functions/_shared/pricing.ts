@@ -15,7 +15,7 @@
 //      independently of the above. A vertical can pay monthly, a commission,
 //      both, or neither. The active plan can suspend commission while it runs.
 //
-// The vertical is read from the listing's speciality whenever a doctorId is
+// The vertical is read from the business row whenever a businessId is
 // known. The client's hint is only trusted before that row exists, for a quote.
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { applyGst, extractGst, resolveRecipientState, resolveTaxSettings, TaxBreakdown } from './tax.ts'
@@ -105,17 +105,12 @@ export interface VerticalBilling {
 // Used only when the DB has not been set up yet, so a fresh project still
 // prices sanely. Errs toward NOT charging a commission vertical a monthly fee.
 const FALLBACK_VERTICALS: Record<string, VerticalBilling> = {
-  doctors:   { vertical: 'doctors',   monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
+  clinic:    { vertical: 'clinic',    monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
   hospital:  { vertical: 'hospital',  monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
   lab:       { vertical: 'lab',       monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
   pharmacy:  { vertical: 'pharmacy',  monthlyEnabled: false, commissionEnabled: true,  commissionPercent: 10, commissionBasis: 'order value' },
   insurance: { vertical: 'insurance', monthlyEnabled: false, commissionEnabled: true,  commissionPercent: 10, commissionBasis: 'your IRDA commission' },
   ambulance: { vertical: 'ambulance', monthlyEnabled: false, commissionEnabled: true,  commissionPercent: 10, commissionBasis: 'non-emergency transport billing' },
-}
-
-const SPECIALITY_TO_VERTICAL: Record<string, string> = {
-  GEN: 'doctors', HOSPITAL: 'hospital', LAB: 'lab',
-  PHARMACY: 'pharmacy', INSURANCE: 'insurance', AMBULANCE: 'ambulance',
 }
 
 const FALLBACK_PLAN: PricingPlan = {
@@ -152,17 +147,18 @@ export async function resolveActivePlan(supabase: SupabaseClient): Promise<Prici
 }
 
 /**
- * Billable consultants for a listing, via its organisation.
+ * Billable doctors at a business: its active affiliations in the doctor role.
  *
- * Zero for anything that is not part of one, which is every solo practice — a
- * single doctor must never be charged for being one doctor.
+ * Each business pays for the doctors it advertises, so a visiting consultant at
+ * four hospitals counts once for each of them — every one is separately listing,
+ * and separately profiting from, that doctor.
  */
 export async function resolveDoctorCount(
   supabase: SupabaseClient,
-  doctorId?: string | null,
+  businessId?: string | null,
 ): Promise<number> {
-  if (!doctorId) return 0
-  const { data, error } = await supabase.rpc('sehat_org_doctor_count', { p_doctor_id: doctorId })
+  if (!businessId) return 0
+  const { data, error } = await supabase.rpc('sehat_business_doctor_count', { p_business_id: businessId })
   if (error || data == null) return 0
   return Number(data) || 0
 }
@@ -170,25 +166,28 @@ export async function resolveDoctorCount(
 /**
  * Which vertical this request is for, and how that vertical is billed.
  *
- * With a doctorId the vertical comes from that row's speciality — the client's
- * hint is ignored, so nobody can talk their way onto a cheaper plan. The hint is
- * only used pre-signup, where no money moves.
+ * With a businessId the vertical is read off that row — the client's hint is
+ * ignored, so nobody can talk their way onto a cheaper plan. The hint is only
+ * used pre-signup, where no money moves.
+ *
+ * This used to map doctors.speciality through a hardcoded table, because the
+ * vertical had nowhere of its own to live and 'PHARMACY' was stored as though it
+ * were a medical speciality. It is a column now.
  */
 export async function resolveVerticalBilling(
   supabase: SupabaseClient,
-  doctorId?: string | null,
+  businessId?: string | null,
   verticalHint?: string | null,
 ): Promise<VerticalBilling> {
   let vertical: string | null = null
 
-  if (doctorId) {
-    const { data: doc } = await supabase
-      .from('doctors').select('speciality').eq('id', doctorId).maybeSingle()
-    const spec = (doc as { speciality?: string } | null)?.speciality
-    if (spec) vertical = SPECIALITY_TO_VERTICAL[spec.toUpperCase()] ?? null
+  if (businessId) {
+    const { data: biz } = await supabase
+      .from('businesses').select('vertical').eq('id', businessId).maybeSingle()
+    vertical = (biz as { vertical?: string } | null)?.vertical ?? null
   }
   if (!vertical && verticalHint) vertical = String(verticalHint)
-  if (!vertical) vertical = 'doctors'
+  if (!vertical) vertical = 'clinic'
 
   const { data: row } = await supabase
     .from('vertical_billing')
@@ -213,7 +212,7 @@ export async function resolveVerticalBilling(
       commissionBasis: r.commission_basis,
     }
   }
-  return FALLBACK_VERTICALS[vertical] ?? FALLBACK_VERTICALS.doctors
+  return FALLBACK_VERTICALS[vertical] ?? FALLBACK_VERTICALS.clinic
 }
 
 /** Clamp a requested term to what the plan allows. Never trust the client's months. */
@@ -232,29 +231,29 @@ export function clampMonths(plan: PricingPlan, requested?: number | null): numbe
 export async function computePrice(
   supabase: SupabaseClient,
   rawPincodes: string[],
-  doctorId?: string | null,
+  businessId?: string | null,
   verticalHint?: string | null,
   requestedMonths?: number | null,
   doctorCountHint?: number | null,
 ): Promise<PriceResult> {
   const [plan, vb, taxSettings, recipientState, resolvedCount] = await Promise.all([
     resolveActivePlan(supabase),
-    resolveVerticalBilling(supabase, doctorId, verticalHint),
+    resolveVerticalBilling(supabase, businessId, verticalHint),
     resolveTaxSettings(supabase),
-    resolveRecipientState(supabase, doctorId),
-    resolveDoctorCount(supabase, doctorId),
+    resolveRecipientState(supabase, businessId),
+    resolveDoctorCount(supabase, businessId),
   ])
 
   // With a listing, the headcount comes from the database and the client cannot
   // influence it — that is the number charged. Without one, a hospital is still
   // filling in the wizard and has no row to count, so the quote uses what they
   // have typed. Same shape as verticalHint: display-only, ignored the moment a
-  // doctorId resolves, and never able to decide an amount charged.
+  // businessId resolves, and never able to decide an amount charged.
   // Restricted to the hospital vertical. A solo practice has no consultants to
   // count, and without this guard a crafted request could inflate its own quote
   // — harmless to the amount charged, which always comes from the database, but
   // it would show a doctor a price that is not theirs.
-  const doctorCount = doctorId
+  const doctorCount = businessId
     ? resolvedCount
     : (vb.vertical === 'hospital'
         ? Math.max(0, Math.floor(Number(doctorCountHint) || 0))
@@ -333,17 +332,17 @@ export async function computePrice(
     (tiers ?? []).map((t: { tier_number: number; tier_name: string; monthly_price: number }) => [t.tier_number, t]),
   )
 
-  // Per-business negotiated price. Production's doctor_pricing_overrides is a
-  // flat custom_monthly_price per doctor (not the per-tier shape schema.sql
+  // Per-business negotiated price. business_pricing_overrides is a flat
+  // custom_monthly_price per business (not the per-tier shape schema.sql
   // describes — that version was never applied), so this overrides the whole
   // monthly total rather than individual tier prices. Applies under any mode: a
   // negotiated price is negotiated regardless of how the list price is derived.
   let customMonthly: number | null = null
-  if (doctorId) {
+  if (businessId) {
     const { data: ov } = await supabase
-      .from('doctor_pricing_overrides')
+      .from('business_pricing_overrides')
       .select('custom_monthly_price, valid_from, valid_until')
-      .eq('doctor_id', doctorId)
+      .eq('business_id', businessId)
       .eq('is_active', true)
     const today = new Date().toISOString().slice(0, 10)
     const live = (ov ?? []).find((o: { custom_monthly_price: number | null; valid_from: string | null; valid_until: string | null }) =>
