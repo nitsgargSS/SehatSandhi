@@ -279,7 +279,8 @@ export default function BusinessLanding() {
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: '#4f7a68' }}>Patient booking flow</div>
             <h2 style={{ fontSize: 'clamp(24px,6vw,30px)', fontWeight: 800, color: BIZ.ink, margin: '10px 0 12px', letterSpacing: '-.02em' }}>Booking happens inside WhatsApp</h2>
-            <p style={{ fontSize: 16, color: BIZ.muted, lineHeight: 1.6, maxWidth: 520 }}>Patients tap a service and land in this AISensy-powered thread. Try it — tap the reply chips to walk a full doctor booking, from category to confirmed slot. Every reply maps to your schema: chosen doctor, slot &amp; fee become an appointment, and the reminder goes out over SMS + WhatsApp.</p>
+            <p style={{ fontSize: 16, color: BIZ.muted, lineHeight: 1.6, maxWidth: 520 }}>Patients tap a service and land in this AISensy-powered thread. Try it — tap the reply chips to walk a full booking: clinic type, speciality, then the verified clinics in their own pincode, a slot and a confirmation. Every reply maps to your schema: chosen clinic, slot &amp; fee become an appointment, and the reminder goes out over SMS + WhatsApp.</p>
+            <Link to="/business/booking-demo" style={{ display: 'inline-block', marginTop: 18, color: BIZ.green, fontWeight: 800, fontSize: 15 }}>See the full booking demo →</Link>
           </div>
           <div className="flex justify-center min-w-0"><WhatsAppBotMock /></div>
         </div>
