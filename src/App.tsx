@@ -20,6 +20,7 @@ const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
 const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
+const WhatsAppBookingDemo = lazy(() => import('./pages/business/WhatsAppBookingDemo'))
 const InvoicePage = lazy(() => import('./pages/InvoicePage'))
 const AdminLogin = lazy(() => import('./pages/admin/Login'))
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
@@ -74,8 +75,11 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => {
 
 // Global floating WhatsApp button. Hidden on the business onboarding wizard:
 // that flow has its own "Activate on WhatsApp" action, and the floater sits on
-// top of the step footer's buttons.
-const FLOAT_HIDDEN_PATHS = ['/business/register']
+// top of the step footer's buttons. Hidden on the booking demo for the same
+// reason with sharper consequences — that page has its own "Book on WhatsApp"
+// button, and a demo derails completely if the presenter taps the floater and
+// gets bounced out to real WhatsApp mid-walkthrough.
+const FLOAT_HIDDEN_PATHS = ['/business/register', '/business/booking-demo']
 
 // One page_view per route change. Placed inside the router so it sees client
 // navigations, which never reload the page and would otherwise go uncounted.
@@ -154,6 +158,11 @@ export default function App() {
           <Route path="/business/register" element={<BusinessRegister />} />
           <Route path="/business/login" element={<DoctorLogin />} />
           <Route path="/business/dashboard" element={<DoctorDashboard />} />
+
+          {/* Presentation view of the WhatsApp booking journey, for showing
+              stakeholders the flow while the AISensy integration is built. All
+              local fixtures — no backend, nothing to set up before a demo. */}
+          <Route path="/business/booking-demo" element={<WhatsAppBookingDemo />} />
 
           {/* Tax invoice, opened by unguessable token from a WhatsApp or email
               link — so deliberately no login and no header. It carries the
