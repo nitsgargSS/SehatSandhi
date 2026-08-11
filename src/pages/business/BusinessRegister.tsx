@@ -3,7 +3,11 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER, SPECIALITIES } from '../../types'
-import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, DOCTOR_QUALIFICATIONS } from './shared'
+import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor } from './shared'
+import { RegistrySearch } from './RegistrySearch'
+import { PlacesSearch } from './PlacesSearch'
+import { placesConfigured, guessSpeciality } from '../../lib/placesLookup'
+import { searchClinicsByName, searchDoctorsByName } from '../../lib/registryLookup'
 import VerticalIcon from './VerticalIcon'
 import SandboxAutofill from '../../components/SandboxAutofill'
 import SiteFooter from '../../components/SiteFooter'
@@ -229,7 +233,7 @@ export default function BusinessRegister() {
     // A doctor without a speciality is unsearchable — patients match on it
     // exactly — so it is required rather than defaulted to something wrong.
     if (s === 2) return !!(form.business_name?.trim() && form.phone?.trim()
-      && (vertical !== 'doctors' || (form.speciality && form.qualification)))
+      && (vertical !== 'doctors' || form.speciality))
     if (s === 3) return zips.length > 0
     return true
   }
@@ -238,8 +242,6 @@ export default function BusinessRegister() {
       setError(step === 2
         ? (vertical === 'doctors' && !form.speciality
             ? 'Please choose a speciality — it is how patients find you.'
-            : vertical === 'doctors' && !form.qualification
-            ? 'Please choose your qualification — it appears on your profile.'
             : 'Please enter at least a business name and WhatsApp number.')
         : step === 3 ? 'Select at least one pincode to continue.' : 'Please complete this step.')
       return
@@ -336,17 +338,28 @@ export default function BusinessRegister() {
       p_pin_codes: zips,
       p_phone: form.phone || '',
       p_email: form.email || '',
-      // A doctor's own degree when they gave one; the vertical's label otherwise,
-      // which is what identifies a pharmacy or a lab. Sending the label for a
-      // doctor stored every one of them as "Clinic".
-      p_qualification: vertical === 'doctors' && form.qualification
-        ? form.qualification
-        : verticalObj.qualification,
+      // The vertical's label — 'Clinic', 'Pharmacy', 'Diagnostic Lab'. This
+      // describes the business, which is what a listing is. Degrees belong to
+      // the people who work there and are recorded per doctor in clinic_users,
+      // where a clinic with three doctors can hold three of them.
+      p_qualification: verticalObj.qualification,
       p_consultation_fee: 0,
       // Collected on step 2 since the wizard was written and passed by the
       // hospital branch, but never by this one — so the number a doctor typed
       // was discarded, and the admin verifying them saw an empty Reg field.
       p_reg_number: form.reg_number || null,
+      // Everything below is whatever is in the field at submit, not what was
+      // suggested: prefill only seeds the inputs, and an edit overwrites the
+      // suggestion long before this runs.
+      p_working_hours: form.working_hours || null,
+      // Which council issued reg_number. A registration number means nothing
+      // without it — the same digits belong to a different doctor in each of
+      // seventeen councils.
+      p_smc_id: form.smc_id ? Number(form.smc_id) : null,
+      // Google's id for the business, kept so a listing can be refreshed from
+      // Places later. Their terms allow storing this indefinitely, unlike the
+      // coordinates, which is why those are not here.
+      p_place_id: form.place_id || null,
     })
     if (insErr) { setError(`Could not save listing: ${insErr.message}`); return null }
     doctorIdRef.current = data as string
@@ -584,7 +597,64 @@ export default function BusinessRegister() {
                       <h3 style={h3Style}>Tell us about your business</h3>
                       <p style={pStyle}>Listing as <strong style={{ color: BIZ.green }}>{verticalObj.label}</strong>. This is what patients will see.</p>
                       <div className="grid gap-[18px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-                        <Field label="Business name *" placeholder="e.g. Aggarwal Eye Care" value={form.business_name} onChange={v => upd('business_name', v)} />
+                        {/* Google Places when it is configured, the clinic
+                            directory when it is not. Places wins where it can:
+                            it is current, and it carries the phone number and
+                            opening hours that the government directory simply
+                            does not have — 1,655 addresses and not one phone.
+                            The fallback is not a lesser feature so much as the
+                            thing that keeps signup working if the key is missing
+                            or Google is unreachable. */}
+                        {placesConfigured() ? (
+                          <PlacesSearch
+                            label="Business name *"
+                            placeholder="Start typing — e.g. Garg ENT"
+                            hint="Pick your clinic and we will fill in the rest."
+                            value={form.business_name ?? ''}
+                            onChange={v => upd('business_name', v)}
+                            onPick={d => {
+                              upd('business_name', d.name)
+                              upd('address', d.address)
+                              upd('place_id', d.placeId)
+                              // Suggested, not assumed: the number Google lists
+                              // is often a reception landline, and this field is
+                              // the WhatsApp number we send login codes to.
+                              if (d.phone && !form.phone) upd('phone', d.phone)
+                              if (d.hours?.length) upd('working_hours', d.hours.join('; '))
+                              // Clinics here name themselves after what they do —
+                              // "SN Eye Hospital", "Garg ENT" — which is a better
+                              // signal than Places' own category, where an eye
+                              // hospital and a maternity home are both 'hospital'.
+                              // Only ever a preselection; the dropdown is right
+                              // there and they change it if this guessed wrong.
+                              if (!form.speciality) {
+                                const guess = guessSpeciality(d.name)
+                                if (guess) upd('speciality', guess)
+                              }
+                            }}
+                          />
+                        ) : (
+                        <RegistrySearch
+                          label="Business name *"
+                          placeholder="e.g. Aggarwal Eye Care"
+                          hint="Type a few letters and press Find — we may already have your address."
+                          value={form.business_name ?? ''}
+                          onChange={v => upd('business_name', v)}
+                          onSearch={async q => {
+                            const found = await searchClinicsByName(q)
+                            return found.map(c => ({
+                              ...c,
+                              title: c.name,
+                              subtitle: [c.address, c.pincode].filter(Boolean).join(' — ') || 'No address on record',
+                            }))
+                          }}
+                          onPick={c => {
+                            upd('business_name', c.name)
+                            if (c.address) upd('address', c.address)
+                          }}
+                          emptyNote="No match — just carry on and type your details."
+                        />
+                        )}
                         <Field label="Owner / contact name" placeholder="e.g. Dr. Ramesh Aggarwal" value={form.owner_name} onChange={v => upd('owner_name', v)} />
                         <Field label="WhatsApp number *" placeholder="+91 " value={form.phone} onChange={v => upd('phone', v)} type="tel" inputMode="tel" autoComplete="tel" />
                         {/* A dropdown, and it is now saved. This was free text
@@ -615,38 +685,69 @@ export default function BusinessRegister() {
                         ) : (
                           <Field label="Category / speciality" placeholder="e.g. Ophthalmology" value={form.category} onChange={v => upd('category', v)} />
                         )}
-                        {/* Same story as speciality above: this used to be the
-                            vertical's label — every doctor was stored as
-                            "Clinic", which is what their public profile showed
-                            where a degree belongs, and what sent the admin
-                            verification panel to the AYUSH council instead of
-                            the NMC register. */}
-                        {vertical === 'doctors' && (
-                          <div>
-                            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: BIZ.ink, marginBottom: 7 }}>
-                              Qualification *
-                            </label>
-                            <select value={form.qualification ?? ''}
-                              onChange={e => upd('qualification', e.target.value)}
-                              style={{
-                                width: '100%', padding: '13px 14px', borderRadius: 12,
-                                border: `1.5px solid ${BIZ.inputBorder}`, fontFamily: 'inherit',
-                                fontSize: 15, color: form.qualification ? BIZ.ink : BIZ.mutedWarm, background: '#fff',
-                              }}>
-                              <option value="">Choose your qualification…</option>
-                              {DOCTOR_QUALIFICATIONS.map(q => (
-                                <option key={q.value} value={q.value}>{q.label}</option>
-                              ))}
-                            </select>
-                            <p style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 6 }}>
-                              Shown on your public profile, and what we check your registration against.
-                            </p>
-                          </div>
+                        {/* Doctors search the Indian Medical Register by name and
+                            get their own registration number back, which is
+                            easier than finding the certificate. Everyone else
+                            types a licence number we cannot check. */}
+                        {vertical === 'doctors' ? (
+                          <RegistrySearch
+                            label="Find your registration"
+                            placeholder="Your name, as registered"
+                            hint="Search the medical register by name — or leave this blank."
+                            value={form.doctor_search ?? ''}
+                            onChange={v => upd('doctor_search', v)}
+                            onSearch={async q => {
+                              const found = await searchDoctorsByName(q)
+                              return found.map(d => ({
+                                ...d,
+                                title: d.name,
+                                subtitle: `${d.council} · Reg ${d.regNo}${d.year ? ` · ${d.year}` : ''}`,
+                              }))
+                            }}
+                            onPick={d => {
+                              upd('reg_number', d.regNo)
+                              upd('smc_id', String(d.smcId))
+                              upd('doctor_search', d.name)
+                            }}
+                            emptyNote="Not found — type it in the box below instead."
+                          />
+                        ) : (
+                          <Field label="Registration number" placeholder="e.g. HR-12345 (optional)" value={form.reg_number} onChange={v => upd('reg_number', v)} />
                         )}
-                        <Field label="Registration number" placeholder="e.g. HR-12345 (optional)" value={form.reg_number} onChange={v => upd('reg_number', v)} />
+                        {/* The register is not complete — it has nobody who
+                            qualified in the last few months, and the search only
+                            matches how a council chose to spell someone. Typing
+                            the number has to stay possible. */}
+                        {vertical === 'doctors' && (
+                          <Field label="Registration number"
+                            placeholder={form.reg_number ? '' : 'or type it — e.g. HR-12345 (optional)'}
+                            value={form.reg_number} onChange={v => upd('reg_number', v)} />
+                        )}
                         <Field label="Email" placeholder="you@example.com (optional)" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />
                         <div className="sm:col-span-2 xl:col-span-3">
-                          <Field label="Full address" placeholder="Shop / building, area, city" value={form.address} onChange={v => upd('address', v)} />
+                          {/* Also a lookup, in address mode rather than business
+                              mode. Picking the clinic by name fills this in, but
+                              two cases leave it to be typed: a clinic with no
+                              Google listing of its own, and one whose listed
+                              address is out of date. Both are the moment someone
+                              is typing a street name into a phone, which is
+                              exactly when suggestions help most.
+                              A street always exists in Places even when the
+                              business on it does not, so this finds things the
+                              name search cannot. */}
+                          {placesConfigured() ? (
+                            <PlacesSearch
+                              mode="address"
+                              label="Full address"
+                              placeholder="Start typing — e.g. Model Town, Yamunanagar"
+                              hint="Pick the nearest street or locality, then add your shop or building number."
+                              value={form.address ?? ''}
+                              onChange={v => upd('address', v)}
+                              onPick={d => upd('address', d.address)}
+                            />
+                          ) : (
+                            <Field label="Full address" placeholder="Shop / building, area, city" value={form.address} onChange={v => upd('address', v)} />
+                          )}
                         </div>
                       </div>
 
