@@ -47,6 +47,47 @@ export interface PlaceDetails {
 export const placesConfigured = (): boolean =>
   Boolean(import.meta.env.VITE_GOOGLE_PLACES_KEY)
 
+/**
+ * Guess a speciality from the business name.
+ *
+ * Places' own categories are far too coarse to help — an eye hospital comes back
+ * as primaryType 'hospital', the same as a maternity home. The name is the
+ * better signal, because clinics in India name themselves after what they do:
+ * "SN Eye Hospital", "Garg ENT", "Deswal Children and Maternity Centre".
+ *
+ * A guess, and only ever a preselection. The dropdown stays where it is and the
+ * business changes it if we picked wrong; nothing here is saved without them
+ * seeing it. Ordered so the more specific words win — 'child' before 'general',
+ * because "General Child Care" is paediatrics.
+ */
+const SPECIALITY_HINTS: [RegExp, string][] = [
+  [/\b(eye|ophthal|netra|drishti|optical)/i, 'EYE'],
+  [/\b(dental|dentist|dant|orthodont)/i, 'DENT'],
+  [/\b(ent|e\.n\.t|ear.?nose|otolaryn)\b/i, 'ENT'],
+  // Prefixes, not whole words: real names read "Childrens and Maternity
+  // Centre", "Paediatrics", "Gynaecological". Requiring a word boundary at the
+  // end missed most of them.
+  [/\b(child|paed|pediatr|shishu|bal vihar)/i, 'PAED'],
+  [/\b(matern|gynae|gynec|prasuti|obstetric)/i, 'GYN'],
+  [/\b(ivf|fertilit|infertilit)/i, 'IVF'],
+  [/\b(ortho|bone|joint|fracture)/i, 'ORTH'],
+  [/\b(heart|cardi)/i, 'CARD'],
+  [/\b(skin|derma|cosmet|twacha)/i, 'SKIN'],
+  [/\b(gastro|liver|digest)/i, 'GAST'],
+  [/\b(neuro|brain|spine)/i, 'NEUR'],
+  [/\b(urolog|kidney|nephro)/i, 'URO'],
+  [/\b(onco|cancer|tumour|tumor)/i, 'ONC'],
+  [/\b(psychiatr|mental|de.?addict)/i, 'PSY'],
+  [/\b(diabet)/i, 'DIAB'],
+  [/\b(physio)/i, 'PHYS'],
+  [/\b(ayurved|homeo|unani|panchakarma)/i, 'ALT'],
+]
+
+export function guessSpeciality(name: string): string | null {
+  for (const [re, id] of SPECIALITY_HINTS) if (re.test(name)) return id
+  return null
+}
+
 const key = () => import.meta.env.VITE_GOOGLE_PLACES_KEY as string
 
 /**

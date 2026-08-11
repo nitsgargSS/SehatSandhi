@@ -3,10 +3,10 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER, SPECIALITIES } from '../../types'
-import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, DOCTOR_QUALIFICATIONS } from './shared'
+import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor } from './shared'
 import { RegistrySearch } from './RegistrySearch'
 import { PlacesSearch } from './PlacesSearch'
-import { placesConfigured } from '../../lib/placesLookup'
+import { placesConfigured, guessSpeciality } from '../../lib/placesLookup'
 import { searchClinicsByName, searchDoctorsByName } from '../../lib/registryLookup'
 import VerticalIcon from './VerticalIcon'
 import SandboxAutofill from '../../components/SandboxAutofill'
@@ -233,7 +233,7 @@ export default function BusinessRegister() {
     // A doctor without a speciality is unsearchable — patients match on it
     // exactly — so it is required rather than defaulted to something wrong.
     if (s === 2) return !!(form.business_name?.trim() && form.phone?.trim()
-      && (vertical !== 'doctors' || (form.speciality && form.qualification)))
+      && (vertical !== 'doctors' || form.speciality))
     if (s === 3) return zips.length > 0
     return true
   }
@@ -242,8 +242,6 @@ export default function BusinessRegister() {
       setError(step === 2
         ? (vertical === 'doctors' && !form.speciality
             ? 'Please choose a speciality — it is how patients find you.'
-            : vertical === 'doctors' && !form.qualification
-            ? 'Please choose your qualification — it appears on your profile.'
             : 'Please enter at least a business name and WhatsApp number.')
         : step === 3 ? 'Select at least one pincode to continue.' : 'Please complete this step.')
       return
@@ -340,12 +338,11 @@ export default function BusinessRegister() {
       p_pin_codes: zips,
       p_phone: form.phone || '',
       p_email: form.email || '',
-      // A doctor's own degree when they gave one; the vertical's label otherwise,
-      // which is what identifies a pharmacy or a lab. Sending the label for a
-      // doctor stored every one of them as "Clinic".
-      p_qualification: vertical === 'doctors' && form.qualification
-        ? form.qualification
-        : verticalObj.qualification,
+      // The vertical's label — 'Clinic', 'Pharmacy', 'Diagnostic Lab'. This
+      // describes the business, which is what a listing is. Degrees belong to
+      // the people who work there and are recorded per doctor in clinic_users,
+      // where a clinic with three doctors can hold three of them.
+      p_qualification: verticalObj.qualification,
       p_consultation_fee: 0,
       // Collected on step 2 since the wizard was written and passed by the
       // hospital branch, but never by this one — so the number a doctor typed
@@ -624,6 +621,16 @@ export default function BusinessRegister() {
                               // the WhatsApp number we send login codes to.
                               if (d.phone && !form.phone) upd('phone', d.phone)
                               if (d.hours?.length) upd('working_hours', d.hours.join('; '))
+                              // Clinics here name themselves after what they do —
+                              // "SN Eye Hospital", "Garg ENT" — which is a better
+                              // signal than Places' own category, where an eye
+                              // hospital and a maternity home are both 'hospital'.
+                              // Only ever a preselection; the dropdown is right
+                              // there and they change it if this guessed wrong.
+                              if (!form.speciality) {
+                                const guess = guessSpeciality(d.name)
+                                if (guess) upd('speciality', guess)
+                              }
                             }}
                           />
                         ) : (
@@ -677,34 +684,6 @@ export default function BusinessRegister() {
                           </div>
                         ) : (
                           <Field label="Category / speciality" placeholder="e.g. Ophthalmology" value={form.category} onChange={v => upd('category', v)} />
-                        )}
-                        {/* Same story as speciality above: this used to be the
-                            vertical's label — every doctor was stored as
-                            "Clinic", which is what their public profile showed
-                            where a degree belongs, and what sent the admin
-                            verification panel to the AYUSH council instead of
-                            the NMC register. */}
-                        {vertical === 'doctors' && (
-                          <div>
-                            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: BIZ.ink, marginBottom: 7 }}>
-                              Qualification *
-                            </label>
-                            <select value={form.qualification ?? ''}
-                              onChange={e => upd('qualification', e.target.value)}
-                              style={{
-                                width: '100%', padding: '13px 14px', borderRadius: 12,
-                                border: `1.5px solid ${BIZ.inputBorder}`, fontFamily: 'inherit',
-                                fontSize: 15, color: form.qualification ? BIZ.ink : BIZ.mutedWarm, background: '#fff',
-                              }}>
-                              <option value="">Choose your qualification…</option>
-                              {DOCTOR_QUALIFICATIONS.map(q => (
-                                <option key={q.value} value={q.value}>{q.label}</option>
-                              ))}
-                            </select>
-                            <p style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 6 }}>
-                              Shown on your public profile, and what we check your registration against.
-                            </p>
-                          </div>
                         )}
                         {/* Doctors search the Indian Medical Register by name and
                             get their own registration number back, which is
