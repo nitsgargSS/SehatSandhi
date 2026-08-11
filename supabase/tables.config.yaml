@@ -110,11 +110,11 @@ tables:
     class: isolated
     purgeOrder: 60
 
-  doctor_pricing_overrides:
+  business_pricing_overrides:
     class: isolated
     purgeOrder: 70
 
-  doctor_availability:
+  availability:
     class: isolated
     purgeOrder: 80
 
@@ -122,25 +122,18 @@ tables:
     class: isolated
     purgeOrder: 90
 
-  clinic_users:
+  # The affiliation goes before either side of it: it is the child of both.
+  business_practitioners:
     class: isolated
     purgeOrder: 100
 
-  org_subscriptions:
-    class: isolated
-    purgeOrder: 110
-
-  org_specialities:
+  practitioners:
     class: isolated
     purgeOrder: 120
 
-  doctors:
+  businesses:
     class: isolated
     purgeOrder: 130
-
-  organizations:
-    class: isolated
-    purgeOrder: 140
 
   unmet_demand_log:
     class: isolated
@@ -239,7 +232,7 @@ tables:
     class: view
 
   # Discovered in the production dump; none were in any committed SQL.
-  doctor_effective_pricing: { class: view }
+  business_effective_pricing: { class: view }
   admin_revenue_summary:    { class: view }
   free_camp_quota:          { class: view }
   offer_quota:              { class: view }
@@ -254,7 +247,8 @@ tables:
   wa_entry_point_stats:   { class: view }
 
   # The doctors shown under a clinic listing — name and qualification only.
-  public_listing_doctors: { class: view }
+  public_business_doctors: { class: view }
+  public_practitioner_businesses: { class: view }
 
   # Seed clinics offered as suggestions at signup — name and address only,
   # with our pipeline status and notes left behind in seed_clinics.

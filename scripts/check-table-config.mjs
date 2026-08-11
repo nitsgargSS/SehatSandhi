@@ -68,6 +68,23 @@ for (const file of src.files) {
   for (const m of sql.matchAll(/create\s+(?:or\s+replace\s+)?view\s+(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi)) {
     viewsInSql.add(m[1].toLowerCase())
   }
+  // A renamed table is the same table under a new name, so the manifest must
+  // classify the new one and stop being asked about the old. Without this, 0037
+  // renaming doctor_availability to availability left the check demanding a
+  // classification for a table that no longer exists and rejecting the one
+  // that does.
+  for (const m of sql.matchAll(/alter\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s+rename\s+to\s+"?([a-z_][a-z0-9_]*)"?/gi)) {
+    tablesInSql.delete(m[1].toLowerCase())
+    tablesInSql.add(m[2].toLowerCase())
+  }
+  // Likewise a dropped table: 0037 removed the whole doctors/organizations
+  // cluster, and the manifest should not have to keep describing it.
+  for (const m of sql.matchAll(/drop\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi)) {
+    tablesInSql.delete(m[1].toLowerCase())
+  }
+  for (const m of sql.matchAll(/drop\s+view\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi)) {
+    viewsInSql.delete(m[1].toLowerCase())
+  }
 }
 
 console.log(`\n  Schema source: ${srcLabel}/ (${src.files.length} file(s))`)
