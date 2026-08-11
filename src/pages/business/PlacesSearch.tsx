@@ -23,7 +23,7 @@ import { useNearbyBias } from '../../lib/useNearbyBias'
 const DEBOUNCE_MS = 300
 
 export function PlacesSearch({
-  label, hint, placeholder, value, onChange, onPick,
+  label, hint, placeholder, value, onChange, onPick, mode = 'business',
 }: {
   label: string
   hint?: string
@@ -31,6 +31,8 @@ export function PlacesSearch({
   value: string
   onChange: (v: string) => void
   onPick: (d: PlaceDetails) => void
+  /** 'business' looks for named clinics, 'address' for streets and localities. */
+  mode?: 'business' | 'address'
 }) {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([])
   const [busy, setBusy] = useState(false)
@@ -47,19 +49,25 @@ export function PlacesSearch({
   // Suggestions can arrive out of order; only the newest query may render.
   const latest = useRef(0)
 
+  // Set when a suggestion is applied, so the value change it causes does not
+  // immediately search again for the text we just put there — which reopened the
+  // list under the cursor with the one entry already chosen.
+  const justPicked = useRef(false)
+
   useEffect(() => {
+    if (justPicked.current) { justPicked.current = false; return }
     if (picked || value.trim().length < 3) { setSuggestions([]); return }
     const seq = ++latest.current
     const t = setTimeout(async () => {
       setBusy(true)
-      const found = await suggestPlaces(value, session.current, bias)
+      const found = await suggestPlaces(value, session.current, bias, mode)
       if (seq === latest.current) { setSuggestions(found); setOpen(true) }
       setBusy(false)
     }, DEBOUNCE_MS)
     return () => clearTimeout(t)
     // bias is a dependency: a fix that arrives after the first keystroke should
     // re-run the search rather than leave a nationwide list on screen.
-  }, [value, picked, bias])
+  }, [value, picked, bias, mode])
 
   const choose = async (s: PlaceSuggestion) => {
     setOpen(false)
@@ -69,9 +77,14 @@ export function PlacesSearch({
     session.current = newSessionToken()
     setBusy(false)
     if (!details) return
-    setPicked(details)
+    justPicked.current = true
     setSuggestions([])
+    setOpen(false)
     onPick(details)
+    // An address is a starting point that still needs a shop or building number
+    // in front of it, so the field stays live and typing does not clear it back
+    // to nothing. A business is a whole answer, so that one is marked as chosen.
+    if (mode === 'business') setPicked(details)
   }
 
   const clear = () => {
@@ -127,8 +140,18 @@ export function PlacesSearch({
         }}>
           <Check size={16} style={{ color: BIZ.chipText, flex: '0 0 auto', marginTop: 2 }} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.chipText }}>{picked.name}</div>
-            <div style={{ fontSize: 12, color: BIZ.muted, overflowWrap: 'anywhere' }}>{picked.address}</div>
+            {/* In address mode the name is the locality — 'Model Town' — which
+                is just the first words of the address again. Showing it as a
+                heading above that reads like a mistake. */}
+            {mode === 'business' && (
+              <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.chipText }}>{picked.name}</div>
+            )}
+            <div style={{
+              fontSize: mode === 'address' ? 13 : 12,
+              fontWeight: mode === 'address' ? 700 : 400,
+              color: mode === 'address' ? BIZ.chipText : BIZ.muted,
+              overflowWrap: 'anywhere',
+            }}>{picked.address}</div>
             {picked.phone && (
               <div style={{ fontSize: 12, color: BIZ.muted }}>Phone {picked.phone}</div>
             )}

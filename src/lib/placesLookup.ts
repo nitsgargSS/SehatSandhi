@@ -111,6 +111,13 @@ export async function suggestPlaces(
   input: string,
   sessionToken: string,
   bias?: { latitude: number; longitude: number; radius: number } | null,
+  /**
+   * 'business' finds named establishments; 'address' finds streets and
+   * localities. They are different searches: a clinic in a building with no
+   * Google listing of its own will never appear as a business, but the street it
+   * is on always exists. The address field needs the second kind.
+   */
+  mode: 'business' | 'address' = 'business',
 ): Promise<PlaceSuggestion[]> {
   if (!placesConfigured() || input.trim().length < 3) return []
 
@@ -146,7 +153,9 @@ export async function suggestPlaces(
         // the API accepts — a sixth is a 400, not a warning — so dentists and
         // physiotherapists are left off and reached through 'doctor', which
         // Places treats as the broader medical category.
-        includedPrimaryTypes: ['doctor', 'hospital', 'pharmacy', 'medical_lab', 'health'],
+        includedPrimaryTypes: mode === 'address'
+          ? ['geocode']
+          : ['doctor', 'hospital', 'pharmacy', 'medical_lab', 'health'],
       }),
     })
   } catch {

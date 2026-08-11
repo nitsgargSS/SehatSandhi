@@ -725,7 +725,29 @@ export default function BusinessRegister() {
                         )}
                         <Field label="Email" placeholder="you@example.com (optional)" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />
                         <div className="sm:col-span-2 xl:col-span-3">
-                          <Field label="Full address" placeholder="Shop / building, area, city" value={form.address} onChange={v => upd('address', v)} />
+                          {/* Also a lookup, in address mode rather than business
+                              mode. Picking the clinic by name fills this in, but
+                              two cases leave it to be typed: a clinic with no
+                              Google listing of its own, and one whose listed
+                              address is out of date. Both are the moment someone
+                              is typing a street name into a phone, which is
+                              exactly when suggestions help most.
+                              A street always exists in Places even when the
+                              business on it does not, so this finds things the
+                              name search cannot. */}
+                          {placesConfigured() ? (
+                            <PlacesSearch
+                              mode="address"
+                              label="Full address"
+                              placeholder="Start typing — e.g. Model Town, Yamunanagar"
+                              hint="Pick the nearest street or locality, then add your shop or building number."
+                              value={form.address ?? ''}
+                              onChange={v => upd('address', v)}
+                              onPick={d => upd('address', d.address)}
+                            />
+                          ) : (
+                            <Field label="Full address" placeholder="Shop / building, area, city" value={form.address} onChange={v => upd('address', v)} />
+                          )}
                         </div>
                       </div>
 
