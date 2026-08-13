@@ -3,8 +3,8 @@ import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Building2, Plu
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { money, num, shortDate, dateTime, isoDate } from '../../lib/format'
-import { Doctor, SPECIALITIES, PIN_CODES } from '../../types'
-import { verticalForSpeciality, DOCTOR_QUALIFICATIONS } from '../business/shared'
+import { Business, Practitioner, SPECIALITIES, PIN_CODES } from '../../types'
+import { DOCTOR_QUALIFICATIONS } from '../business/shared'
 import { StatTile, ColumnChart, BarList, RangePicker } from '../../components/Charts'
 import { describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import ScrollableTable from '../../components/ScrollableTable'
@@ -14,13 +14,10 @@ import SandboxPanel from './SandboxPanel'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 
-// Local type extension — organization_id / is_hospital_doctor were
-// added to the doctors table via ALTER TABLE, but the shared Doctor
-// type in types/index.ts hasn't necessarily been updated everywhere.
-// Same safe pattern already used in SpecialityLanding.tsx / Profile.tsx.
-interface DoctorWithOrg extends Doctor {
-  organization_id?: string | null
-  is_hospital_doctor?: boolean
+// A listing as admin sees it: the business, plus the verification note a
+// reviewer leaves on it. organization_id and is_hospital_doctor are gone —
+// a hospital's doctors are affiliations now, not a separate species of listing.
+interface BusinessRow extends Business {
   verification_notes?: string | null
 }
 
@@ -174,7 +171,7 @@ interface PlanEvent {
 
 export default function AdminDashboard() {
   const { t } = useLanguage()
-  const [doctors, setDoctors] = useState<DoctorWithOrg[]>([])
+  const [doctors, setDoctors] = useState<BusinessRow[]>([])
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'orgs' | 'coupons' | 'billing' | 'reports' | 'account' | 'sandbox'>('pending')
@@ -220,31 +217,20 @@ export default function AdminDashboard() {
   const [specBusy, setSpecBusy] = useState<string | null>(null)
   const [specMsg, setSpecMsg] = useState('')
 
-  // Moving a listing onto a business speciality changes how it is billed — a
-  // doctor set to PHARMACY stops paying monthly and starts owing commission —
-  // so it is confirmed, not silent.
-  //
-  // This asks verticalForSpeciality rather than keeping its own map. The map it
-  // used to hold spelled pharmacy "PHARMACY", while the dropdown writes "PHRM"
-  // from SPECIALITIES, so the two never matched: the confirmation silently did
-  // not fire for the one example it was written for, and the listing was not
-  // recognised as a pharmacy for billing either.
-  const verticalOf = (spec: string) => verticalForSpeciality(spec)
-
-  const changeSpeciality = async (doc: Doctor, next: string) => {
+  // No longer a billing decision. A speciality used to double as the vertical —
+  // 'PHARMACY' was stored in the same column as 'CARD' — so changing it could
+  // silently move a listing from monthly billing to commission, and the
+  // confirmation below existed to catch that. `businesses.vertical` is its own
+  // column now, so this only changes what a doctor practises.
+  const changeSpeciality = async (doc: Practitioner, next: string) => {
     if (!next || next === doc.speciality) return
-    const from = verticalOf(doc.speciality), to = verticalOf(next)
-    if (from !== to && !window.confirm(
-      `${doc.name} is billed as "${from}". Changing the speciality to ${specName(next)} `
-      + `moves them to "${to}", which changes how they are charged.\n\nContinue?`
-    )) return
 
     setSpecBusy(doc.id); setSpecMsg('')
-    const { error } = await supabase.from('doctors')
+    const { error } = await supabase.from('practitioners')
       .update({ speciality: next }).eq('id', doc.id)
     setSpecBusy(null)
     if (error) { setSpecMsg(`Could not change: ${error.message}`); return }
-    setSpecMsg(`${doc.name} is now listed under ${specName(next)}.`)
+    setSpecMsg(`${doc.full_name} is now listed under ${specName(next)}.`)
     setTimeout(() => setSpecMsg(''), 5000)
     await load()
   }
@@ -387,7 +373,7 @@ export default function AdminDashboard() {
     ])
 
     warn('doctors', doctorsRes.error)
-    setDoctors((doctorsRes.data as DoctorWithOrg[]) || [])
+    setDoctors((doctorsRes.data as BusinessRow[]) || [])
     warn('camps_offers', campsRes.error)
     setCamps((campsRes.data as any) || [])
     warn('organizations', orgsRes.error)
@@ -446,7 +432,7 @@ export default function AdminDashboard() {
     setTimeout(() => setActionMsg(''), 3000)
   }
 
-  const toggleVerify = (doctor: DoctorWithOrg) => {
+  const toggleVerify = (doctor: BusinessRow) => {
     if (expandedDoctorId === doctor.id) {
       setExpandedDoctorId(null)
     } else {
@@ -654,15 +640,16 @@ export default function AdminDashboard() {
   })
 
   const selectedOrg = organizations.find(o => o.id === selectedOrgId)
-  const orgLinkedDoctors = doctors.filter(d => d.organization_id === selectedOrgId)
-  const unlinkedMatches = doctorSearch.length >= 2
-    ? doctors.filter(d => !d.organization_id && d.name.toLowerCase().includes(doctorSearch.toLowerCase()))
-    : []
+  // Organisations are no longer how a hospital holds its doctors — that is what
+  // business_practitioners does. These lists are kept empty rather than removed
+  // so the org panel still renders while it is being retired.
+  const orgLinkedDoctors: BusinessRow[] = []
+  const unlinkedMatches: BusinessRow[] = []
 
   // Rendered by both the desktop table and the mobile cards. Defined once: the
   // approve/reject buttons are the whole point of this screen, and two copies
   // would drift the first time one of them changed.
-  const SpecialitySelect = ({ d }: { d: Doctor }) => (
+  const SpecialitySelect = ({ d }: { d: Practitioner }) => (
     <select
       value={d.speciality ?? ''}
       disabled={specBusy === d.id}
@@ -676,7 +663,7 @@ export default function AdminDashboard() {
     </select>
   )
 
-  const DoctorActions = ({ d }: { d: Doctor }) => (
+  const DoctorActions = ({ d }: { d: BusinessRow }) => (
     <div className="flex gap-1 flex-wrap md:justify-center">
       <button onClick={() => toggleVerify(d)}
         className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition ${expandedDoctorId === d.id ? 'bg-navy-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-500'}`}>
@@ -851,14 +838,13 @@ export default function AdminDashboard() {
                       <div className="min-w-0">
                         <p className="font-medium text-gray-800 leading-snug">
                           {d.name}
-                          {d.is_hospital_doctor && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}
+                          {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}
                         </p>
-                        <p className="text-xs text-gray-400">{d.qualification} · {d.phone}</p>
+                        <p className="text-xs text-gray-400 capitalize">{d.vertical} · {d.phone}</p>
                       </div>
                       <StatusBadge kind="listing" value={d.status} />
                     </div>
 
-                    <div className="mb-2"><SpecialitySelect d={d} /></div>
 
                     <div className="text-xs text-gray-500 space-y-0.5 mb-3">
                       {d.reg_number && (
@@ -875,7 +861,7 @@ export default function AdminDashboard() {
                     {expandedDoctorId === d.id && (
                       <div className="bg-navy-50 rounded-lg px-3 py-3 mt-3">
                         <p className="font-bold text-navy-700 text-sm mb-2">{t('adminDashboardPage.verificationChecklistTitle')}</p>
-                        {NMC_QUALIFICATIONS.includes(d.qualification) ? (
+                        {NMC_QUALIFICATIONS.includes(d.reg_number ?? '') ? (
                           <a href="https://www.nmc.org.in/information-desk/indian-medical-register/" target="_blank" rel="noreferrer"
                             className="text-teal-600 hover:underline text-sm font-medium inline-block mb-2">
                             {t('adminDashboardPage.checkNmcLink')}
@@ -914,14 +900,11 @@ export default function AdminDashboard() {
                     <Fragment key={d.id}>
                     <tr className="border-b border-gray-50 hover:bg-gray-50 transition">
                       <td className="py-3 px-2">
-                        <p className="font-medium text-gray-800">{d.name} {d.is_hospital_doctor && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}</p>
-                        <p className="text-xs text-gray-400">{d.qualification} · {d.phone}</p>
+                        <p className="font-medium text-gray-800">{d.name} {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}</p>
+                        <p className="text-xs text-gray-400 capitalize">{d.vertical} · {d.phone}</p>
                       </td>
-                      {/* Editable: patients find a listing by this exact value,
-                          so a wrong one makes the listing invisible rather than
-                          merely mislabelled. */}
                       <td className="py-3 px-2">
-                        <SpecialitySelect d={d} />
+                        <span className="text-xs text-gray-600 capitalize">{d.vertical}</span>
                       </td>
                       <td className="py-3 px-2">
                         <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{d.reg_number}</span>
@@ -940,7 +923,7 @@ export default function AdminDashboard() {
                         <td colSpan={7} className="bg-navy-50 border-b border-gray-100 px-4 py-4">
                           <div className="max-w-xl">
                             <p className="font-bold text-navy-700 text-sm mb-2">{t('adminDashboardPage.verificationChecklistTitle')}</p>
-                            {NMC_QUALIFICATIONS.includes(d.qualification) ? (
+                            {NMC_QUALIFICATIONS.includes(d.reg_number ?? '') ? (
                               <a href="https://www.nmc.org.in/information-desk/indian-medical-register/" target="_blank" rel="noreferrer"
                                 className="text-teal-600 hover:underline text-sm font-medium inline-block mb-3">
                                 {t('adminDashboardPage.checkNmcLink')}
@@ -1115,7 +1098,7 @@ export default function AdminDashboard() {
                         {o.type.replace('_', ' ')}
                         {o.phone ? ` · ${o.phone}` : ''}
                         {' · '}
-                        {doctors.filter(d => d.organization_id === o.id).length} doctors
+                        {o.name} organisation
                       </p>
                       <OrgActions o={o} />
                     </div>
@@ -1141,7 +1124,7 @@ export default function AdminDashboard() {
                         <td className="py-3 px-2">
                           <StatusBadge kind="listing" value={o.status} />
                         </td>
-                        <td className="py-3 px-2 text-gray-600">{doctors.filter(d => d.organization_id === o.id).length}</td>
+                        <td className="py-3 px-2 text-gray-600">—</td>
                         <td className="py-3 px-2"><OrgActions o={o} /></td>
                       </tr>
                     ))}</tbody>
@@ -1236,7 +1219,7 @@ export default function AdminDashboard() {
                   <div className="space-y-1 mb-4 border border-gray-100 rounded-lg p-2 max-h-40 overflow-y-auto">
                     {unlinkedMatches.map(d => (
                       <div key={d.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
-                        <span className="text-sm text-gray-700">{d.name} · {d.speciality}</span>
+                        <span className="text-sm text-gray-700">{d.name} · {d.vertical}</span>
                         <button onClick={() => linkDoctor(d.id)} className="text-xs text-teal-600 hover:underline font-medium">{t('adminDashboardPage.linkDoctorButton')}</button>
                       </div>
                     ))}
@@ -1250,7 +1233,7 @@ export default function AdminDashboard() {
                       <div key={d.id} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
                         <div>
                           <p className="text-sm font-medium text-gray-800">{d.name}</p>
-                          <p className="text-xs text-gray-400">{d.speciality} · {d.pin_codes?.join(', ')}</p>
+                          <p className="text-xs text-gray-400">{d.vertical} · {d.pin_codes?.join(', ')}</p>
                         </div>
                         <button onClick={() => unlinkDoctor(d.id)} className="text-xs text-gray-400 hover:text-red-500 underline">{t('adminDashboardPage.unlinkDoctorButton')}</button>
                       </div>

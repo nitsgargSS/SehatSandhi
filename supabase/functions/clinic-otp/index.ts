@@ -206,10 +206,16 @@ Deno.serve(async (req) => {
 
   // ── request ──────────────────────────────────────────────────────────────
   if (body.action === 'request') {
-    // Match on the digits, however the number was typed at signup.
-    const { data: listings } = await supabase
-      .from('doctors').select('id, name, phone').not('phone', 'is', null)
-    const match = (listings ?? []).find(d => normalisePhone(String(d.phone)) === phone)
+    // Match on the digits, however the number was typed at signup. Either side
+    // of the model can log in: a business on its own number, and a doctor on
+    // theirs — a visiting consultant has no listing of their own to be found by.
+    const [{ data: listings }, { data: people }] = await Promise.all([
+      supabase.from('businesses').select('id, name, phone').not('phone', 'is', null),
+      supabase.from('practitioners').select('id, full_name, phone').not('phone', 'is', null),
+    ])
+    const match =
+      (listings ?? []).find(d => normalisePhone(String(d.phone)) === phone)
+      ?? (people ?? []).find(d => normalisePhone(String(d.phone)) === phone)
 
     // Answer identically whether or not the number is registered. Otherwise this
     // endpoint tells anyone which numbers belong to businesses on the platform.
@@ -233,7 +239,8 @@ Deno.serve(async (req) => {
     await supabase.from('login_codes').insert({
       phone,
       code_hash: await sha256Hex(code),
-      doctor_id: (match as { id: string }).id,
+      business_id: (listings ?? []).some(d => d.id === (match as { id: string }).id)
+        ? (match as { id: string }).id : null,
       expires_at: new Date(Date.now() + CODE_TTL_MINUTES * 60_000).toISOString(),
     })
 
@@ -283,7 +290,7 @@ Deno.serve(async (req) => {
       .order('created_at', { ascending: false }).limit(1).maybeSingle()
 
     const rec = row as {
-      id: string; code_hash: string; doctor_id: string | null
+      id: string; code_hash: string; business_id: string | null
       expires_at: string; attempts: number
     } | null
 
@@ -312,17 +319,25 @@ Deno.serve(async (req) => {
     // the project level, which is a separate dependency.
     const syntheticEmail = `${phone}@wa.sehatsandhi.in`
 
-    // Every listing on this number, so one login reaches all of them. Read before
-    // the user is resolved: the auth_uid already on these rows is how a returning
-    // clinic is recognised.
-    const { data: all } = await supabase.from('doctors').select('id, phone, auth_uid').not('phone', 'is', null)
-    const ours = (all ?? []).filter(d => normalisePhone(String(d.phone)) === phone)
+    // Everything on this number, so one login reaches all of it. Read before the
+    // user is resolved: the auth_uid already on these rows is how a returning
+    // clinic — or doctor — is recognised.
+    const [{ data: allBiz }, { data: allPeople }] = await Promise.all([
+      supabase.from('businesses').select('id, phone, auth_uid').not('phone', 'is', null),
+      supabase.from('practitioners').select('id, phone, auth_uid').not('phone', 'is', null),
+    ])
+    const ours = (allBiz ?? []).filter(d => normalisePhone(String(d.phone)) === phone)
+    const oursPeople = (allPeople ?? []).filter(d => normalisePhone(String(d.phone)) === phone)
     const mine = ours.map(d => d.id)
+    const minePeople = oursPeople.map(d => d.id)
 
     // auth_uid is deliberately not unique (0024) — one number may own a clinic and
     // a pharmacy — so take the first non-null rather than expecting a single row.
+    // A doctor whose only row is a practitioner is recognised the same way.
     let userId: string | null =
-      (ours.find(d => d.auth_uid) as { auth_uid?: string } | undefined)?.auth_uid ?? null
+      (ours.find(d => d.auth_uid) as { auth_uid?: string } | undefined)?.auth_uid
+      ?? (oursPeople.find(d => d.auth_uid) as { auth_uid?: string } | undefined)?.auth_uid
+      ?? null
 
     if (!userId) {
       const { data: created } = await supabase.auth.admin.createUser({
@@ -348,7 +363,8 @@ Deno.serve(async (req) => {
 
     // Re-link on every login, not just the first: it repairs the rows above and
     // picks up listings registered on this number since last time.
-    if (mine.length) await supabase.from('doctors').update({ auth_uid: userId }).in('id', mine)
+    if (mine.length) await supabase.from('businesses').update({ auth_uid: userId }).in('id', mine)
+    if (minePeople.length) await supabase.from('practitioners').update({ auth_uid: userId }).in('id', minePeople)
 
     // A magic-link token the browser exchanges for a real session. Supabase has
     // no "mint a session" admin call; this is the supported way.

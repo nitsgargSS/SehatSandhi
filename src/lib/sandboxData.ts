@@ -57,7 +57,7 @@ const address = () => `${int(1, 299)}, ${pick(LOCALITIES)}, ${pick(STREET_TYPES)
 
 /** Business names that read like the vertical they belong to. */
 const BUSINESS_SUFFIX: Record<VerticalKey, string[]> = {
-  doctors:   ['Clinic', 'Medical Centre', 'Polyclinic'],
+  clinic:    ['Clinic', 'Medical Centre', 'Polyclinic'],
   hospital:  ['Hospital', 'Nursing Home', 'Multispeciality Hospital'],
   pharmacy:  ['Medical Store', 'Pharmacy', 'Chemist'],
   lab:       ['Diagnostics', 'Path Lab', 'Diagnostic Centre'],
@@ -67,7 +67,7 @@ const BUSINESS_SUFFIX: Record<VerticalKey, string[]> = {
 
 /** Speciality text for the free-text "Category / speciality" field. */
 const CATEGORY_BY_VERTICAL: Record<VerticalKey, string[]> = {
-  doctors:   ['General Physician', 'Ophthalmology', 'Paediatrics', 'Orthopaedics', 'Dermatology'],
+  clinic:    ['General Physician', 'Ophthalmology', 'Paediatrics', 'Orthopaedics', 'Dermatology'],
   hospital:  ['Multispeciality', 'General & Emergency', 'Maternity & Surgical'],
   pharmacy:  ['Retail Pharmacy', 'Generic & Branded Medicines', 'Surgical & Ayurvedic'],
   lab:       ['Pathology', 'Radiology & Pathology', 'Blood & Urine Testing'],
@@ -134,12 +134,12 @@ export function generateBusiness(vertical: VerticalKey): BusinessFill {
     runId,
     form: {
       business_name: tag(businessName, runId),
-      owner_name: v.key === 'doctors' ? `Dr. ${owner}` : owner,
+      owner_name: v.key === 'clinic' ? `Dr. ${owner}` : owner,
       phone: testPhone(),
       category: pick(CATEGORY_BY_VERTICAL[vertical] ?? ['General']),
-      // Doctors only: step 2 requires it for that vertical, and a value outside
+      // Clinics only: the doctor step requires it, and a value outside
       // DOCTOR_QUALIFICATIONS would not select in the dropdown.
-      ...(vertical === 'doctors' ? { qualification: pick(['MBBS', 'MD', 'MS', 'DNB']) } : {}),
+      ...(vertical === 'clinic' ? { qualification: pick(['MBBS', 'MD', 'MS', 'DNB']) } : {}),
       reg_number: businessRegNumber(),
       email: testEmail(runId),
       address: address(),
@@ -175,7 +175,7 @@ export function generateDoctor(): DoctorFill {
       qualification: qualificationFor(speciality),
       speciality,
       reg_number: medicalRegNumber(),
-      clinic_name: tag(`${pick(SURNAMES)} ${pick(BUSINESS_SUFFIX.doctors)}`, runId),
+      clinic_name: tag(`${pick(SURNAMES)} ${pick(BUSINESS_SUFFIX.clinic)}`, runId),
       address: address(),
       consultation_fee: String(pick([200, 300, 400, 500, 600])),
       phone: testPhone(),

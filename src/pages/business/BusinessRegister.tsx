@@ -3,7 +3,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER, SPECIALITIES } from '../../types'
-import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor } from './shared'
+import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, hasPractitioners } from './shared'
 import { RegistrySearch } from './RegistrySearch'
 import { PlacesSearch } from './PlacesSearch'
 import { placesConfigured, guessSpeciality } from '../../lib/placesLookup'
@@ -14,8 +14,10 @@ import SiteFooter from '../../components/SiteFooter'
 import { generateBusiness } from '../../lib/sandboxData'
 import {
   computePrice, createRazorpayOrder, verifyRazorpayPayment,
-  loadRazorpayCheckout, businessBackendConfigured, PriceResult, HospitalDoctor,
+  loadRazorpayCheckout, businessBackendConfigured, PriceResult, DraftPractitioner,
 } from '../../lib/businessApi'
+import { registerBusiness, registerPractitioner, attachPractitioner } from '../../lib/identityApi'
+import PractitionerPicker from './PractitionerPicker'
 import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
 import { useTaxSettings, localTax, isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { track } from '../../lib/analytics'
@@ -24,22 +26,27 @@ import { track } from '../../lib/analytics'
 import { headcountFor, applyHeadcount, describeDoctorRate } from '../../../supabase/functions/_shared/headcount'
 import { money, num } from '../../lib/format'
 
-// Design 2b — 4-step onboarding wizard.
+// Design 2b — 3-step onboarding wizard.
 // Layout: desktop = dark left step-rail + content pane; tablet (<900px) =
-// horizontal stepper on top, content below (and in step 3 the summary drops
-// below the pincode grid).
+// horizontal stepper on top, content below.
 //
-// Pricing is authoritative from the server: step 3 sends the selected pincodes
-// to the compute-price Edge Function and shows what it returns. If the backend
-// isn't configured (fresh dev), it falls back to summing the local list so the
-// UI still works. Step 4 pays via Razorpay, whose amount the server recomputes.
+// Coverage is not a step. Every listing is sold every service area we run in
+// (see the effect that fills `zips`), so the wizard is: what you are → who you
+// are → pay. The pincodes still travel with the quote and the order because
+// they are what the price is computed from — they are simply no longer a
+// question, since under a flat plan the answer never changed the total.
+//
+// Pricing is authoritative from the server: step 3 sends those pincodes to the
+// compute-price Edge Function and shows what it returns. If the backend isn't
+// configured (fresh dev), it falls back to summing the local list so the UI
+// still works. Step 3 also pays via Razorpay, whose amount the server recomputes.
 //
 // Two billing models, decided by the step-1 vertical (see shared.ts):
 //   • pincode_monthly (doctors, hospitals, labs) — pay per pincode per month,
-//     Razorpay at step 4.
+//     Razorpay at step 3.
 //   • commission (pharmacy, insurance, ambulance) — free to list, 10% of
-//     billing. Step 3 shows reach without a price, step 4 takes no payment and
-//     asks the business to accept the commission term instead.
+//     billing. Step 3 takes no payment and asks the business to accept the
+//     commission term instead.
 
 const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 
@@ -64,16 +71,25 @@ interface CoverageArea {
   population: number
 }
 
+/** Which door they came in by. 'doctor' registers a person and gives them a
+ *  listing of their own; 'business' registers the establishment and attaches
+ *  whichever doctors work there. */
+export type RegisterMode = 'business' | 'doctor'
+
 interface RazorpayResponse {
   razorpay_order_id: string
   razorpay_payment_id: string
   razorpay_signature: string
 }
 
-export default function BusinessRegister() {
+export default function BusinessRegister({ mode = 'business' }: { mode?: RegisterMode }) {
   const { areas } = useServiceAreas()
-  const [step, setStep] = useState(1)
-  const [vertical, setVertical] = useState<VerticalKey>('doctors')
+  const soloDoctor = mode === 'doctor'
+  const [step, setStep] = useState(mode === 'doctor' ? 2 : 1)
+  // A doctor registering themselves is a clinic of one: they still need a
+  // listing to be found and billed through, so the vertical is fixed rather
+  // than asked for.
+  const [vertical, setVertical] = useState<VerticalKey>('clinic')
   const [form, setForm] = useState<Record<string, string>>({})
   const [zips, setZips] = useState<string[]>([])
   const [error, setError] = useState('')
@@ -81,9 +97,10 @@ export default function BusinessRegister() {
   const [done, setDone] = useState(false)
   const [paid, setPaid] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
-  // Consultants, for a hospital. Each becomes an ordinary doctors row, so they
-  // get profiles, search results and their own appointments.
-  const [hospDoctors, setHospDoctors] = useState<HospitalDoctor[]>([])
+  // The doctors who work here. Each is either a person already on the platform
+  // (attached, not copied) or a new one; the picker decides which, and
+  // saveRegistration below links them either way.
+  const [practitioners, setPractitioners] = useState<DraftPractitioner[]>([])
   const [invoiceToken, setInvoiceToken] = useState<string | null>(null)
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null)
 
@@ -139,26 +156,22 @@ export default function BusinessRegister() {
     return FALLBACK_AREAS.map(a => ({ ...a, population: a.pop }))
   }, [areas])
 
-  const toggleZip = (pin: string) =>
-    setZips(s => (s.includes(pin) ? s.filter(p => p !== pin) : [...s, pin]))
+  // Coverage is no longer asked for. Every business is listed across every
+  // service area we run in, and this keeps that in step with `coverage` as the
+  // live service_areas load in.
+  //
+  // Nothing is lost by not asking: the live plans are flat_all_pincodes, where
+  // the price is the same whether they pick one area or all of them, so the
+  // step only ever cost them reach. It is also not a free choice to skip under
+  // a per-pincode plan — see the guard on `zips` below, which is why this sets
+  // the full list rather than the wizard quietly billing for it.
+  useEffect(() => {
+    setZips(coverage.map(z => z.pin_code))
+  }, [coverage])
 
-  // ── Area picker ──
-  // Twenty areas as twenty large cards was a wall, especially on a phone where
-  // they stack. A filter, two bulk actions and one compact row each turns it
-  // into a list you can scan. Under a flat plan "select all" is usually the
-  // right answer anyway, so it is one tap away.
   // Counted in one place: the local quote, the server quote and the re-quote
   // effect must all agree on how many consultants have been entered.
-  const namedHospitalDoctors = vertical === 'hospital'
-    ? hospDoctors.filter(d => d.name.trim()).length : 0
-
-  const [areaQuery, setAreaQuery] = useState('')
-  const visibleAreas = useMemo(() => {
-    const q = areaQuery.trim().toLowerCase()
-    if (!q) return coverage
-    return coverage.filter(z =>
-      z.area_name.toLowerCase().includes(q) || z.pin_code.includes(q))
-  }, [coverage, areaQuery])
+  const namedHospitalDoctors = practitioners.filter(d => d.name.trim()).length
 
   // ── Live pricing: prefer the server (authoritative); fall back to a local
   //    sum when the backend isn't configured or is unreachable. ──
@@ -195,7 +208,7 @@ export default function BusinessRegister() {
       tax: localTax(monthlyTotal * months, tax, form.gstin),
       priceIncludesGst: plan.price_includes_gst ?? false,
     }
-  }, [coverage, zips, plan, tiers, months, monthlyApplies, commission, tax, form.gstin, vertical, hospDoctors])
+  }, [coverage, zips, plan, tiers, months, monthlyApplies, commission, tax, form.gstin, vertical, practitioners])
 
   const [serverPrice, setServerPrice] = useState<PriceResult | null>(null)
   const [pricing, setPricing] = useState(false)
@@ -232,48 +245,44 @@ export default function BusinessRegister() {
     if (s === 1) return !!vertical
     // A doctor without a speciality is unsearchable — patients match on it
     // exactly — so it is required rather than defaulted to something wrong.
+    // The doctor path needs the person's own name and speciality: they become
+    // a practitioner row, and a doctor with neither is unsearchable.
     if (s === 2) return !!(form.business_name?.trim() && form.phone?.trim()
-      && (vertical !== 'doctors' || form.speciality))
-    if (s === 3) return zips.length > 0
+      && (!soloDoctor || (form.speciality && form.owner_name?.trim())))
     return true
   }
   const nextStep = () => {
     if (!stepValid(step)) {
       setError(step === 2
-        ? (vertical === 'doctors' && !form.speciality
+        ? (soloDoctor && !form.speciality
             ? 'Please choose a speciality — it is how patients find you.'
-            : 'Please enter at least a business name and WhatsApp number.')
-        : step === 3 ? 'Select at least one pincode to continue.' : 'Please complete this step.')
+            : soloDoctor && !form.owner_name?.trim()
+              ? 'Please enter your name — it is what patients see.'
+              : 'Please enter at least a business name and WhatsApp number.')
+        : 'Please complete this step.')
       return
     }
     setError('')
-    setStep(s => Math.min(4, s + 1))
+    setStep(s => Math.min(3, s + 1))
   }
-  const prevStep = () => { setError(''); setStep(s => Math.max(1, s - 1)) }
+  const prevStep = () => { setError(''); setStep(s => Math.max(soloDoctor ? 2 : 1, s - 1)) }
   const goStep = (n: number) => {
     // allow jumping back freely, and forward only through validated steps
-    if (n <= step || [1, 2, 3].slice(0, n - 1).every(stepValid)) { setError(''); setStep(n) }
+    if (n <= step || [1, 2].slice(0, n - 1).every(stepValid)) { setError(''); setStep(n) }
   }
 
   // ── Sandbox autofill ──
-  // Keeps the tester's chosen `vertical`: it decides whether step 4 ends at
+  // Keeps the tester's chosen `vertical`: it decides whether step 3 ends at
   // Razorpay or at the WhatsApp commission path, so overwriting it would take
   // away control of which branch is under test.
   //
-  // Pincodes come from `coverage` (live service_areas when available) rather
-  // than a hardcoded list, because compute-price only prices pincodes the
-  // server knows. Picking the two most expensive makes the charge clearly
-  // non-zero, so a ₹0 total is unambiguous evidence that seeding failed rather
-  // than a plausible-looking result.
+  // Pincodes are deliberately not touched. They used to be seeded here with the
+  // two most expensive areas, back when a tester had to pick them by hand; now
+  // every signup carries the full `coverage` list, so seeding a smaller set
+  // would test a combination no real business can produce.
   const fillSandbox = () => {
     const { form: generated } = generateBusiness(vertical)
     setForm(generated)
-    setZips(
-      [...coverage]
-        .sort((a, b) => b.monthly_price - a.monthly_price)
-        .slice(0, 2)
-        .map(z => z.pin_code),
-    )
     setAcceptedTerms(true)
     setError('')
   }
@@ -298,72 +307,80 @@ export default function BusinessRegister() {
     ? (GST_STATE_NAMES[(form.gstin ?? '').slice(0, 2)] ?? null)
     : null
 
-  const doctorIdRef = useRef<string | null>(null)
-  const ensureDoctorRow = async (): Promise<string | null> => {
-    if (doctorIdRef.current) return doctorIdRef.current
-    // Via RPC, not a direct insert. `.insert(...).select('id')` asks PostgREST
-    // to read the row back, and that read is filtered by
-    // allow_read_active_doctors (status = 'active') — so a just-created
-    // 'pending' listing is invisible to its own creator and the whole call
-    // fails as an RLS violation. create_listing is SECURITY DEFINER and
-    // returns only the new id; it also forces status server-side, so a caller
-    // cannot self-activate a listing. See migration 0002.
-    // A hospital is an organisation with consultants, not a single listing, so
-    // it takes a different RPC — one transaction for the org, its own listing
-    // and every consultant.
-    if (vertical === 'hospital') {
-      const { data: hid, error: hErr } = await supabase.rpc('sehat_create_hospital', {
-        p_name: form.business_name || form.owner_name || 'Hospital',
-        p_address: form.address || '',
-        p_pin_codes: zips,
-        p_phone: form.phone || '',
-        p_email: form.email || '',
-        p_reg_number: form.reg_number || null,
-        p_doctors: hospDoctors.filter(d => d.name.trim()),
-      })
-      if (hErr) { setError(`Could not save hospital: ${hErr.message}`); return null }
-      doctorIdRef.current = hid as string
-      return hid as string
-    }
+  const businessIdRef = useRef<string | null>(null)
 
-    const { data, error: insErr } = await supabase.rpc('create_listing', {
-      p_name: form.business_name || form.owner_name || 'Business',
-      // The doctor's own speciality when they chose one; the vertical's own code
-      // otherwise (PHARMACY, LAB, …), which is what identifies those businesses.
-      p_speciality: vertical === 'doctors' && form.speciality
-        ? form.speciality
-        : verticalObj.dbSpeciality,
-      p_clinic_name: form.business_name || form.owner_name,
-      p_address: form.address || '',
-      p_pin_codes: zips,
-      p_phone: form.phone || '',
-      p_email: form.email || '',
-      // The vertical's label — 'Clinic', 'Pharmacy', 'Diagnostic Lab'. This
-      // describes the business, which is what a listing is. Degrees belong to
-      // the people who work there and are recorded per doctor in clinic_users,
-      // where a clinic with three doctors can hold three of them.
-      p_qualification: verticalObj.qualification,
-      p_consultation_fee: 0,
-      // Collected on step 2 since the wizard was written and passed by the
-      // hospital branch, but never by this one — so the number a doctor typed
-      // was discarded, and the admin verifying them saw an empty Reg field.
-      p_reg_number: form.reg_number || null,
-      // Everything below is whatever is in the field at submit, not what was
-      // suggested: prefill only seeds the inputs, and an edit overwrites the
-      // suggestion long before this runs.
-      p_working_hours: form.working_hours || null,
-      // Which council issued reg_number. A registration number means nothing
-      // without it — the same digits belong to a different doctor in each of
-      // seventeen councils.
-      p_smc_id: form.smc_id ? Number(form.smc_id) : null,
-      // Google's id for the business, kept so a listing can be refreshed from
-      // Places later. Their terms allow storing this indefinitely, unlike the
-      // coordinates, which is why those are not here.
-      p_place_id: form.place_id || null,
-    })
-    if (insErr) { setError(`Could not save listing: ${insErr.message}`); return null }
-    doctorIdRef.current = data as string
-    return data as string
+  /**
+   * Save the business, its doctors, and the links between them.
+   *
+   * One path for every vertical. There used to be two — create_listing for
+   * everyone and sehat_create_hospital for hospitals — and they disagreed about
+   * what a doctor was: a hospital's consultants became listings of their own,
+   * while a clinic's doctors became staff rows with no identity. That fork is
+   * why the same doctor could exist twice and belong to neither place properly.
+   *
+   * All of it goes through SECURITY DEFINER RPCs rather than direct inserts,
+   * because a just-created row is 'pending' and therefore invisible to its own
+   * creator under the public read policy — a plain insert cannot even read back
+   * the id it just made. See migration 0002 for the original diagnosis.
+   */
+  const saveRegistration = async (): Promise<string | null> => {
+    if (businessIdRef.current) return businessIdRef.current
+
+    // A doctor registering themselves is a person AND a one-doctor practice.
+    // They need both rows: the business is what patients book and what we bill,
+    // the practitioner is what makes them findable as a cardiologist — and it is
+    // what lets them later be attached to a hospital they visit without any of
+    // this being redone.
+    const toAttach: DraftPractitioner[] = soloDoctor
+      ? [{
+          name: form.owner_name?.trim() || form.business_name?.trim() || 'Doctor',
+          speciality: form.speciality || 'GEN',
+          qualification: form.qualification || undefined,
+          reg_number: form.reg_number || undefined,
+          smc_id: form.smc_id ? Number(form.smc_id) : undefined,
+          phone: form.phone || undefined,
+        }]
+      : practitioners
+
+    try {
+      // One call, one transaction. Attaching is an owner-only operation and
+      // nobody has logged in yet at signup, so the business and its doctors have
+      // to be created together — split up, the link silently did not happen and
+      // a registered doctor was missing from search.
+      const businessId = await registerBusiness({
+        name: form.business_name || form.owner_name || verticalObj.label,
+        vertical,
+        address: form.address || '',
+        pinCodes: zips,
+        phone: form.phone || '',
+        email: form.email || '',
+        // The BUSINESS's licence — a pharmacy's drug licence, a hospital's
+        // registration. A doctor's own registration belongs to them and travels
+        // with them, so on the solo path it goes to the practitioner instead.
+        regNumber: soloDoctor ? null : (form.reg_number || null),
+        workingHours: form.working_hours || null,
+        placeId: form.place_id || null,
+      }, toAttach.map((d, i) => ({
+        practitioner_id: d.practitioner_id,
+        name: d.name,
+        speciality: d.speciality,
+        qualification: d.qualification,
+        reg_number: d.reg_number,
+        smc_id: d.smc_id,
+        phone: d.phone,
+        consultation_fee: d.consultation_fee ?? 0,
+        // A doctor registering their own practice is primarily there. Somebody a
+        // clinic added may already be primary elsewhere, and the server leaves
+        // that alone.
+        is_primary: soloDoctor && i === 0,
+      })))
+
+      businessIdRef.current = businessId
+      return businessId
+    } catch (e) {
+      setError(`Could not save: ${(e as Error).message}`)
+      return null
+    }
   }
 
   const waLink = `https://wa.me/${WA_NUMBER.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Business signup: ' + verticalObj.label + ' — ' + (form.business_name || ''))}`
@@ -377,7 +394,7 @@ export default function BusinessRegister() {
       return
     }
     setSubmitting(true); setError('')
-    const id = await ensureDoctorRow()
+    const id = await saveRegistration()
     setSubmitting(false)
     if (!id) return
     setDone(true)
@@ -389,7 +406,7 @@ export default function BusinessRegister() {
   const payWithRazorpay = async () => {
     setSubmitting(true); setError('')
     try {
-      const id = await ensureDoctorRow()
+      const id = await saveRegistration()
       if (!id) { setSubmitting(false); return }
       // A wrong GSTIN produces an invoice they cannot claim against, and it is
       // not correctable afterwards without a credit note. Stop here instead.
@@ -457,12 +474,19 @@ export default function BusinessRegister() {
     }
   }
 
-  const RAIL_STEPS = [
-    { n: 1, label: 'Service type' },
-    { n: 2, label: 'Business details' },
-    { n: 3, label: onCommission ? 'Coverage' : 'Coverage & pricing' },
-    { n: 4, label: onCommission ? 'Review & activate' : 'Review & pay' },
-  ]
+  // The doctor path skips the vertical picker: they are a doctor, and asking
+  // whether they are an ambulance service is noise. Numbering stays 2/3 so the
+  // step bodies below need no special casing.
+  const RAIL_STEPS = soloDoctor
+    ? [
+        { n: 2, label: 'Your details' },
+        { n: 3, label: onCommission ? 'Review & activate' : 'Review & pay' },
+      ]
+    : [
+        { n: 1, label: 'Service type' },
+        { n: 2, label: 'Business details' },
+        { n: 3, label: onCommission ? 'Review & activate' : 'Review & pay' },
+      ]
 
   // Full-bleed at every width — the wizard IS the page, so it gets no outer
   // padding, border or card shadow. On desktop the dark rail runs the full
@@ -483,7 +507,7 @@ export default function BusinessRegister() {
             const done = s.n < step
             return (
               <button key={s.n} onClick={() => goStep(s.n)} aria-current={current ? 'step' : undefined}
-                aria-label={`Step ${s.n} of 4: ${s.label}`}
+                aria-label={`Step ${s.n} of ${RAIL_STEPS.length}: ${s.label}`}
                 style={{
                   // The dot is only 8px, so the button pads out to a ~44px tap
                   // target around it; negative margin keeps the dots visually
@@ -505,7 +529,7 @@ export default function BusinessRegister() {
               </button>
             )
           })}
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#9fb3aa', flex: '0 0 auto', marginLeft: 'auto' }}>{step}/4</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#9fb3aa', flex: '0 0 auto', marginLeft: 'auto' }}>{step}/{RAIL_STEPS.length}</span>
         </div>
 
         <div style={{ background: BIZ.cream }} className="grid lg:grid-cols-[300px_1fr] lg:min-h-screen">
@@ -565,7 +589,7 @@ export default function BusinessRegister() {
                 {step === 1 && (
                   <>
                     <div style={{ flex: 1 }}>
-                      <StepKicker n={1} />
+                      <StepKicker n={RAIL_STEPS.findIndex(r => r.n === 1) + 1} of={RAIL_STEPS.length} />
                       <h3 style={h3Style}>What kind of business are you listing?</h3>
                       <p style={pStyle}>Choose the category patients will find you under.</p>
                       <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
@@ -593,9 +617,13 @@ export default function BusinessRegister() {
                 {step === 2 && (
                   <>
                     <div style={{ flex: 1 }}>
-                      <StepKicker n={2} />
-                      <h3 style={h3Style}>Tell us about your business</h3>
-                      <p style={pStyle}>Listing as <strong style={{ color: BIZ.green }}>{verticalObj.label}</strong>. This is what patients will see.</p>
+                      <StepKicker n={RAIL_STEPS.findIndex(r => r.n === 2) + 1} of={RAIL_STEPS.length} />
+                      <h3 style={h3Style}>{soloDoctor ? 'Tell us about yourself' : 'Tell us about your business'}</h3>
+                      <p style={pStyle}>
+                        {soloDoctor
+                          ? <>Your own practice. If you also consult at a hospital, you can add that from your dashboard once you are set up.</>
+                          : <>Listing as <strong style={{ color: BIZ.green }}>{verticalObj.label}</strong>. This is what patients will see.</>}
+                      </p>
                       <div className="grid gap-[18px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
                         {/* Google Places when it is configured, the clinic
                             directory when it is not. Places wins where it can:
@@ -607,9 +635,11 @@ export default function BusinessRegister() {
                             or Google is unreachable. */}
                         {placesConfigured() ? (
                           <PlacesSearch
-                            label="Business name *"
+                            label={soloDoctor ? 'Clinic / practice name *' : 'Business name *'}
                             placeholder="Start typing — e.g. Garg ENT"
-                            hint="Pick your clinic and we will fill in the rest."
+                            hint={soloDoctor
+                              ? 'Your clinic — pick it and we will fill in the address.'
+                              : 'Pick your clinic and we will fill in the rest.'}
                             value={form.business_name ?? ''}
                             onChange={v => upd('business_name', v)}
                             onPick={d => {
@@ -635,7 +665,7 @@ export default function BusinessRegister() {
                           />
                         ) : (
                         <RegistrySearch
-                          label="Business name *"
+                          label={soloDoctor ? 'Clinic / practice name *' : 'Business name *'}
                           placeholder="e.g. Aggarwal Eye Care"
                           hint="Type a few letters and press Find — we may already have your address."
                           value={form.business_name ?? ''}
@@ -655,13 +685,17 @@ export default function BusinessRegister() {
                           emptyNote="No match — just carry on and type your details."
                         />
                         )}
-                        <Field label="Owner / contact name" placeholder="e.g. Dr. Ramesh Aggarwal" value={form.owner_name} onChange={v => upd('owner_name', v)} />
+                        <Field
+                          label={soloDoctor ? 'Your full name *' : 'Owner / contact name'}
+                          placeholder="e.g. Dr. Ramesh Aggarwal"
+                          value={form.owner_name} onChange={v => upd('owner_name', v)} />
                         <Field label="WhatsApp number *" placeholder="+91 " value={form.phone} onChange={v => upd('phone', v)} type="tel" inputMode="tel" autoComplete="tel" />
-                        {/* A dropdown, and it is now saved. This was free text
-                            that create_listing ignored — every doctor was stored
-                            as GEN, so a cardiologist never appeared in a
-                            cardiology search. Patients match on this exact value. */}
-                        {vertical === 'doctors' ? (
+                        {/* The speciality of the DOCTOR registering, which is
+                            what patients match on. Only asked on the doctor
+                            path: a clinic does not have a speciality, the
+                            doctors who work there do — and they are added
+                            through the picker below. */}
+                        {soloDoctor ? (
                           <div>
                             <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: BIZ.ink, marginBottom: 7 }}>
                               Speciality *
@@ -687,9 +721,9 @@ export default function BusinessRegister() {
                         )}
                         {/* Doctors search the Indian Medical Register by name and
                             get their own registration number back, which is
-                            easier than finding the certificate. Everyone else
-                            types a licence number we cannot check. */}
-                        {vertical === 'doctors' ? (
+                            easier than finding the certificate. A business types
+                            its own licence number, which we cannot check. */}
+                        {soloDoctor ? (
                           <RegistrySearch
                             label="Find your registration"
                             placeholder="Your name, as registered"
@@ -718,7 +752,7 @@ export default function BusinessRegister() {
                             qualified in the last few months, and the search only
                             matches how a council chose to spell someone. Typing
                             the number has to stay possible. */}
-                        {vertical === 'doctors' && (
+                        {soloDoctor && (
                           <Field label="Registration number"
                             placeholder={form.reg_number ? '' : 'or type it — e.g. HR-12345 (optional)'}
                             value={form.reg_number} onChange={v => upd('reg_number', v)} />
@@ -751,83 +785,34 @@ export default function BusinessRegister() {
                         </div>
                       </div>
 
-                      {/* Consultants. Only hospitals: a solo practice is one
-                          doctor and must never be asked to list itself. Each
-                          becomes a real listing — searchable, with its own
-                          profile and appointment calendar. */}
-                      {vertical === 'hospital' && (
+                      {/* The doctors who work here.
+                          This used to exist only for hospitals, because only a
+                          hospital's consultants became rows of their own — a
+                          clinic's doctors had nowhere to go. Both are the same
+                          thing now, so a clinic can name its doctors too, and
+                          either can attach somebody who already works elsewhere
+                          instead of creating a second copy of them. */}
+                      {hasPractitioners(vertical) && !soloDoctor && (
                         <div style={{ marginTop: 28, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
                           <div style={{ fontSize: 16, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
                             Your doctors
                           </div>
                           <p style={{ fontSize: 13.5, color: BIZ.muted, margin: '0 0 16px', lineHeight: 1.6 }}>
-                            Add each consultant who sees patients here. Every one gets their own profile and
-                            appointment calendar, so a patient searching for a cardiologist in your area finds
-                            them by name.
+                            Add each doctor who sees patients here. Every one gets their own profile, so a
+                            patient searching for a cardiologist in your area finds them by name.
                             {describeDoctorRate(plan) && <> {describeDoctorRate(plan)}</>}
                           </p>
 
-                          {/* Grouped per doctor. Stacked as four bare fields the
-                              remove button ended up orphaned on its own line and
-                              nothing showed which doctor it belonged to — three
-                              doctors read as twelve unrelated inputs. Each is a
-                              card on mobile, one row from sm up. */}
-                          {hospDoctors.map((doc, i) => (
-                            <div key={i}
-                              style={{
-                                border: `1px solid ${BIZ.border}`, borderRadius: 14,
-                                padding: 12, marginBottom: 10, background: '#fdfcfa',
-                              }}
-                              className="sm:border-0 sm:p-0 sm:bg-transparent sm:rounded-none">
-                              <div className="flex items-center justify-between mb-2 sm:hidden">
-                                <span style={{ fontSize: 12.5, fontWeight: 800, color: BIZ.mutedWarm, letterSpacing: '.04em' }}>
-                                  DOCTOR {i + 1}
-                                </span>
-                                <button onClick={() => setHospDoctors(list => list.filter((_, j) => j !== i))}
-                                  style={{
-                                    border: 'none', background: 'transparent', cursor: 'pointer',
-                                    color: '#d94848', fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
-                                    padding: '2px 4px',
-                                  }}>
-                                  Remove
-                                </button>
-                              </div>
-                              <div className="grid gap-2 grid-cols-1 sm:grid-cols-[1.4fr_1fr_1fr_auto]">
-                                <input placeholder="Doctor's name" value={doc.name}
-                                  onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, name: e.target.value } : d))}
-                                  style={hospInput} />
-                                <select value={doc.speciality}
-                                  onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, speciality: e.target.value } : d))}
-                                  style={hospInput}>
-                                  {SPECIALITIES.map(sp => <option key={sp.id} value={sp.id}>{sp.en}</option>)}
-                                </select>
-                                <input placeholder="Qualification" value={doc.qualification ?? ''}
-                                  onChange={e => setHospDoctors(list => list.map((d, j) => j === i ? { ...d, qualification: e.target.value } : d))}
-                                  style={hospInput} />
-                                {/* The × only exists from sm up, where the row
-                                    layout gives it a column of its own. */}
-                                <button onClick={() => setHospDoctors(list => list.filter((_, j) => j !== i))}
-                                  className="hidden sm:block"
-                                  style={{ ...hospInput, width: 44, cursor: 'pointer', color: '#d94848', fontWeight: 800, borderColor: '#f0d9d9' }}
-                                  title="Remove">×</button>
-                              </div>
-                            </div>
-                          ))}
+                          <PractitionerPicker
+                            added={practitioners}
+                            onAdd={d => setPractitioners(list => [...list, d])}
+                            onRemove={i => setPractitioners(list => list.filter((_, j) => j !== i))}
+                          />
 
-                          <button
-                            onClick={() => setHospDoctors(list => [...list, { name: '', speciality: 'GEN', qualification: '' }])}
-                            style={{
-                              marginTop: 6, padding: '10px 18px', borderRadius: 11, cursor: 'pointer',
-                              border: `2px dashed ${BIZ.green}`, background: '#fff', color: BIZ.green,
-                              fontFamily: 'inherit', fontSize: 14, fontWeight: 800,
-                            }}>
-                            + Add a doctor
-                          </button>
-
-                          {hospDoctors.filter(d => d.name.trim()).length > 0 && (
+                          {namedHospitalDoctors > 0 && (
                             <div style={{ marginTop: 14, fontSize: 13.5, color: BIZ.ink }}>
-                              <strong>{hospDoctors.filter(d => d.name.trim()).length}</strong> doctor
-                              {hospDoctors.filter(d => d.name.trim()).length === 1 ? '' : 's'} added
+                              <strong>{namedHospitalDoctors}</strong> doctor
+                              {namedHospitalDoctors === 1 ? '' : 's'} added
                               {price.doctorBilling === 'per_doctor' && price.doctorMultiplier > 1 && (
                                 <span style={{ color: BIZ.mutedWarm }}>
                                   {' '}· {price.doctorMultiplier} × {money((plan.monthly_price ?? 0))}
@@ -858,174 +843,17 @@ export default function BusinessRegister() {
                 {step === 3 && (
                   <>
                     <div style={{ flex: 1 }}>
-                      <StepKicker n={3} />
-                      <h3 style={h3Style}>Choose your coverage</h3>
-                      <p style={pStyle}>
-                        {onCommission
-                          ? `Tap the pincodes you want to reach. Coverage is free on your plan — you only pay ${commissionPct}% of ${commissionBasis}.`
-                          : flatPlan
-                            ? `Tap the pincodes you want to reach. Every pincode is included in ${plan.label.toLowerCase()} — pick as many as you can serve.`
-                            : 'Tap the pincodes you want to reach. Price updates as you go.'}
-                      </p>
-                      {/* desktop: grid + sticky summary side by side; tablet: summary below */}
-                      <div className="grid gap-6 items-start lg:grid-cols-[1fr_300px]">
-                        <div>
-                          {/* Filter and bulk actions, above the list they act on. */}
-                          <div className="flex gap-2 flex-wrap items-center mb-3">
-                            <input
-                              value={areaQuery}
-                              onChange={e => setAreaQuery(e.target.value)}
-                              placeholder="Search area or pincode…"
-                              style={{
-                                flex: '1 1 180px', minWidth: 0, padding: '10px 13px', borderRadius: 11,
-                                border: `1.5px solid ${BIZ.inputBorder}`, fontFamily: 'inherit',
-                                fontSize: 14, color: BIZ.ink, background: '#fff',
-                              }} />
-                            <button onClick={() => setZips(coverage.map(z => z.pin_code))}
-                              style={{
-                                padding: '10px 14px', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit',
-                                fontSize: 13, fontWeight: 800, border: `1.5px solid ${BIZ.green}`,
-                                background: '#fff', color: BIZ.green, whiteSpace: 'nowrap',
-                              }}>
-                              Select all
-                            </button>
-                            {zips.length > 0 && (
-                              <button onClick={() => setZips([])}
-                                style={{
-                                  padding: '10px 14px', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit',
-                                  fontSize: 13, fontWeight: 700, border: `1.5px solid ${BIZ.inputBorder}`,
-                                  background: '#fff', color: BIZ.muted, whiteSpace: 'nowrap',
-                                }}>
-                                Clear
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Count first, so the choice is visible without
-                              scrolling back through the list. */}
-                          <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 10 }}>
-                            {zips.length === 0
-                              ? `${visibleAreas.length} area${visibleAreas.length === 1 ? '' : 's'} available`
-                              : <><strong style={{ color: BIZ.ink }}>{zips.length} selected</strong>
-                                  {areaQuery && ` · ${visibleAreas.length} matching`}</>}
-                          </div>
-
-                          <div style={{ border: `1px solid ${BIZ.border}`, borderRadius: 14, overflow: 'hidden' }}>
-                            {visibleAreas.length === 0 && (
-                              <div style={{ padding: '18px 14px', fontSize: 14, color: BIZ.mutedWarm, textAlign: 'center' }}>
-                                Nothing matches "{areaQuery}".
-                              </div>
-                            )}
-                            {visibleAreas.map((z, i) => {
-                              const on = zips.includes(z.pin_code)
-                              return (
-                                <button key={z.pin_code} onClick={() => toggleZip(z.pin_code)} style={{
-                                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                                  textAlign: 'left', padding: '11px 13px', cursor: 'pointer',
-                                  fontFamily: 'inherit', border: 'none',
-                                  borderTop: i === 0 ? 'none' : `1px solid ${BIZ.border}`,
-                                  background: on ? 'rgba(14,159,110,.08)' : '#fff',
-                                }}>
-                                  <span style={{
-                                    width: 20, height: 20, borderRadius: 6, flex: '0 0 auto',
-                                    border: `2px solid ${on ? BIZ.green : '#d8cfbd'}`,
-                                    background: on ? BIZ.green : '#fff', color: '#fff',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
-                                  }}>{on ? '✓' : ''}</span>
-                                  <span style={{ flex: 1, minWidth: 0 }}>
-                                    <span style={{ fontSize: 14.5, fontWeight: 700, color: BIZ.ink }}>{z.area_name}</span>
-                                    <span style={{ fontSize: 12.5, color: BIZ.mutedWarm }}> · {z.pin_code}</span>
-                                    <span style={{ display: 'block', fontSize: 12, color: BIZ.mutedWarm, marginTop: 2 }}>
-                                      {num(z.population)} residents
-                                    </span>
-                                  </span>
-                                  {/* Only show a per-area price when the plan
-                                      actually charges per area — under a flat
-                                      plan it is noise on every row. */}
-                                  <span style={{ fontSize: 12.5, fontWeight: 700, color: BIZ.green, flex: '0 0 auto', textAlign: 'right' }}>
-                                    {onCommission
-                                      ? 'no fee'
-                                      : plan.mode === 'flat_all_pincodes'
-                                        ? 'included'
-                                        : plan.mode === 'flat_per_pincode'
-                                          ? `${money((plan.monthly_price ?? 0))}/mo`
-                                          : `${money(z.monthly_price)}/mo`}
-                                  </span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                        <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: 22 }} className="lg:sticky lg:top-5">
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.mutedWarm, textTransform: 'uppercase', letterSpacing: '.06em' }}>Your plan</div>
-                            {pricing && <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: BIZ.green }} />}
-                          </div>
-                          <SummaryRow label="Pincodes" value={String(price.count)} />
-                          <SummaryRow label="Residents reached" value={num(price.residents)} />
-                          {onCommission ? (
-                            <div style={{ borderTop: `1px dashed ${BIZ.inputBorder}`, paddingTop: 16 }}>
-                              <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 2 }}>Monthly listing fee</div>
-                              <div style={{ fontSize: 32, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>₹0</div>
-                              <div style={{ fontSize: 13.5, fontWeight: 800, color: BIZ.ink, marginTop: 12 }}>
-                                {commissionPct}% of {commissionBasis}
-                              </div>
-                              <div style={{ fontSize: 12, color: BIZ.mutedWarm, lineHeight: 1.5, marginTop: 4 }}>{verticalObj.commissionNote}</div>
-                            </div>
-                          ) : (
-                            <>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                <span style={{ fontSize: 14, color: BIZ.muted }}>{flatPlan ? 'Plan' : 'Plan tier'}</span>
-                                <span style={{ background: BIZ.chipBg, color: BIZ.chipText, fontSize: 13, fontWeight: 800, padding: '4px 10px', borderRadius: 999 }}>
-                                  {flatPlan ? 'All pincodes' : (price.topTier?.tier_name ?? '—')}
-                                </span>
-                              </div>
-                              <div style={{ borderTop: `1px dashed ${BIZ.inputBorder}`, paddingTop: 16 }}>
-                                <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginBottom: 2 }}>
-                                  {flatPlan ? plan.label : 'Estimated monthly'}
-                                </div>
-                                <div style={{ fontSize: 32, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>{money(price.monthlyTotal)}<span style={{ fontSize: 15, color: BIZ.mutedWarm, fontWeight: 600 }}>/mo</span></div>
-                                {flatPlan && (
-                                  <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 4, lineHeight: 1.5 }}>
-                                    Every pincode you pick is included — the price does not change with coverage.
-                                  </div>
-                                )}
-                                {months > 1 && (
-                                  <div style={{ fontSize: 13, color: BIZ.ink, fontWeight: 700, marginTop: 10 }}>
-                                    {money((price.monthlyTotal * months))} for {months} months
-                                  </div>
-                                )}
-                                {price.tax?.applied && (
-                                  <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 8, lineHeight: 1.6 }}>
-                                    + {price.tax.rate}% GST {money(price.tax.taxTotal)}
-                                    <div style={{ fontSize: 13, fontWeight: 800, color: BIZ.ink, marginTop: 2 }}>
-                                      {money(price.tax.grandTotal)} payable
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <FooterBar error={error}>
-                      <button onClick={prevStep} style={btnBack}>← Back</button>
-                      <button onClick={nextStep} style={btnPrimary}>Review →</button>
-                    </FooterBar>
-                  </>
-                )}
-
-                {step === 4 && (
-                  <>
-                    <div style={{ flex: 1 }}>
-                      <StepKicker n={4} />
+                      <StepKicker n={RAIL_STEPS.findIndex(r => r.n === 3) + 1} of={RAIL_STEPS.length} />
                       <h3 style={h3Style}>{onCommission ? 'Review & activate' : 'Review & pay'}</h3>
-                      <p style={pStyle}>Confirm your listing. You can change coverage anytime.</p>
+                      <p style={pStyle}>Confirm your listing. Your team can adjust coverage later on WhatsApp.</p>
                       <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, overflow: 'hidden' }}>
                         <ReviewRow label="Service type" value={verticalObj.label} />
                         <ReviewRow label="Business name" value={form.business_name || form.owner_name || '—'} />
-                        <ReviewRow label="Pincodes selected" value={String(price.count)} />
+                        {/* Coverage was never asked for, so it is stated rather
+                            than described as a selection — this is the only
+                            place a business sees how wide their listing runs
+                            before they pay for it. */}
+                        <ReviewRow label="Areas covered" value={`All ${price.count} service area${price.count === 1 ? '' : 's'}`} />
                         <ReviewRow label="Total reach" value={`${num(price.residents)} residents`} />
                         {onCommission
                           ? <ReviewRow label="Plan" value={`${commissionPct}% of ${commissionBasis}`} />
@@ -1215,8 +1043,8 @@ const btnPrimary: React.CSSProperties = { background: BIZ.green, color: '#fff', 
 const btnBack: React.CSSProperties = { background: '#fff', color: '#3f4a44', fontWeight: 700, fontSize: 15, padding: '13px clamp(18px,4.5vw,24px)', minHeight: 48, borderRadius: 12, border: `1px solid ${BIZ.inputBorder}`, cursor: 'pointer', fontFamily: 'inherit' }
 const btnWhatsApp: React.CSSProperties = { background: '#25D366', color: '#fff', fontWeight: 800, fontSize: 15, padding: '13px 20px', minHeight: 48, borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%' }
 
-function StepKicker({ n }: { n: number }) {
-  return <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.mutedWarm, letterSpacing: '.06em' }}>STEP {n} OF 4</div>
+function StepKicker({ n, of }: { n: number; of: number }) {
+  return <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.mutedWarm, letterSpacing: '.06em' }}>STEP {n} OF {of}</div>
 }
 
 function FooterBar({ children, error }: { children: React.ReactNode; error?: string }) {
@@ -1245,15 +1073,6 @@ function Field({ label, placeholder, value, onChange, type = 'text', inputMode, 
         type={type} inputMode={inputMode} autoComplete={autoComplete}
         style={{ width: '100%', padding: '12px 14px', border: `1px solid ${BIZ.inputBorder}`, borderRadius: 12, fontSize: 16, fontFamily: 'inherit', outline: 'none', background: '#fdfbf6' }} />
     </label>
-  )
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-      <span style={{ fontSize: 14, color: BIZ.muted }}>{label}</span>
-      <span style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink }}>{value}</span>
-    </div>
   )
 }
 

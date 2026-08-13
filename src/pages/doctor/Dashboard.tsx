@@ -4,8 +4,9 @@ import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
 import { money, shortDate, isoDate } from '../../lib/format'
-import { BIZ, verticalForSpeciality, takesAppointments, verticalFor } from '../business/shared'
-import { Doctor, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
+import { BIZ, takesAppointments, verticalFor, hasPractitioners, VerticalKey } from '../business/shared'
+import { registerPractitioner, attachPractitioner, detachPractitioner } from '../../lib/identityApi'
+import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
@@ -38,11 +39,11 @@ interface CampOffer {
 
 export default function DoctorDashboard() {
   const { t } = useLanguage()
-  const [doctor, setDoctor] = useState<Doctor | null>(null)
+  const [doctor, setDoctor] = useState<Business | null>(null)
   // Every listing this login reaches. One WhatsApp number can carry more than
   // one — a clinic and a pharmacy run by the same family — and before this the
   // dashboard could only ever show one of them.
-  const [listings, setListings] = useState<Doctor[]>([])
+  const [listings, setListings] = useState<Business[]>([])
   // Which listing the dashboard is showing. Switching sets this, and the load
   // effect keys on it, so appointments/staff/hours all follow — setting only
   // `doctor` would have left one listing's name above another's data.
@@ -176,7 +177,20 @@ export default function DoctorDashboard() {
   // ── Hospital roster ──
   // Only present when this listing belongs to an organisation. A solo practice
   // never sees any of it.
-  const [roster, setRoster] = useState<Doctor[]>([])
+  /** Everyone attached to this business, with the person joined on. */
+  interface RosterRow {
+    id: string
+    practitioner_id: string
+    role: string
+    is_primary: boolean
+    consultation_fee: number
+    status: string
+    practitioners: {
+      id: string; full_name: string; speciality: string | null
+      qualification: string | null; reg_number: string | null; status: string
+    } | null
+  }
+  const [roster, setRoster] = useState<RosterRow[]>([])
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
   const [showAddDoc, setShowAddDoc] = useState(false)
@@ -189,44 +203,71 @@ export default function DoctorDashboard() {
   }
   const [plan, setPlan] = useState<PlanTerms | null>(null)
 
-  const loadRoster = async (orgId: string) => {
-    const { data } = await supabase.from('doctors')
-      .select('*').eq('organization_id', orgId).eq('is_hospital_doctor', true)
-      .order('name')
-    setRoster((data as Doctor[]) || [])
+  const loadRoster = async (businessId: string) => {
+    const { data } = await supabase.from('business_practitioners')
+      .select('*, practitioners(id, full_name, speciality, qualification, reg_number, status)')
+      .eq('business_id', businessId)
+      .order('sort_order')
+    setRoster((data as RosterRow[]) || [])
   }
 
-  const addRosterDoctor = async () => {
-    if (!doctor || !docForm.name.trim()) return
+  /**
+   * Add a doctor — attaching one who already exists wherever possible.
+   *
+   * The old version could only ever create: a consultant who already worked at
+   * another hospital was typed in again as a fresh record, and the two copies
+   * then drifted. registerPractitioner deduplicates on (council, registration
+   * number), so a doctor entered with their real registration resolves to the
+   * person already on file.
+   */
+  const addRosterDoctor = async (picked?: { practitionerId: string }) => {
+    if (!doctor || (!picked && !docForm.name.trim())) return
     setRosterBusy(true); setRosterErr('')
-    const { error } = await supabase.rpc('sehat_org_add_doctor', {
-      p_org_listing_id: doctor.id,
-      p_name: docForm.name.trim(),
-      p_speciality: docForm.speciality,
-      p_qualification: docForm.qualification || null,
-      p_phone: docForm.phone || null,
-    })
-    setRosterBusy(false)
-    if (error) { setRosterErr(error.message); return }
-    setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '' })
-    setShowAddDoc(false)
-    if (doctor.organization_id) await loadRoster(doctor.organization_id)
+    try {
+      const practitionerId = picked?.practitionerId ?? await registerPractitioner({
+        fullName: docForm.name.trim(),
+        speciality: docForm.speciality,
+        qualification: docForm.qualification || null,
+        phone: docForm.phone || '',
+      })
+      await attachPractitioner({
+        businessId: doctor.id,
+        practitionerId,
+        role: 'doctor',
+        consultationFee: 0,
+      })
+      setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '' })
+      setShowAddDoc(false)
+      await loadRoster(doctor.id)
+    } catch (e) {
+      setRosterErr((e as Error).message)
+    } finally {
+      setRosterBusy(false)
+    }
   }
 
-  const setRosterStatus = async (id: string, status: 'suspended' | 'active') => {
+  /** Removing is suspending the AFFILIATION, not the person: they keep working
+   *  wherever else they work, and the appointments made here stay attributable. */
+  const setRosterStatus = async (practitionerId: string, status: 'suspended' | 'active') => {
     if (!doctor) return
     setRosterBusy(true); setRosterErr('')
-    const { error } = await supabase.rpc('sehat_org_set_doctor_status', {
-      p_doctor_id: id, p_status: status,
-    })
-    setRosterBusy(false)
-    if (error) { setRosterErr(error.message); return }
-    if (doctor.organization_id) await loadRoster(doctor.organization_id)
+    try {
+      if (status === 'suspended') {
+        await detachPractitioner(doctor.id, practitionerId)
+      } else {
+        await attachPractitioner({ businessId: doctor.id, practitionerId, role: 'doctor' })
+      }
+      await loadRoster(doctor.id)
+    } catch (e) {
+      setRosterErr((e as Error).message)
+    } finally {
+      setRosterBusy(false)
+    }
   }
 
-  // Consultants that count towards the bill — suspended ones do not, which is
+  // Doctors that count towards the bill — suspended ones do not, which is
   // the whole reason removing one is worth doing promptly.
-  const billableDoctors = roster.filter(d => d.status !== 'suspended').length
+  const billableDoctors = roster.filter(d => d.status !== 'suspended' && d.role === 'doctor').length
   // All of this comes from _shared/headcount.ts, which the pricing engine and
   // the signup wizard also use. Computing it here separately is what let this
   // panel go on quoting a superseded model.
@@ -397,10 +438,11 @@ export default function DoctorDashboard() {
           loadCamps(doc.id),
           loadLocations(doc.id),
           loadAvailability(doc.id),
-          // A solo practice has no roster and no headcount plan to read.
-          doc.organization_id
+          // Any business that has doctors has a roster now. It used to be
+          // hospitals only, because a clinic's doctors had nowhere to live.
+          hasPractitioners(doc.vertical as VerticalKey)
             ? Promise.all([
-                loadRoster(doc.organization_id),
+                loadRoster(doc.id),
                 supabase.from('active_pricing_plan')
                   .select('doctor_billing, monthly_price, included_doctors, extra_doctor_price')
                   .maybeSingle()
@@ -419,7 +461,7 @@ export default function DoctorDashboard() {
   // 'today' does not exist for a pharmacy or an agent, so it would render an
   // empty page on their first visit.
   useEffect(() => {
-    if (doctor && !takesAppointments(verticalForSpeciality(doctor.speciality)) && (tab === 'today' || tab === 'appointments')) {
+    if (doctor && !takesAppointments(doctor.vertical as VerticalKey) && (tab === 'today' || tab === 'appointments')) {
       setTab('reports')
     }
   }, [doctor, tab])
@@ -650,7 +692,7 @@ export default function DoctorDashboard() {
   // a schedule of consultation hours. The plumbing underneath — login, bills,
   // reports, locations — is identical for every vertical because they all share
   // the doctors table, so only what is offered needs to differ.
-  const myVertical = verticalForSpeciality(doctor?.speciality)
+  const myVertical = (doctor?.vertical ?? 'clinic') as VerticalKey
   const booksAppointments = takesAppointments(myVertical)
   const verticalLabel = verticalFor(myVertical).label
 
@@ -696,12 +738,9 @@ export default function DoctorDashboard() {
             </div>
             <div style={{ minWidth: 0 }}>
               <h1 style={{ fontSize: 14, fontWeight: 800, color: '#fff', margin: 0, lineHeight: 1.3 }}>{doctor.name}</h1>
-              {[doctor.qualification, doctor.clinic_name !== doctor.name ? doctor.clinic_name : null].filter(Boolean).length > 0 && (
-                <p style={{ fontSize: 12, color: '#8fa89d', margin: '2px 0 0', lineHeight: 1.4 }}>
-                  {[doctor.qualification, doctor.clinic_name !== doctor.name ? doctor.clinic_name : null]
-                    .filter(Boolean).join(' · ')}
-                </p>
-              )}
+              <p style={{ fontSize: 12, color: '#8fa89d', margin: '2px 0 0', lineHeight: 1.4 }}>
+                {verticalFor(myVertical).label}
+              </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2" style={{ marginTop: 11 }}>
@@ -1393,8 +1432,9 @@ export default function DoctorDashboard() {
 
         {tab === 'clinic' && (
           <div className="space-y-4">
-            {/* Consultants. Only for a hospital — a solo practice never sees this. */}
-            {doctor.organization_id && (
+            {/* The doctors who work here. Shown for clinics too now: the roster
+                is affiliations, and a clinic has those the same as a hospital. */}
+            {hasPractitioners(myVertical) && (
               <div className="card shadow-sm">
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                   <h3 className="font-bold text-navy-700">Your doctors</h3>
@@ -1442,7 +1482,7 @@ export default function DoctorDashboard() {
                       </p>
                     )}
                     <div className="flex gap-2">
-                      <button onClick={addRosterDoctor} disabled={rosterBusy || !docForm.name.trim()}
+                      <button onClick={() => addRosterDoctor()} disabled={rosterBusy || !docForm.name.trim()}
                         className="btn-teal text-sm py-2 px-5 disabled:opacity-50">
                         {rosterBusy ? 'Adding…' : 'Add'}
                       </button>
@@ -1458,26 +1498,33 @@ export default function DoctorDashboard() {
                   )}
                   {roster.map(d => {
                     const suspended = d.status === 'suspended'
+                    const person = d.practitioners
                     return (
                       <div key={d.id} className={`flex items-center gap-3 flex-wrap border rounded-xl p-3 ${suspended ? 'border-gray-100 bg-gray-50 opacity-70' : 'border-gray-100'}`}>
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-navy-700 flex items-center gap-2 flex-wrap">
-                            {d.name}
+                            {person?.full_name ?? 'Unknown'}
                             {d.status === 'pending' && (
                               <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">AWAITING APPROVAL</span>
                             )}
                             {suspended && (
                               <span className="text-[10px] font-bold text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded">REMOVED</span>
                             )}
+                            {/* Says plainly that this doctor works elsewhere too,
+                                so nobody mistakes "remove" for deleting them. */}
+                            {d.is_primary === false && !suspended && (
+                              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded">VISITING</span>
+                            )}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {SPECIALITIES.find(sp => sp.id === d.speciality)?.en ?? d.speciality}
-                            {d.qualification ? ` · ${d.qualification}` : ''}
+                            {SPECIALITIES.find(sp => sp.id === person?.speciality)?.en ?? person?.speciality ?? 'Doctor'}
+                            {person?.qualification ? ` · ${person.qualification}` : ''}
+                            {d.consultation_fee > 0 ? ` · ₹${d.consultation_fee} here` : ''}
                             {suspended ? ' · not on your bill' : ''}
                           </div>
                         </div>
                         <button disabled={rosterBusy}
-                          onClick={() => setRosterStatus(d.id, suspended ? 'active' : 'suspended')}
+                          onClick={() => setRosterStatus(d.practitioner_id, suspended ? 'active' : 'suspended')}
                           className={`text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50 ${
                             suspended ? 'bg-teal-50 hover:bg-teal-100 text-teal-700'
                                       : 'bg-red-50 hover:bg-red-100 text-red-500'}`}>
@@ -1490,8 +1537,9 @@ export default function DoctorDashboard() {
                 {/* Removing is reversible and keeps history — worth saying, or a
                     clinic will hesitate to remove someone who has left. */}
                 <p className="text-xs text-gray-400 mt-3">
-                  Removing a doctor takes them off the site and off your bill, and keeps their past
-                  appointments. You can bring them back at any time.
+                  Removing a doctor takes them off your listing and off your bill, and keeps their
+                  past appointments. It does not affect anywhere else they work. You can bring
+                  them back at any time.
                 </p>
               </div>
             )}

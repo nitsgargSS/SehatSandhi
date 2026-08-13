@@ -1,14 +1,24 @@
 import { useEffect, useState } from 'react'
 import { track } from '../../lib/analytics'
-import { PracticeLocation } from '../../types'
 import { useParams, Link } from 'react-router-dom'
 import { MapPin, Clock, CheckCircle2, ArrowLeft, Share2, Copy, Star } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { Doctor, SPECIALITIES, WA_NUMBER } from '../../types'
+import { Practitioner, SPECIALITIES, WA_NUMBER } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../../components/SiteHeader'
 import SiteFooter from '../../components/SiteFooter'
 import { Spinner } from '../../components/Loading'
+
+/** A place this doctor practises, and what they charge there. */
+interface Post {
+  business_id: string
+  business_name: string
+  vertical: string
+  address: string | null
+  pin_codes: string[]
+  consultation_fee: number
+  is_primary: boolean
+}
 
 interface RatingAgg {
   avg_rating: number
@@ -36,8 +46,11 @@ const subRatingLabel = (t: (k: string) => string, v: string | null) => {
 export default function DoctorProfile() {
   const { slug } = useParams()
   const { t, lang } = useLanguage()
-  const [doctor, setDoctor] = useState<Doctor | null>(null)
-  const [locations, setLocations] = useState<PracticeLocation[]>([])
+  const [doctor, setDoctor] = useState<Practitioner | null>(null)
+  // Where this doctor works. Each post carries the fee AT that business,
+  // because the same doctor legitimately charges differently in different
+  // places — which a single consultation_fee on one row could never say.
+  const [posts, setPosts] = useState<Post[]>([])
   const [ratingAgg, setRatingAgg] = useState<RatingAgg | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
@@ -68,14 +81,14 @@ export default function DoctorProfile() {
       // ("operator does not exist: uuid ~~*"), so the prefix match is expressed
       // as a range over the text form instead: everything from the fragment up
       // to the next value. Uses the primary key index rather than a scan.
-      let query = supabase.from('doctors').select('*').eq('status', 'active')
+      let query = supabase.from('practitioners').select('*').eq('status', 'active')
       query = looksLikeId
         ? query.gte('id', `${idFragment}-0000-0000-0000-000000000000`)
                .lte('id', `${idFragment}-ffff-ffff-ffff-ffffffffffff`)
         // Links shared before ids were in the slug. Best effort on the name,
         // and limit(1) rather than .single() so a near-miss shows SOMETHING
         // rather than 404ing both listings.
-        : query.ilike('name', `%${slug.replace(/-/g, ' ')}%`)
+        : query.ilike('full_name', `%${slug.replace(/-/g, ' ')}%`)
 
       const { data: rows, error } = await query.limit(1)
       if (error) console.warn('[profile] lookup failed:', error.message)
@@ -86,24 +99,28 @@ export default function DoctorProfile() {
       // denominator for "seen 240 times, opened 12".
       if (data?.id) track('doctor_view', { doctorId: data.id, speciality: data.speciality })
 
-      // Every clinic this doctor sits at. A patient who is not told which
-      // building to walk into is the problem multi-location exists to solve.
+      // Everywhere this doctor works, primary first. This used to be the
+      // branches of one listing; it is now the businesses they are attached to,
+      // which is the same question asked correctly — a visiting consultant's
+      // other hospital was simply invisible before.
       if (data?.id) {
-        const { data: locs } = await supabase.from('practice_locations')
-          .select('*').eq('doctor_id', data.id).eq('is_active', true)
+        const { data: posts } = await supabase
+          .from('public_practitioner_businesses')
+          .select('*').eq('practitioner_id', data.id)
           .order('is_primary', { ascending: false })
-        setLocations((locs as PracticeLocation[]) || [])
-      }
+        setPosts((posts ?? []) as Post[])
 
-      if (data?.id) {
-        const [{ data: agg }, { data: reviewRows }] = await Promise.all([
-          supabase.from('rating_aggregate').select('*').eq('doctor_id', data.id).maybeSingle(),
-          supabase.from('ratings').select('id, overall_rating, waiting_time, communication, value_for_money, review_text, created_at')
-            .eq('doctor_id', data.id).eq('is_visible', true)
-            .order('created_at', { ascending: false }).limit(10),
-        ])
-        setRatingAgg(agg)
-        setReviews(reviewRows || [])
+        // Reviews follow the places they work: a patient rates where they were
+        // seen. Aggregated across all of them for this doctor's own page.
+        const businessIds = (posts ?? []).map(b => b.business_id)
+        if (businessIds.length) {
+          const { data: reviewRows } = await supabase
+            .from('ratings')
+            .select('id, overall_rating, waiting_time, communication, value_for_money, review_text, created_at')
+            .in('business_id', businessIds).eq('is_visible', true)
+            .order('created_at', { ascending: false }).limit(10)
+          setReviews(reviewRows || [])
+        }
       }
 
       setLoading(false)
@@ -118,7 +135,7 @@ export default function DoctorProfile() {
   }
 
   const waMsg = encodeURIComponent(
-    `Namaste! Main ${doctor?.name || 'aapke doctor'} se appointment book karna chahta hoon. Sehatsandhi se aa raha hoon.`
+    `Namaste! Main ${doctor?.full_name || 'aapke doctor'} se appointment book karna chahta hoon. Sehatsandhi se aa raha hoon.`
   )
 
   if (loading) return (
@@ -148,11 +165,11 @@ export default function DoctorProfile() {
   const schema: any = {
     '@context': 'https://schema.org',
     '@type': 'Physician',
-    name: doctor.name,
+    name: doctor.full_name,
     medicalSpecialty: speciality?.en || doctor.speciality,
     address: {
       '@type': 'PostalAddress',
-      streetAddress: doctor.address,
+      streetAddress: posts[0]?.address ?? '',
       addressRegion: 'Haryana',
       addressCountry: 'IN',
     },
@@ -187,14 +204,14 @@ export default function DoctorProfile() {
             {/* Avatar */}
             <div className="flex items-end justify-between -mt-12 mb-4">
               <div className="w-24 h-24 rounded-2xl bg-white border-4 border-white shadow-md flex items-center justify-center text-3xl font-bold text-teal-600 bg-teal-50">
-                {doctor.name.split(' ').pop()?.charAt(0)}
+                {doctor.full_name.split(' ').pop()?.charAt(0)}
               </div>
               <div className="flex gap-2 mt-12">
                 <button onClick={copyLink}
                   className="flex items-center gap-1.5 text-xs border border-gray-200 px-3 py-1.5 rounded-lg hover:border-teal-400 text-gray-500 hover:text-teal-600 transition">
                   {copied ? <><CheckCircle2 className="w-3.5 h-3.5 text-teal-500" /> {t('profilePage.copied')}</> : <><Copy className="w-3.5 h-3.5" /> {t('profilePage.copyLink')}</>}
                 </button>
-                <button onClick={() => navigator.share?.({ title: doctor.name, url: window.location.href })}
+                <button onClick={() => navigator.share?.({ title: doctor.full_name, url: window.location.href })}
                   className="flex items-center gap-1.5 text-xs border border-gray-200 px-3 py-1.5 rounded-lg hover:border-teal-400 text-gray-500 hover:text-teal-600 transition">
                   <Share2 className="w-3.5 h-3.5" /> {t('profilePage.share')}
                 </button>
@@ -204,7 +221,7 @@ export default function DoctorProfile() {
             {/* Name + badges */}
             <div className="flex items-start justify-between flex-wrap gap-2 mb-1">
               <div>
-                <h1 className="text-2xl font-bold text-navy-700">{doctor.name}</h1>
+                <h1 className="text-2xl font-bold text-navy-700">{doctor.full_name}</h1>
                 <p className="text-gray-500 text-sm">{doctor.qualification}</p>
               </div>
               <div className="flex flex-col items-end gap-1.5">
@@ -248,45 +265,39 @@ export default function DoctorProfile() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
                 <MapPin className="w-4 h-4 text-teal-500 mt-0.5 shrink-0" />
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-gray-400 mb-0.5">
-                    {locations.length > 1 ? 'Clinics' : t('profilePage.labelClinicAddress')}
+                    {posts.length > 1 ? 'Where they practise' : t('profilePage.labelClinicAddress')}
                   </p>
-                  {locations.length > 0 ? (
-                    locations.map((l, i) => (
-                      <div key={l.id} className={i > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}>
-                        <p className="text-sm text-gray-700">{l.name}</p>
-                        {l.address && <p className="text-xs text-gray-500">{l.address}</p>}
-                        {l.phone && <p className="text-xs text-gray-500">{l.phone}</p>}
+                  {posts.length > 0 ? (
+                    posts.map((b, i) => (
+                      <div key={b.business_id} className={i > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}>
+                        <p className="text-sm text-gray-700">
+                          {b.business_name}
+                          {b.is_primary && posts.length > 1 && (
+                            <span className="text-[10px] bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded-full ml-1.5">
+                              main
+                            </span>
+                          )}
+                        </p>
+                        {b.address && <p className="text-xs text-gray-500">{b.address}</p>}
+                        {b.consultation_fee > 0 && (
+                          <p className="text-xs text-gray-500">₹{b.consultation_fee} consultation</p>
+                        )}
                       </div>
                     ))
                   ) : (
-                    <>
-                      <p className="text-sm text-gray-700">{doctor.clinic_name}</p>
-                      <p className="text-xs text-gray-500">{doctor.address}</p>
-                    </>
+                    <p className="text-sm text-gray-500">Not currently listed at a clinic.</p>
                   )}
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
-                <Clock className="w-4 h-4 text-teal-500 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">{t('profilePage.labelWorkingHours')}</p>
-                  <p className="text-sm text-gray-700">{doctor.working_hours || t('profilePage.defaultHours')}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
-                <span className="text-lg mt-0.5">💰</span>
-                <div>
-                  <p className="text-xs text-gray-400 mb-0.5">{t('profilePage.labelConsultFee')}</p>
-                  <p className="text-sm font-semibold text-navy-700">₹{doctor.consultation_fee}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
                 <span className="text-lg mt-0.5">📍</span>
                 <div>
                   <p className="text-xs text-gray-400 mb-0.5">{t('profilePage.labelCoverageArea')}</p>
-                  <p className="text-sm text-gray-700">{doctor.pin_codes?.join(', ')}</p>
+                  <p className="text-sm text-gray-700">
+                    {[...new Set(posts.flatMap(b => b.pin_codes ?? []))].join(', ')}
+                  </p>
                 </div>
               </div>
             </div>

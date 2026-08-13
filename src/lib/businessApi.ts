@@ -102,17 +102,17 @@ async function callFn<T>(name: string, payload: unknown, authToken?: string): Pr
 }
 
 // `vertical` is a quote-time hint so a pharmacy sees its own terms before its
-// listing row exists. Once doctorId is known the server reads the vertical off
-// that row instead, so the hint can never change what's charged. `months` is
+// business row exists. Once businessId is known the server reads the vertical
+// off that row instead, so the hint can never change what's charged. `months` is
 // clamped server-side to the active plan's bounds.
 export const computePrice = (
   pincodes: string[],
-  doctorId?: string | null,
+  businessId?: string | null,
   vertical?: string | null,
   months?: number | null,
-  /** Consultants typed into the wizard, before the listing exists to count them. */
+  /** Doctors typed into the wizard, before the business exists to count them. */
   doctorCount?: number | null,
-) => callFn<PriceResult>('compute-price', { pincodes, doctorId, vertical, months, doctorCount })
+) => callFn<PriceResult>('compute-price', { pincodes, businessId, vertical, months, doctorCount })
 
 export interface RazorpayOrder {
   orderId: string
@@ -130,12 +130,17 @@ export interface RazorpayOrder {
   termEnd: string
 }
 
-export interface HospitalDoctor {
+/** A doctor being registered alongside a business, before either row exists. */
+export interface DraftPractitioner {
   name: string
   speciality: string
   qualification?: string
   phone?: string
+  reg_number?: string
+  smc_id?: number
   consultation_fee?: number
+  /** Set when the wizard matched an existing person rather than typing a new one. */
+  practitioner_id?: string
 }
 
 export interface BuyerGstDetails {
@@ -146,9 +151,9 @@ export interface BuyerGstDetails {
 }
 
 export const createRazorpayOrder = (
-  pincodes: string[], doctorId: string, periodMonths = 1, gst: BuyerGstDetails = {},
+  pincodes: string[], businessId: string, periodMonths = 1, gst: BuyerGstDetails = {},
 ) =>
-  callFn<RazorpayOrder>('razorpay-order', { pincodes, doctorId, periodMonths, ...gst })
+  callFn<RazorpayOrder>('razorpay-order', { pincodes, businessId, periodMonths, ...gst })
 
 export const verifyRazorpayPayment = (args: {
   orderId: string

@@ -1,19 +1,28 @@
 export type DoctorStatus = 'pending' | 'active' | 'suspended'
 
-export interface Doctor {
+/**
+ * A listing: the business a patient finds and the entity we bill.
+ *
+ * Never a person. This used to be one `Doctor` type covering both, which is why
+ * a pharmacy had a `qualification` and a clinic had a `speciality` — see
+ * migration 0037 for the split.
+ */
+export interface Business {
   id: string
   name: string
-  qualification: string
-  reg_number: string
-  speciality: string
-  clinic_name: string
+  /** clinic | hospital | pharmacy | lab | insurance | ambulance. Its own column,
+   *  not smuggled into a speciality code. */
+  vertical: string
   address: string
   pin_codes: string[]
   phone: string
   email: string
-  consultation_fee: number
   working_hours: string
   photo_url?: string
+  /** The BUSINESS's licence. A doctor's medical registration belongs to them and
+   *  lives on Practitioner. */
+  reg_number?: string | null
+  google_place_id?: string | null
   status: DoctorStatus
   created_at: string
   // GST registration of the BUSINESS BEING BILLED — ours lives in tax_settings.
@@ -22,12 +31,38 @@ export interface Doctor {
   // its first two digits decide CGST+SGST versus IGST. Columns added in
   // migration 0007.
   gstin?: string
-  /** Set when this listing belongs to a hospital. Null for a solo practice. */
-  organization_id?: string | null
-  is_hospital_doctor?: boolean
   gst_legal_name?: string
   state_code?: string
   billing_address?: string
+}
+
+/** A person. Exists independently of any business, so one doctor can hold
+ *  several posts — typically one full-time and a few visiting. */
+export interface Practitioner {
+  id: string
+  full_name: string
+  speciality: string | null
+  qualification: string | null
+  reg_number: string | null
+  smc_id: number | null
+  imr_status?: string
+  phone?: string | null
+  email?: string | null
+  photo_url?: string | null
+  status: DoctorStatus
+  created_at: string
+}
+
+/** Who works where, and on what terms. */
+export interface BusinessPractitioner {
+  id: string
+  business_id: string
+  practitioner_id: string
+  role: 'owner' | 'doctor' | 'receptionist' | 'manager'
+  is_primary: boolean
+  consultation_fee: number
+  status: DoctorStatus
+  sort_order: number
 }
 
 // Where a doctor actually sits. A listing may have several; exactly one is

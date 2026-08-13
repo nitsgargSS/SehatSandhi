@@ -12,7 +12,7 @@
 // covers it) are rejected here — there is nothing to charge upfront. The plan
 // and the vertical both come from the server, never from the request body.
 //
-// Request:  { pincodes: string[], doctorId: string, periodMonths?: number }
+// Request:  { pincodes: string[], businessId: string, periodMonths?: number }
 // The amount charged INCLUDES GST when tax_settings has it enabled: the plan
 // price is the taxable value and 18% is added on top (or backed out, for a plan
 // quoted inclusive). The breakdown is stored on the payments row, and
@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
   if (!keyId || !keySecret) return json({ error: 'Razorpay not configured' }, 500)
 
   let body: {
-    pincodes?: unknown; doctorId?: unknown; periodMonths?: unknown
+    pincodes?: unknown; businessId?: unknown; periodMonths?: unknown
     gstin?: unknown; gstLegalName?: unknown; billingAddress?: unknown
   }
   try {
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
   }
 
   const pincodes = Array.isArray(body.pincodes) ? body.pincodes.map(String) : []
-  const doctorId = typeof body.doctorId === 'string' ? body.doctorId : null
+  const businessId = typeof body.businessId === 'string' ? body.businessId : null
   const requestedMonths = Number.isFinite(body.periodMonths) ? Number(body.periodMonths) : null
 
   if (!pincodes.length) return json({ error: 'no pincodes selected' }, 400)
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
   // invoice, and a business that cannot claim the input credit because of a
   // typo has paid 18% for nothing.
   const rawGstin = typeof body.gstin === 'string' ? body.gstin.trim().toUpperCase() : ''
-  if (rawGstin && doctorId) {
+  if (rawGstin && businessId) {
     if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(rawGstin)) {
       return json({ error: 'That GSTIN is not 15 characters in the expected format.' }, 400)
     }
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
       patch.billing_address = body.billingAddress.trim()
     }
 
-    const { error: gstErr } = await supabase.from('doctors').update(patch).eq('id', doctorId)
+    const { error: gstErr } = await supabase.from('businesses').update(patch).eq('id', businessId)
     if (gstErr) return json({ error: `could not save GST details: ${gstErr.message}` }, 500)
   }
 
@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
   // computePrice clamps the requested months to the plan's min/max.
   let priced
   try {
-    priced = await computePrice(supabase, pincodes, doctorId, null, requestedMonths)
+    priced = await computePrice(supabase, pincodes, businessId, null, requestedMonths)
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)
   }
@@ -156,9 +156,9 @@ Deno.serve(async (req) => {
   // loses none.
   const today = new Date()
   let termStart = today
-  if (doctorId) {
+  if (businessId) {
     const { data: doc } = await supabase
-      .from('doctors').select('term_end').eq('id', doctorId).maybeSingle()
+      .from('businesses').select('term_end').eq('id', businessId).maybeSingle()
     const existingEnd = (doc as { term_end?: string } | null)?.term_end
     if (existingEnd) {
       const end = new Date(`${existingEnd}T00:00:00Z`)
@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
   const { data: pay, error: pErr } = await supabase
     .from('payments')
     .insert({
-      doctor_id: doctorId,
+      business_id: businessId,
       // amount is the grand total actually taken, so anything reading it sees
       // real money. The pre-tax figure lives in taxable_value.
       amount: chargeable,
@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
       receipt: pay.id,
       notes: {
         payment_row_id: pay.id,
-        doctor_id: doctorId ?? '',
+        business_id: businessId ?? '',
         pincodes: priced.pincodes.join(','),
         plan: priced.planCode ?? '',
         months: String(months),

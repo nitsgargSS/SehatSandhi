@@ -16,10 +16,14 @@ export const BIZ = {
   chipText: '#0b7d57',
 } as const
 
+// Must match businesses.vertical and vertical_billing.vertical exactly: the
+// billing row is looked up by this string, and a spelling that does not match
+// silently falls through to the defaults. 'clinic', not 'doctors' — a doctor is
+// a person now, and this names the establishment.
 export type VerticalKey =
-  | 'doctors' | 'hospital' | 'pharmacy' | 'lab' | 'insurance' | 'ambulance'
+  | 'clinic' | 'hospital' | 'pharmacy' | 'lab' | 'insurance' | 'ambulance'
 
-// How a vertical pays. Doctors, hospitals and labs buy pincodes monthly (see
+// How a vertical pays. Clinics, hospitals and labs buy pincodes monthly (see
 // PRICING_TIERS below); pharmacies, insurance agents and ambulance services list
 // free and pay a percentage of what they bill instead.
 export type BillingModel = 'pincode_monthly' | 'commission'
@@ -29,9 +33,6 @@ export interface Vertical {
   label: string
   sub: string
   color: string
-  /** maps to doctors.speciality / qualification for the DB insert */
-  dbSpeciality: string
-  qualification: string
   billing: BillingModel
   /** commission plan only — % of billing we take */
   commissionPercent?: number
@@ -70,16 +71,16 @@ export const DOCTOR_QUALIFICATIONS: { value: string; label: string; nmc: boolean
 ]
 
 export const VERTICALS: Vertical[] = [
-  { key: 'doctors',   label: 'Doctors / Clinic',           sub: '20 specialities',        color: '#0E9F6E', dbSpeciality: 'GEN',       qualification: 'Clinic',            billing: 'pincode_monthly' },
-  { key: 'hospital',  label: 'Hospital',                   sub: 'Multi-speciality',       color: '#2563EB', dbSpeciality: 'HOSPITAL',  qualification: 'Hospital',          billing: 'pincode_monthly' },
-  { key: 'pharmacy',  label: 'Pharmacy / Medical Store',   sub: 'Medicine delivery',      color: '#DB2777', dbSpeciality: 'PHARMACY',  qualification: 'Pharmacy',          billing: 'commission', commissionPercent: 10,
+  { key: 'clinic',    label: 'Clinic',                     sub: 'One or more doctors',    color: '#0E9F6E', billing: 'pincode_monthly' },
+  { key: 'hospital',  label: 'Hospital',                   sub: 'Multi-speciality',       color: '#2563EB', billing: 'pincode_monthly' },
+  { key: 'pharmacy',  label: 'Pharmacy / Medical Store',   sub: 'Medicine delivery',      color: '#DB2777', billing: 'commission', commissionPercent: 10,
     commissionBasis: 'order value',
     commissionNote: 'Applies to prescription orders that reach you through Sehatsandhi. No monthly listing fee, whatever pincodes you pick.' },
-  { key: 'lab',       label: 'Diagnostic Lab',             sub: 'Tests & sample pickup',  color: '#7C3AED', dbSpeciality: 'LAB',       qualification: 'Diagnostic Lab',    billing: 'pincode_monthly' },
-  { key: 'insurance', label: 'Health Insurance',           sub: 'Plans & agents',         color: '#0891B2', dbSpeciality: 'INSURANCE', qualification: 'IRDA Licensed',     billing: 'commission', commissionPercent: 10,
+  { key: 'lab',       label: 'Diagnostic Lab',             sub: 'Tests & sample pickup',  color: '#7C3AED', billing: 'pincode_monthly' },
+  { key: 'insurance', label: 'Health Insurance',           sub: 'Plans & agents',         color: '#0891B2', billing: 'commission', commissionPercent: 10,
     commissionBasis: 'your commission',
     commissionNote: 'We take 10% of the IRDA commission you earn on policies sold through us — you keep 90%. Your commission rate with the insurer is untouched. No monthly listing fee.' },
-  { key: 'ambulance', label: 'Ambulance Service',          sub: 'Emergency response',     color: '#DC2626', dbSpeciality: 'AMBULANCE', qualification: 'Ambulance Service', billing: 'commission', commissionPercent: 10,
+  { key: 'ambulance', label: 'Ambulance Service',          sub: 'Emergency response',     color: '#DC2626', billing: 'commission', commissionPercent: 10,
     commissionBasis: 'non-emergency billing',
     commissionNote: 'Emergency calls are always commission-free — we take nothing on them. The 10% applies only to scheduled, non-emergency transport. No monthly listing fee.' },
 ]
@@ -91,19 +92,6 @@ export const isCommissionVertical = (key: VerticalKey): boolean =>
   verticalFor(key).billing === 'commission'
 
 /**
- * Which vertical a listing belongs to, from the speciality stored on its row.
- *
- * Anything unrecognised is a doctor: a cardiologist is stored as CARD, a
- * dermatologist as SKIN, and only the six business types have codes of their
- * own. Mirrors SPECIALITY_TO_VERTICAL in the pricing engine, which resolves the
- * same question server-side and must reach the same answer.
- */
-export const verticalForSpeciality = (speciality?: string | null): VerticalKey => {
-  const match = VERTICALS.find(v => v.dbSpeciality === (speciality ?? '').toUpperCase())
-  return match?.key ?? 'doctors'
-}
-
-/**
  * Does this vertical see patients at a booked time?
  *
  * A pharmacy takes orders, an agent takes calls and an ambulance takes
@@ -111,7 +99,12 @@ export const verticalForSpeciality = (speciality?: string | null): VerticalKey =
  * consultation slots is noise on their dashboard rather than a feature.
  */
 export const takesAppointments = (key: VerticalKey): boolean =>
-  key === 'doctors' || key === 'hospital' || key === 'lab'
+  key === 'clinic' || key === 'hospital' || key === 'lab'
+
+/** Does this vertical have doctors working at it? Drives whether registration
+ *  offers the "add your doctors" step at all. */
+export const hasPractitioners = (key: VerticalKey): boolean =>
+  key === 'clinic' || key === 'hospital'
 
 
 // The four population tiers, matching supabase pricing_tiers and the landing's
