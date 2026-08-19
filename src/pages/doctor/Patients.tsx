@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2 } from 'lucide-react'
+import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
 import {
@@ -9,6 +9,11 @@ import {
   logAccess,
   PatientSearchResult, PatientSummary, Visit, Vital, Allergy, Condition, Medication,
 } from '../../lib/patientsApi'
+import {
+  getAdmissions, admitPatient, dischargePatient, getOccupancy,
+  getAdmissionNotes, addAdmissionNote,
+  Admission, AdmissionNote, OccupancyRow,
+} from '../../lib/admissionsApi'
 import {
   issuePrescription, getPrescriptions, cancelPrescription, sendPrescription,
   uploadDocument, getDocuments, documentUrl, deleteDocument,
@@ -181,13 +186,14 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   const [meds, setMeds] = useState<Medication[]>([])
   const [scripts, setScripts] = useState<Prescription[]>([])
   const [docs, setDocs] = useState<PatientDocument[]>([])
+  const [stays, setStays] = useState<Admission[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs'>('history')
+  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd'>('history')
 
   const reload = useCallback(async () => {
     try {
-      const [s, v, vt, a, c, m, rx, dc] = await Promise.all([
+      const [s, v, vt, a, c, m, rx, dc, ad] = await Promise.all([
         getPatientSummary(memberId, businessId),
         getVisits(memberId, businessId),
         getVitals(memberId, businessId),
@@ -196,10 +202,11 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         getMedications(memberId, businessId),
         getPrescriptions(memberId, businessId),
         getDocuments(memberId, businessId),
+        getAdmissions(memberId, businessId),
       ])
       setSummary(s); setVisits(v); setVitals(vt)
       setAllergies(a); setConditions(c); setMeds(m)
-      setScripts(rx); setDocs(dc)
+      setScripts(rx); setDocs(dc); setStays(ad)
       setError('')
     } catch (e) {
       setError((e as Error).message)
@@ -288,6 +295,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         {([
           ['history', 'Visits'], ['clinical', 'Allergies & medicines'],
           ['vitals', 'Vitals'], ['rx', 'Prescriptions'], ['docs', 'Documents'],
+          ['ipd', 'Admissions'],
         ] as const).map(([id, lbl]) => (
           <button key={id} onClick={() => setPane(id)}
             style={{ ...btn(pane === id), fontSize: 12.5 }}>{lbl}</button>
@@ -313,6 +321,12 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         <PrescriptionsPane
           scripts={scripts} summary={summary} memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} allergies={live} onChange={reload}
+        />
+      )}
+      {pane === 'ipd' && (
+        <AdmissionsPane
+          stays={stays} memberId={memberId} businessId={businessId}
+          practitionerId={practitionerId} onChange={reload}
         />
       )}
       {pane === 'docs' && (
@@ -1000,6 +1014,212 @@ function VitalsPane({ memberId, businessId, vitals, onChange }: {
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Inpatient stays ─────────────────────────────────────────────────────────
+//
+// The chart side of IPD. The bed board lives in its own tab because "where is
+// everyone" is a different question from "what happened to this person" — but
+// a stay is part of one person's story, so it belongs here beside their visits
+// and prescriptions rather than somewhere a doctor has to go looking.
+
+function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange }: {
+  stays: Admission[]
+  memberId: string
+  businessId: string
+  practitionerId?: string | null
+  onChange: () => void
+}) {
+  const [admitting, setAdmitting] = useState(false)
+  const [free, setFree] = useState<OccupancyRow[]>([])
+  const [form, setForm] = useState({ bedId: '', reason: '', diagnosis: '', expected: '' })
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [openNotes, setOpenNotes] = useState<string | null>(null)
+
+  const current = stays.find(s => s.status === 'admitted')
+
+  useEffect(() => {
+    if (!admitting) return
+    getOccupancy(businessId)
+      .then(rows => setFree(rows.filter(r => !r.occupied)))
+      .catch(e => setErr((e as Error).message))
+  }, [admitting, businessId])
+
+  const admit = async () => {
+    setBusy(true); setErr('')
+    try {
+      await admitPatient({
+        patientMemberId: memberId, businessId,
+        bedId: form.bedId || null,
+        attendingPractitionerId: practitionerId ?? null,
+        reason: form.reason, admittingDiagnosis: form.diagnosis,
+        expectedDischarge: form.expected || null,
+      })
+      setForm({ bedId: '', reason: '', diagnosis: '', expected: '' })
+      setAdmitting(false); onChange()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      {!current && !admitting && (
+        <button onClick={() => setAdmitting(true)} style={{ ...btn(true), justifySelf: 'start' }}>
+          <BedDouble className="w-4 h-4" style={{ display: 'inline', marginRight: 5 }} /> Admit
+        </button>
+      )}
+
+      {admitting && (
+        <div style={card}>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div><div style={label}>Bed</div>
+              <select style={input} value={form.bedId} onChange={e => setForm({ ...form, bedId: e.target.value })}>
+                <option value="">No bed yet — admit and assign later</option>
+                {free.map(f => (
+                  <option key={f.bed_id} value={f.bed_id}>{f.ward_name} / bed {f.bed_label}</option>
+                ))}
+              </select>
+              {free.length === 0 && (
+                <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 4 }}>
+                  No free beds. You can still admit — set the bed from the Beds tab when one opens.
+                </div>
+              )}
+            </div>
+            <div><div style={label}>Reason for admission</div>
+              <input style={input} value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} /></div>
+            <div><div style={label}>Admitting diagnosis</div>
+              <input style={input} value={form.diagnosis} onChange={e => setForm({ ...form, diagnosis: e.target.value })} /></div>
+            <div><div style={label}>Expected discharge</div>
+              <input type="date" style={input} value={form.expected}
+                onChange={e => setForm({ ...form, expected: e.target.value })} /></div>
+            {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={admit} disabled={busy} style={btn(true)}>Admit</button>
+              <button onClick={() => setAdmitting(false)} style={btn()}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {err && !admitting && <div style={{ ...card, color: '#8a2b2b', fontSize: 13 }}>{err}</div>}
+
+      {stays.length === 0 && !admitting && (
+        <div style={{ ...card, color: BIZ.muted, fontSize: 13.5 }}>
+          Never admitted here.
+        </div>
+      )}
+
+      {stays.map(a => (
+        <div key={a.id} style={{
+          ...card,
+          borderColor: a.status === 'admitted' ? '#bfe3d0' : BIZ.border,
+          background: a.status === 'admitted' ? '#f6fbf8' : '#fff',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: BIZ.ink }}>
+                {a.admission_no}
+                <span style={{
+                  fontSize: 11, fontWeight: 800, marginLeft: 8, padding: '2px 7px', borderRadius: 999,
+                  background: a.status === 'admitted' ? BIZ.chipBg : BIZ.creamAlt,
+                  color: a.status === 'admitted' ? BIZ.chipText : BIZ.muted,
+                  textTransform: 'uppercase',
+                }}>{a.status.replace('_', ' ')}</span>
+              </div>
+              <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 3 }}>
+                {when(a.admitted_at)}
+                {a.discharged_at ? ` → ${when(a.discharged_at)}` : ''}
+                {` · ${a.days_stayed} day${a.days_stayed === 1 ? '' : 's'}`}
+                {a.ward_name && ` · ${a.ward_name} / ${a.bed_label}`}
+                {a.attending_name && ` · ${a.attending_name}`}
+              </div>
+            </div>
+            {a.status === 'admitted' && (
+              <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
+                onClick={async () => {
+                  const summary = window.prompt('Discharge summary (optional):')
+                  if (summary === null) return
+                  setBusy(true)
+                  try {
+                    await dischargePatient(a.id, {
+                      dischargeSummary: summary || undefined,
+                      practitionerId: practitionerId ?? null,
+                    })
+                    onChange()
+                  } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+                }}>Discharge</button>
+            )}
+          </div>
+
+          {a.admitting_diagnosis && <Row k="Admitted for" v={a.admitting_diagnosis} />}
+          {a.reason && !a.admitting_diagnosis && <Row k="Reason" v={a.reason} />}
+          {a.discharge_diagnosis && <Row k="Discharge diagnosis" v={a.discharge_diagnosis} />}
+          {a.discharge_summary && <Row k="Discharge summary" v={a.discharge_summary} />}
+
+          <button style={{ ...btn(), fontSize: 12, marginTop: 10 }}
+            onClick={() => setOpenNotes(openNotes === a.id ? null : a.id)}>
+            {openNotes === a.id ? 'Hide ward notes' : 'Ward notes'}
+          </button>
+
+          {openNotes === a.id && (
+            <WardNotes admissionId={a.id} businessId={businessId} practitionerId={practitionerId} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function WardNotes({ admissionId, businessId, practitionerId }: {
+  admissionId: string
+  businessId: string
+  practitionerId?: string | null
+}) {
+  const [notes, setNotes] = useState<AdmissionNote[]>([])
+  const [body, setBody] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => {
+    getAdmissionNotes(admissionId).then(setNotes).catch(e => setErr((e as Error).message))
+  }, [admissionId])
+  useEffect(load, [load])
+
+  return (
+    <div style={{ marginTop: 11, borderTop: `1px solid ${BIZ.border}`, paddingTop: 11 }}>
+      <div style={{ display: 'flex', gap: 7 }}>
+        <input style={{ ...input, flex: 1 }} placeholder="Add a progress note…"
+          value={body} onChange={e => setBody(e.target.value)} />
+        <button style={btn(true)} disabled={!body.trim() || busy}
+          onClick={async () => {
+            setBusy(true)
+            try {
+              await addAdmissionNote(admissionId, businessId, body.trim(), 'progress', practitionerId ?? null)
+              setBody(''); load()
+            } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+          }}>Add</button>
+      </div>
+      {err && <div style={{ fontSize: 12.5, color: '#8a2b2b', marginTop: 7 }}>{err}</div>}
+
+      <div style={{ marginTop: 10, display: 'grid', gap: 7 }}>
+        {notes.length === 0 && (
+          <div style={{ fontSize: 12.5, color: BIZ.muted }}>No notes yet.</div>
+        )}
+        {notes.map(n => (
+          <div key={n.id} style={{ fontSize: 13, color: BIZ.ink }}>
+            <span style={{ color: BIZ.mutedWarm, fontSize: 11.5 }}>
+              {new Date(n.recorded_at).toLocaleString('en-IN', {
+                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+              })}
+              {n.note_type !== 'progress' && ` · ${n.note_type.replace('_', ' ')}`}
+              {'  '}
+            </span>
+            {n.body}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

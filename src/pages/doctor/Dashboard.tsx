@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -7,6 +7,7 @@ import { money, shortDate, isoDate } from '../../lib/format'
 import { BIZ, takesAppointments, verticalFor, hasPractitioners, VerticalKey } from '../business/shared'
 import { registerPractitioner, attachPractitioner, detachPractitioner } from '../../lib/identityApi'
 import Patients from './Patients'
+import Wards from './Wards'
 import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -59,7 +60,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'appointments' | 'patients' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
+  const [tab, setTab] = useState<'today' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
 
   // ── Bills ──
   // Until now the only copy of an invoice was the WhatsApp link sent once at
@@ -678,6 +679,11 @@ export default function DoctorDashboard() {
     // Every vertical keeps records of who it has seen — a lab has patients as
     // much as a clinic does — so this one is not gated on appointments.
     { id: 'patients', label: 'Patients', icon: <UserSearch className="w-4 h-4" /> },
+    // Only where somebody is actually admitted. A pharmacy has no beds, and a
+    // single-doctor clinic that does day care has no use for a ward board.
+    ...(booksAppointments ? [
+      { id: 'beds', label: 'Beds', icon: <BedDouble className="w-4 h-4" /> },
+    ] : []),
     // Hours and branches matter to a pharmacy and an ambulance service too —
     // patients need to know when they are open and where.
     { id: 'schedule', label: booksAppointments ? t('dashboardPage.tabSchedule') : 'Hours & branches', icon: <Clock className="w-4 h-4" /> },
@@ -1240,6 +1246,11 @@ export default function DoctorDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ══════════ BEDS — the ward board ══════════ */}
+        {tab === 'beds' && doctor && (
+          <Wards businessId={doctor.id} practitionerId={myPractitionerId} />
         )}
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}

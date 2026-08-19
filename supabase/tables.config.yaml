@@ -176,6 +176,32 @@ tables:
     class: isolated
     purgeOrder: 90
 
+  # ── Inpatients (0048) ───────────────────────────────────────────────────
+  # Notes before stays, stays before beds, beds before wards — and all of them
+  # before businesses. Every FK here carries an ON DELETE clause, so ordering
+  # is convention rather than necessity, but the convention is what makes the
+  # next addition obvious.
+  admission_notes:
+    class: isolated
+    purgeOrder: 92
+
+  admissions:
+    class: isolated
+    purgeOrder: 94
+
+  admission_counters:
+    class: isolated
+    purgeOrder: 95
+    pk: business_id
+
+  beds:
+    class: isolated
+    purgeOrder: 96
+
+  wards:
+    class: isolated
+    purgeOrder: 98
+
   # The affiliation goes before either side of it: it is the child of both.
   business_practitioners:
     class: isolated
@@ -422,6 +448,8 @@ tables:
   patient_summary:          { class: view }
   business_appointment_list: { class: view }
   prescription_detail:      { class: view }
+  ward_occupancy:           { class: view }
+  admission_detail:         { class: view }
 
   # Billing and plan reporting.
   invoice_register:         { class: view }
