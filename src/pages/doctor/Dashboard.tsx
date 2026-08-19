@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -8,6 +8,7 @@ import { BIZ, takesAppointments, verticalFor, hasPractitioners, VerticalKey } fr
 import { registerPractitioner, attachPractitioner, detachPractitioner } from '../../lib/identityApi'
 import Patients from './Patients'
 import Wards from './Wards'
+import Queue from './Queue'
 import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -60,7 +61,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
 
   // ── Bills ──
   // Until now the only copy of an invoice was the WhatsApp link sent once at
@@ -674,6 +675,9 @@ export default function DoctorDashboard() {
   const tabs = [
     ...(booksAppointments ? [
       { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
+      // Above Appointments on purpose: the line is what reception works all
+      // day, the booking list is what they check occasionally.
+      { id: 'queue', label: 'Queue', icon: <ListOrdered className="w-4 h-4" /> },
       { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4" /> },
     ] : []),
     // Every vertical keeps records of who it has seen — a lab has patients as
@@ -1246,6 +1250,11 @@ export default function DoctorDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ══════════ QUEUE — today's OPD line ══════════ */}
+        {tab === 'queue' && doctor && (
+          <Queue businessId={doctor.id} practitionerId={myPractitionerId} />
         )}
 
         {/* ══════════ BEDS — the ward board ══════════ */}

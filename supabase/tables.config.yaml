@@ -148,6 +148,11 @@ tables:
     class: isolated
     purgeOrder: 20
 
+  # Today's OPD line (0054). Before appointments and visits, which it points at.
+  opd_queue:
+    class: isolated
+    purgeOrder: 22
+
   appointments:
     class: isolated
     purgeOrder: 30
@@ -471,6 +476,7 @@ tables:
   consultation_audio_to_purge: { class: view }
   admission_detail:         { class: view }
   admission_bed_history:    { class: view }
+  opd_board:                { class: view }
   patient_account:          { class: view }
   business_outstanding:     { class: view }
 
