@@ -429,8 +429,13 @@ tables:
   plan_enrolment:           { class: view }
   subscription_renewals_due: { class: view }
   public_tax_display:       { class: view }
+  active_pricing_plan:      { class: view }
+  pricing_plan_status:      { class: view }
 
-  # Analytics.
+  # Appointments and analytics.
+  appointment_detail:       { class: view }
+  appointment_outcomes:     { class: view }
+  business_daily_stats:     { class: view }
   demand_by_area:           { class: view }
   platform_daily_stats:     { class: view }
   visitors_live:            { class: view }
