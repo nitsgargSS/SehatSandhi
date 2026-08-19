@@ -207,3 +207,35 @@ export async function loadPosts(practitionerId: string) {
   if (error) throw new Error(error.message)
   return data ?? []
 }
+
+// ── What this login may see ─────────────────────────────────────────────────
+//
+// business_practitioners.role has existed since the schema was split, but until
+// 0057 nothing read it for access — every signed-in member of staff could open
+// every patient's record. It decides something now, and the UI has to agree
+// with the database or reception gets a screen full of panes that quietly
+// return nothing.
+//
+// The database is still the authority. This only decides what to draw.
+
+export type ClinicRole = 'owner' | 'doctor' | 'receptionist' | 'manager'
+
+/** The caller's role at this business, or null if they have no access. */
+export async function getMyRole(businessId: string): Promise<ClinicRole | null> {
+  const { data, error } = await supabase.rpc('sehat_caller_role', {
+    p_business: businessId,
+  })
+  if (error) throw new Error(error.message)
+  return (data as ClinicRole) ?? null
+}
+
+/**
+ * May this login see medical records, as opposed to the queue, the beds and
+ * the money?
+ *
+ * Defaults to FALSE while the answer is still loading or if the lookup fails:
+ * a moment of a doctor seeing a missing tab is a smaller problem than a moment
+ * of a receptionist seeing a consultation recording.
+ */
+export const isClinicalRole = (r: ClinicRole | null): boolean =>
+  r === 'owner' || r === 'doctor'

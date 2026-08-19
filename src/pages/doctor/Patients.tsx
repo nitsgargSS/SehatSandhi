@@ -32,6 +32,7 @@ import {
   getBills, issueBill, cancelBill, sendBill,
   Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod, Bill,
 } from '../../lib/billingApi'
+import { getMyRole, isClinicalRole } from '../../lib/identityApi'
 import { moneyExact } from '../../lib/format'
 
 // The clinic's patient records — search, history, and the clinical detail a
@@ -186,6 +187,10 @@ export default function Patients({ businessId, practitionerId }: {
 
 // ── One patient ─────────────────────────────────────────────────────────────
 
+// Panes that show the medical record rather than the logistics around it.
+// Mirrors the table list gated in 0057; if one moves, both move.
+const CLINICAL_PANES = new Set(['history', 'clinical', 'rx', 'docs'])
+
 function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   memberId: string
   businessId: string
@@ -206,7 +211,25 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   const [account, setAccount] = useState<Account | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // Starts false. RLS denies rather than errors, so without this a receptionist
+  // would get the clinical panes rendering empty — which reads as "this patient
+  // has no allergies" rather than "you cannot see them", and that is the more
+  // dangerous of the two. Assume not-clinical until told otherwise.
+  const [clinical, setClinical] = useState(false)
   const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'money'>('history')
+
+  useEffect(() => {
+    let cancelled = false
+    getMyRole(businessId)
+      .then(r => { if (!cancelled) setClinical(isClinicalRole(r)) })
+      .catch(() => { /* stays false — the database refuses either way */ })
+    return () => { cancelled = true }
+  }, [businessId])
+
+  // 'history' is the default and is clinical, so reception would land on an
+  // empty Visits pane whose tab is not even drawn. Fall through to Admissions
+  // rather than tracking the default in two places.
+  const shown = !clinical && CLINICAL_PANES.has(pane) ? 'ipd' : pane
 
   const reload = useCallback(async () => {
     try {
@@ -305,66 +328,83 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         )}
       </div>
 
-      <RecordingConsent
-        summary={summary}
-        businessId={businessId}
-        onChange={reload}
-      />
+      {/* The consent toggle is clinical too. It is the gate on recording a
+          consultation, and it is not reception's to give on a doctor's behalf —
+          0057 refuses the write regardless. */}
+      {clinical && (
+        <RecordingConsent
+          summary={summary}
+          businessId={businessId}
+          onChange={reload}
+        />
+      )}
 
-      {summary.recording_consent && (
+      {clinical && summary.recording_consent && (
         <ConsultationRecorder
           memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} visits={visits} onChange={reload}
         />
       )}
 
-      {/* panes */}
-      <div style={{ display: 'flex', gap: 6 }}>
+      {/* Panes. The clinical ones are not shown to reception — the database
+          refuses them either way, but a tab that opens onto nothing looks like
+          a patient with no history rather than a permission you do not have. */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {([
-          ['history', 'Visits'], ['clinical', 'Allergies & medicines'],
-          ['vitals', 'Vitals'], ['rx', 'Prescriptions'], ['docs', 'Documents'],
-          ['ipd', 'Admissions'], ['money', 'Billing'],
-        ] as const).map(([id, lbl]) => (
-          <button key={id} onClick={() => setPane(id)}
-            style={{ ...btn(pane === id), fontSize: 12.5 }}>{lbl}</button>
-        ))}
+          ['history', 'Visits', true], ['clinical', 'Allergies & medicines', true],
+          ['vitals', 'Vitals', false], ['rx', 'Prescriptions', true],
+          ['docs', 'Documents', true], ['ipd', 'Admissions', false],
+          ['money', 'Billing', false],
+        ] as const)
+          .filter(([, , needsClinical]) => clinical || !needsClinical)
+          .map(([id, lbl]) => (
+            <button key={id} onClick={() => setPane(id)}
+              style={{ ...btn(shown === id), fontSize: 12.5 }}>{lbl}</button>
+          ))}
       </div>
 
-      {pane === 'history' && (
+      {!clinical && (
+        <div style={{ fontSize: 12.5, color: BIZ.mutedWarm }}>
+          Your account is not registered as a doctor here, so the medical record
+          is not shown. Beds, the queue and billing are.
+        </div>
+      )}
+
+      {shown === 'history' && (
         <VisitHistory
           visits={visits} memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} onAdded={reload}
         />
       )}
-      {pane === 'clinical' && (
+      {shown === 'clinical' && (
         <ClinicalPane
           memberId={memberId} businessId={businessId}
           allergies={allergies} conditions={conditions} meds={meds} onChange={reload}
         />
       )}
-      {pane === 'vitals' && (
+      {shown === 'vitals' && (
         <VitalsPane memberId={memberId} businessId={businessId} vitals={vitals} onChange={reload} />
       )}
-      {pane === 'rx' && (
+      {shown === 'rx' && (
         <PrescriptionsPane
           scripts={scripts} summary={summary} memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} allergies={live} onChange={reload}
         />
       )}
-      {pane === 'ipd' && (
+      {shown === 'ipd' && (
         <AdmissionsPane
           stays={stays} memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} onChange={reload}
         />
       )}
-      {pane === 'money' && (
+      {shown === 'money' && (
         <BillingPane
           charges={charges} payments={payments} account={account} stays={stays}
           memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} onChange={reload}
         />
       )}
-      {pane === 'docs' && (
+      {shown === 'docs' && (
         <DocumentsPane
           docs={docs} memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} onChange={reload}
