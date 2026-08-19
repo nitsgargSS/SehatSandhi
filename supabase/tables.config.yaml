@@ -177,6 +177,28 @@ tables:
     class: isolated
     purgeOrder: 157
 
+  # ── Prescriptions and documents (0046) ──────────────────────────────────
+  # Items reference prescriptions; documents reference both prescriptions and
+  # visits, so both go before either.
+  prescription_items:
+    class: isolated
+    purgeOrder: 141
+
+  patient_documents:
+    class: isolated
+    purgeOrder: 142
+
+  prescriptions:
+    class: isolated
+    purgeOrder: 143
+
+  # Per-business numbering. Purged with everything else in sandbox: a counter
+  # left behind would keep numbering from where the deleted data stopped.
+  prescription_counters:
+    class: isolated
+    purgeOrder: 144
+    pk: business_id
+
   patient_visits:
     class: isolated
     purgeOrder: 160
@@ -301,6 +323,7 @@ tables:
   # The clinical record's read models (0045).
   patient_summary:          { class: view }
   business_appointment_list: { class: view }
+  prescription_detail:      { class: view }
 
   # Seed clinics offered as suggestions at signup — name and address only,
   # with our pipeline status and notes left behind in seed_clinics.

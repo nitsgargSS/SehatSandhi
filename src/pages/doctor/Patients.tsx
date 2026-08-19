@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity } from 'lucide-react'
+import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2 } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
 import {
@@ -9,6 +9,11 @@ import {
   logAccess,
   PatientSearchResult, PatientSummary, Visit, Vital, Allergy, Condition, Medication,
 } from '../../lib/patientsApi'
+import {
+  issuePrescription, getPrescriptions, cancelPrescription, sendPrescription,
+  uploadDocument, getDocuments, documentUrl, deleteDocument,
+  Prescription, PrescriptionItem, PatientDocument,
+} from '../../lib/prescriptionsApi'
 
 // The clinic's patient records — search, history, and the clinical detail a
 // doctor needs on screen before they prescribe anything.
@@ -174,22 +179,27 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   const [allergies, setAllergies] = useState<Allergy[]>([])
   const [conditions, setConditions] = useState<Condition[]>([])
   const [meds, setMeds] = useState<Medication[]>([])
+  const [scripts, setScripts] = useState<Prescription[]>([])
+  const [docs, setDocs] = useState<PatientDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals'>('history')
+  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs'>('history')
 
   const reload = useCallback(async () => {
     try {
-      const [s, v, vt, a, c, m] = await Promise.all([
+      const [s, v, vt, a, c, m, rx, dc] = await Promise.all([
         getPatientSummary(memberId, businessId),
         getVisits(memberId, businessId),
         getVitals(memberId, businessId),
         getAllergies(memberId, businessId),
         getConditions(memberId, businessId),
         getMedications(memberId, businessId),
+        getPrescriptions(memberId, businessId),
+        getDocuments(memberId, businessId),
       ])
       setSummary(s); setVisits(v); setVitals(vt)
       setAllergies(a); setConditions(c); setMeds(m)
+      setScripts(rx); setDocs(dc)
       setError('')
     } catch (e) {
       setError((e as Error).message)
@@ -275,7 +285,10 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
 
       {/* panes */}
       <div style={{ display: 'flex', gap: 6 }}>
-        {([['history', 'Visits'], ['clinical', 'Allergies & medicines'], ['vitals', 'Vitals']] as const).map(([id, lbl]) => (
+        {([
+          ['history', 'Visits'], ['clinical', 'Allergies & medicines'],
+          ['vitals', 'Vitals'], ['rx', 'Prescriptions'], ['docs', 'Documents'],
+        ] as const).map(([id, lbl]) => (
           <button key={id} onClick={() => setPane(id)}
             style={{ ...btn(pane === id), fontSize: 12.5 }}>{lbl}</button>
         ))}
@@ -296,6 +309,319 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
       {pane === 'vitals' && (
         <VitalsPane memberId={memberId} businessId={businessId} vitals={vitals} onChange={reload} />
       )}
+      {pane === 'rx' && (
+        <PrescriptionsPane
+          scripts={scripts} summary={summary} memberId={memberId} businessId={businessId}
+          practitionerId={practitionerId} allergies={live} onChange={reload}
+        />
+      )}
+      {pane === 'docs' && (
+        <DocumentsPane
+          docs={docs} memberId={memberId} businessId={businessId}
+          practitionerId={practitionerId} onChange={reload}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Prescriptions ───────────────────────────────────────────────────────────
+
+const blankItem = (): PrescriptionItem => ({ drug_name: '', strength: '', dosage: '', duration: '', instructions: '' })
+
+function PrescriptionsPane({ scripts, summary, memberId, businessId, practitionerId, allergies, onChange }: {
+  scripts: Prescription[]
+  summary: PatientSummary
+  memberId: string
+  businessId: string
+  practitionerId?: string | null
+  allergies: Allergy[]
+  onChange: () => void
+}) {
+  const [writing, setWriting] = useState(false)
+  const [items, setItems] = useState<PrescriptionItem[]>([blankItem()])
+  const [diagnosis, setDiagnosis] = useState('')
+  const [advice, setAdvice] = useState('')
+  const [followUp, setFollowUp] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [note, setNote] = useState('')
+
+  const setItem = (i: number, patch: Partial<PrescriptionItem>) =>
+    setItems(list => list.map((it, j) => j === i ? { ...it, ...patch } : it))
+
+  const issue = async () => {
+    if (!practitionerId) {
+      setErr('Only a registered doctor can issue a prescription, and this login is not one. '
+        + 'Ask the doctor to sign in, or add them to the roster under Business.')
+      return
+    }
+    setBusy(true); setErr(''); setNote('')
+    try {
+      await issuePrescription({
+        patientMemberId: memberId, businessId, practitionerId,
+        items, diagnosis, advice, followUpDate: followUp || null,
+      })
+      setItems([blankItem()]); setDiagnosis(''); setAdvice(''); setFollowUp('')
+      setWriting(false); onChange()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  const send = async (id: string) => {
+    setBusy(true); setErr(''); setNote('')
+    try {
+      const r = await sendPrescription(id)
+      setNote(r.whatsapp ? 'Sent on WhatsApp.' : r.email ? 'Sent by email.' : 'Queued.')
+      onChange()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      {!writing && (
+        <button onClick={() => setWriting(true)} style={{ ...btn(true), justifySelf: 'start' }}>
+          <Plus className="w-4 h-4" style={{ display: 'inline', marginRight: 5 }} /> Write a prescription
+        </button>
+      )}
+
+      {writing && (
+        <div style={card}>
+          {/* The allergy warning is repeated here on purpose. It is in the
+              header too, but this is the moment it matters — a doctor typing a
+              drug name should not have to scroll up to be reminded. */}
+          {allergies.length > 0 && (
+            <div style={{
+              marginBottom: 12, padding: '9px 11px', borderRadius: 9,
+              background: '#fdf1f1', border: '1px solid #f0c9c9',
+              color: '#8a2b2b', fontSize: 13, fontWeight: 700,
+            }}>
+              <AlertTriangle className="w-4 h-4" style={{ display: 'inline', marginRight: 6 }} />
+              Allergic to {allergies.map(a => a.substance).join(', ')}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div><div style={label}>Diagnosis</div>
+              <input style={input} value={diagnosis} onChange={e => setDiagnosis(e.target.value)} /></div>
+
+            <div>
+              <div style={label}>Medicines</div>
+              {items.map((it, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
+                  <input style={{ ...input, flex: '2 1 160px' }} placeholder="Medicine"
+                    value={it.drug_name} onChange={e => setItem(i, { drug_name: e.target.value })} />
+                  <input style={{ ...input, flex: '0 1 92px' }} placeholder="500 mg"
+                    value={it.strength ?? ''} onChange={e => setItem(i, { strength: e.target.value })} />
+                  <input style={{ ...input, flex: '0 1 88px' }} placeholder="1-0-1"
+                    value={it.dosage ?? ''} onChange={e => setItem(i, { dosage: e.target.value })} />
+                  <input style={{ ...input, flex: '0 1 88px' }} placeholder="5 days"
+                    value={it.duration ?? ''} onChange={e => setItem(i, { duration: e.target.value })} />
+                  <input style={{ ...input, flex: '1 1 120px' }} placeholder="after food"
+                    value={it.instructions ?? ''} onChange={e => setItem(i, { instructions: e.target.value })} />
+                  {items.length > 1 && (
+                    <button aria-label="Remove medicine" style={{ ...btn(), padding: 8 }}
+                      onClick={() => setItems(l => l.filter((_, j) => j !== i))}>
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button style={{ ...btn(), marginTop: 8, fontSize: 12.5 }}
+                onClick={() => setItems(l => [...l, blankItem()])}>
+                <Plus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} /> Another medicine
+              </button>
+            </div>
+
+            <div><div style={label}>Advice</div>
+              <textarea style={{ ...input, minHeight: 64, resize: 'vertical' }}
+                value={advice} onChange={e => setAdvice(e.target.value)} /></div>
+
+            <div><div style={label}>Come back on</div>
+              <input type="date" style={input} value={followUp} onChange={e => setFollowUp(e.target.value)} /></div>
+
+            <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>
+              Once issued a prescription cannot be edited — a correction is a new
+              one that replaces it. Check the doses before you sign.
+            </div>
+
+            {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={issue} disabled={busy || !items.some(i => i.drug_name.trim())}
+                style={btn(true)}>Issue prescription</button>
+              <button onClick={() => setWriting(false)} style={btn()}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {note && <div style={{ ...card, background: '#f3faf6', borderColor: '#bfe3d0', fontSize: 13 }}>{note}</div>}
+      {err && !writing && <div style={{ ...card, color: '#8a2b2b', fontSize: 13 }}>{err}</div>}
+
+      {scripts.length === 0 && !writing && (
+        <div style={{ ...card, color: BIZ.muted, fontSize: 13.5 }}>
+          No prescriptions issued here yet.
+        </div>
+      )}
+
+      {scripts.map(rx => (
+        <div key={rx.id} style={{
+          ...card,
+          opacity: rx.status === 'issued' ? 1 : .72,
+          borderColor: rx.status === 'cancelled' ? '#f0c9c9' : BIZ.border,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: BIZ.ink }}>
+              {rx.prescription_no}
+              <span style={{ fontWeight: 600, color: BIZ.muted, marginLeft: 8 }}>{when(rx.issued_at)}</span>
+              {rx.status !== 'issued' && (
+                <span style={{
+                  fontSize: 11, fontWeight: 800, marginLeft: 8, padding: '2px 7px', borderRadius: 999,
+                  background: rx.status === 'cancelled' ? '#fdf1f1' : '#fff5e5',
+                  color: rx.status === 'cancelled' ? '#8a2b2b' : '#8a5a00', textTransform: 'uppercase',
+                }}>{rx.status}</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {rx.status === 'issued' && (
+                <button style={{ ...btn(), fontSize: 12 }} disabled={busy} onClick={() => send(rx.id)}>
+                  <Send className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />
+                  {rx.sent_at ? 'Send again' : 'Send to patient'}
+                </button>
+              )}
+              {rx.status === 'issued' && (
+                <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
+                  onClick={async () => {
+                    const why = window.prompt('Why is this being cancelled?')
+                    if (why === null) return
+                    setBusy(true)
+                    try { await cancelPrescription(rx.id, why); onChange() }
+                    catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+                  }}>Cancel</button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 9 }}>
+            {rx.items.map((it, i) => (
+              <div key={i} style={{ fontSize: 13.5, color: BIZ.ink }}>
+                {i + 1}. <strong>{it.drug_name}</strong>
+                {it.strength && ` ${it.strength}`}
+                {it.dosage && ` · ${it.dosage}`}
+                {it.duration && ` · ${it.duration}`}
+                {it.instructions && <span style={{ color: BIZ.muted }}> — {it.instructions}</span>}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 8 }}>
+            {rx.prescriber_name}
+            {rx.prescriber_reg_number && ` · Reg. ${rx.prescriber_reg_number}`}
+            {rx.sent_at && ` · sent ${when(rx.sent_at)}`}
+            {rx.sent_channels?.length ? ` (${rx.sent_channels.join(', ')})` : ''}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>
+        Patient {summary.full_name} is sent a link, not a file — it opens on their
+        phone and expires after 90 days.
+      </div>
+    </div>
+  )
+}
+
+// ── Uploaded documents ──────────────────────────────────────────────────────
+
+const DOC_KINDS: [string, string][] = [
+  ['prescription_scan', 'Prescription (paper)'],
+  ['lab_report', 'Lab report'],
+  ['discharge_summary', 'Discharge summary'],
+  ['imaging', 'X-ray / scan'],
+  ['consent_form', 'Consent form'],
+  ['insurance', 'Insurance'],
+  ['other', 'Other'],
+]
+
+function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }: {
+  docs: PatientDocument[]
+  memberId: string
+  businessId: string
+  practitionerId?: string | null
+  onChange: () => void
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [kind, setKind] = useState('lab_report')
+  const [title, setTitle] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const upload = async () => {
+    if (!file) return
+    setBusy(true); setErr('')
+    try {
+      await uploadDocument(file, {
+        businessId, patientMemberId: memberId, kind,
+        title: title.trim() || file.name, uploadedBy: practitionerId ?? null,
+      })
+      setFile(null); setTitle(''); onChange()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  const open = async (d: PatientDocument) => {
+    try {
+      // A private bucket has no permanent address, so this mints a short-lived
+      // one each time rather than storing a URL that would outlive the session.
+      window.open(await documentUrl(d.storage_path), '_blank', 'noopener')
+    } catch (e) { setErr((e as Error).message) }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div style={card}>
+        <div style={{ ...label, marginBottom: 9 }}>Add a document</div>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input type="file" onChange={e => setFile(e.target.files?.[0] ?? null)}
+            accept="image/*,application/pdf"
+            style={{ ...input, flex: '1 1 220px', padding: 7 }} />
+          <select style={{ ...input, flex: '0 1 170px' }} value={kind} onChange={e => setKind(e.target.value)}>
+            {DOC_KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <input style={{ ...input, flex: '1 1 160px' }} placeholder="Title (optional)"
+            value={title} onChange={e => setTitle(e.target.value)} />
+          <button style={btn(true)} disabled={!file || busy} onClick={upload}>
+            <Upload className="w-4 h-4" style={{ display: 'inline', marginRight: 5 }} /> Upload
+          </button>
+        </div>
+        {err && <div style={{ fontSize: 12.5, color: '#8a2b2b', marginTop: 8 }}>{err}</div>}
+      </div>
+
+      {docs.length === 0 ? (
+        <div style={{ ...card, color: BIZ.muted, fontSize: 13.5 }}>
+          <FileText className="w-4 h-4" style={{ display: 'inline', marginRight: 6 }} />
+          Nothing uploaded yet. Photograph a paper prescription or a lab report and it stays on the chart.
+        </div>
+      ) : docs.map(d => (
+        <div key={d.id} style={{ ...card, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: BIZ.ink }}>{d.title}</div>
+            <div style={{ fontSize: 12.5, color: BIZ.muted }}>
+              {DOC_KINDS.find(k => k[0] === d.kind)?.[1] ?? d.kind}
+              {' · '}{when(d.created_at)}
+              {d.size_bytes ? ` · ${Math.max(1, Math.round(d.size_bytes / 1024))} KB` : ''}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+            <button style={{ ...btn(), fontSize: 12 }} onClick={() => open(d)}>Open</button>
+            <button aria-label="Delete document" style={{ ...btn(), padding: 8 }}
+              onClick={async () => {
+                if (!window.confirm(`Delete "${d.title}"? This cannot be undone.`)) return
+                try { await deleteDocument(d); onChange() } catch (e) { setErr((e as Error).message) }
+              }}>
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
