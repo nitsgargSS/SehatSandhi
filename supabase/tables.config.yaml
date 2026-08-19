@@ -146,6 +146,37 @@ tables:
     class: isolated
     purgeOrder: 150
 
+  # ── The clinical record (0045) ──────────────────────────────────────────
+  # Children first. Everything here hangs off patient_members, which hangs off
+  # patients, so these must all precede it.
+
+  # References patient_consents, so it goes before that table's own rows.
+  consultation_recordings:
+    class: isolated
+    purgeOrder: 152
+
+  patient_vitals:
+    class: isolated
+    purgeOrder: 153
+
+  patient_allergies:
+    class: isolated
+    purgeOrder: 154
+
+  patient_conditions:
+    class: isolated
+    purgeOrder: 155
+
+  patient_medications:
+    class: isolated
+    purgeOrder: 156
+
+  # Audit trail. Isolated rather than never_purge: a sandbox purge clears test
+  # data, and an access log about deleted patients describes nothing.
+  patient_record_access:
+    class: isolated
+    purgeOrder: 157
+
   patient_visits:
     class: isolated
     purgeOrder: 160
@@ -153,6 +184,16 @@ tables:
   patient_consents:
     class: isolated
     purgeOrder: 170
+
+  # The clinic's patient list, and the people a phone number covers. Both must
+  # go after every clinical row that references them and before `patients`.
+  business_patients:
+    class: isolated
+    purgeOrder: 172
+
+  patient_members:
+    class: isolated
+    purgeOrder: 174
 
   patient_import_rows:
     class: isolated
@@ -256,6 +297,10 @@ tables:
   # The doctors shown under a clinic listing — name and qualification only.
   public_business_doctors: { class: view }
   public_practitioner_businesses: { class: view }
+
+  # The clinical record's read models (0045).
+  patient_summary:          { class: view }
+  business_appointment_list: { class: view }
 
   # Seed clinics offered as suggestions at signup — name and address only,
   # with our pipeline status and notes left behind in seed_clinics.
