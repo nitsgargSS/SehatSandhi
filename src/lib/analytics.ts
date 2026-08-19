@@ -83,7 +83,7 @@ export function track(type: SiteEventType, fields: EventFields = {}): void {
       // Path without the query string: a search page's query can contain what
       // someone typed, and the structured columns already carry what we need.
       path: (fields.path ?? window.location.pathname).slice(0, 200),
-      doctor_id: fields.doctorId ?? null,
+      business_id: fields.doctorId ?? null,
       speciality: fields.speciality ?? null,
       pin_code: fields.pinCode ?? null,
       referrer_host: referrerHost(),
@@ -124,7 +124,7 @@ export function trackImpressions(
         event_type: 'doctor_impression',
         session_id: sessionId(),
         path: path.slice(0, 200),
-        doctor_id: id,
+        business_id: id,
         speciality: fields.speciality ?? null,
         pin_code: fields.pinCode ?? null,
         referrer_host: referrerHost(),

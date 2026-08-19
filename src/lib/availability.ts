@@ -10,7 +10,7 @@ import { supabase } from './supabase'
 
 export interface AvailabilityTemplate {
   id: string
-  doctor_id: string
+  business_id: string
   location_id?: string | null
   day_of_week: number // 0=Sunday ... 6=Saturday, matches JS Date.getDay()
   start_time: string  // "10:00:00"
