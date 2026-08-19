@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
 import { money, shortDate, isoDate } from '../../lib/format'
 import { BIZ, takesAppointments, verticalFor, hasPractitioners, VerticalKey } from '../business/shared'
 import { registerPractitioner, attachPractitioner, detachPractitioner } from '../../lib/identityApi'
+import Patients from './Patients'
 import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -67,7 +68,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'appointments' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
+  const [tab, setTab] = useState<'today' | 'appointments' | 'patients' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
 
   // ── Bills ──
   // Until now the only copy of an invoice was the WhatsApp link sent once at
@@ -191,6 +192,10 @@ export default function DoctorDashboard() {
     } | null
   }
   const [roster, setRoster] = useState<RosterRow[]>([])
+  // Which practitioner this session IS, where it is one at all. A clinic owner
+  // or a receptionist is nobody on the roster, so this stays null and a visit
+  // they record simply carries no practitioner rather than inventing one.
+  const [myPractitionerId, setMyPractitionerId] = useState<string | null>(null)
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
   const [showAddDoc, setShowAddDoc] = useState(false)
@@ -388,6 +393,12 @@ export default function DoctorDashboard() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { window.location.href = '/business/login'; return }
+
+      // practitioners_read_own (0038) matches on auth_uid, so this resolves for
+      // a doctor and returns nothing for an owner who does not see patients.
+      const { data: me } = await supabase.from('practitioners')
+        .select('id').eq('auth_uid', user.id).maybeSingle()
+      setMyPractitionerId((me as { id: string } | null)?.id ?? null)
 
       // Ask which listings this session may act on, rather than matching an
       // email.
@@ -701,6 +712,9 @@ export default function DoctorDashboard() {
       { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
       { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4" /> },
     ] : []),
+    // Every vertical keeps records of who it has seen — a lab has patients as
+    // much as a clinic does — so this one is not gated on appointments.
+    { id: 'patients', label: 'Patients', icon: <UserSearch className="w-4 h-4" /> },
     // Hours and branches matter to a pharmacy and an ambulance service too —
     // patients need to know when they are open and where.
     { id: 'schedule', label: booksAppointments ? t('dashboardPage.tabSchedule') : 'Hours & branches', icon: <Clock className="w-4 h-4" /> },
@@ -1263,6 +1277,11 @@ export default function DoctorDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
+        {tab === 'patients' && doctor && (
+          <Patients businessId={doctor.id} practitionerId={myPractitionerId} />
         )}
 
         {/* ══════════ CLINIC — staff management + camps & offers ══════════ */}
