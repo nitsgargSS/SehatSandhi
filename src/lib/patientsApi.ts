@@ -1,7 +1,7 @@
 // The clinic's patient records.
 //
 // Reads go through patient_summary and the clinical tables directly, because
-// RLS already answers "may this clinic see this patient" — every policy in 0045
+// RLS already answers "may this clinic see this patient" — every policy in 0047
 // resolves through sehat_caller_owns_business(), so a query that returns
 // nothing is a query about somebody else's patient. Search is an RPC because it
 // spans three tables and needs the caller's businesses resolved server-side.
@@ -520,7 +520,7 @@ export interface MedicineSuggestion {
  * Read medicines out of the CONFIRMED note.
  *
  * Only ever called after confirmTranscript. The edge function refuses anything
- * else, and 0046 refuses to build a prescription from an unconfirmed recording
+ * else, and 0048 refuses to build a prescription from an unconfirmed recording
  * — the same rule enforced twice, on purpose.
  */
 export async function requestMedicineSuggestions(recordingId: string) {

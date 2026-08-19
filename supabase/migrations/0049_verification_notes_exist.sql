@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Sehatsandhi — give the admin's verification note somewhere to live
 --
--- Run AFTER 0046. Safe to re-run.
+-- Run AFTER 0048. Safe to re-run.
 --
 -- The admin panel has had a "verification notes" box since 0012: a reviewer
 -- types why they approved or rejected a listing, and it saves. It has never

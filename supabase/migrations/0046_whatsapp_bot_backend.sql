@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Sehatsandhi — the backend the WhatsApp bot calls
 --
--- Run AFTER 0043. Safe to re-run.
+-- Run AFTER 0045. Safe to re-run.
 --
 -- The AiSensy flow (6 branches + the booking path) is built and has nothing to
 -- talk to. This is the Supabase half: the searches it runs, the two things it
@@ -568,7 +568,7 @@ comment on function bot_generic_search is
 -- 3.8 Slots, and the plumbing between "2" and somebody's diary.
 --
 -- Slot maths is not reimplemented. sehat_open_windows is the same source the
--- capacity trigger enforces against (0043 keeps the two reading availability
+-- capacity trigger enforces against (0045 keeps the two reading availability
 -- the same way), so what the bot offers and what the database accepts cannot
 -- drift.
 -- ============================================================================

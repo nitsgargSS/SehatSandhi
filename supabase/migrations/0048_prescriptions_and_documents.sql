@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Sehatsandhi — prescriptions, and the documents a patient already has on paper
 --
--- Run AFTER 0045. Safe to re-run.
+-- Run AFTER 0047. Safe to re-run.
 --
 -- Two different things, deliberately not one table:
 --
@@ -26,7 +26,7 @@
 -- also how prescribing works on paper — you do not amend a slip somebody has
 -- already carried out of the room.
 --
--- ── THE RULE 0045 SET, ENFORCED HERE ────────────────────────────────────────
+-- ── THE RULE 0047 SET, ENFORCED HERE ────────────────────────────────────────
 -- A prescription may be built from a confirmed transcript and never from a
 -- draft. source_recording_id is checked by trigger: it must point at a
 -- recording whose status is 'confirmed'. Speech recognition hearing "15 mg" as

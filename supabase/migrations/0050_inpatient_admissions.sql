@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Sehatsandhi — inpatients: a stay, a bed, and what happened each day
 --
--- Run AFTER 0047. Safe to re-run.
+-- Run AFTER 0049. Safe to re-run.
 --
 -- ── WHY AN ADMISSION IS NOT A VISIT ─────────────────────────────────────────
 -- patient_visits already carries a visit_type of 'ipd', and it would have been

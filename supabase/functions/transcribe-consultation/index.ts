@@ -11,7 +11,7 @@
 // ── THE RULE THIS FILE EXISTS TO KEEP ───────────────────────────────────────
 // A machine transcript is a draft. `suggest` refuses to run on anything but a
 // CONFIRMED transcript, and what it returns is written to suggested_medicines —
-// never to a prescription. 0046's trigger enforces the same rule from the other
+// never to a prescription. 0048's trigger enforces the same rule from the other
 // side: a prescription citing a non-confirmed recording is rejected by the
 // database. Two independent guards, because "15 mg" misheard as "50 mg" is a
 // wrong dose in someone's hand.

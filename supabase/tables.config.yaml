@@ -176,7 +176,7 @@ tables:
     class: isolated
     purgeOrder: 90
 
-  # ── Patient billing (0049) ──────────────────────────────────────────────
+  # ── Patient billing (0051) ──────────────────────────────────────────────
   # A clinic charging a patient, which is NOT the invoices/payments pair — those
   # bill businesses for their listing under our GSTIN. Every FK here carries an
   # ON DELETE clause, so these sit before the encounters they reference only for
@@ -189,7 +189,7 @@ tables:
     class: isolated
     purgeOrder: 86
 
-  # ── Inpatients (0048) ───────────────────────────────────────────────────
+  # ── Inpatients (0050) ───────────────────────────────────────────────────
   # Notes before stays, stays before beds, beds before wards — and all of them
   # before businesses. Every FK here carries an ON DELETE clause, so ordering
   # is convention rather than necessity, but the convention is what makes the
@@ -258,7 +258,7 @@ tables:
     class: isolated
     purgeOrder: 150
 
-  # ── The clinical record (0045) ──────────────────────────────────────────
+  # ── The clinical record (0047) ──────────────────────────────────────────
   # Children first. Everything here hangs off patient_members, which hangs off
   # patients, so these must all precede it.
 
@@ -289,7 +289,7 @@ tables:
     class: isolated
     purgeOrder: 157
 
-  # ── Prescriptions and documents (0046) ──────────────────────────────────
+  # ── Prescriptions and documents (0048) ──────────────────────────────────
   # These sit BEFORE practitioners (120), not after, and the reason is the same
   # one recorded above for payments: prescriptions.practitioner_id has no
   # ON DELETE clause, so it is NO ACTION. A prescription is issued by a named
@@ -457,7 +457,7 @@ tables:
   public_business_doctors: { class: view }
   public_practitioner_businesses: { class: view }
 
-  # The clinical record's read models (0045).
+  # The clinical record's read models (0047).
   patient_summary:          { class: view }
   business_appointment_list: { class: view }
   prescription_detail:      { class: view }

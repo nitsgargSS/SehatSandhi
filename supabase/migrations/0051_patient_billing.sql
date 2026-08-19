@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Sehatsandhi — what a patient was charged, and what they have paid
 --
--- Run AFTER 0048. Safe to re-run.
+-- Run AFTER 0050. Safe to re-run.
 --
 -- ── THIS IS NOT THE INVOICES TABLE, AND MUST NEVER BECOME IT ────────────────
 -- `invoices`, `payments` and the whole GST apparatus from 0007 bill BUSINESSES

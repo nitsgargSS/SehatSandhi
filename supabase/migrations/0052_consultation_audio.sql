@@ -1,9 +1,9 @@
 -- ============================================================================
 -- Sehatsandhi — somewhere to put the audio, and a way to be rid of it
 --
--- Run AFTER 0049. Safe to re-run.
+-- Run AFTER 0051. Safe to re-run.
 --
--- 0045 gave consultation_recordings an audio_path and an audio_deleted_at and
+-- 0047 gave consultation_recordings an audio_path and an audio_deleted_at and
 -- described the lifecycle: capture, transcribe, doctor confirms, audio goes.
 -- Nothing implemented it — the toggle recorded consent and opened a row, and no
 -- audio was ever captured. This is the storage half.
@@ -25,7 +25,7 @@
 -- ============================================================================
 
 -- Where the machine's suggestions live until a doctor accepts them. Separate
--- from the prescription entirely: these are proposals, and 0046 already refuses
+-- from the prescription entirely: these are proposals, and 0048 already refuses
 -- to build a prescription from anything but a confirmed transcript.
 alter table consultation_recordings
   add column if not exists suggested_medicines jsonb;
@@ -37,7 +37,7 @@ alter table consultation_recordings
 comment on column consultation_recordings.suggested_medicines is
   'What a model read out of the CONFIRMED transcript, as a draft for the '
   'prescription form. Never a prescription: a doctor edits and issues, and '
-  '0046''s trigger enforces the same rule from the other end.';
+  '0048''s trigger enforces the same rule from the other end.';
 
 -- Private, and its own bucket. patient-documents holds things a clinic uploads
 -- deliberately; this holds a voice recording that exists for minutes. Sharing a
