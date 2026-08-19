@@ -6,6 +6,11 @@
 // with. These accounts fill that gap: known addresses, known password, created
 // once and surviving every purge.
 //
+// Writes a business, a practitioner and the affiliation between them. It used
+// to write a single `doctors` row, which 0037 removed — so until this was
+// updated the script created the auth user and then failed on a 404, leaving a
+// login with nothing behind it.
+//
 // Real production users are deliberately NOT copied. Supabase salts password
 // hashes per project so they would not work anyway, and putting real people's
 // identities in a disposable database behind a published anon key is a privacy
@@ -45,24 +50,42 @@ if (prodUrl.includes(sandboxRef)) {
 // The hyphen matters: sandbox-purge deletes `sandbox+NNNN@` (autofill-generated)
 // and leaves `sandbox-*@` alone, so these logins survive a purge.
 const PASSWORD = 'Sandbox@123'
+
+// One account used to mean one `doctors` row. 0037 split that into three: the
+// listing, the person, and the affiliation carrying what is true of them there.
+// A seed that writes only one produces a business nobody staffs or a doctor who
+// works nowhere, and the dashboard shows neither.
 const ACCOUNTS = [
   {
     email: 'sandbox-doctor@sehatsandhi.test',
     role: 'doctor',
-    doctor: {
-      name: '[SEED] Dr. Sandbox Tester',
-      qualification: 'MBBS',
-      speciality: 'GEN',
-      reg_number: 'DMC/R/2020/00001',
-      clinic_name: '[SEED] Sandbox Test Clinic',
+    business: {
+      name: '[SEED] Sandbox Test Clinic',
+      vertical: 'clinic',
       address: '1, Model Town, Yamunanagar, Haryana',
+      // A real pincode, not the empty array this used to write. With no
+      // coverage the listing is invisible to every search — patient page, area
+      // page and bot alike — so the seed could be used to test a login and
+      // nothing beyond it.
+      pin_codes: ['135001'],
       phone: '9000000001',
-      consultation_fee: 300,
+      working_hours: 'Mon,Tue,Wed,Thu,Fri,Sat 10:00-18:00',
       // Active, so it appears in public listings and the dashboard has data.
       status: 'active',
     },
+    practitioner: {
+      full_name: '[SEED] Dr. Sandbox Tester',
+      speciality: 'GEN',
+      qualification: 'MBBS',
+      reg_number: 'DMC/R/2020/00001',
+      phone: '9000000001',
+      status: 'active',
+    },
+    // On the affiliation, not on either side of it: the same doctor charges
+    // differently at each place they sit.
+    consultation_fee: 300,
   },
-  { email: 'sandbox-admin@sehatsandhi.test', role: 'admin', doctor: null },
+  { email: 'sandbox-admin@sehatsandhi.test', role: 'admin', business: null },
 ]
 
 // Talk to the REST and Admin endpoints directly rather than through
@@ -94,6 +117,7 @@ let failures = 0
 for (const acct of ACCOUNTS) {
   process.stdout.write(`      ${acct.email.padEnd(36)} `)
 
+  let userId = null
   try {
     // Idempotent: look for an existing account before creating one, so
     // re-running after a purge (which leaves these alone) is a no-op.
@@ -101,9 +125,10 @@ for (const acct of ACCOUNTS) {
     const existingUser = (list.users ?? []).find(u => u.email === acct.email)
 
     if (existingUser) {
+      userId = existingUser.id
       console.log('already exists')
     } else {
-      await api('/auth/v1/admin/users', {
+      const created = await api('/auth/v1/admin/users', {
         method: 'POST',
         body: JSON.stringify({
           email: acct.email,
@@ -113,6 +138,7 @@ for (const acct of ACCOUNTS) {
           email_confirm: true,
         }),
       })
+      userId = created?.id ?? null
       console.log('created')
     }
   } catch (e) {
@@ -121,30 +147,85 @@ for (const acct of ACCOUNTS) {
     continue
   }
 
-  // A matching doctors row, so /doctor/dashboard has something to show. The
-  // email must match: doctors_read_own resolves on auth.jwt() ->> 'email'.
-  if (acct.doctor) {
-    try {
-      const found = await api(`/rest/v1/doctors?select=id&email=eq.${encodeURIComponent(acct.email)}&limit=1`)
-      if (found.length) {
-        console.log('      ↳ doctors row already exists')
-      } else {
-        await api('/rest/v1/doctors', {
-          method: 'POST',
-          headers: { Prefer: 'return=minimal' },
-          body: JSON.stringify({
-            ...acct.doctor,
-            email: acct.email,
-            pin_codes: [],
-            working_hours: 'Mon,Tue,Wed,Thu,Fri,Sat 10:00-18:00',
-          }),
-        })
-        console.log('      ↳ doctors row created')
-      }
-    } catch (e) {
-      console.log(`      ↳ doctors row: ✗ ${e.message}`)
-      failures++
+  if (!acct.business) continue
+
+  // The listing, the person, and the affiliation — so /doctor/dashboard has
+  // something to show and the listing is reachable from a search.
+  try {
+    // sehat_caller_business_ids() resolves a login three ways; the two that
+    // apply here are businesses.auth_uid and a matching businesses.email. Both
+    // are set, so the seed survives whichever route the dashboard takes.
+    let businessId
+    const foundBiz = await api(
+      `/rest/v1/businesses?select=id&email=eq.${encodeURIComponent(acct.email)}&limit=1`)
+    if (foundBiz.length) {
+      businessId = foundBiz[0].id
+      console.log('      ↳ business already exists')
+    } else {
+      const rows = await api('/rest/v1/businesses', {
+        method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({ ...acct.business, email: acct.email }),
+      })
+      businessId = rows[0].id
+      console.log('      ↳ business created')
     }
+
+    // Set separately rather than on the insert, so a row seeded before the
+    // auth user existed still gets linked on a later run.
+    if (userId) {
+      await api(`/rest/v1/businesses?id=eq.${businessId}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ auth_uid: userId }),
+      })
+    }
+
+    // Keyed on the registration number: practitioners_registration_key treats
+    // (council, registration) as the identity of a person, and re-inserting
+    // would either duplicate them or trip that index.
+    let practitionerId
+    const foundDoc = await api(
+      `/rest/v1/practitioners?select=id&reg_number=eq.${encodeURIComponent(acct.practitioner.reg_number)}&limit=1`)
+    if (foundDoc.length) {
+      practitionerId = foundDoc[0].id
+      console.log('      ↳ practitioner already exists')
+    } else {
+      const rows = await api('/rest/v1/practitioners', {
+        method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify(acct.practitioner),
+      })
+      practitionerId = rows[0].id
+      console.log('      ↳ practitioner created')
+    }
+
+    const foundLink = await api(
+      `/rest/v1/business_practitioners?select=id&business_id=eq.${businessId}` +
+      `&practitioner_id=eq.${practitionerId}&limit=1`)
+    if (foundLink.length) {
+      console.log('      ↳ affiliation already exists')
+    } else {
+      await api('/rest/v1/business_practitioners', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          business_id: businessId,
+          practitioner_id: practitionerId,
+          role: 'doctor',
+          is_primary: true,
+          consultation_fee: acct.consultation_fee,
+          // Active on all three, or public_practitioner_businesses filters the
+          // doctor out and every search comes back empty.
+          status: 'active',
+          can_login_web: true,
+        }),
+      })
+      console.log('      ↳ affiliation created')
+    }
+  } catch (e) {
+    console.log(`      ↳ listing: ✗ ${e.message}`)
+    failures++
   }
 }
 
