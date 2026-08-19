@@ -116,10 +116,50 @@ comment on function sehat_caller_is_clinical is
   'queue, its beds and its money, which every signed-in member of staff needs. '
   'False for reception and for administrative managers.';
 
+
+-- The other axis, and it is genuinely a different question rather than the
+-- inverse of the one above. A hospital doctor should read a chart and should
+-- not be changing the company's GSTIN; a manager is the exact reverse. Neither
+-- is "more" trusted than the other.
+create or replace function sehat_caller_is_business(p_business uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(sehat_caller_role(p_business) in ('owner', 'manager'), false);
+$$;
+
+comment on function sehat_caller_is_business is
+  'May the caller act on the business itself — its listing, its GSTIN and '
+  'billing address, its plan, and the tax invoices Sehatsandhi raises against '
+  'it. Owner and manager. Orthogonal to sehat_caller_is_clinical, not its '
+  'opposite: a doctor is clinical and not business, a manager the reverse.';
+
 grant execute on function sehat_caller_role(uuid) to authenticated;
 grant execute on function sehat_caller_is_clinical(uuid) to authenticated;
+grant execute on function sehat_caller_is_business(uuid) to authenticated;
 revoke all on function sehat_caller_role(uuid) from anon;
 revoke all on function sehat_caller_is_clinical(uuid) from anon;
+revoke all on function sehat_caller_is_business(uuid) from anon;
+
+
+-- ── The listing itself ──────────────────────────────────────────────────────
+-- 0038 wrote businesses_update_own against sehat_caller_owns_business, which is
+-- every member of staff who can log in. So reception could rewrite the
+-- business's name, address, GSTIN, billing address and locked plan price.
+--
+-- Hiding the Clinic tab in the dashboard does not fix that — the tab is a
+-- convenience, the policy is the rule, and a hidden tab is one fetch away from
+-- not being hidden.
+--
+-- Read stays wide: everyone who works here needs to see the address and the
+-- phone number. It is writing that narrows.
+drop policy if exists businesses_update_own on businesses;
+create policy businesses_update_own on businesses
+  for update using (sehat_caller_is_business(id))
+  with check (sehat_caller_is_business(id));
 
 
 -- ============================================================================

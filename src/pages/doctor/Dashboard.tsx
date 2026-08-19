@@ -9,6 +9,7 @@ import { registerPractitioner, attachPractitioner, detachPractitioner } from '..
 import Patients from './Patients'
 import Wards from './Wards'
 import Queue from './Queue'
+import { getMyRole, ClinicRole } from '../../lib/identityApi'
 import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -62,6 +63,11 @@ export default function DoctorDashboard() {
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
   const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
+
+  // What this login is at this business. Null once looked up and found to be
+  // nothing; undefined only while the dashboard is still loading, which is the
+  // same moment the spinner covers.
+  const [role, setRole] = useState<ClinicRole | null>(null)
 
   // ── Bills ──
   // Until now the only copy of an invoice was the WhatsApp link sent once at
@@ -397,11 +403,20 @@ export default function DoctorDashboard() {
       // by code: they signed in successfully, landed here, and got an empty
       // dashboard with no error to explain it.
       //
-      // Not simply dropping the filter: allow_read_active_doctors lets any
-      // caller read EVERY active listing, so an unfiltered select would show a
-      // clinic somebody else's business. sehat_caller_listing_ids() is the
-      // function the RLS policies themselves use.
-      const { data: myIds, error: idsErr } = await supabase.rpc('sehat_caller_listing_ids')
+      // Not simply dropping the filter: the public read policy lets any caller
+      // read EVERY active listing, so an unfiltered select would show a clinic
+      // somebody else's business. This is the function the RLS policies
+      // themselves use.
+      //
+      // It used to be sehat_caller_listing_ids(). 0037 dropped that function
+      // outright when it split `doctors` into businesses and practitioners —
+      // the body selected from `doctors`, which stopped existing — and named
+      // sehat_caller_business_ids() as its replacement, "the single authority
+      // for business-facing RLS". The call here was never moved across, so
+      // every dashboard load has been failing at this line since 0037 applied:
+      // PostgREST cannot find the function, idsErr is set, and the whole
+      // dashboard renders its load-error state before fetching anything.
+      const { data: myIds, error: idsErr } = await supabase.rpc('sehat_caller_business_ids')
       if (idsErr) {
         console.warn('[dashboard] could not resolve listings:', idsErr.message)
         setLoadError(true); setLoading(false); return
@@ -434,6 +449,11 @@ export default function DoctorDashboard() {
           loadCamps(doc.id),
           loadLocations(doc.id),
           loadAvailability(doc.id),
+          // Which tabs this person may see. In here rather than its own effect
+          // so it lands with everything else: fetched separately, the rail
+          // would paint the owner's full set and then take tabs away, which
+          // looks like a bug and reads like a demotion.
+          getMyRole(doc.id).then(setRole).catch(() => setRole(null)),
           // Any business that has doctors has a roster now. It used to be
           // hospitals only, because a clinic's doctors had nowhere to live.
           hasPractitioners(doc.vertical as VerticalKey)
@@ -453,14 +473,6 @@ export default function DoctorDashboard() {
     }
     load()
   }, [selectedId])
-
-  // 'today' does not exist for a pharmacy or an agent, so it would render an
-  // empty page on their first visit.
-  useEffect(() => {
-    if (doctor && !takesAppointments(doctor.vertical as VerticalKey) && (tab === 'today' || tab === 'appointments')) {
-      setTab('reports')
-    }
-  }, [doctor, tab])
 
   const logout = async () => { await supabase.auth.signOut(); window.location.href = '/business/login' }
 
@@ -672,6 +684,29 @@ export default function DoctorDashboard() {
   const booksAppointments = takesAppointments(myVertical)
   const verticalLabel = verticalFor(myVertical).label
 
+  // Who sees what.
+  //
+  // 0057 gated the medical record; this gates the business around it, which is
+  // the other half of the same job. The two are separate questions: a hospital
+  // doctor should read a chart and should not be editing the listing's GSTIN,
+  // and a manager is the exact reverse.
+  //
+  //   BUSINESS tabs — the listing itself (name, address, GSTIN, billing
+  //   address, pricing plan), the tax invoices Sehatsandhi raises against it,
+  //   and how the business is performing. Owner and manager. This is the
+  //   company's commercial identity, not the day's work.
+  //
+  //   SCHEDULE — who sits when, and at which branch. Changes what patients can
+  //   book, so it stays with the people accountable for it. Reception works
+  //   the diary through Today and Queue instead.
+  //
+  //   Everything else — today, the queue, appointments, patients, beds — is
+  //   the day's work, and reception cannot do its job without all of it. The
+  //   sensitive part of Patients is gated inside the tab, not on the rail:
+  //   reception genuinely needs to find a patient and take their money.
+  const isBusinessRole = role === 'owner' || role === 'manager'
+  const isClinician = role === 'owner' || role === 'doctor'
+
   const tabs = [
     ...(booksAppointments ? [
       { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
@@ -690,11 +725,36 @@ export default function DoctorDashboard() {
     ] : []),
     // Hours and branches matter to a pharmacy and an ambulance service too —
     // patients need to know when they are open and where.
-    { id: 'schedule', label: booksAppointments ? t('dashboardPage.tabSchedule') : 'Hours & branches', icon: <Clock className="w-4 h-4" /> },
-    { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
-    { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
-    { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
+    ...(isBusinessRole || isClinician ? [
+      { id: 'schedule', label: booksAppointments ? t('dashboardPage.tabSchedule') : 'Hours & branches', icon: <Clock className="w-4 h-4" /> },
+    ] : []),
+    ...(isBusinessRole ? [
+      { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
+      { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
+      { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
+    ] : []),
   ]
+
+  // Keep the open tab one that exists.
+  //
+  // Replaces the old rule that sent a pharmacy off 'today' to 'reports', and
+  // covers both reasons a tab can vanish now — the vertical does not have it,
+  // or this role may not see it. That second case broke the old rule outright:
+  // it redirected to 'reports', which is exactly one of the tabs a receptionist
+  // no longer has, so reception would have been bounced onto a blank page.
+  //
+  // Still prefers Reports where it is available, so a pharmacy owner lands
+  // where they always did.
+  const tabIds = tabs.map(tb => tb.id).join(',')
+  useEffect(() => {
+    if (loading || tabs.length === 0) return
+    if (tabs.some(tb => tb.id === tab)) return
+    const fallback = tabs.find(tb => tb.id === 'reports') ?? tabs[0]
+    setTab(fallback.id as typeof tab)
+    // tabIds rather than tabs: the array is rebuilt every render and would
+    // otherwise re-run this forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, tab, tabIds])
 
   // Same shell as the /business/register wizard: dark ink rail down the left
   // holding the nav, cream content pane beside it. The rail replaces what used
