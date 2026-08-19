@@ -9,7 +9,7 @@ import { registerPractitioner, attachPractitioner, detachPractitioner } from '..
 import Patients from './Patients'
 import Wards from './Wards'
 import Queue from './Queue'
-import { getMyRole, ClinicRole } from '../../lib/identityApi'
+import { getMyRole, isBusinessRole, isClinicalRole, hasPatientRecords, RoleLookup } from '../../lib/identityApi'
 import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -64,10 +64,15 @@ export default function DoctorDashboard() {
   // six tabs has what they need.
   const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
 
-  // What this login is at this business. Null once looked up and found to be
-  // nothing; undefined only while the dashboard is still loading, which is the
-  // same moment the spinner covers.
-  const [role, setRole] = useState<ClinicRole | null>(null)
+  // What this login is at this business, and whether the database has a role
+  // system to ask at all. Starts enforced-with-no-role so nothing extra is
+  // drawn during the moment the spinner covers.
+  const [role, setRole] = useState<RoleLookup>({ role: null, enforced: true })
+
+  // Whether this database has the patient-records schema under it. The EMR tabs
+  // are built and shipped; production may not have run 0047-0054 yet, and a tab
+  // that opens onto a 404 is worse than a tab that is not there.
+  const [emr, setEmr] = useState(false)
 
   // ── Bills ──
   // Until now the only copy of an invoice was the WhatsApp link sent once at
@@ -453,7 +458,8 @@ export default function DoctorDashboard() {
           // so it lands with everything else: fetched separately, the rail
           // would paint the owner's full set and then take tabs away, which
           // looks like a bug and reads like a demotion.
-          getMyRole(doc.id).then(setRole).catch(() => setRole(null)),
+          getMyRole(doc.id).then(setRole).catch(() => setRole({ role: null, enforced: true })),
+          hasPatientRecords().then(setEmr).catch(() => setEmr(false)),
           // Any business that has doctors has a roster now. It used to be
           // hospitals only, because a clinic's doctors had nowhere to live.
           hasPractitioners(doc.vertical as VerticalKey)
@@ -704,31 +710,40 @@ export default function DoctorDashboard() {
   //   the day's work, and reception cannot do its job without all of it. The
   //   sensitive part of Patients is gated inside the tab, not on the rail:
   //   reception genuinely needs to find a patient and take their money.
-  const isBusinessRole = role === 'owner' || role === 'manager'
-  const isClinician = role === 'owner' || role === 'doctor'
+  // Both return TRUE against a database with no role system (pre-0057). That is
+  // the pre-0057 behaviour restored, not a bypass — see RoleLookup.enforced.
+  // Without it this deploy would take Clinic, Bills and Reports away from every
+  // owner on a database that has no roles to check them against.
+  const businessRole = isBusinessRole(role)
+  const isClinician = isClinicalRole(role)
 
   const tabs = [
     ...(booksAppointments ? [
       { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
       // Above Appointments on purpose: the line is what reception works all
       // day, the booking list is what they check occasionally.
-      { id: 'queue', label: 'Queue', icon: <ListOrdered className="w-4 h-4" /> },
+      // `emr` because the queue reads opd_board, which arrives with 0054.
+      ...(emr ? [{ id: 'queue', label: 'Queue', icon: <ListOrdered className="w-4 h-4" /> }] : []),
       { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4" /> },
     ] : []),
     // Every vertical keeps records of who it has seen — a lab has patients as
-    // much as a clinic does — so this one is not gated on appointments.
-    { id: 'patients', label: 'Patients', icon: <UserSearch className="w-4 h-4" /> },
+    // much as a clinic does — so this one is not gated on appointments. It IS
+    // gated on the schema being there: this ships ahead of 0047-0054, and until
+    // those run the tab would open onto a PostgREST 404.
+    ...(emr ? [
+      { id: 'patients', label: 'Patients', icon: <UserSearch className="w-4 h-4" /> },
+    ] : []),
     // Only where somebody is actually admitted. A pharmacy has no beds, and a
     // single-doctor clinic that does day care has no use for a ward board.
-    ...(booksAppointments ? [
+    ...(booksAppointments && emr ? [
       { id: 'beds', label: 'Beds', icon: <BedDouble className="w-4 h-4" /> },
     ] : []),
     // Hours and branches matter to a pharmacy and an ambulance service too —
     // patients need to know when they are open and where.
-    ...(isBusinessRole || isClinician ? [
+    ...(businessRole || isClinician ? [
       { id: 'schedule', label: booksAppointments ? t('dashboardPage.tabSchedule') : 'Hours & branches', icon: <Clock className="w-4 h-4" /> },
     ] : []),
-    ...(isBusinessRole ? [
+    ...(businessRole ? [
       { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
       { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
       { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
@@ -1313,17 +1328,17 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ QUEUE — today's OPD line ══════════ */}
-        {tab === 'queue' && doctor && (
+        {tab === 'queue' && emr && doctor && (
           <Queue businessId={doctor.id} practitionerId={myPractitionerId} />
         )}
 
         {/* ══════════ BEDS — the ward board ══════════ */}
-        {tab === 'beds' && doctor && (
+        {tab === 'beds' && emr && doctor && (
           <Wards businessId={doctor.id} practitionerId={myPractitionerId} />
         )}
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
-        {tab === 'patients' && doctor && (
+        {tab === 'patients' && emr && doctor && (
           <Patients businessId={doctor.id} practitionerId={myPractitionerId} />
         )}
 

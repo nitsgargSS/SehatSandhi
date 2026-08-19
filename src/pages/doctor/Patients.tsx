@@ -226,6 +226,10 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
     return () => { cancelled = true }
   }, [businessId])
 
+  // Note isClinicalRole returns TRUE against a database with no role system at
+  // all (pre-0057), which is deliberate — see RoleLookup.enforced. It is the
+  // behaviour that was in force before roles existed, not a bypass.
+
   // 'history' is the default and is clinical, so reception would land on an
   // empty Visits pane whose tab is not even drawn. Fall through to Admissions
   // rather than tracking the default in two places.
