@@ -29,6 +29,7 @@ export const PURGE_TABLES: PurgeTable[] = [
   { name: 'camps_offers', purgeOrder: 90, pk: 'id' },
   { name: 'business_practitioners', purgeOrder: 100, pk: 'id' },
   { name: 'practitioners', purgeOrder: 120, pk: 'id' },
+  { name: 'insurance_leads', purgeOrder: 125, pk: 'id' },
   { name: 'businesses', purgeOrder: 130, pk: 'id' },
   { name: 'unmet_demand_log', purgeOrder: 150, pk: 'id' },
   { name: 'patient_visits', purgeOrder: 160, pk: 'id' },

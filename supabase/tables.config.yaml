@@ -131,6 +131,13 @@ tables:
     class: isolated
     purgeOrder: 120
 
+  # Patients who asked the WhatsApp bot about insurance. References businesses
+  # via agent_business_id, so it goes before businesses even though the FK is
+  # ON DELETE SET NULL and would survive either order.
+  insurance_leads:
+    class: isolated
+    purgeOrder: 125
+
   businesses:
     class: isolated
     purgeOrder: 130

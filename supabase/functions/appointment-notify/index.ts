@@ -1,7 +1,7 @@
 // appointment-notify — drain the notification outbox.
 //
-// Whenever an appointment is cancelled, rescheduled or marked no-show, a trigger
-// queues a row saying who needs telling. This sends those: WhatsApp first via
+// Whenever an appointment is booked, cancelled, rescheduled or marked no-show, a
+// trigger queues a row saying who needs telling. This sends those: WhatsApp first via
 // AISensy, and SMS via MSG91 only if WhatsApp fails. That ordering is the point —
 // WhatsApp is free and is where these conversations already live, but a patient
 // who never opens it must still learn their appointment moved.
@@ -43,11 +43,23 @@ function messageFor(recipient: string, event: string, p: Record<string, unknown>
         return `Your appointment with ${doctor} has moved from ${oldSlot} to ${newSlot}. Please come at the new time.`
       case 'confirmed':
         return `Your appointment with ${doctor} on ${newSlot} is confirmed. See you then.`
+      // Asked three hours after the slot, by sehat_queue_rating_requests. Kept
+      // to one question with one answer: a rating nobody can reply to in a
+      // second is a rating nobody sends.
+      case 'rating_request':
+        return `How was your visit to ${doctor} on ${newSlot}? Reply with a number from 1 (poor) to 5 (excellent). It helps the next patient choose.`
       default:
         return `Update on your appointment with ${doctor} on ${newSlot}.`
     }
   }
   switch (event) {
+    // A new booking, from the bot or the website. The business is told what it
+    // needs in order to expect someone: who, when, and the number to ring them on.
+    case 'booked': {
+      const phone = p.patient_phone ? `, phone ${String(p.patient_phone)}` : ''
+      const via = p.booked_via === 'whatsapp_bot' ? 'WhatsApp' : String(p.booked_via ?? 'Sehatsandhi')
+      return `New appointment: ${patient} on ${newSlot}${phone}. Booked on ${via}.`
+    }
     case 'cancelled':
       return `${patient} cancelled their ${oldSlot} appointment.${reason} The slot is now free.`
     case 'rescheduled':
