@@ -6,10 +6,10 @@
 // with. These accounts fill that gap: known addresses, known password, created
 // once and surviving every purge.
 //
-// Writes a business, a practitioner and the affiliation between them. It used
-// to write a single `doctors` row, which 0037 removed — so until this was
-// updated the script created the auth user and then failed on a 404, leaving a
-// login with nothing behind it.
+// Writes a business, a practitioner, the affiliation between them, and the
+// hours that affiliation sits. It used to write a single `doctors` row, which
+// 0037 removed — so until this was updated the script created the auth user and
+// then failed on a 404, leaving a login with nothing behind it.
 //
 // Real production users are deliberately NOT copied. Supabase salts password
 // hashes per project so they would not work anyway, and putting real people's
@@ -84,6 +84,17 @@ const ACCOUNTS = [
     // On the affiliation, not on either side of it: the same doctor charges
     // differently at each place they sit.
     consultation_fee: 300,
+    // When this doctor actually sits here. Monday to Saturday, matching the
+    // working_hours line above — that field is free text for humans to read and
+    // nothing books against it, so without these rows the clinic publishes
+    // hours on its profile and offers no slots to anyone.
+    hours: {
+      days: [1, 2, 3, 4, 5, 6],   // 0 = Sunday, as day_of_week stores it
+      start: '10:00',
+      end: '18:00',
+      slot_minutes: 15,
+      capacity: 4,
+    },
   },
   { email: 'sandbox-admin@sehatsandhi.test', role: 'admin', business: null },
 ]
@@ -200,15 +211,17 @@ for (const acct of ACCOUNTS) {
       console.log('      ↳ practitioner created')
     }
 
+    let affiliationId
     const foundLink = await api(
       `/rest/v1/business_practitioners?select=id&business_id=eq.${businessId}` +
       `&practitioner_id=eq.${practitionerId}&limit=1`)
     if (foundLink.length) {
+      affiliationId = foundLink[0].id
       console.log('      ↳ affiliation already exists')
     } else {
-      await api('/rest/v1/business_practitioners', {
+      const rows = await api('/rest/v1/business_practitioners', {
         method: 'POST',
-        headers: { Prefer: 'return=minimal' },
+        headers: { Prefer: 'return=representation' },
         body: JSON.stringify({
           business_id: businessId,
           practitioner_id: practitionerId,
@@ -221,7 +234,43 @@ for (const acct of ACCOUNTS) {
           can_login_web: true,
         }),
       })
+      affiliationId = rows[0].id
       console.log('      ↳ affiliation created')
+    }
+
+    // Bookable hours, hung off the affiliation rather than the business: 0037
+    // moved availability onto the posting so a doctor can sit here on Tuesdays
+    // and somewhere else on Wednesdays. This is what sehat_open_windows reads,
+    // so it is what decides whether the dashboard and the bot have any slot to
+    // offer at all.
+    if (acct.hours) {
+      const foundHours = await api(
+        `/rest/v1/availability?select=id&business_practitioner_id=eq.${affiliationId}&limit=1`)
+      if (foundHours.length) {
+        console.log('      ↳ hours already published')
+      } else {
+        await api('/rest/v1/availability', {
+          method: 'POST',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify(acct.hours.days.map(day => ({
+            business_id: businessId,
+            business_practitioner_id: affiliationId,
+            day_of_week: day,
+            start_time: acct.hours.start,
+            end_time: acct.hours.end,
+            slot_duration_minutes: acct.hours.slot_minutes,
+            slot_capacity: acct.hours.capacity,
+            is_active: true,
+            // Left null deliberately: the seed clinic has the one branch its
+            // insert trigger created, and a null location means "wherever this
+            // business sees patients" — the fallback both sehat_open_windows
+            // and the capacity check already honour.
+            location_id: null,
+          }))),
+        })
+        console.log(`      ↳ hours published (${acct.hours.days.length} days, `
+          + `${acct.hours.start}-${acct.hours.end}, ${acct.hours.capacity} per slot)`)
+      }
     }
   } catch (e) {
     console.log(`      ↳ listing: ✗ ${e.message}`)
@@ -235,4 +284,10 @@ if (failures) {
 }
 
 console.log(`\n  ✓ Sandbox logins ready — password: ${PASSWORD}`)
-console.log('    These survive `Purge sandbox data`; autofill accounts do not.\n')
+console.log('    The logins survive `Purge sandbox data`; autofill accounts do not.')
+// The rows do NOT. businesses, practitioners, business_practitioners and
+// availability are all classified `isolated`, so a purge takes them and leaves
+// the login pointing at nothing — a dashboard that looks broken rather than
+// empty. Re-running is a no-op when they are still there, so the safe habit is
+// to run this after every purge.
+console.log('    Re-run this after a purge — the rows are purged, the logins are not.\n')
