@@ -194,6 +194,24 @@ tables:
     class: isolated
     purgeOrder: 86
 
+  # ── Patient bills (0056) ────────────────────────────────────────────────
+  # Numbered after charges (86) and payments (84), which both carry a bill_id
+  # pointing here. Every FK on a bill has an ON DELETE clause, so nothing here
+  # is forced — but the convention in this file is child-first, and a stamped
+  # charge is the child of the bill it was copied onto.
+  patient_bill_items:
+    class: isolated
+    purgeOrder: 97
+
+  patient_bills:
+    class: isolated
+    purgeOrder: 99
+
+  bill_counters:
+    class: isolated
+    purgeOrder: 101
+    pk: business_id
+
   # ── Discharge summaries (0055) ──────────────────────────────────────────
   # Before admissions (94) because they are its child, and — the part that
   # actually matters — before practitioners (120), for exactly the reason
@@ -494,6 +512,8 @@ tables:
   admission_detail:         { class: view }
   admission_bed_history:    { class: view }
   discharge_summary_detail: { class: view }
+  patient_bill_detail:      { class: view }
+  business_bills_outstanding: { class: view }
   opd_board:                { class: view }
   patient_account:          { class: view }
   business_outstanding:     { class: view }

@@ -29,7 +29,8 @@ import {
 import {
   getCharges, getPayments, getAccount, addCharge, removeCharge,
   addPayment, removePayment, postBedCharges,
-  Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod,
+  getBills, issueBill, cancelBill, sendBill,
+  Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod, Bill,
 } from '../../lib/billingApi'
 import { moneyExact } from '../../lib/format'
 
@@ -1646,6 +1647,11 @@ function BillingPane({
         </div>
       </div>
 
+      <BillsSection
+        charges={charges} stays={stays} memberId={memberId} businessId={businessId}
+        practitionerId={practitionerId} onChange={onChange}
+      />
+
       {ledger.length === 0 ? (
         <div style={{ ...card, color: BIZ.muted, fontSize: 13.5 }}>
           Nothing charged or paid here yet.
@@ -1670,6 +1676,7 @@ function BillingPane({
                     ` · ${(e.row as Charge).quantity} × ${moneyExact((e.row as Charge).unit_price)}`}
                   {e.kind === 'payment' && (e.row as PatientPayment).reference &&
                     ` · ${(e.row as PatientPayment).reference}`}
+                  {e.row.bill_id && ' · billed'}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 9, alignItems: 'center', flex: '0 0 auto' }}>
@@ -1679,17 +1686,233 @@ function BillingPane({
                 }}>
                   {e.kind === 'payment' ? '− ' : ''}{moneyExact(e.row.amount)}
                 </span>
-                <button aria-label="Remove line" style={{ ...btn(), padding: 6 }} disabled={busy}
-                  onClick={() => guard(async () => {
-                    if (!window.confirm('Remove this line?')) return
-                    if (e.kind === 'charge') await removeCharge(e.row.id)
-                    else await removePayment(e.row.id)
-                  })}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {/* A billed line has no delete. The database refuses it too, but
+                    a button that always errors is worse than no button — the
+                    way to change it is to cancel the bill. */}
+                {!e.row.bill_id && (
+                  <button aria-label="Remove line" style={{ ...btn(), padding: 6 }} disabled={busy}
+                    onClick={() => guard(async () => {
+                      if (!window.confirm('Remove this line?')) return
+                      if (e.kind === 'charge') await removeCharge(e.row.id)
+                      else await removePayment(e.row.id)
+                    })}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Bills ───────────────────────────────────────────────────────────────────
+//
+// The ledger above is what the clinic knows; a bill is what the patient is
+// handed. Numbered, itemised, and frozen once issued — because it goes to an
+// insurer, who will hold a printed copy of it for months and reimburse against
+// whatever it says.
+//
+// Issuing takes every UNBILLED charge in scope, so the count shown on the
+// button is the honest answer to "what will be on this". A stay with nothing
+// left unbilled offers a correction instead.
+
+function BillsSection({ charges, stays, memberId, businessId, practitionerId, onChange }: {
+  charges: Charge[]
+  stays: Admission[]
+  memberId: string
+  businessId: string
+  practitionerId?: string | null
+  onChange: () => void
+}) {
+  const [bills, setBills] = useState<Bill[]>([])
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [note, setNote] = useState('')
+  const [form, setForm] = useState({
+    scope: '', discount: '', discountReason: '', roundOff: '',
+  })
+
+  const load = useCallback(() => {
+    getBills(memberId, businessId).then(setBills).catch(e => setErr((e as Error).message))
+  }, [memberId, businessId])
+  useEffect(load, [load])
+
+  // What this bill would actually pick up. Recomputed against the chosen scope,
+  // because "bill this stay" and "bill everything" are very different numbers.
+  const inScope = charges.filter(c =>
+    !c.bill_id && (form.scope === '' || c.admission_id === form.scope))
+  const subtotal = inScope.reduce((s, c) => s + Number(c.amount), 0)
+  const discount = Number(form.discount) || 0
+  const roundOff = Number(form.roundOff) || 0
+  const net = subtotal - discount + roundOff
+
+  const liveForScope = bills.find(b =>
+    b.status === 'issued' && (form.scope === '' ? !b.admission_id : b.admission_id === form.scope))
+
+  const issue = async () => {
+    setBusy(true); setErr(''); setNote('')
+    try {
+      await issueBill({
+        patientMemberId: memberId,
+        businessId,
+        admissionId: form.scope || null,
+        discount,
+        discountReason: form.discountReason,
+        roundOff,
+        issuedBy: practitionerId ?? null,
+        supersedes: liveForScope?.id ?? null,
+      })
+      setForm({ scope: '', discount: '', discountReason: '', roundOff: '' })
+      setOpen(false); load(); onChange()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  const act = async (fn: () => Promise<void>) => {
+    setBusy(true); setErr(''); setNote('')
+    try { await fn(); load(); onChange() }
+    catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+        <div style={label}>Bills</div>
+        {!open && (
+          <button style={{ ...btn(true), fontSize: 12 }} onClick={() => setOpen(true)}>
+            <FileText className="w-3 h-3" style={{ display: 'inline', marginRight: 4 }} />
+            Issue a bill
+          </button>
+        )}
+      </div>
+
+      {bills.length === 0 && !open && (
+        <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 7 }}>
+          Nothing issued yet. The patient has no itemised bill to pay against or
+          claim with.
+        </div>
+      )}
+
+      {bills.map(b => (
+        <div key={b.id} style={{
+          display: 'flex', justifyContent: 'space-between', gap: 10,
+          flexWrap: 'wrap', alignItems: 'center',
+          padding: '8px 0', borderBottom: `1px solid ${BIZ.border}`,
+          opacity: b.status === 'issued' ? 1 : .55,
+        }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.ink }}>
+              {b.bill_no}
+              <span style={{ fontWeight: 500, color: BIZ.muted }}>
+                {' '}· {b.bill_type === 'ipd' ? 'inpatient' : b.bill_type === 'opd' ? 'visit' : 'account'}
+              </span>
+              {b.status !== 'issued' && (
+                <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 7, color: BIZ.mutedWarm }}>
+                  {b.status}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
+              {when(b.issued_at)} · {moneyExact(b.net_payable)}
+              {b.balance_due > 0
+                ? ` · ${moneyExact(b.balance_due)} due`
+                : ' · paid'}
+              {b.sent_at && ' · sent'}
+            </div>
+          </div>
+          {b.status === 'issued' && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <a href={`/bill/${b.public_token}`} target="_blank" rel="noreferrer"
+                style={{ ...btn(), fontSize: 12, textDecoration: 'none' }}>Open</a>
+              <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
+                onClick={() => act(async () => {
+                  const r = await sendBill(b.id)
+                  setNote(r.whatsapp ? 'Sent on WhatsApp.' : r.email ? 'Emailed.' : 'Sent.')
+                })}>
+                <Send className="w-3 h-3" style={{ display: 'inline', marginRight: 4 }} />
+                {b.sent_at ? 'Resend' : 'Send'}
+              </button>
+              <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
+                onClick={() => act(async () => {
+                  const reason = window.prompt('Why is this bill being cancelled?')
+                  if (!reason?.trim()) return
+                  await cancelBill(b.id, reason.trim())
+                  setNote(`${b.bill_no} cancelled. Its charges are billable again.`)
+                })}>Cancel</button>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {note && <div style={{ fontSize: 12.5, color: '#1c6b4a', marginTop: 8 }}>{note}</div>}
+      {err && <div style={{ fontSize: 12.5, color: '#8a2b2b', marginTop: 8 }}>{err}</div>}
+
+      {open && (
+        <div style={{ display: 'grid', gap: 9, marginTop: 12 }}>
+          <div>
+            <div style={label}>What this bill covers</div>
+            <select style={input} value={form.scope}
+              onChange={e => setForm({ ...form, scope: e.target.value })}>
+              <option value="">Everything not yet billed</option>
+              {stays.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.admission_no} — {when(s.admitted_at)}
+                  {s.status === 'admitted' ? ' (still admitted)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {liveForScope && (
+            <div style={{ fontSize: 12.5, color: '#8a5a00' }}>
+              {liveForScope.bill_no} already covers this. Issuing now replaces it —
+              its lines are released back and go onto the new bill.
+            </div>
+          )}
+
+          <div style={{ fontSize: 13, color: BIZ.ink }}>
+            {inScope.length === 0 && !liveForScope
+              ? 'Nothing unbilled here. Add a charge first.'
+              : `${inScope.length} line${inScope.length === 1 ? '' : 's'} · ${moneyExact(subtotal)}`}
+          </div>
+
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            <input style={{ ...input, flex: '0 1 120px' }} inputMode="decimal" placeholder="Discount ₹"
+              value={form.discount} onChange={e => setForm({ ...form, discount: e.target.value })} />
+            <input style={{ ...input, flex: '1 1 180px' }} placeholder="Reason for the discount"
+              value={form.discountReason}
+              onChange={e => setForm({ ...form, discountReason: e.target.value })} />
+            <input style={{ ...input, flex: '0 1 120px' }} inputMode="decimal" placeholder="Round off ₹"
+              value={form.roundOff} onChange={e => setForm({ ...form, roundOff: e.target.value })} />
+          </div>
+          {discount > 0 && !form.discountReason.trim() && (
+            <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>
+              A discount needs a reason — it goes on the bill, and an unexplained
+              one is what an audit stops on.
+            </div>
+          )}
+
+          <div style={{ fontSize: 16, fontWeight: 800, color: BIZ.ink }}>
+            Net payable {moneyExact(net)}
+          </div>
+
+          <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>
+            Once issued the bill cannot be edited, and every line on it is locked
+            against deletion. Fix a mistake by cancelling it or issuing a
+            replacement.
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={issue} style={btn(true)}
+              disabled={busy || net < 0 || (discount > 0 && !form.discountReason.trim())
+                || (inScope.length === 0 && !liveForScope)}>
+              {busy ? 'Issuing…' : liveForScope ? 'Replace bill' : 'Issue bill'}
+            </button>
+            <button onClick={() => { setOpen(false); setErr('') }} style={btn()}>Cancel</button>
+          </div>
         </div>
       )}
     </div>
