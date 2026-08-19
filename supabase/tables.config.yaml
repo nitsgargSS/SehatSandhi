@@ -178,25 +178,28 @@ tables:
     purgeOrder: 157
 
   # ── Prescriptions and documents (0046) ──────────────────────────────────
-  # Items reference prescriptions; documents reference both prescriptions and
-  # visits, so both go before either.
+  # These sit BEFORE practitioners (120), not after, and the reason is the same
+  # one recorded above for payments: prescriptions.practitioner_id has no
+  # ON DELETE clause, so it is NO ACTION. A prescription is issued by a named
+  # person and that link is not something a delete should quietly sever — which
+  # means the prescription has to go first or the purge raises an FK violation.
   prescription_items:
     class: isolated
-    purgeOrder: 141
+    purgeOrder: 102
 
   patient_documents:
     class: isolated
-    purgeOrder: 142
+    purgeOrder: 104
 
   prescriptions:
     class: isolated
-    purgeOrder: 143
+    purgeOrder: 106
 
   # Per-business numbering. Purged with everything else in sandbox: a counter
   # left behind would keep numbering from where the deleted data stopped.
   prescription_counters:
     class: isolated
-    purgeOrder: 144
+    purgeOrder: 108
     pk: business_id
 
   patient_visits:
