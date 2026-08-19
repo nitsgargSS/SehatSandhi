@@ -38,11 +38,24 @@ export interface TimeSlot {
  * capacity trigger enforces against, so what is offered and what is accepted
  * cannot disagree. It also knows about locations, which the local template
  * version cannot see.
+ *
+ * Pass a practitioner to get that doctor's own published hours at this
+ * business, and occupancy counted for them alone. Without one you get every
+ * window the business publishes — right for a clinic looking at its whole day,
+ * wrong for booking a named doctor at a clinic that has several.
  */
-export async function fetchOpenWindows(doctorId: string, date: Date): Promise<TimeSlot[]> {
+export async function fetchOpenWindows(
+  businessId: string,
+  date: Date,
+  practitionerId?: string,
+): Promise<TimeSlot[]> {
   const { data, error } = await supabase.rpc('sehat_open_windows', {
-    p_doctor_id: doctorId,
+    p_business_id: businessId,
     p_date: date.toISOString().slice(0, 10),
+    // Omitted rather than passed as null: without a practitioner the RPC
+    // returns every window the business publishes, which is what the clinic's
+    // own schedule view wants to see.
+    ...(practitionerId ? { p_practitioner_id: practitionerId } : {}),
   })
   if (error || !data) return []
   return (data as {
