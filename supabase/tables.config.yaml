@@ -194,6 +194,23 @@ tables:
     class: isolated
     purgeOrder: 86
 
+  # ── Discharge summaries (0055) ──────────────────────────────────────────
+  # Before admissions (94) because they are its child, and — the part that
+  # actually matters — before practitioners (120), for exactly the reason
+  # recorded on prescriptions below: discharge_summaries.practitioner_id has no
+  # ON DELETE clause, so it is NO ACTION. The document is signed by a named
+  # doctor with a registration number, which is what makes it worth anything to
+  # the next hospital, so that link is not something a delete may quietly sever.
+  # The summary goes first or the purge raises an FK violation.
+  discharge_summaries:
+    class: isolated
+    purgeOrder: 88
+
+  discharge_counters:
+    class: isolated
+    purgeOrder: 89
+    pk: business_id
+
   # ── Inpatients (0050) ───────────────────────────────────────────────────
   # Notes before stays, stays before beds, beds before wards — and all of them
   # before businesses. Every FK here carries an ON DELETE clause, so ordering
@@ -476,6 +493,7 @@ tables:
   consultation_audio_to_purge: { class: view }
   admission_detail:         { class: view }
   admission_bed_history:    { class: view }
+  discharge_summary_detail: { class: view }
   opd_board:                { class: view }
   patient_account:          { class: view }
   business_outstanding:     { class: view }

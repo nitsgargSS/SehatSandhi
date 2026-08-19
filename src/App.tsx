@@ -23,6 +23,7 @@ const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
 const WhatsAppBookingDemo = lazy(() => import('./pages/business/WhatsAppBookingDemo'))
 const InvoicePage = lazy(() => import('./pages/InvoicePage'))
 const PrescriptionPage = lazy(() => import('./pages/PrescriptionPage'))
+const DischargeSummaryPage = lazy(() => import('./pages/DischargeSummaryPage'))
 const AdminLogin = lazy(() => import('./pages/admin/Login'))
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
 // Legal/company pages. Linked from SiteFooter on every public page, and
@@ -84,14 +85,15 @@ const FLOAT_HIDDEN_PATHS = ['/business/register', '/doctor/register', '/business
 
 // One page_view per route change. Placed inside the router so it sees client
 // navigations, which never reload the page and would otherwise go uncounted.
-// Admin, invoice and prescription paths are skipped: those are our own screens
-// and a customer's private link, neither of which belongs in product analytics.
+// Admin, invoice and patient-document paths are skipped: those are our own
+// screens and a customer's private link, neither of which belongs in product
+// analytics.
 //
-// For /rx/ this is not a preference, it is the whole access model. The tracker
-// sends page_location, which is the URL including the token — so tracking a
-// prescription would hand every one of them to Google Analytics, where anyone
-// with report access could open a patient's medicines.
-const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/']
+// For /rx/ and /ds/ this is not a preference, it is the whole access model. The
+// tracker sends page_location, which is the URL including the token — so
+// tracking these would hand every one of them to Google Analytics, where anyone
+// with report access could open a patient's medicines or their hospital stay.
+const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/', '/ds/']
 
 const PageViewTracker = () => {
   const { pathname } = useLocation()
@@ -186,6 +188,12 @@ export default function App() {
               forwarded into a family group should not open a year later.
               Carries no header or footer at all: what prints is the slip. */}
           <Route path="/rx/:token" element={<PrescriptionPage />} />
+
+          {/* The discharge summary, same no-login token pattern. Its link lasts
+              a year rather than 90 days: this is the document patients are told
+              to keep and produce at the next hospital, which may be months
+              away. Also bare, because what prints is what they carry. */}
+          <Route path="/ds/:token" element={<DischargeSummaryPage />} />
 
           {/* ── Legal ──────────────────────────────────────────────────────
               Reachable from SiteFooter on every public page. Meta's business

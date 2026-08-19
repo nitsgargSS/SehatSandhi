@@ -127,15 +127,23 @@ export async function cancelPrescription(id: string, reason: string) {
   oops(error)
 }
 
-/** Hand the patient their copy. Service-role work, so it goes via the function. */
+/**
+ * Hand the patient their copy.
+ *
+ * Sends the doctor's own session token, not the anon key: the function reads
+ * the prescription through it so RLS is what decides this clinic may send it.
+ * The anon key would authenticate nobody and is rejected.
+ */
 export async function sendPrescription(prescriptionId: string, email?: string) {
   const { url, anon } = activeConfig()
   if (!url || !anon) throw new Error('Not configured for sending.')
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Please sign in again to send this.')
   const res = await fetch(`${url}/functions/v1/prescription-send`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${anon}`,
+      Authorization: `Bearer ${session.access_token}`,
       apikey: anon,
     },
     body: JSON.stringify({ prescriptionId, email }),

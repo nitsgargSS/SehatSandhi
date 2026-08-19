@@ -23,6 +23,10 @@ import {
   Prescription, PrescriptionItem, PatientDocument,
 } from '../../lib/prescriptionsApi'
 import {
+  getDischargeSummaries, issueDischargeSummary, sendDischargeSummary,
+  DischargeSummary,
+} from '../../lib/dischargeApi'
+import {
   getCharges, getPayments, getAccount, addCharge, removeCharge,
   addPayment, removePayment, postBedCharges,
   Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod,
@@ -1196,8 +1200,241 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange 
           {openNotes === a.id && (
             <WardNotes admissionId={a.id} businessId={businessId} practitionerId={practitionerId} />
           )}
+
+          {/* The document they leave with. Only once the stay has ended —
+              a summary of an unfinished admission is not one, and the
+              database refuses it too. */}
+          {a.status !== 'admitted' && (
+            <DischargeSummarySection
+              admission={a} memberId={memberId} businessId={businessId}
+              practitionerId={practitionerId}
+            />
+          )}
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── The discharge summary ───────────────────────────────────────────────────
+//
+// A stay usually has exactly one. It can have more, because the only way to fix
+// a mistake in an issued summary is to issue a corrected one that supersedes
+// it — so the list is newest first and the superseded ones stay visible.
+//
+// Almost every field is filled by the database from the admission: dates, ward,
+// diagnoses, the consultant's registration number. What is asked for here is
+// only what the doctor knows and nothing else does.
+
+function DischargeSummarySection({ admission, memberId, businessId, practitionerId }: {
+  admission: Admission
+  memberId: string
+  businessId: string
+  practitionerId?: string | null
+}) {
+  const [list, setList] = useState<DischargeSummary[]>([])
+  const [open, setOpen] = useState(false)
+  const [scripts, setScripts] = useState<Prescription[]>([])
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [sentNote, setSentNote] = useState('')
+  const [form, setForm] = useState({
+    course: '', investigations: '', procedures: '', advice: '',
+    diet: '', activity: '', warnings: '', followUpWith: '', prescriptionId: '',
+  })
+
+  const load = useCallback(() => {
+    getDischargeSummaries(admission.id).then(setList).catch(e => setErr((e as Error).message))
+  }, [admission.id])
+  useEffect(load, [load])
+
+  // Only fetched when the form opens: the point is to LINK the discharge
+  // prescription rather than retype the drugs into a second table.
+  useEffect(() => {
+    if (!open) return
+    getPrescriptions(memberId, businessId)
+      .then(rows => setScripts(rows.filter(r => r.status !== 'cancelled')))
+      .catch(() => { /* linking is optional — a failure here must not block issuing */ })
+  }, [open, memberId, businessId])
+
+  const current = list.find(s => s.status === 'issued')
+
+  const issue = async () => {
+    if (!practitionerId) { setErr('Select which doctor is signing this first.'); return }
+    setBusy(true); setErr('')
+    try {
+      await issueDischargeSummary({
+        admissionId: admission.id,
+        practitionerId,
+        courseInHospital: form.course,
+        investigations: form.investigations,
+        procedures: form.procedures,
+        advice: form.advice,
+        dietAdvice: form.diet,
+        activityAdvice: form.activity,
+        warningSigns: form.warnings,
+        followUpWith: form.followUpWith,
+        prescriptionId: form.prescriptionId || null,
+        // Issuing while one is already live means this is a correction.
+        supersedes: current?.id ?? null,
+      })
+      setForm({
+        course: '', investigations: '', procedures: '', advice: '',
+        diet: '', activity: '', warnings: '', followUpWith: '', prescriptionId: '',
+      })
+      setOpen(false); load()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  const send = async (s: DischargeSummary) => {
+    setBusy(true); setErr(''); setSentNote('')
+    try {
+      const r = await sendDischargeSummary(s.id)
+      setSentNote(r.whatsapp ? 'Sent on WhatsApp.' : r.email ? 'Emailed.' : 'Sent.')
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ marginTop: 11, borderTop: `1px solid ${BIZ.border}`, paddingTop: 11 }}>
+      <div style={{ ...label, marginBottom: 7 }}>Discharge summary</div>
+
+      {list.length === 0 && !open && (
+        <div style={{ fontSize: 12.5, color: BIZ.muted, marginBottom: 8 }}>
+          Not issued yet. The patient has nothing to show the next doctor.
+        </div>
+      )}
+
+      {list.map(s => (
+        <div key={s.id} style={{
+          display: 'flex', justifyContent: 'space-between', gap: 10,
+          flexWrap: 'wrap', alignItems: 'center',
+          padding: '7px 0', borderBottom: `1px solid ${BIZ.border}`,
+          opacity: s.status === 'issued' ? 1 : .6,
+        }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.ink }}>
+              {s.summary_no}
+              {s.status !== 'issued' && (
+                <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 7, color: BIZ.mutedWarm }}>
+                  {s.status}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
+              {when(s.issued_at)} · {s.doctor_name}
+              {s.prescription_no && ` · medicines on ${s.prescription_no}`}
+              {s.sent_at && ' · sent'}
+            </div>
+          </div>
+          {s.status === 'issued' && (
+            <div style={{ display: 'flex', gap: 7 }}>
+              <a href={`/ds/${s.public_token}`} target="_blank" rel="noreferrer"
+                style={{ ...btn(), fontSize: 12, textDecoration: 'none' }}>
+                Open
+              </a>
+              <button style={{ ...btn(), fontSize: 12 }} disabled={busy} onClick={() => send(s)}>
+                <Send className="w-3 h-3" style={{ display: 'inline', marginRight: 4 }} />
+                {s.sent_at ? 'Resend' : 'Send to patient'}
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {sentNote && <div style={{ fontSize: 12.5, color: '#1c6b4a', marginTop: 7 }}>{sentNote}</div>}
+      {err && <div style={{ fontSize: 12.5, color: '#8a2b2b', marginTop: 7 }}>{err}</div>}
+
+      {!open && (
+        <button style={{ ...btn(!current), fontSize: 12, marginTop: 9 }} onClick={() => setOpen(true)}>
+          <FileText className="w-3 h-3" style={{ display: 'inline', marginRight: 4 }} />
+          {current ? 'Issue a correction' : 'Issue discharge summary'}
+        </button>
+      )}
+
+      {open && (
+        <div style={{ display: 'grid', gap: 9, marginTop: 10 }}>
+          {current && (
+            <div style={{ fontSize: 12.5, color: '#8a5a00' }}>
+              This will replace {current.summary_no}. The old one stays on file and
+              stops opening for the patient.
+            </div>
+          )}
+
+          <div style={{ fontSize: 12, color: BIZ.muted }}>
+            The dates, ward, diagnoses and your registration number are filled in
+            from the admission — you do not need to retype them.
+          </div>
+
+          <div><div style={label}>Course in hospital</div>
+            <textarea style={{ ...input, minHeight: 66 }} value={form.course}
+              placeholder="What happened between admission and discharge — the part the next doctor reads first."
+              onChange={e => setForm({ ...form, course: e.target.value })} /></div>
+
+          <div><div style={label}>Investigations</div>
+            <textarea style={{ ...input, minHeight: 48 }} value={form.investigations}
+              placeholder="Key results. Blood counts, imaging, cultures."
+              onChange={e => setForm({ ...form, investigations: e.target.value })} /></div>
+
+          <div><div style={label}>Procedures</div>
+            <input style={input} value={form.procedures}
+              onChange={e => setForm({ ...form, procedures: e.target.value })} /></div>
+
+          <div><div style={label}>Medicines to continue at home</div>
+            <select style={input} value={form.prescriptionId}
+              onChange={e => setForm({ ...form, prescriptionId: e.target.value })}>
+              <option value="">No discharge medication</option>
+              {scripts.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.prescription_no} — {when(p.issued_at)}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 4 }}>
+              Linked to a prescription rather than retyped, so the two can never
+              disagree. Issue it from the Prescriptions tab first if it is not here.
+            </div>
+          </div>
+
+          <div><div style={label}>Advice</div>
+            <textarea style={{ ...input, minHeight: 48 }} value={form.advice}
+              onChange={e => setForm({ ...form, advice: e.target.value })} /></div>
+
+          <div><div style={label}>Diet</div>
+            <input style={input} value={form.diet}
+              onChange={e => setForm({ ...form, diet: e.target.value })} /></div>
+
+          <div><div style={label}>Activity and rest</div>
+            <input style={input} value={form.activity}
+              onChange={e => setForm({ ...form, activity: e.target.value })} /></div>
+
+          <div><div style={label}>Come back immediately if</div>
+            <textarea style={{ ...input, minHeight: 48 }} value={form.warnings}
+              placeholder="Fever above 101, bleeding, breathlessness — what would mean coming back before the follow-up date."
+              onChange={e => setForm({ ...form, warnings: e.target.value })} />
+            <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 4 }}>
+              Printed in red on the patient's copy. This is the part that decides
+              whether they come back here or end up in a casualty ward.
+            </div>
+          </div>
+
+          <div><div style={label}>Follow up with</div>
+            <input style={input} value={form.followUpWith}
+              placeholder="Dr Sharma, OPD, Tuesday morning"
+              onChange={e => setForm({ ...form, followUpWith: e.target.value })} /></div>
+
+          <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>
+            Once issued it cannot be edited — a mistake is fixed by issuing a
+            correction, because the patient may already be holding a printed copy.
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={issue} disabled={busy} style={btn(true)}>
+              {busy ? 'Issuing…' : 'Issue'}
+            </button>
+            <button onClick={() => { setOpen(false); setErr('') }} style={btn()}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

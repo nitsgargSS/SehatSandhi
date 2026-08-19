@@ -33,6 +33,8 @@ export const PURGE_TABLES: PurgeTable[] = [
   { name: 'availability', purgeOrder: 80, pk: 'id' },
   { name: 'patient_payments', purgeOrder: 84, pk: 'id' },
   { name: 'patient_charges', purgeOrder: 86, pk: 'id' },
+  { name: 'discharge_summaries', purgeOrder: 88, pk: 'id' },
+  { name: 'discharge_counters', purgeOrder: 89, pk: 'business_id' },
   { name: 'camps_offers', purgeOrder: 90, pk: 'id' },
   { name: 'admission_notes', purgeOrder: 92, pk: 'id' },
   { name: 'admission_bed_stays', purgeOrder: 93, pk: 'id' },
