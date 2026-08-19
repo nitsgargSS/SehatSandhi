@@ -522,6 +522,7 @@ tables:
   discharge_summary_detail: { class: view }
   patient_bill_detail:      { class: view }
   patient_documents_to_purge: { class: view }
+  purge_job_history:        { class: view }
   business_bills_outstanding: { class: view }
   opd_board:                { class: view }
   patient_account:          { class: view }
