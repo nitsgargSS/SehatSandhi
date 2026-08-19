@@ -194,6 +194,14 @@ tables:
     class: isolated
     purgeOrder: 86
 
+  # ── Document retention (0058) ───────────────────────────────────────────
+  # Settings, not records. Purged with the business in sandbox: a retention
+  # rule for a clinic that no longer exists governs nothing.
+  document_retention_policies:
+    class: isolated
+    purgeOrder: 103
+    pk: business_id
+
   # ── Patient bills (0056) ────────────────────────────────────────────────
   # Numbered after charges (86) and payments (84), which both carry a bill_id
   # pointing here. Every FK on a bill has an ON DELETE clause, so nothing here
@@ -513,6 +521,7 @@ tables:
   admission_bed_history:    { class: view }
   discharge_summary_detail: { class: view }
   patient_bill_detail:      { class: view }
+  patient_documents_to_purge: { class: view }
   business_bills_outstanding: { class: view }
   opd_board:                { class: view }
   patient_account:          { class: view }

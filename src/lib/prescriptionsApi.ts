@@ -61,6 +61,30 @@ export interface PatientDocument {
   size_bytes: number | null
   document_date: string | null
   created_at: string
+  /** When this is due to be destroyed under the clinic's retention policy. */
+  retain_until: string | null
+  /** Blocks the sweeper. A document that is evidence outlives its date. */
+  legal_hold: boolean
+  legal_hold_reason: string | null
+  /** Set once the file is gone. The row remains as a tombstone. */
+  purged_at: string | null
+}
+
+/**
+ * Hold a document beyond its retention date, or release it.
+ *
+ * The safety valve on automatic destruction: a scan that is evidence in a
+ * complaint, a medico-legal case or an insurance dispute must not be swept
+ * because a date passed. Holding requires a reason — an unexplained hold is
+ * indistinguishable from a clinic quietly keeping everything.
+ */
+export async function setLegalHold(documentId: string, hold: boolean, reason?: string) {
+  const { error } = await supabase.rpc('sehat_set_legal_hold', {
+    p_document_id: documentId,
+    p_hold: hold,
+    p_reason: reason || null,
+  })
+  oops(error)
 }
 
 const oops = (e: { message: string } | null) => { if (e) throw new Error(e.message) }

@@ -19,7 +19,7 @@ import {
 } from '../../lib/admissionsApi'
 import {
   issuePrescription, getPrescriptions, cancelPrescription, sendPrescription,
-  uploadDocument, getDocuments, documentUrl, deleteDocument,
+  uploadDocument, getDocuments, documentUrl, deleteDocument, setLegalHold,
   Prescription, PrescriptionItem, PatientDocument,
 } from '../../lib/prescriptionsApi'
 import {
@@ -702,9 +702,41 @@ function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }:
               {' · '}{when(d.created_at)}
               {d.size_bytes ? ` · ${Math.max(1, Math.round(d.size_bytes / 1024))} KB` : ''}
             </div>
+            {/* When this is due to be destroyed, and whether something is
+                stopping that. Shown because a clinic asked for a document in
+                two years needs to know now whether it will still be here. */}
+            {d.legal_hold ? (
+              <div style={{ fontSize: 12, color: '#8a5a00', fontWeight: 700, marginTop: 2 }}>
+                On hold — kept indefinitely
+                {d.legal_hold_reason && (
+                  <span style={{ fontWeight: 400 }}> · {d.legal_hold_reason}</span>
+                )}
+              </div>
+            ) : d.retain_until ? (
+              <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 2 }}>
+                Kept until {when(d.retain_until)}
+              </div>
+            ) : null}
           </div>
           <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
             <button style={{ ...btn(), fontSize: 12 }} onClick={() => open(d)}>Open</button>
+            <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
+              onClick={async () => {
+                setBusy(true); setErr('')
+                try {
+                  if (d.legal_hold) {
+                    if (!window.confirm(`Release the hold on "${d.title}"? It becomes eligible for destruction again.`)) return
+                    await setLegalHold(d.id, false)
+                  } else {
+                    const why = window.prompt('Why is this being held? (complaint, medico-legal case, insurance dispute)')
+                    if (!why?.trim()) return
+                    await setLegalHold(d.id, true, why.trim())
+                  }
+                  onChange()
+                } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+              }}>
+              {d.legal_hold ? 'Release' : 'Hold'}
+            </button>
             <button aria-label="Delete document" style={{ ...btn(), padding: 8 }}
               onClick={async () => {
                 if (!window.confirm(`Delete "${d.title}"? This cannot be undone.`)) return
