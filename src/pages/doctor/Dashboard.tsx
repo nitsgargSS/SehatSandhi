@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
 import { money, shortDate, isoDate } from '../../lib/format'
 import { BIZ, takesAppointments, verticalFor, hasPractitioners, VerticalKey } from '../business/shared'
 import { registerPractitioner, attachPractitioner, detachPractitioner } from '../../lib/identityApi'
+import Patients from './Patients'
+import Wards from './Wards'
+import Queue from './Queue'
+import { getMyRole, isBusinessRole, isClinicalRole, hasPatientRecords, RoleLookup } from '../../lib/identityApi'
 import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -14,14 +18,6 @@ import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../components/Charts'
 import { headcountFor, marginalDoctorCost, describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 
-interface StaffMember {
-  id: string
-  full_name: string
-  whatsapp_number: string
-  role: string
-  can_login_web: boolean
-  is_active: boolean
-}
 
 interface CampOffer {
   id: string
@@ -60,14 +56,23 @@ export default function DoctorDashboard() {
   const [cancelReason, setCancelReason] = useState('')
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null)
   const [reschedDate, setReschedDate] = useState(() => isoDate())
-  const [staff, setStaff] = useState<StaffMember[]>([])
   const [camps, setCamps] = useState<CampOffer[]>([])
   const [loading, setLoading] = useState(true)
   // Consolidated from 6 tabs to 3 — Today / Schedule / Clinic —
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'appointments' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
+
+  // What this login is at this business, and whether the database has a role
+  // system to ask at all. Starts enforced-with-no-role so nothing extra is
+  // drawn during the moment the spinner covers.
+  const [role, setRole] = useState<RoleLookup>({ role: null, enforced: true })
+
+  // Whether this database has the patient-records schema under it. The EMR tabs
+  // are built and shipped; production may not have run 0047-0054 yet, and a tab
+  // that opens onto a 404 is worse than a tab that is not there.
+  const [emr, setEmr] = useState(false)
 
   // ── Bills ──
   // Until now the only copy of an invoice was the WhatsApp link sent once at
@@ -125,7 +130,7 @@ export default function DoctorDashboard() {
     // Filtered in the database, not in the browser: a busy clinic's full history
     // is not something to download so it can be thrown away client-side.
     let q = supabase.from('appointments').select('*')
-      .eq('doctor_id', doctorId)
+      .eq('business_id', doctorId)
       .gte('slot_datetime', `${apptFrom}T00:00:00`)
       .lte('slot_datetime', `${apptTo}T23:59:59`)
       .order('slot_datetime', { ascending: false })
@@ -191,6 +196,10 @@ export default function DoctorDashboard() {
     } | null
   }
   const [roster, setRoster] = useState<RosterRow[]>([])
+  // Which practitioner this session IS, where it is one at all. A clinic owner
+  // or a receptionist is nobody on the roster, so this stays null and a visit
+  // they record simply carries no practitioner rather than inventing one.
+  const [myPractitionerId, setMyPractitionerId] = useState<string | null>(null)
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
   const [showAddDoc, setShowAddDoc] = useState(false)
@@ -284,7 +293,7 @@ export default function DoctorDashboard() {
     if (!doctor) return
     setGstSaving(true); setGstMsg('')
     const value = gstinDraft.trim()
-    const { error } = await supabase.from('doctors').update({
+    const { error } = await supabase.from('businesses').update({
       gstin: value || null,
       // Derived, never typed separately — it is the first two digits by
       // definition, and letting them drift apart would misstate the tax split.
@@ -306,7 +315,7 @@ export default function DoctorDashboard() {
 
   const loadLocations = async (doctorId: string) => {
     const { data } = await supabase.from('practice_locations')
-      .select('*').eq('doctor_id', doctorId).eq('is_active', true)
+      .select('*').eq('business_id', doctorId).eq('is_active', true)
       .order('is_primary', { ascending: false }).order('created_at')
     const rows = (data as PracticeLocation[]) || []
     setLocations(rows)
@@ -317,7 +326,7 @@ export default function DoctorDashboard() {
     if (!doctor || !locForm.name.trim()) return
     setLocBusy(true)
     const { error } = await supabase.from('practice_locations').insert({
-      doctor_id: doctor.id,
+      business_id: doctor.id,
       name: locForm.name.trim(),
       address: locForm.address.trim() || null,
       pin_code: locForm.pin_code.trim() || null,
@@ -339,7 +348,7 @@ export default function DoctorDashboard() {
     setLocBusy(true)
     // Clear first: a partial unique index allows only one primary, so setting
     // the new one before clearing the old would violate it.
-    await supabase.from('practice_locations').update({ is_primary: false }).eq('doctor_id', doctor.id)
+    await supabase.from('practice_locations').update({ is_primary: false }).eq('business_id', doctor.id)
     await supabase.from('practice_locations').update({ is_primary: true }).eq('id', id)
     await loadLocations(doctor.id)
     setLocBusy(false)
@@ -357,9 +366,6 @@ export default function DoctorDashboard() {
   const [availSaving, setAvailSaving] = useState(false)
   const [availSaved, setAvailSaved] = useState(false)
 
-  const [showAddStaff, setShowAddStaff] = useState(false)
-  const [staffForm, setStaffForm] = useState({ full_name: '', whatsapp_number: '', role: 'receptionist', can_login_web: true })
-  const [staffSubmitting, setStaffSubmitting] = useState(false)
 
   const [showAddCamp, setShowAddCamp] = useState(false)
   const [campForm, setCampForm] = useState({
@@ -369,18 +375,14 @@ export default function DoctorDashboard() {
   })
   const [campSubmitting, setCampSubmitting] = useState(false)
 
-  const loadStaff = async (doctorId: string) => {
-    const { data } = await supabase.from('clinic_users').select('*').eq('doctor_id', doctorId).order('created_at', { ascending: true })
-    setStaff(data || [])
-  }
 
   const loadCamps = async (doctorId: string) => {
-    const { data } = await supabase.from('camps_offers').select('*').eq('doctor_id', doctorId).order('created_at', { ascending: false })
+    const { data } = await supabase.from('camps_offers').select('*').eq('business_id', doctorId).order('created_at', { ascending: false })
     setCamps(data || [])
   }
 
   const loadAvailability = async (doctorId: string) => {
-    const { data } = await supabase.from('doctor_availability').select('*').eq('doctor_id', doctorId).eq('is_active', true)
+    const { data } = await supabase.from('availability').select('*').eq('business_id', doctorId).eq('is_active', true)
     setAvailability((data as AvailabilityTemplate[]) || [])
   }
 
@@ -388,6 +390,12 @@ export default function DoctorDashboard() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { window.location.href = '/business/login'; return }
+
+      // practitioners_read_own (0038) matches on auth_uid, so this resolves for
+      // a doctor and returns nothing for an owner who does not see patients.
+      const { data: me } = await supabase.from('practitioners')
+        .select('id').eq('auth_uid', user.id).maybeSingle()
+      setMyPractitionerId((me as { id: string } | null)?.id ?? null)
 
       // Ask which listings this session may act on, rather than matching an
       // email.
@@ -400,11 +408,20 @@ export default function DoctorDashboard() {
       // by code: they signed in successfully, landed here, and got an empty
       // dashboard with no error to explain it.
       //
-      // Not simply dropping the filter: allow_read_active_doctors lets any
-      // caller read EVERY active listing, so an unfiltered select would show a
-      // clinic somebody else's business. sehat_caller_listing_ids() is the
-      // function the RLS policies themselves use.
-      const { data: myIds, error: idsErr } = await supabase.rpc('sehat_caller_listing_ids')
+      // Not simply dropping the filter: the public read policy lets any caller
+      // read EVERY active listing, so an unfiltered select would show a clinic
+      // somebody else's business. This is the function the RLS policies
+      // themselves use.
+      //
+      // It used to be sehat_caller_listing_ids(). 0037 dropped that function
+      // outright when it split `doctors` into businesses and practitioners —
+      // the body selected from `doctors`, which stopped existing — and named
+      // sehat_caller_business_ids() as its replacement, "the single authority
+      // for business-facing RLS". The call here was never moved across, so
+      // every dashboard load has been failing at this line since 0037 applied:
+      // PostgREST cannot find the function, idsErr is set, and the whole
+      // dashboard renders its load-error state before fetching anything.
+      const { data: myIds, error: idsErr } = await supabase.rpc('sehat_caller_business_ids')
       if (idsErr) {
         console.warn('[dashboard] could not resolve listings:', idsErr.message)
         setLoadError(true); setLoading(false); return
@@ -413,7 +430,7 @@ export default function DoctorDashboard() {
 
       // One number can carry several listings — a clinic and a pharmacy on the
       // same phone. Show the first and offer the rest.
-      const { data: mine } = await supabase.from('doctors').select('*')
+      const { data: mine } = await supabase.from('businesses').select('*')
         .in('id', ids).order('created_at', { ascending: true })
       setListings(mine || [])
       const doc = (selectedId && mine?.find(l => l.id === selectedId)) || mine?.[0] || null
@@ -429,15 +446,20 @@ export default function DoctorDashboard() {
         // under-reported every clinic past its twentieth booking.
         const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
         const [appts, total, month] = await Promise.all([
-          supabase.from('appointments').select('*').eq('doctor_id', doc.id)
+          supabase.from('appointments').select('*').eq('business_id', doc.id)
             .order('created_at', { ascending: false }).limit(20),
-          supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('doctor_id', doc.id),
+          supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('business_id', doc.id),
           supabase.from('appointments').select('id', { count: 'exact', head: true })
-            .eq('doctor_id', doc.id).gte('created_at', monthStart.toISOString()),
-          loadStaff(doc.id),
+            .eq('business_id', doc.id).gte('created_at', monthStart.toISOString()),
           loadCamps(doc.id),
           loadLocations(doc.id),
           loadAvailability(doc.id),
+          // Which tabs this person may see. In here rather than its own effect
+          // so it lands with everything else: fetched separately, the rail
+          // would paint the owner's full set and then take tabs away, which
+          // looks like a bug and reads like a demotion.
+          getMyRole(doc.id).then(setRole).catch(() => setRole({ role: null, enforced: true })),
+          hasPatientRecords().then(setEmr).catch(() => setEmr(false)),
           // Any business that has doctors has a roster now. It used to be
           // hospitals only, because a clinic's doctors had nowhere to live.
           hasPractitioners(doc.vertical as VerticalKey)
@@ -458,37 +480,9 @@ export default function DoctorDashboard() {
     load()
   }, [selectedId])
 
-  // 'today' does not exist for a pharmacy or an agent, so it would render an
-  // empty page on their first visit.
-  useEffect(() => {
-    if (doctor && !takesAppointments(doctor.vertical as VerticalKey) && (tab === 'today' || tab === 'appointments')) {
-      setTab('reports')
-    }
-  }, [doctor, tab])
-
   const logout = async () => { await supabase.auth.signOut(); window.location.href = '/business/login' }
 
-  const submitStaff = async () => {
-    if (!doctor || !staffForm.full_name || !staffForm.whatsapp_number) return
-    setStaffSubmitting(true)
-    await supabase.from('clinic_users').insert({
-      doctor_id: doctor.id,
-      full_name: staffForm.full_name,
-      whatsapp_number: staffForm.whatsapp_number,
-      role: staffForm.role,
-      can_login_web: staffForm.can_login_web,
-      is_active: true,
-    })
-    await loadStaff(doctor.id)
-    setStaffForm({ full_name: '', whatsapp_number: '', role: 'receptionist', can_login_web: true })
-    setShowAddStaff(false)
-    setStaffSubmitting(false)
-  }
 
-  const toggleStaffActive = async (member: StaffMember) => {
-    await supabase.from('clinic_users').update({ is_active: !member.is_active }).eq('id', member.id)
-    if (doctor) await loadStaff(doctor.id)
-  }
 
   const toggleCampArea = (code: string) =>
     setCampForm(f => ({ ...f, pin_codes: f.pin_codes.includes(code) ? f.pin_codes.filter(c => c !== code) : [...f.pin_codes, code] }))
@@ -497,7 +491,7 @@ export default function DoctorDashboard() {
     if (!doctor || !campForm.title || !campForm.date_from || !campForm.date_to || campForm.pin_codes.length === 0) return
     setCampSubmitting(true)
     await supabase.from('camps_offers').insert({
-      doctor_id: doctor.id,
+      business_id: doctor.id,
       camp_type: campForm.camp_type,
       title: campForm.title,
       description: campForm.description,
@@ -554,7 +548,7 @@ export default function DoctorDashboard() {
         a => !(a.day_of_week === dow && (a.location_id ?? '') === activeLoc)))
     } else {
       setAvailability(prev => [...prev, {
-        id: `new-${dow}-${activeLoc}`, doctor_id: doctor?.id || '', location_id: activeLoc,
+        id: `new-${dow}-${activeLoc}`, business_id: doctor?.id || '', location_id: activeLoc,
         day_of_week: dow,
         // Hourly by default: patients are given a 12-1 window to arrive in
         // rather than a 15-minute appointment nobody can keep to.
@@ -579,14 +573,14 @@ export default function DoctorDashboard() {
     // Delete-then-insert scoped to the location being edited. Unscoped, saving
     // the Radaur branch would delete the main clinic's hours, because the editor
     // only ever holds the rows for one location.
-    await supabase.from('doctor_availability')
-      .delete().eq('doctor_id', doctor.id).eq('location_id', activeLoc)
+    await supabase.from('availability')
+      .delete().eq('business_id', doctor.id).eq('location_id', activeLoc)
 
     const rows = availability.filter(a => (a.location_id ?? '') === activeLoc)
     if (rows.length > 0) {
-      await supabase.from('doctor_availability').insert(
+      await supabase.from('availability').insert(
         rows.map(a => ({
-          doctor_id: doctor.id,
+          business_id: doctor.id,
           location_id: activeLoc || null,
           day_of_week: a.day_of_week,
           start_time: a.start_time,
@@ -606,7 +600,7 @@ export default function DoctorDashboard() {
   const reloadAppointments = async () => {
     if (!doctor) return
     const { data } = await supabase.from('appointments').select('*')
-      .eq('doctor_id', doctor.id).order('created_at', { ascending: false }).limit(20)
+      .eq('business_id', doctor.id).order('created_at', { ascending: false }).limit(20)
     setAppointments(data || [])
   }
 
@@ -696,18 +690,86 @@ export default function DoctorDashboard() {
   const booksAppointments = takesAppointments(myVertical)
   const verticalLabel = verticalFor(myVertical).label
 
+  // Who sees what.
+  //
+  // 0057 gated the medical record; this gates the business around it, which is
+  // the other half of the same job. The two are separate questions: a hospital
+  // doctor should read a chart and should not be editing the listing's GSTIN,
+  // and a manager is the exact reverse.
+  //
+  //   BUSINESS tabs — the listing itself (name, address, GSTIN, billing
+  //   address, pricing plan), the tax invoices Sehatsandhi raises against it,
+  //   and how the business is performing. Owner and manager. This is the
+  //   company's commercial identity, not the day's work.
+  //
+  //   SCHEDULE — who sits when, and at which branch. Changes what patients can
+  //   book, so it stays with the people accountable for it. Reception works
+  //   the diary through Today and Queue instead.
+  //
+  //   Everything else — today, the queue, appointments, patients, beds — is
+  //   the day's work, and reception cannot do its job without all of it. The
+  //   sensitive part of Patients is gated inside the tab, not on the rail:
+  //   reception genuinely needs to find a patient and take their money.
+  // Both return TRUE against a database with no role system (pre-0057). That is
+  // the pre-0057 behaviour restored, not a bypass — see RoleLookup.enforced.
+  // Without it this deploy would take Clinic, Bills and Reports away from every
+  // owner on a database that has no roles to check them against.
+  const businessRole = isBusinessRole(role)
+  const isClinician = isClinicalRole(role)
+
   const tabs = [
     ...(booksAppointments ? [
       { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
+      // Above Appointments on purpose: the line is what reception works all
+      // day, the booking list is what they check occasionally.
+      // `emr` because the queue reads opd_board, which arrives with 0054.
+      ...(emr ? [{ id: 'queue', label: 'Queue', icon: <ListOrdered className="w-4 h-4" /> }] : []),
       { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4" /> },
+    ] : []),
+    // Every vertical keeps records of who it has seen — a lab has patients as
+    // much as a clinic does — so this one is not gated on appointments. It IS
+    // gated on the schema being there: this ships ahead of 0047-0054, and until
+    // those run the tab would open onto a PostgREST 404.
+    ...(emr ? [
+      { id: 'patients', label: 'Patients', icon: <UserSearch className="w-4 h-4" /> },
+    ] : []),
+    // Only where somebody is actually admitted. A pharmacy has no beds, and a
+    // single-doctor clinic that does day care has no use for a ward board.
+    ...(booksAppointments && emr ? [
+      { id: 'beds', label: 'Beds', icon: <BedDouble className="w-4 h-4" /> },
     ] : []),
     // Hours and branches matter to a pharmacy and an ambulance service too —
     // patients need to know when they are open and where.
-    { id: 'schedule', label: booksAppointments ? t('dashboardPage.tabSchedule') : 'Hours & branches', icon: <Clock className="w-4 h-4" /> },
-    { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
-    { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
-    { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
+    ...(businessRole || isClinician ? [
+      { id: 'schedule', label: booksAppointments ? t('dashboardPage.tabSchedule') : 'Hours & branches', icon: <Clock className="w-4 h-4" /> },
+    ] : []),
+    ...(businessRole ? [
+      { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
+      { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
+      { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
+    ] : []),
   ]
+
+  // Keep the open tab one that exists.
+  //
+  // Replaces the old rule that sent a pharmacy off 'today' to 'reports', and
+  // covers both reasons a tab can vanish now — the vertical does not have it,
+  // or this role may not see it. That second case broke the old rule outright:
+  // it redirected to 'reports', which is exactly one of the tabs a receptionist
+  // no longer has, so reception would have been bounced onto a blank page.
+  //
+  // Still prefers Reports where it is available, so a pharmacy owner lands
+  // where they always did.
+  const tabIds = tabs.map(tb => tb.id).join(',')
+  useEffect(() => {
+    if (loading || tabs.length === 0) return
+    if (tabs.some(tb => tb.id === tab)) return
+    const fallback = tabs.find(tb => tb.id === 'reports') ?? tabs[0]
+    setTab(fallback.id as typeof tab)
+    // tabIds rather than tabs: the array is rebuilt every render and would
+    // otherwise re-run this forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, tab, tabIds])
 
   // Same shell as the /business/register wizard: dark ink rail down the left
   // holding the nav, cream content pane beside it. The rail replaces what used
@@ -1265,7 +1327,22 @@ export default function DoctorDashboard() {
           </div>
         )}
 
-        {/* ══════════ CLINIC — staff management + camps & offers ══════════ */}
+        {/* ══════════ QUEUE — today's OPD line ══════════ */}
+        {tab === 'queue' && emr && doctor && (
+          <Queue businessId={doctor.id} practitionerId={myPractitionerId} />
+        )}
+
+        {/* ══════════ BEDS — the ward board ══════════ */}
+        {tab === 'beds' && emr && doctor && (
+          <Wards businessId={doctor.id} practitionerId={myPractitionerId} />
+        )}
+
+        {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
+        {tab === 'patients' && emr && doctor && (
+          <Patients businessId={doctor.id} practitionerId={myPractitionerId} />
+        )}
+
+        {/* ══════════ CLINIC — doctors on the roster + camps & offers ══════════ */}
         {tab === 'bills' && (
           <div className="space-y-4">
             <div className="card shadow-sm">
@@ -1577,86 +1654,6 @@ export default function DoctorDashboard() {
                   {gstSaving ? 'Saving…' : 'Save'}
                 </button>
                 {gstMsg && <span className="text-sm text-teal-600 self-center">{gstMsg}</span>}
-              </div>
-            </div>
-
-            <div className="card shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-navy-700">{t('dashboardPage.staffHeading')}</h3>
-                {!showAddStaff && (
-                  <button onClick={() => setShowAddStaff(true)} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
-                    <Plus className="w-4 h-4" /> {t('dashboardPage.addStaffButton')}
-                  </button>
-                )}
-              </div>
-
-              {showAddStaff && (
-                <div className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm font-medium text-navy-700">{t('dashboardPage.addStaffButton')}</p>
-                    <button onClick={() => setShowAddStaff(false)}><X className="w-4 h-4 text-gray-400" /></button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-sm font-medium text-gray-600 mb-1 block">{t('dashboardPage.staffNameLabel')}</label>
-                      <input className="input-field" placeholder="Sunita Devi"
-                        value={staffForm.full_name} onChange={e => setStaffForm(f => ({ ...f, full_name: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-600 mb-1 block">{t('dashboardPage.staffWhatsappLabel')}</label>
-                      <input className="input-field" type="tel" maxLength={10} placeholder="9876543210"
-                        value={staffForm.whatsapp_number} onChange={e => setStaffForm(f => ({ ...f, whatsapp_number: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-600 mb-1 block">{t('dashboardPage.staffRoleLabel')}</label>
-                      <select className="input-field" value={staffForm.role} onChange={e => setStaffForm(f => ({ ...f, role: e.target.value }))}>
-                        <option value="receptionist">{t('dashboardPage.roleReceptionist')}</option>
-                        <option value="manager">{t('dashboardPage.roleManager')}</option>
-                        <option value="doctor">{t('dashboardPage.roleDoctor')}</option>
-                      </select>
-                    </div>
-                    <div className="flex items-end pb-1">
-                      <label className="flex items-center gap-2 text-sm text-gray-600">
-                        <input type="checkbox" checked={staffForm.can_login_web}
-                          onChange={e => setStaffForm(f => ({ ...f, can_login_web: e.target.checked }))}
-                          className="w-4 h-4 accent-teal-600" />
-                        {t('dashboardPage.staffWebLoginLabel')}
-                      </label>
-                    </div>
-                  </div>
-                  <button onClick={submitStaff} disabled={staffSubmitting || !staffForm.full_name || !staffForm.whatsapp_number}
-                    className="btn-teal text-sm disabled:opacity-50">
-                    {t('dashboardPage.staffSubmitButton')}
-                  </button>
-                </div>
-              )}
-
-              {staff.length === 0 && !showAddStaff ? (
-                <p className="text-gray-400 text-sm text-center py-8">{t('dashboardPage.staffNoneYet')}</p>
-              ) : (
-                <div className="space-y-2">
-                  {staff.map(m => (
-                    <div key={m.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                      <div>
-                        <p className="font-medium text-gray-800 text-sm">{m.full_name}</p>
-                        <p className="text-sm text-gray-400">{roleLabel(m.role)} · {m.whatsapp_number}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={m.is_active ? 'badge-active' : 'badge-suspended'}>
-                          {m.is_active ? t('dashboardPage.staffActive') : t('dashboardPage.staffInactive')}
-                        </span>
-                        <button onClick={() => toggleStaffActive(m)}
-                          className="text-sm text-gray-400 hover:text-teal-600 underline">
-                          {m.is_active ? t('dashboardPage.staffDeactivate') : t('dashboardPage.staffReactivate')}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-4 bg-teal-50 border border-teal-100 rounded-xl p-3">
-                <p className="text-sm text-teal-700">💡 {t('dashboardPage.staffNote')}</p>
               </div>
             </div>
 

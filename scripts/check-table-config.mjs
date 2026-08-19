@@ -62,28 +62,41 @@ for (const file of src.files) {
     .replace(/--[^\n]*/g, '')          // strip line comments
     .replace(/\/\*[\s\S]*?\*\//g, '')  // strip block comments
 
-  for (const m of sql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi)) {
-    tablesInSql.add(m[1].toLowerCase())
-  }
-  for (const m of sql.matchAll(/create\s+(?:or\s+replace\s+)?view\s+(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi)) {
-    viewsInSql.add(m[1].toLowerCase())
-  }
+  // ONE pass, in the order the statements actually appear.
+  //
+  // This used to be five passes — creates, then renames, then drops — which
+  // meant a drop always won over a create in the same file however they were
+  // written. 0041 recreates three views the way everyone recreates a view:
+  //
+  //     drop view if exists rating_aggregate;
+  //     create view rating_aggregate as ...
+  //
+  // and the drop pass, running last, removed it again. All three came out
+  // "declared but not found", which reads as a missing migration and is
+  // nothing of the sort. Order matters, so the scan follows it.
+  //
   // A renamed table is the same table under a new name, so the manifest must
-  // classify the new one and stop being asked about the old. Without this, 0037
-  // renaming doctor_availability to availability left the check demanding a
-  // classification for a table that no longer exists and rejecting the one
-  // that does.
-  for (const m of sql.matchAll(/alter\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s+rename\s+to\s+"?([a-z_][a-z0-9_]*)"?/gi)) {
-    tablesInSql.delete(m[1].toLowerCase())
-    tablesInSql.add(m[2].toLowerCase())
-  }
-  // Likewise a dropped table: 0037 removed the whole doctors/organizations
-  // cluster, and the manifest should not have to keep describing it.
-  for (const m of sql.matchAll(/drop\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi)) {
-    tablesInSql.delete(m[1].toLowerCase())
-  }
-  for (const m of sql.matchAll(/drop\s+view\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi)) {
-    viewsInSql.delete(m[1].toLowerCase())
+  // classify the new one and stop being asked about the old — that is why 0037
+  // renaming doctor_availability to availability does not leave both demanding
+  // a classification.
+  const STATEMENT = new RegExp([
+    /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/,
+    /create\s+(?:or\s+replace\s+)?view\s+(?:public\.)?"?([a-z_][a-z0-9_]*)"?/,
+    /alter\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s+rename\s+to\s+"?([a-z_][a-z0-9_]*)"?/,
+    /drop\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/,
+    /drop\s+view\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/,
+  ].map(r => `(?:${r.source})`).join('|'), 'gi')
+
+  for (const m of sql.matchAll(STATEMENT)) {
+    const [, createTable, createView, renameFrom, renameTo, dropTable, dropView] = m
+    if (createTable) tablesInSql.add(createTable.toLowerCase())
+    else if (createView) viewsInSql.add(createView.toLowerCase())
+    else if (renameFrom) {
+      tablesInSql.delete(renameFrom.toLowerCase())
+      tablesInSql.add(renameTo.toLowerCase())
+    }
+    else if (dropTable) tablesInSql.delete(dropTable.toLowerCase())
+    else if (dropView) viewsInSql.delete(dropView.toLowerCase())
   }
 }
 

@@ -70,7 +70,7 @@ export interface BusinessPractitioner {
 // including every booking the WhatsApp bot makes until it starts asking.
 export interface PracticeLocation {
   id: string
-  doctor_id: string
+  business_id: string
   name: string
   address?: string | null
   pin_code?: string | null
@@ -86,7 +86,7 @@ export interface Appointment {
   patient_phone: string
   patient_name: string
   patient_age: number
-  doctor_id: string
+  business_id: string
   slot_datetime: string
   // 'no_show' is distinct from 'cancelled': nobody cancelled, the patient just
   // didn't arrive. Conflating them hides the thing worth measuring.
@@ -103,7 +103,7 @@ export interface Appointment {
 
 export interface Payment {
   id: string
-  doctor_id: string
+  business_id: string
   amount: number
   type: 'subscription' | 'premium_slot'
   razorpay_payment_id?: string

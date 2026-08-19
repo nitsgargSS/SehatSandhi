@@ -22,6 +22,9 @@ const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
 const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
 const WhatsAppBookingDemo = lazy(() => import('./pages/business/WhatsAppBookingDemo'))
 const InvoicePage = lazy(() => import('./pages/InvoicePage'))
+const PrescriptionPage = lazy(() => import('./pages/PrescriptionPage'))
+const DischargeSummaryPage = lazy(() => import('./pages/DischargeSummaryPage'))
+const BillPage = lazy(() => import('./pages/BillPage'))
 const AdminLogin = lazy(() => import('./pages/admin/Login'))
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
 // Legal/company pages. Linked from SiteFooter on every public page, and
@@ -83,9 +86,16 @@ const FLOAT_HIDDEN_PATHS = ['/business/register', '/doctor/register', '/business
 
 // One page_view per route change. Placed inside the router so it sees client
 // navigations, which never reload the page and would otherwise go uncounted.
-// Admin and invoice paths are skipped: those are our own screens and a customer's
-// private link, neither of which belongs in product analytics.
-const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/']
+// Admin, invoice and patient-document paths are skipped: those are our own
+// screens and a customer's private link, neither of which belongs in product
+// analytics.
+//
+// For /rx/, /ds/ and /bill/ this is not a preference, it is the whole access
+// model. The tracker sends page_location, which is the URL including the token —
+// so tracking these would hand every one of them to Google Analytics, where
+// anyone with report access could open a patient's medicines, their hospital
+// stay, or what they were charged for it.
+const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/', '/ds/', '/bill/']
 
 const PageViewTracker = () => {
   const { pathname } = useLocation()
@@ -173,6 +183,26 @@ export default function App() {
               footer, but print:hidden: a saved PDF should be the invoice and
               nothing else. */}
           <Route path="/invoice/:token" element={<InvoicePage />} />
+
+          {/* A patient's own prescription, opened from the WhatsApp or email
+              link. Same no-login token pattern as the invoice above, but the
+              token expires — this is health data about a person, and a link
+              forwarded into a family group should not open a year later.
+              Carries no header or footer at all: what prints is the slip. */}
+          <Route path="/rx/:token" element={<PrescriptionPage />} />
+
+          {/* The discharge summary, same no-login token pattern. Its link lasts
+              a year rather than 90 days: this is the document patients are told
+              to keep and produce at the next hospital, which may be months
+              away. Also bare, because what prints is what they carry. */}
+          <Route path="/ds/:token" element={<DischargeSummaryPage />} />
+
+          {/* The patient's bill. Not /invoice/ — that one bills a clinic for
+              its listing under our GSTIN, and this is a clinic billing a
+              patient. Different payer, different payee, money that is never
+              ours, and the two must not share a URL any more than they share a
+              table. This is the copy that goes to an insurer. */}
+          <Route path="/bill/:token" element={<BillPage />} />
 
           {/* ── Legal ──────────────────────────────────────────────────────
               Reachable from SiteFooter on every public page. Meta's business

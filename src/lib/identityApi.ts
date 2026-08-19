@@ -207,3 +207,96 @@ export async function loadPosts(practitionerId: string) {
   if (error) throw new Error(error.message)
   return data ?? []
 }
+
+// ── What this login may see ─────────────────────────────────────────────────
+//
+// business_practitioners.role has existed since the schema was split, but until
+// 0057 nothing read it for access — every signed-in member of staff could open
+// every patient's record. It decides something now, and the UI has to agree
+// with the database or reception gets a screen full of panes that quietly
+// return nothing.
+//
+// The database is still the authority. This only decides what to draw.
+
+export type ClinicRole = 'owner' | 'doctor' | 'receptionist' | 'manager'
+
+export interface RoleLookup {
+  role: ClinicRole | null
+  /**
+   * Whether this database HAS a role system at all.
+   *
+   * False means sehat_caller_role does not exist yet — the database predates
+   * 0057. That is not "no access"; before 0057 there were no role checks in the
+   * schema and every signed-in member of staff could reach everything. So the
+   * honest fallback is the behaviour that was actually in force, not a lockout.
+   *
+   * This matters because the code ships ahead of the migration. Treating a
+   * missing function as null would take Clinic, Bills and Reports away from
+   * every real owner the moment this deploys — a worse outage than the one it
+   * is being deployed to fix, and one that would look like a permissions bug
+   * nobody could explain.
+   */
+  enforced: boolean
+}
+
+/** PostgREST's code for "no such function", and Postgres's for "no such table". */
+const MISSING_FUNCTION = 'PGRST202'
+const MISSING_TABLE = ['PGRST205', '42P01']
+
+/**
+ * The caller's role at this business.
+ *
+ * Never throws. A failure that is not a missing function is still reported as
+ * enforced-with-no-role, which fails closed — an unexpected error should not
+ * hand out access.
+ */
+export async function getMyRole(businessId: string): Promise<RoleLookup> {
+  const { data, error } = await supabase.rpc('sehat_caller_role', {
+    p_business: businessId,
+  })
+  if (error) {
+    if (error.code === MISSING_FUNCTION) return { role: null, enforced: false }
+    return { role: null, enforced: true }
+  }
+  return { role: (data as ClinicRole) ?? null, enforced: true }
+}
+
+/**
+ * May this login see medical records, as opposed to the queue, the beds and
+ * the money?
+ *
+ * Fails CLOSED where the rule exists: a moment of a doctor seeing a missing tab
+ * is a smaller problem than a moment of a receptionist seeing a consultation
+ * recording. Falls back to OPEN only where the database has no rule to enforce,
+ * which is the pre-0057 behaviour rather than a hole being punched.
+ */
+export const isClinicalRole = (r: RoleLookup): boolean =>
+  !r.enforced || r.role === 'owner' || r.role === 'doctor'
+
+/** May this login act on the business itself — its listing, plan and invoices? */
+export const isBusinessRole = (r: RoleLookup): boolean =>
+  !r.enforced || r.role === 'owner' || r.role === 'manager'
+
+/**
+ * Does this database have the patient-records schema (0047 onward)?
+ *
+ * The dashboard ships with Patients, Queue and Beds built, and production may
+ * not have the tables under them yet. A tab that opens onto a PostgREST 404
+ * looks like a broken product; not drawing it looks like a product that does
+ * not have that feature, which is the truth until the migrations run.
+ *
+ * One probe for the whole stack rather than one per tab: 0047 through 0054
+ * apply together, and three round trips to answer one question is worse than
+ * the precision is worth. `head` fetches no rows — it is a existence check, not
+ * a read.
+ */
+export async function hasPatientRecords(): Promise<boolean> {
+  const { error } = await supabase
+    .from('patient_members')
+    .select('id', { count: 'exact', head: true })
+    .limit(1)
+  if (error && MISSING_TABLE.includes(error.code ?? '')) return false
+  // Anything else — RLS returning nothing, a network blip — means the table is
+  // there. Absence of rows is not absence of schema.
+  return true
+}

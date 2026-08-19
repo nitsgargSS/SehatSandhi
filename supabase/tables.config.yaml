@@ -63,6 +63,32 @@ tables:
     key: [vertical]
     syncOrder: 40
 
+  # What we charge and who we are on an invoice. Config we author, not data
+  # anyone generates — so sandbox should hold the same values as production or
+  # every price it quotes is a fiction.
+  #
+  # syncOrder puts plans before the settings row that names one:
+  # pricing_settings.override_plan_code references pricing_plans(code) with no
+  # ON DELETE clause, so the plan has to exist first.
+  pricing_plans:
+    class: sync
+    key: [code]
+    syncOrder: 60
+
+  pricing_settings:
+    class: sync
+    key: [id]
+    syncOrder: 70
+
+  # Our own GST registration, invoice prefix and SAC code. An invoice raised in
+  # sandbox with production's real GSTIN would be wrong in an interesting way,
+  # but so would one raised with nothing — synced, and edited in the SQL editor
+  # rather than by anyone's code.
+  tax_settings:
+    class: sync
+    key: [id]
+    syncOrder: 80
+
   discount_codes:
     class: sync
     syncOrder: 50
@@ -81,6 +107,34 @@ tables:
     class: isolated
     purgeOrder: 10
 
+  # ── Everything that hangs off an appointment ────────────────────────────
+  # Both cascade from appointments, so a purge would take them anyway. Ordered
+  # explicitly regardless: relying on a cascade means the manifest stops
+  # describing what actually happens, and the next person to add a table here
+  # has no pattern to follow.
+  appointment_events:
+    class: isolated
+    purgeOrder: 24
+
+  notification_outbox:
+    class: isolated
+    purgeOrder: 26
+
+  # Invoices before payments (40): invoices.payment_id points at payments. It is
+  # ON DELETE SET NULL so either order survives, but a nulled payment_id on a
+  # row about to be deleted is pointless work.
+  invoices:
+    class: isolated
+    purgeOrder: 35
+
+  # The gapless invoice series. Purged with the invoices it numbered — a
+  # counter left at 47 after the invoices are gone would start the next sandbox
+  # run at 48 and leave a permanent hole in the series.
+  invoice_counters:
+    class: isolated
+    purgeOrder: 36
+    pk: fy
+
   # Children of `ratings`, so they must be deleted before it.
   rating_responses:
     class: isolated
@@ -93,6 +147,11 @@ tables:
   ratings:
     class: isolated
     purgeOrder: 20
+
+  # Today's OPD line (0054). Before appointments and visits, which it points at.
+  opd_queue:
+    class: isolated
+    purgeOrder: 22
 
   appointments:
     class: isolated
@@ -122,14 +181,120 @@ tables:
     class: isolated
     purgeOrder: 90
 
+  # ── Patient billing (0051) ──────────────────────────────────────────────
+  # A clinic charging a patient, which is NOT the invoices/payments pair — those
+  # bill businesses for their listing under our GSTIN. Every FK here carries an
+  # ON DELETE clause, so these sit before the encounters they reference only for
+  # tidiness.
+  patient_payments:
+    class: isolated
+    purgeOrder: 84
+
+  patient_charges:
+    class: isolated
+    purgeOrder: 86
+
+  # ── Patient bills (0056) ────────────────────────────────────────────────
+  # Numbered after charges (86) and payments (84), which both carry a bill_id
+  # pointing here. Every FK on a bill has an ON DELETE clause, so nothing here
+  # is forced — but the convention in this file is child-first, and a stamped
+  # charge is the child of the bill it was copied onto.
+  patient_bill_items:
+    class: isolated
+    purgeOrder: 97
+
+  patient_bills:
+    class: isolated
+    purgeOrder: 99
+
+  bill_counters:
+    class: isolated
+    purgeOrder: 101
+    pk: business_id
+
+  # ── Discharge summaries (0055) ──────────────────────────────────────────
+  # Before admissions (94) because they are its child, and — the part that
+  # actually matters — before practitioners (120), for exactly the reason
+  # recorded on prescriptions below: discharge_summaries.practitioner_id has no
+  # ON DELETE clause, so it is NO ACTION. The document is signed by a named
+  # doctor with a registration number, which is what makes it worth anything to
+  # the next hospital, so that link is not something a delete may quietly sever.
+  # The summary goes first or the purge raises an FK violation.
+  discharge_summaries:
+    class: isolated
+    purgeOrder: 88
+
+  discharge_counters:
+    class: isolated
+    purgeOrder: 89
+    pk: business_id
+
+  # ── Inpatients (0050) ───────────────────────────────────────────────────
+  # Notes before stays, stays before beds, beds before wards — and all of them
+  # before businesses. Every FK here carries an ON DELETE clause, so ordering
+  # is convention rather than necessity, but the convention is what makes the
+  # next addition obvious.
+  admission_notes:
+    class: isolated
+    purgeOrder: 92
+
+  # The occupancy timeline billing multiplies against (0053). Before admissions,
+  # which it references, and before beds, whose rate it snapshots.
+  admission_bed_stays:
+    class: isolated
+    purgeOrder: 93
+
+  admissions:
+    class: isolated
+    purgeOrder: 94
+
+  admission_counters:
+    class: isolated
+    purgeOrder: 95
+    pk: business_id
+
+  beds:
+    class: isolated
+    purgeOrder: 96
+
+  wards:
+    class: isolated
+    purgeOrder: 98
+
   # The affiliation goes before either side of it: it is the child of both.
   business_practitioners:
     class: isolated
     purgeOrder: 100
 
+  # A listing's branches. After availability (80), which references it, and
+  # before businesses (130), which it references.
+  practice_locations:
+    class: isolated
+    purgeOrder: 110
+
+  # One-time login codes. Short-lived anyway; purged with the businesses they
+  # authenticate.
+  login_codes:
+    class: isolated
+    purgeOrder: 112
+
+  # Who changed a pricing plan and when. Ours rather than a customer's, but
+  # still a log of things that happened in THIS database — copying production's
+  # plan history into sandbox would describe decisions nobody made here.
+  pricing_plan_events:
+    class: isolated
+    purgeOrder: 114
+
   practitioners:
     class: isolated
     purgeOrder: 120
+
+  # Patients who asked the WhatsApp bot about insurance. References businesses
+  # via agent_business_id, so it goes before businesses even though the FK is
+  # ON DELETE SET NULL and would survive either order.
+  insurance_leads:
+    class: isolated
+    purgeOrder: 125
 
   businesses:
     class: isolated
@@ -139,6 +304,62 @@ tables:
     class: isolated
     purgeOrder: 150
 
+  # ── The clinical record (0047) ──────────────────────────────────────────
+  # Children first. Everything here hangs off patient_members, which hangs off
+  # patients, so these must all precede it.
+
+  # References patient_consents, so it goes before that table's own rows.
+  consultation_recordings:
+    class: isolated
+    purgeOrder: 152
+
+  patient_vitals:
+    class: isolated
+    purgeOrder: 153
+
+  patient_allergies:
+    class: isolated
+    purgeOrder: 154
+
+  patient_conditions:
+    class: isolated
+    purgeOrder: 155
+
+  patient_medications:
+    class: isolated
+    purgeOrder: 156
+
+  # Audit trail. Isolated rather than never_purge: a sandbox purge clears test
+  # data, and an access log about deleted patients describes nothing.
+  patient_record_access:
+    class: isolated
+    purgeOrder: 157
+
+  # ── Prescriptions and documents (0048) ──────────────────────────────────
+  # These sit BEFORE practitioners (120), not after, and the reason is the same
+  # one recorded above for payments: prescriptions.practitioner_id has no
+  # ON DELETE clause, so it is NO ACTION. A prescription is issued by a named
+  # person and that link is not something a delete should quietly sever — which
+  # means the prescription has to go first or the purge raises an FK violation.
+  prescription_items:
+    class: isolated
+    purgeOrder: 102
+
+  patient_documents:
+    class: isolated
+    purgeOrder: 104
+
+  prescriptions:
+    class: isolated
+    purgeOrder: 106
+
+  # Per-business numbering. Purged with everything else in sandbox: a counter
+  # left behind would keep numbering from where the deleted data stopped.
+  prescription_counters:
+    class: isolated
+    purgeOrder: 108
+    pk: business_id
+
   patient_visits:
     class: isolated
     purgeOrder: 160
@@ -146,6 +367,16 @@ tables:
   patient_consents:
     class: isolated
     purgeOrder: 170
+
+  # The clinic's patient list, and the people a phone number covers. Both must
+  # go after every clinical row that references them and before `patients`.
+  business_patients:
+    class: isolated
+    purgeOrder: 172
+
+  patient_members:
+    class: isolated
+    purgeOrder: 174
 
   patient_import_rows:
     class: isolated
@@ -182,6 +413,18 @@ tables:
   site_visits:
     class: isolated
     purgeOrder: 255
+
+  # Product analytics: searches, impressions, profile views. business_id is ON
+  # DELETE SET NULL, so ordering is unconstrained — kept beside site_visits
+  # because they are read together.
+  site_events:
+    class: isolated
+    purgeOrder: 254
+
+  # Where visitors were, for the coverage map. No FKs.
+  visitor_locations:
+    class: isolated
+    purgeOrder: 256
 
   patients:
     class: isolated
@@ -226,6 +469,16 @@ tables:
     class: never_purge
     # Import progress. Purging it would strand a half-finished run.
 
+  # Who may open the admin panel. NOT synced: auth_uid points at a row in
+  # auth.users, and production's user ids do not exist in sandbox — copying
+  # them down produces admins who can never sign in. NOT purged either: the
+  # purge is triggered FROM the admin panel, so wiping this table would lock
+  # the person running it out of the tool they just used, with no way back
+  # except the SQL editor. Sandbox admins are made by
+  # scripts/seed-sandbox-accounts.mjs.
+  admin_users:
+    class: never_purge
+
   # ── Views: neither synced nor purged ────────────────────────────────────
 
   rating_aggregate:
@@ -249,6 +502,39 @@ tables:
   # The doctors shown under a clinic listing — name and qualification only.
   public_business_doctors: { class: view }
   public_practitioner_businesses: { class: view }
+
+  # The clinical record's read models (0047).
+  patient_summary:          { class: view }
+  business_appointment_list: { class: view }
+  prescription_detail:      { class: view }
+  ward_occupancy:           { class: view }
+  consultation_audio_to_purge: { class: view }
+  admission_detail:         { class: view }
+  admission_bed_history:    { class: view }
+  discharge_summary_detail: { class: view }
+  patient_bill_detail:      { class: view }
+  business_bills_outstanding: { class: view }
+  opd_board:                { class: view }
+  patient_account:          { class: view }
+  business_outstanding:     { class: view }
+
+  # Billing and plan reporting.
+  invoice_register:         { class: view }
+  invoice_monthly_summary:  { class: view }
+  plan_enrolment:           { class: view }
+  subscription_renewals_due: { class: view }
+  public_tax_display:       { class: view }
+  active_pricing_plan:      { class: view }
+  pricing_plan_status:      { class: view }
+
+  # Appointments and analytics.
+  appointment_detail:       { class: view }
+  appointment_outcomes:     { class: view }
+  business_daily_stats:     { class: view }
+  demand_by_area:           { class: view }
+  platform_daily_stats:     { class: view }
+  visitors_live:            { class: view }
+  visitors_by_area:         { class: view }
 
   # Seed clinics offered as suggestions at signup — name and address only,
   # with our pipeline status and notes left behind in seed_clinics.
