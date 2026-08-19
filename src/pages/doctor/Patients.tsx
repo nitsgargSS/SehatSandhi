@@ -6,7 +6,10 @@ import {
   searchPatients, getPatientSummary, getVisits, getVitals, getAllergies,
   getConditions, getMedications, addVisit, addVital, addAllergy, addCondition,
   addMedication, stopMedication, grantRecordingConsent, withdrawRecordingConsent,
-  logAccess,
+  logAccess, canRecord, startMicrophone, uploadConsultationAudio,
+  requestTranscription, requestMedicineSuggestions, discardConsultationAudio,
+  startRecording, stopRecording, confirmTranscript, getRecording,
+  LiveRecording, Recording,
   PatientSearchResult, PatientSummary, Visit, Vital, Allergy, Condition, Medication,
 } from '../../lib/patientsApi'
 import {
@@ -302,6 +305,13 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         businessId={businessId}
         onChange={reload}
       />
+
+      {summary.recording_consent && (
+        <ConsultationRecorder
+          memberId={memberId} businessId={businessId}
+          practitionerId={practitionerId} visits={visits} onChange={reload}
+        />
+      )}
 
       {/* panes */}
       <div style={{ display: 'flex', gap: 6 }}>
@@ -1443,6 +1453,180 @@ function BillingPane({
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Recording a consultation ────────────────────────────────────────────────
+//
+// The capture half of the toggle above. Only rendered once the patient has
+// agreed — the consent panel is the gate, and the database enforces the same
+// thing independently.
+//
+// The shape of this component IS the safety rule: record, transcribe, then a
+// text box the doctor edits, and nothing leaves this pane until they press
+// Confirm. The draft is labelled as a machine's hearing every time it is shown,
+// because a transcript that looks like a note gets read like one.
+
+function ConsultationRecorder({ memberId, businessId, practitionerId, visits, onChange }: {
+  memberId: string
+  businessId: string
+  practitionerId?: string | null
+  visits: Visit[]
+  onChange: () => void
+}) {
+  const [live, setLive] = useState<LiveRecording | null>(null)
+  const [seconds, setSeconds] = useState(0)
+  const [recordingId, setRecordingId] = useState<string | null>(null)
+  const [rec, setRec] = useState<Recording | null>(null)
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState('')
+  const [err, setErr] = useState('')
+  const [note, setNote] = useState('')
+
+  // A visible timer, because a recording light nobody can see is how a
+  // consultation gets taped for forty minutes after everyone left.
+  useEffect(() => {
+    if (!live) return
+    const t = setInterval(() => setSeconds(s => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [live])
+
+  // Release the microphone if this pane goes away mid-recording.
+  useEffect(() => () => { live?.cancel() }, [live])
+
+  if (!canRecord()) {
+    return (
+      <div style={{ ...card, fontSize: 13, color: BIZ.muted }}>
+        This browser cannot record — it needs microphone access over a secure (https) connection.
+      </div>
+    )
+  }
+
+  const begin = async () => {
+    setErr(''); setNote(''); setBusy('starting')
+    try {
+      // A recording belongs to a visit, so there has to be one. Today's if it
+      // exists, otherwise a fresh one — the consultation is happening either way.
+      const today = new Date().toISOString().slice(0, 10)
+      const visitId = visits.find(v => v.visit_date === today)?.id
+        ?? await addVisit(memberId, businessId, { practitionerId })
+
+      const id = await startRecording(visitId, memberId, businessId, practitionerId)
+      const mic = await startMicrophone()
+      setRecordingId(id); setLive(mic); setSeconds(0)
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally { setBusy('') }
+  }
+
+  const finish = async () => {
+    if (!live || !recordingId) return
+    setBusy('transcribing'); setErr('')
+    try {
+      const blob = await live.stop()
+      setLive(null)
+      await stopRecording(recordingId, seconds)
+      await uploadConsultationAudio(recordingId, businessId, blob)
+      await requestTranscription(recordingId)
+      const mine = await getRecording(recordingId)
+      setRec(mine)
+      setDraft(mine?.transcript_draft ?? '')
+      if (!mine?.transcript_draft) {
+        setErr('Nothing came back from transcription. Type the note yourself, or discard and try again.')
+      }
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally { setBusy('') }
+  }
+
+  const abandon = () => {
+    live?.cancel(); setLive(null); setRecordingId(null); setSeconds(0); setDraft(''); setRec(null)
+  }
+
+  const confirm = async () => {
+    if (!recordingId || !draft.trim()) return
+    setBusy('confirming'); setErr('')
+    try {
+      await confirmTranscript(recordingId, draft.trim(), practitionerId)
+      // Signed, so the audio has done its job.
+      await discardConsultationAudio(recordingId, businessId)
+      const s = await requestMedicineSuggestions(recordingId).catch(() => null)
+      setNote(
+        !s?.configured
+          ? 'Note saved and the audio deleted.'
+          : s.suggestions?.medicines?.length
+            ? `Note saved, audio deleted. ${s.suggestions.medicines.length} medicine${s.suggestions.medicines.length === 1 ? '' : 's'} read out — check them on the Prescriptions tab before issuing.`
+            : 'Note saved and the audio deleted. No medicines were read out of it.',
+      )
+      setRecordingId(null); setDraft(''); setRec(null); onChange()
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally { setBusy('') }
+  }
+
+  const mmss = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+
+  return (
+    <div style={{ ...card, borderColor: live ? '#e8b4b4' : BIZ.border }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {live
+            ? <span style={{ width: 11, height: 11, borderRadius: '50%', background: '#d23b3b', flex: '0 0 auto' }} />
+            : <Mic className="w-4 h-4" style={{ color: BIZ.mutedWarm }} />}
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: BIZ.ink }}>
+              {live ? `Recording — ${mmss}` : busy === 'transcribing' ? 'Transcribing…' : 'Record this consultation'}
+            </div>
+            <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 2, maxWidth: 560 }}>
+              {live
+                ? 'The patient can ask you to stop at any time.'
+                : 'You will get a draft to correct. The audio is deleted the moment you confirm the note.'}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 7 }}>
+          {!live && !recordingId && (
+            <button style={btn(true)} disabled={!!busy} onClick={begin}>Start</button>
+          )}
+          {live && (
+            <>
+              <button style={btn(true)} onClick={finish}>Stop</button>
+              <button style={btn()} onClick={abandon}>Discard</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {err && <div style={{ marginTop: 10, fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
+      {note && <div style={{ marginTop: 10, fontSize: 12.5, color: BIZ.chipText }}>{note}</div>}
+
+      {recordingId && !live && (
+        <div style={{ marginTop: 13 }}>
+          <div style={{
+            display: 'flex', gap: 7, alignItems: 'center', marginBottom: 7,
+            fontSize: 12, fontWeight: 700, color: '#8a5a00',
+          }}>
+            <AlertTriangle className="w-3.5 h-3.5" />
+            This is what the machine heard. Read it before you confirm — doses especially.
+          </div>
+          <textarea
+            style={{ ...input, minHeight: 170, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.55 }}
+            value={draft} onChange={e => setDraft(e.target.value)}
+            placeholder="The draft will appear here. You can also type the note yourself."
+          />
+          <div style={{ display: 'flex', gap: 8, marginTop: 9, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button style={btn(true)} disabled={!draft.trim() || !!busy} onClick={confirm}>
+              Confirm note
+            </button>
+            <button style={btn()} disabled={!!busy} onClick={abandon}>Throw away</button>
+            <span style={{ fontSize: 12, color: BIZ.mutedWarm }}>
+              Confirming saves your version and deletes the recording.
+              {rec?.transcript_engine && ` Heard by ${rec.transcript_engine}.`}
+            </span>
+          </div>
         </div>
       )}
     </div>

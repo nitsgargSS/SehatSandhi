@@ -462,6 +462,7 @@ tables:
   business_appointment_list: { class: view }
   prescription_detail:      { class: view }
   ward_occupancy:           { class: view }
+  consultation_audio_to_purge: { class: view }
   admission_detail:         { class: view }
   patient_account:          { class: view }
   business_outstanding:     { class: view }

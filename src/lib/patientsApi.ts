@@ -19,6 +19,7 @@
 //      never transcript_draft.
 
 import { supabase } from './supabase'
+import { activeConfig } from './env'
 
 export interface PatientSearchResult {
   patient_member_id: string
@@ -339,7 +340,18 @@ export interface Recording {
   duration_seconds: number | null
   transcript_draft: string | null
   transcript_confirmed: string | null
+  transcript_engine: string | null
   audio_deleted_at: string | null
+}
+
+/** One recording by its own id — what the recorder needs after transcription. */
+export async function getRecording(id: string): Promise<Recording | null> {
+  const { data, error } = await supabase
+    .from('consultation_recordings')
+    .select('id,visit_id,status,started_at,ended_at,duration_seconds,transcript_draft,transcript_confirmed,transcript_engine,audio_deleted_at')
+    .eq('id', id).maybeSingle()
+  oops(error)
+  return (data as Recording) ?? null
 }
 
 /**
@@ -396,10 +408,135 @@ export async function confirmTranscript(recordingId: string, confirmedText: stri
 export async function getRecordings(visitId: string): Promise<Recording[]> {
   const { data, error } = await supabase
     .from('consultation_recordings')
-    .select('id,visit_id,status,started_at,ended_at,duration_seconds,transcript_draft,transcript_confirmed,audio_deleted_at')
+    .select('id,visit_id,status,started_at,ended_at,duration_seconds,transcript_draft,transcript_confirmed,transcript_engine,audio_deleted_at')
     .eq('visit_id', visitId).order('started_at', { ascending: false })
   oops(error)
   return (data ?? []) as Recording[]
+}
+
+// ── Capturing the consultation ──────────────────────────────────────────────
+
+const AUDIO_BUCKET = 'consultation-audio'
+
+/**
+ * Is recording even possible here?
+ *
+ * getUserMedia needs a secure context, so this is false on plain http — worth
+ * checking before offering a button that cannot work.
+ */
+export const canRecord = (): boolean =>
+  typeof navigator !== 'undefined'
+  && !!navigator.mediaDevices?.getUserMedia
+  && typeof MediaRecorder !== 'undefined'
+
+/**
+ * A live consultation capture.
+ *
+ * Kept deliberately small: start, stop, and the stream handle so the
+ * microphone can be released. Everything after the blob — upload, transcribe —
+ * is a separate step, so a failure there never costs the recording.
+ */
+export interface LiveRecording {
+  stop: () => Promise<Blob>
+  /** Release the microphone without keeping anything. */
+  cancel: () => void
+}
+
+export async function startMicrophone(): Promise<LiveRecording> {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true },
+  })
+  // opus in webm is what every current browser can produce and what speech
+  // recognition services accept; falling back to the default keeps Safari working.
+  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus' : ''
+  const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+  const chunks: BlobPart[] = []
+  recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+  recorder.start(1000)   // flush every second, so a crash loses a second not an hour
+
+  const release = () => stream.getTracks().forEach(t => t.stop())
+
+  return {
+    stop: () => new Promise<Blob>((resolve) => {
+      recorder.onstop = () => { release(); resolve(new Blob(chunks, { type: mime || 'audio/webm' })) }
+      recorder.stop()
+    }),
+    cancel: () => { try { recorder.stop() } catch { /* already stopped */ } release() },
+  }
+}
+
+/**
+ * Put the audio where the edge function can read it.
+ *
+ * The path starts with the business id because the storage policy reads it —
+ * the same convention as patient documents, and for the same reason.
+ */
+export async function uploadConsultationAudio(
+  recordingId: string, businessId: string, audio: Blob,
+): Promise<string> {
+  const path = `${businessId}/${recordingId}.webm`
+  const { error } = await supabase.storage.from(AUDIO_BUCKET)
+    .upload(path, audio, { contentType: audio.type || 'audio/webm', upsert: true })
+  if (error) throw new Error(error.message)
+
+  await supabase.from('consultation_recordings')
+    .update({ audio_path: path, status: 'transcribing' })
+    .eq('id', recordingId)
+  return path
+}
+
+const callTranscriber = async (body: Record<string, unknown>) => {
+  const { url, anon } = activeConfig()
+  if (!url || !anon) throw new Error('Not configured for transcription.')
+  const res = await fetch(`${url}/functions/v1/transcribe-consultation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${anon}`, apikey: anon },
+    body: JSON.stringify(body),
+  })
+  const out = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(out.error ?? 'That did not work.')
+  return out
+}
+
+/** Turn the uploaded audio into a draft the doctor will correct. */
+export async function requestTranscription(recordingId: string) {
+  return callTranscriber({ action: 'transcribe', recordingId }) as Promise<{ characters: number }>
+}
+
+export interface MedicineSuggestion {
+  drug_name: string
+  strength: string
+  dosage: string
+  duration: string
+  instructions: string
+  /** The phrase this was read from, so the doctor can check the reading. */
+  verbatim: string
+  /** The model was unsure. Shown, never hidden. */
+  uncertain: boolean
+}
+
+/**
+ * Read medicines out of the CONFIRMED note.
+ *
+ * Only ever called after confirmTranscript. The edge function refuses anything
+ * else, and 0046 refuses to build a prescription from an unconfirmed recording
+ * — the same rule enforced twice, on purpose.
+ */
+export async function requestMedicineSuggestions(recordingId: string) {
+  return callTranscriber({ action: 'suggest', recordingId }) as Promise<{
+    configured: boolean
+    suggestions?: { medicines: MedicineSuggestion[]; advice: string; follow_up: string }
+  }>
+}
+
+/** Delete the audio now that the note is signed. Best effort — swept anyway. */
+export async function discardConsultationAudio(recordingId: string, businessId: string) {
+  await supabase.storage.from(AUDIO_BUCKET)
+    .remove([`${businessId}/${recordingId}.webm`]).catch(() => undefined)
+  await supabase.from('consultation_recordings')
+    .update({ audio_deleted_at: new Date().toISOString(), audio_path: null })
+    .eq('id', recordingId)
 }
 
 // ── The audit trail ─────────────────────────────────────────────────────────
