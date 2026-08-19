@@ -4,9 +4,34 @@
 // Three actions on one function, because they share the same clients and the
 // same audio lifecycle:
 //
-//   transcribe  audio → speech recognition → transcript_draft, status 'draft'
+//   transcribe  audio → English transcript → DELETE THE AUDIO, status 'draft'
 //   suggest     CONFIRMED transcript → structured medicine lines (Claude)
-//   purge       delete audio that should already be gone, and record that
+//   purge       safety net: audio a transcribe call never got to delete
+//
+// ── THE AUDIO DOES NOT SURVIVE THE TRANSCRIPT ───────────────────────────────
+// The recording is deleted inside the same request that transcribes it, the
+// moment the text is safely written. It is not kept until the doctor confirms
+// the draft, and it is not kept for a retention window.
+//
+// A recording of a consultation is the most sensitive thing this system ever
+// holds — a patient's voice, their symptoms, and whatever else they said in a
+// room they believed was private. Once there is a transcript it has no further
+// use: every step after this reads text.
+//
+// `purge` is now only a safety net, for audio whose transcription FAILED and
+// which therefore still exists so it can be retried. That makes the purge cron
+// required rather than housekeeping: without it, a failed transcription leaves
+// audio sitting for seven days.
+//
+// ── THE TRANSCRIPT IS ENGLISH, NOT WHAT WAS SAID ────────────────────────────
+// Consultations happen in Hindi, Punjabi, or code-mixed with English drug names
+// dropped in. Sarvam's translate model detects the language and returns
+// English, so the record is one language a later reader can rely on.
+//
+// This is a real trade-off, not a free win. The transcript is a RENDERING of
+// the consultation, the audio it came from is already gone, and nobody can go
+// back and check it. Which is exactly why the draft still has to be read and
+// confirmed by the doctor before anything downstream touches it.
 //
 // ── THE RULE THIS FILE EXISTS TO KEEP ───────────────────────────────────────
 // A machine transcript is a draft. `suggest` refuses to run on anything but a
@@ -39,29 +64,45 @@ import { corsHeaders, json } from '../_shared/cors.ts'
 const BUCKET = 'consultation-audio'
 
 // ── Speech recognition ──────────────────────────────────────────────────────
-// The one vendor-shaped function. Returns plain text, or throws.
-async function transcribeAudio(audio: Blob, language = 'hi-IN'): Promise<string> {
+//
+// The one vendor-shaped function. Speech in, ENGLISH text out, or it throws.
+//
+// speech-to-text-translate, not speech-to-text. The consultation is in Hindi,
+// or Punjabi, or code-mixed with English drug names dropped in — and the record
+// has to be one language a later reader can rely on. Sarvam's translate models
+// detect the source and return English in a single call, so there is no second
+// hop and no window where an untranslated draft exists.
+//
+// The cost of this is worth naming: the transcript is no longer WHAT WAS SAID,
+// it is an English rendering of it, and the audio is gone straight afterwards
+// so nobody can go back and check. That is why the draft still has to be
+// confirmed by the doctor before anything reads it.
+async function transcribeAudio(audio: Blob): Promise<{ text: string; source: string | null }> {
   const key = Deno.env.get('SARVAM_API_KEY')
   if (!key) throw new Error('SARVAM_API_KEY is not set — transcription is unconfigured')
 
   const form = new FormData()
   form.append('file', audio, 'consultation.webm')
-  form.append('model', 'saarika:v2')
-  // code-mixed input: the model is told the dominant language, not the only one
-  form.append('language_code', language)
+  // Detects the spoken language itself and renders it into English. No
+  // language_code: telling it the wrong dominant language is worse than letting
+  // it decide, and a clinic near a state border hears several.
+  form.append('model', 'saaras:v2')
 
-  const res = await fetch('https://api.sarvam.ai/speech-to-text', {
+  const res = await fetch('https://api.sarvam.ai/speech-to-text-translate', {
     method: 'POST',
     headers: { 'api-subscription-key': key },
     body: form,
   })
   if (!res.ok) {
-    throw new Error(`speech-to-text ${res.status}: ${(await res.text()).slice(0, 200)}`)
+    throw new Error(`speech-to-text-translate ${res.status}: ${(await res.text()).slice(0, 200)}`)
   }
   const body = await res.json()
   const text = String(body.transcript ?? body.text ?? '').trim()
-  if (!text) throw new Error('speech-to-text returned nothing')
-  return text
+  if (!text) throw new Error('speech-to-text-translate returned nothing')
+  // What it heard, recorded so a doctor reading an odd transcript knows whether
+  // it came through a translation or was already English.
+  const source = body.language_code ? String(body.language_code) : null
+  return { text, source }
 }
 
 // ── Medicine extraction, from a CONFIRMED transcript only ───────────────────
@@ -207,17 +248,32 @@ Deno.serve(async (req) => {
         .from(BUCKET).download(rec.audio_path as string)
       if (dlErr || !file) throw new Error(dlErr?.message ?? 'audio could not be read')
 
-      const text = await transcribeAudio(file, (rec.transcript_language as string) ?? 'hi-IN')
+      const { text, source } = await transcribeAudio(file)
 
       await supabase.from('consultation_recordings').update({
         transcript_draft: text,
-        transcript_engine: 'sarvam:saarika:v2',
+        // Names the translation, so nobody later mistakes this for a verbatim
+        // record of the room.
+        transcript_engine: 'sarvam:saaras:v2 (translated to English)',
+        transcript_language: source ?? rec.transcript_language ?? null,
         status: 'draft',
         transcribed_at: new Date().toISOString(),
         transcribe_error: null,
       }).eq('id', recordingId)
 
-      return json({ ok: true, characters: text.length })
+      // THE AUDIO GOES NOW.
+      //
+      // Not when the doctor confirms the draft, which is what this used to wait
+      // for and could be days. The recording of a consultation is the most
+      // sensitive thing this system ever holds, and the moment the transcript
+      // exists it has no further use — every downstream step reads text.
+      //
+      // Deliberately after the update and not before: if writing the transcript
+      // fails we still have the audio and the sweeper can retry. Losing the
+      // audio and the transcript both would lose the consultation outright.
+      await dropAudio(supabase, recordingId, rec.audio_path as string)
+
+      return json({ ok: true, characters: text.length, audioDeleted: true })
     } catch (e) {
       const message = String((e as Error).message ?? e).slice(0, 400)
       // 'failed' rather than leaving it stuck at 'transcribing': the sweeper

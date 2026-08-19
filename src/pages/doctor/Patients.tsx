@@ -762,7 +762,7 @@ function RecordingConsent({ summary, businessId, onChange }: {
             </div>
             <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 2, maxWidth: 560 }}>
               {on
-                ? 'This patient has agreed. Recordings are transcribed for you to check and correct; the audio is deleted once you confirm the note.'
+                ? 'This patient has agreed. The recording is transcribed into English and the audio is deleted straight away — you then check and correct the text.'
                 : 'The patient has to agree before a consultation can be recorded. Ask them, then record what they said here.'}
             </div>
           </div>
@@ -2055,15 +2055,21 @@ function ConsultationRecorder({ memberId, businessId, practitionerId, visits, on
     setBusy('confirming'); setErr('')
     try {
       await confirmTranscript(recordingId, draft.trim(), practitionerId)
-      // Signed, so the audio has done its job.
+      // Belt and braces. Transcription now deletes the audio in the same
+      // request that produces the text, so in the normal flow there is nothing
+      // left here to remove. Kept for the cases that flow does not cover: a
+      // recording made before that change, or one whose delete failed after the
+      // transcript was written. It only clears audio_path and stamps
+      // audio_deleted_at — it does not touch status, so it cannot undo the
+      // confirmation that just happened.
       await discardConsultationAudio(recordingId, businessId)
       const s = await requestMedicineSuggestions(recordingId).catch(() => null)
       setNote(
         !s?.configured
-          ? 'Note saved and the audio deleted.'
+          ? 'Note saved.'
           : s.suggestions?.medicines?.length
-            ? `Note saved, audio deleted. ${s.suggestions.medicines.length} medicine${s.suggestions.medicines.length === 1 ? '' : 's'} read out — check them on the Prescriptions tab before issuing.`
-            : 'Note saved and the audio deleted. No medicines were read out of it.',
+            ? `Note saved. ${s.suggestions.medicines.length} medicine${s.suggestions.medicines.length === 1 ? '' : 's'} read out — check them on the Prescriptions tab before issuing.`
+            : 'Note saved. No medicines were read out of it.',
       )
       setRecordingId(null); setDraft(''); setRec(null); onChange()
     } catch (e) {
@@ -2087,7 +2093,7 @@ function ConsultationRecorder({ memberId, businessId, practitionerId, visits, on
             <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 2, maxWidth: 560 }}>
               {live
                 ? 'The patient can ask you to stop at any time.'
-                : 'You will get a draft to correct. The audio is deleted the moment you confirm the note.'}
+                : 'The audio is deleted as soon as it is transcribed. You correct the English draft, which is what gets saved.'}
             </div>
           </div>
         </div>
