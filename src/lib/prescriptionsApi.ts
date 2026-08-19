@@ -215,7 +215,11 @@ export async function getDocuments(memberId: string, businessId: string): Promis
  */
 export async function documentUrl(storagePath: string, seconds = 600): Promise<string> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, seconds)
-  if (error) throw new Error(error.message)
+  // data and error are separate fields rather than a discriminated union, so a
+  // null error does not prove a non-null data — check both.
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message ?? 'That file could not be opened. It may have been removed.')
+  }
   return data.signedUrl
 }
 
