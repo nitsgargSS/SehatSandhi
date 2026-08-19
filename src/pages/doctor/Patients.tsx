@@ -19,6 +19,12 @@ import {
   uploadDocument, getDocuments, documentUrl, deleteDocument,
   Prescription, PrescriptionItem, PatientDocument,
 } from '../../lib/prescriptionsApi'
+import {
+  getCharges, getPayments, getAccount, addCharge, removeCharge,
+  addPayment, removePayment, postBedCharges,
+  Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod,
+} from '../../lib/billingApi'
+import { moneyExact } from '../../lib/format'
 
 // The clinic's patient records — search, history, and the clinical detail a
 // doctor needs on screen before they prescribe anything.
@@ -187,13 +193,16 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   const [scripts, setScripts] = useState<Prescription[]>([])
   const [docs, setDocs] = useState<PatientDocument[]>([])
   const [stays, setStays] = useState<Admission[]>([])
+  const [charges, setCharges] = useState<Charge[]>([])
+  const [payments, setPayments] = useState<PatientPayment[]>([])
+  const [account, setAccount] = useState<Account | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd'>('history')
+  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'money'>('history')
 
   const reload = useCallback(async () => {
     try {
-      const [s, v, vt, a, c, m, rx, dc, ad] = await Promise.all([
+      const [s, v, vt, a, c, m, rx, dc, ad, ch, pm, acc] = await Promise.all([
         getPatientSummary(memberId, businessId),
         getVisits(memberId, businessId),
         getVitals(memberId, businessId),
@@ -203,10 +212,14 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         getPrescriptions(memberId, businessId),
         getDocuments(memberId, businessId),
         getAdmissions(memberId, businessId),
+        getCharges(memberId, businessId),
+        getPayments(memberId, businessId),
+        getAccount(memberId, businessId),
       ])
       setSummary(s); setVisits(v); setVitals(vt)
       setAllergies(a); setConditions(c); setMeds(m)
       setScripts(rx); setDocs(dc); setStays(ad)
+      setCharges(ch); setPayments(pm); setAccount(acc)
       setError('')
     } catch (e) {
       setError((e as Error).message)
@@ -295,7 +308,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         {([
           ['history', 'Visits'], ['clinical', 'Allergies & medicines'],
           ['vitals', 'Vitals'], ['rx', 'Prescriptions'], ['docs', 'Documents'],
-          ['ipd', 'Admissions'],
+          ['ipd', 'Admissions'], ['money', 'Billing'],
         ] as const).map(([id, lbl]) => (
           <button key={id} onClick={() => setPane(id)}
             style={{ ...btn(pane === id), fontSize: 12.5 }}>{lbl}</button>
@@ -326,6 +339,13 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
       {pane === 'ipd' && (
         <AdmissionsPane
           stays={stays} memberId={memberId} businessId={businessId}
+          practitionerId={practitionerId} onChange={reload}
+        />
+      )}
+      {pane === 'money' && (
+        <BillingPane
+          charges={charges} payments={payments} account={account} stays={stays}
+          memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} onChange={reload}
         />
       )}
@@ -1220,6 +1240,211 @@ function WardNotes({ admissionId, businessId, practitionerId }: {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ── Billing ─────────────────────────────────────────────────────────────────
+//
+// The money side of one patient's care: OPD fees, bed days, medicines, tests,
+// and what they have actually paid against it.
+//
+// Deliberately the clinic's own ledger and nothing to do with the invoices
+// Sehatsandhi raises for a listing. Different payer, different payee, and a
+// bill that mixed them would be wrong in a way nobody could unpick later.
+
+const CHARGE_CATEGORIES: [ChargeCategory, string][] = [
+  ['consultation', 'Consultation'],
+  ['bed', 'Bed / room'],
+  ['procedure', 'Procedure'],
+  ['medicine', 'Medicine'],
+  ['lab', 'Test'],
+  ['consumable', 'Consumable'],
+  ['other', 'Other'],
+]
+
+const PAYMENT_METHODS: [PaymentMethod, string][] = [
+  ['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'],
+  ['netbanking', 'Net banking'], ['cheque', 'Cheque'],
+  ['insurance', 'Insurance / TPA'], ['other', 'Other'],
+]
+
+function BillingPane({
+  charges, payments, account, stays, memberId, businessId, practitionerId, onChange,
+}: {
+  charges: Charge[]
+  payments: PatientPayment[]
+  account: Account | null
+  stays: Admission[]
+  memberId: string
+  businessId: string
+  practitionerId?: string | null
+  onChange: () => void
+}) {
+  const [c, setC] = useState({ category: 'consultation' as ChargeCategory, description: '', quantity: '1', unitPrice: '' })
+  const [p, setP] = useState({ amount: '', method: 'cash' as PaymentMethod, reference: '' })
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [note, setNote] = useState('')
+
+  const balance = account?.balance ?? 0
+  const openStay = stays.find(s => s.status === 'admitted')
+
+  const guard = async (fn: () => Promise<void>) => {
+    setBusy(true); setErr('')
+    try { await fn(); onChange() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  // Charges and payments interleaved, newest first — a statement reads as one
+  // sequence, not two lists a reader has to merge in their head.
+  const ledger = [
+    ...charges.map(x => ({ kind: 'charge' as const, on: x.charged_on, row: x })),
+    ...payments.map(x => ({ kind: 'payment' as const, on: x.received_on, row: x })),
+  ].sort((a, b) => b.on.localeCompare(a.on))
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div style={{
+        ...card,
+        background: balance > 0 ? '#fdf8f1' : '#f3faf6',
+        borderColor: balance > 0 ? '#eddcc0' : '#bfe3d0',
+      }}>
+        <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
+          <div>
+            <div style={label}>Charged</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: BIZ.ink }}>{moneyExact(account?.charged ?? 0)}</div>
+          </div>
+          <div>
+            <div style={label}>Paid</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: BIZ.ink }}>{moneyExact(account?.paid ?? 0)}</div>
+          </div>
+          <div>
+            <div style={label}>{balance < 0 ? 'In advance' : 'Balance due'}</div>
+            <div style={{ fontSize: 19, fontWeight: 800, color: balance > 0 ? '#8a5a00' : BIZ.green }}>
+              {moneyExact(Math.abs(balance))}
+            </div>
+          </div>
+        </div>
+        {balance < 0 && (
+          <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 8 }}>
+            The patient has paid more than has been charged so far — ordinary during a stay.
+          </div>
+        )}
+      </div>
+
+      {err && <div style={{ ...card, color: '#8a2b2b', fontSize: 13 }}>{err}</div>}
+      {note && <div style={{ ...card, background: '#f3faf6', borderColor: '#bfe3d0', fontSize: 13 }}>{note}</div>}
+
+      {openStay && (
+        <div style={{ ...card, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13, color: BIZ.ink }}>
+            Currently admitted — {openStay.ward_name ? `${openStay.ward_name} / ${openStay.bed_label}` : 'no bed'},
+            {' '}{openStay.days_stayed} day{openStay.days_stayed === 1 ? '' : 's'}.
+          </div>
+          <button style={btn()} disabled={busy} onClick={() => guard(async () => {
+            const posted = await postBedCharges(openStay.id)
+            setNote(posted > 0
+              ? `Bed charge posted: ${moneyExact(posted)}.`
+              : 'That bed has no daily rate set, so nothing was posted.')
+          })}>Post bed charge</button>
+        </div>
+      )}
+
+      <div style={card}>
+        <div style={{ ...label, marginBottom: 9 }}>Add a charge</div>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+          <select style={{ ...input, flex: '0 1 150px' }} value={c.category}
+            onChange={e => setC({ ...c, category: e.target.value as ChargeCategory })}>
+            {CHARGE_CATEGORIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <input style={{ ...input, flex: '2 1 180px' }} placeholder="What for"
+            value={c.description} onChange={e => setC({ ...c, description: e.target.value })} />
+          <input style={{ ...input, flex: '0 1 80px' }} inputMode="decimal" placeholder="Qty"
+            value={c.quantity} onChange={e => setC({ ...c, quantity: e.target.value })} />
+          <input style={{ ...input, flex: '0 1 110px' }} inputMode="decimal" placeholder="Rate ₹"
+            value={c.unitPrice} onChange={e => setC({ ...c, unitPrice: e.target.value })} />
+          <button style={btn(true)} disabled={busy || !c.description.trim() || !c.unitPrice.trim()}
+            onClick={() => guard(async () => {
+              await addCharge(memberId, businessId, {
+                category: c.category,
+                description: c.description.trim(),
+                quantity: Number(c.quantity) || 1,
+                unitPrice: Number(c.unitPrice) || 0,
+                admissionId: openStay?.id ?? null,
+              }, practitionerId)
+              setC({ category: 'consultation', description: '', quantity: '1', unitPrice: '' })
+            })}>Add</button>
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={{ ...label, marginBottom: 9 }}>Record a payment</div>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+          <input style={{ ...input, flex: '0 1 130px' }} inputMode="decimal" placeholder="Amount ₹"
+            value={p.amount} onChange={e => setP({ ...p, amount: e.target.value })} />
+          <select style={{ ...input, flex: '0 1 150px' }} value={p.method}
+            onChange={e => setP({ ...p, method: e.target.value as PaymentMethod })}>
+            {PAYMENT_METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <input style={{ ...input, flex: '1 1 160px' }} placeholder="Reference (UPI ref, cheque no.)"
+            value={p.reference} onChange={e => setP({ ...p, reference: e.target.value })} />
+          <button style={btn(true)} disabled={busy || !(Number(p.amount) > 0)}
+            onClick={() => guard(async () => {
+              await addPayment(memberId, businessId, {
+                amount: Number(p.amount), method: p.method,
+                reference: p.reference, admissionId: openStay?.id ?? null,
+              }, practitionerId)
+              setP({ amount: '', method: 'cash', reference: '' })
+            })}>Record</button>
+        </div>
+      </div>
+
+      {ledger.length === 0 ? (
+        <div style={{ ...card, color: BIZ.muted, fontSize: 13.5 }}>
+          Nothing charged or paid here yet.
+        </div>
+      ) : (
+        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+          {ledger.map((e, i) => (
+            <div key={e.row.id} style={{
+              display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center',
+              padding: '11px 15px', borderTop: i === 0 ? 'none' : `1px solid ${BIZ.border}`,
+              background: e.kind === 'payment' ? '#f8fcfa' : '#fff',
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, color: BIZ.ink }}>
+                  {e.kind === 'charge'
+                    ? (e.row as Charge).description
+                    : `Payment — ${PAYMENT_METHODS.find(m => m[0] === (e.row as PatientPayment).method)?.[1]}`}
+                </div>
+                <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
+                  {when(e.on)}
+                  {e.kind === 'charge' && (e.row as Charge).quantity > 1 &&
+                    ` · ${(e.row as Charge).quantity} × ${moneyExact((e.row as Charge).unit_price)}`}
+                  {e.kind === 'payment' && (e.row as PatientPayment).reference &&
+                    ` · ${(e.row as PatientPayment).reference}`}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 9, alignItems: 'center', flex: '0 0 auto' }}>
+                <span style={{
+                  fontSize: 14, fontWeight: 700,
+                  color: e.kind === 'payment' ? BIZ.green : BIZ.ink,
+                }}>
+                  {e.kind === 'payment' ? '− ' : ''}{moneyExact(e.row.amount)}
+                </span>
+                <button aria-label="Remove line" style={{ ...btn(), padding: 6 }} disabled={busy}
+                  onClick={() => guard(async () => {
+                    if (!window.confirm('Remove this line?')) return
+                    if (e.kind === 'charge') await removeCharge(e.row.id)
+                    else await removePayment(e.row.id)
+                  })}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

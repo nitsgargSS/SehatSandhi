@@ -30,6 +30,8 @@ export const PURGE_TABLES: PurgeTable[] = [
   { name: 'subscriptions', purgeOrder: 60, pk: 'id' },
   { name: 'business_pricing_overrides', purgeOrder: 70, pk: 'id' },
   { name: 'availability', purgeOrder: 80, pk: 'id' },
+  { name: 'patient_payments', purgeOrder: 84, pk: 'id' },
+  { name: 'patient_charges', purgeOrder: 86, pk: 'id' },
   { name: 'camps_offers', purgeOrder: 90, pk: 'id' },
   { name: 'admission_notes', purgeOrder: 92, pk: 'id' },
   { name: 'admissions', purgeOrder: 94, pk: 'id' },

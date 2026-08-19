@@ -176,6 +176,19 @@ tables:
     class: isolated
     purgeOrder: 90
 
+  # ── Patient billing (0049) ──────────────────────────────────────────────
+  # A clinic charging a patient, which is NOT the invoices/payments pair — those
+  # bill businesses for their listing under our GSTIN. Every FK here carries an
+  # ON DELETE clause, so these sit before the encounters they reference only for
+  # tidiness.
+  patient_payments:
+    class: isolated
+    purgeOrder: 84
+
+  patient_charges:
+    class: isolated
+    purgeOrder: 86
+
   # ── Inpatients (0048) ───────────────────────────────────────────────────
   # Notes before stays, stays before beds, beds before wards — and all of them
   # before businesses. Every FK here carries an ON DELETE clause, so ordering
@@ -450,6 +463,8 @@ tables:
   prescription_detail:      { class: view }
   ward_occupancy:           { class: view }
   admission_detail:         { class: view }
+  patient_account:          { class: view }
+  business_outstanding:     { class: view }
 
   # Billing and plan reporting.
   invoice_register:         { class: view }
