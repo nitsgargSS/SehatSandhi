@@ -198,6 +198,12 @@ tables:
     class: isolated
     purgeOrder: 92
 
+  # The occupancy timeline billing multiplies against (0053). Before admissions,
+  # which it references, and before beds, whose rate it snapshots.
+  admission_bed_stays:
+    class: isolated
+    purgeOrder: 93
+
   admissions:
     class: isolated
     purgeOrder: 94
@@ -464,6 +470,7 @@ tables:
   ward_occupancy:           { class: view }
   consultation_audio_to_purge: { class: view }
   admission_detail:         { class: view }
+  admission_bed_history:    { class: view }
   patient_account:          { class: view }
   business_outstanding:     { class: view }
 
