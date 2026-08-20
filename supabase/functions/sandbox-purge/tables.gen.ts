@@ -47,6 +47,7 @@ export const PURGE_TABLES: PurgeTable[] = [
   { name: 'business_practitioners', purgeOrder: 100, pk: 'id' },
   { name: 'bill_counters', purgeOrder: 101, pk: 'business_id' },
   { name: 'prescription_items', purgeOrder: 102, pk: 'id' },
+  { name: 'document_retention_policies', purgeOrder: 103, pk: 'business_id' },
   { name: 'patient_documents', purgeOrder: 104, pk: 'id' },
   { name: 'prescriptions', purgeOrder: 106, pk: 'id' },
   { name: 'prescription_counters', purgeOrder: 108, pk: 'business_id' },

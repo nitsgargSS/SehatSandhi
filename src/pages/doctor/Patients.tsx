@@ -19,7 +19,7 @@ import {
 } from '../../lib/admissionsApi'
 import {
   issuePrescription, getPrescriptions, cancelPrescription, sendPrescription,
-  uploadDocument, getDocuments, documentUrl, deleteDocument,
+  uploadDocument, getDocuments, documentUrl, deleteDocument, setLegalHold,
   Prescription, PrescriptionItem, PatientDocument,
 } from '../../lib/prescriptionsApi'
 import {
@@ -702,9 +702,41 @@ function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }:
               {' · '}{when(d.created_at)}
               {d.size_bytes ? ` · ${Math.max(1, Math.round(d.size_bytes / 1024))} KB` : ''}
             </div>
+            {/* When this is due to be destroyed, and whether something is
+                stopping that. Shown because a clinic asked for a document in
+                two years needs to know now whether it will still be here. */}
+            {d.legal_hold ? (
+              <div style={{ fontSize: 12, color: '#8a5a00', fontWeight: 700, marginTop: 2 }}>
+                On hold — kept indefinitely
+                {d.legal_hold_reason && (
+                  <span style={{ fontWeight: 400 }}> · {d.legal_hold_reason}</span>
+                )}
+              </div>
+            ) : d.retain_until ? (
+              <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 2 }}>
+                Kept until {when(d.retain_until)}
+              </div>
+            ) : null}
           </div>
           <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
             <button style={{ ...btn(), fontSize: 12 }} onClick={() => open(d)}>Open</button>
+            <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
+              onClick={async () => {
+                setBusy(true); setErr('')
+                try {
+                  if (d.legal_hold) {
+                    if (!window.confirm(`Release the hold on "${d.title}"? It becomes eligible for destruction again.`)) return
+                    await setLegalHold(d.id, false)
+                  } else {
+                    const why = window.prompt('Why is this being held? (complaint, medico-legal case, insurance dispute)')
+                    if (!why?.trim()) return
+                    await setLegalHold(d.id, true, why.trim())
+                  }
+                  onChange()
+                } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+              }}>
+              {d.legal_hold ? 'Release' : 'Hold'}
+            </button>
             <button aria-label="Delete document" style={{ ...btn(), padding: 8 }}
               onClick={async () => {
                 if (!window.confirm(`Delete "${d.title}"? This cannot be undone.`)) return
@@ -762,7 +794,7 @@ function RecordingConsent({ summary, businessId, onChange }: {
             </div>
             <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 2, maxWidth: 560 }}>
               {on
-                ? 'This patient has agreed. Recordings are transcribed for you to check and correct; the audio is deleted once you confirm the note.'
+                ? 'This patient has agreed. The recording is transcribed into English and the audio is deleted straight away — you then check and correct the text.'
                 : 'The patient has to agree before a consultation can be recorded. Ask them, then record what they said here.'}
             </div>
           </div>
@@ -2055,15 +2087,21 @@ function ConsultationRecorder({ memberId, businessId, practitionerId, visits, on
     setBusy('confirming'); setErr('')
     try {
       await confirmTranscript(recordingId, draft.trim(), practitionerId)
-      // Signed, so the audio has done its job.
+      // Belt and braces. Transcription now deletes the audio in the same
+      // request that produces the text, so in the normal flow there is nothing
+      // left here to remove. Kept for the cases that flow does not cover: a
+      // recording made before that change, or one whose delete failed after the
+      // transcript was written. It only clears audio_path and stamps
+      // audio_deleted_at — it does not touch status, so it cannot undo the
+      // confirmation that just happened.
       await discardConsultationAudio(recordingId, businessId)
       const s = await requestMedicineSuggestions(recordingId).catch(() => null)
       setNote(
         !s?.configured
-          ? 'Note saved and the audio deleted.'
+          ? 'Note saved.'
           : s.suggestions?.medicines?.length
-            ? `Note saved, audio deleted. ${s.suggestions.medicines.length} medicine${s.suggestions.medicines.length === 1 ? '' : 's'} read out — check them on the Prescriptions tab before issuing.`
-            : 'Note saved and the audio deleted. No medicines were read out of it.',
+            ? `Note saved. ${s.suggestions.medicines.length} medicine${s.suggestions.medicines.length === 1 ? '' : 's'} read out — check them on the Prescriptions tab before issuing.`
+            : 'Note saved. No medicines were read out of it.',
       )
       setRecordingId(null); setDraft(''); setRec(null); onChange()
     } catch (e) {
@@ -2087,7 +2125,7 @@ function ConsultationRecorder({ memberId, businessId, practitionerId, visits, on
             <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 2, maxWidth: 560 }}>
               {live
                 ? 'The patient can ask you to stop at any time.'
-                : 'You will get a draft to correct. The audio is deleted the moment you confirm the note.'}
+                : 'The audio is deleted as soon as it is transcribed. You correct the English draft, which is what gets saved.'}
             </div>
           </div>
         </div>
