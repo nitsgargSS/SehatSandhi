@@ -99,6 +99,58 @@ const ACCOUNTS = [
   { email: 'sandbox-admin@sehatsandhi.test', role: 'admin', business: null },
 ]
 
+// ── Staff logins, for testing role gating ───────────────────────────────────
+//
+// READ THIS BEFORE TESTING 0057. The account above is called
+// sandbox-doctor@ and it is NOT a doctor as far as access is concerned: it is
+// linked through businesses.auth_uid and businesses.email, which are routes 1
+// and 2 of sehat_caller_business_ids, and sehat_caller_role answers 'owner' for
+// both. An owner bypasses every role check by design.
+//
+// So testing the role gating with that login shows nothing and looks like a
+// pass. The only route that yields a non-owner role is route 3 — an affiliation
+// whose practitioner carries auth_uid — and nothing set practitioners.auth_uid
+// until this block existed. That is why sandbox had no login capable of
+// exercising 0057 at all.
+//
+// These three attach to the SAME business as the owner account, so they see the
+// same patients, the same beds and the same money, and the only thing that
+// differs between them is role. Their addresses are deliberately never written
+// to businesses.email — that would quietly promote them to owner and undo the
+// whole point.
+const SEED_BUSINESS_NAME = '[SEED] Sandbox Test Clinic'
+
+const STAFF = [
+  {
+    email: 'sandbox-reception@sehatsandhi.test',
+    role: 'receptionist',
+    // Expect: Queue, Appointments, Beds, and Patients WITHOUT the clinical
+    // panes. No Clinic, Bills or Reports tab. Cannot read vitals, conditions,
+    // prescriptions, documents or recordings; can take money.
+    full_name: '[SEED] Priya Sharma (reception)',
+    phone: '9000000002',
+  },
+  {
+    email: 'sandbox-staffdoc@sehatsandhi.test',
+    role: 'doctor',
+    // Expect: everything clinical, plus Schedule. No Clinic, Bills or Reports —
+    // a salaried doctor is not the business.
+    full_name: '[SEED] Dr. Staff Doctor',
+    phone: '9000000003',
+    speciality: 'GEN',
+    qualification: 'MBBS',
+    reg_number: 'DMC/R/2020/00002',
+  },
+  {
+    email: 'sandbox-manager@sehatsandhi.test',
+    role: 'manager',
+    // Expect: the mirror image of the doctor — Clinic, Bills, Reports and
+    // Schedule, but no clinical panes.
+    full_name: '[SEED] Anil Kumar (manager)',
+    phone: '9000000004',
+  },
+]
+
 // Talk to the REST and Admin endpoints directly rather than through
 // @supabase/supabase-js: its constructor initialises a realtime client, which
 // throws on Node < 22 for want of a native WebSocket. This script needs neither
@@ -278,12 +330,133 @@ for (const acct of ACCOUNTS) {
   }
 }
 
+// ── Staff logins ────────────────────────────────────────────────────────────
+
+const seedBiz = await api(
+  `/rest/v1/businesses?select=id&name=eq.${encodeURIComponent(SEED_BUSINESS_NAME)}&limit=1`
+).catch(() => [])
+
+if (!seedBiz.length) {
+  console.log('\n      staff logins skipped — the seed business is not there yet')
+  failures++
+} else {
+  const businessId = seedBiz[0].id
+  console.log('')
+
+  for (const s of STAFF) {
+    process.stdout.write(`      ${s.email.padEnd(36)} `)
+    try {
+      // 1. The login.
+      const list = await api('/auth/v1/admin/users?page=1&per_page=1000')
+      let userId = (list.users ?? []).find(u => u.email === s.email)?.id ?? null
+      if (userId) {
+        console.log('already exists')
+      } else {
+        const created = await api('/auth/v1/admin/users', {
+          method: 'POST',
+          body: JSON.stringify({ email: s.email, password: PASSWORD, email_confirm: true }),
+        })
+        userId = created?.id ?? null
+        console.log('created')
+      }
+
+      // 2. The person. Keyed on reg_number where there is one, because that is
+      //    the natural key the unique index is built on; on full_name for the
+      //    non-clinical staff, who have no registration to hold.
+      const lookup = s.reg_number
+        ? `reg_number=eq.${encodeURIComponent(s.reg_number)}`
+        : `full_name=eq.${encodeURIComponent(s.full_name)}`
+      let practitionerId
+      const foundDoc = await api(`/rest/v1/practitioners?select=id&${lookup}&limit=1`)
+      if (foundDoc.length) {
+        practitionerId = foundDoc[0].id
+      } else {
+        const rows = await api('/rest/v1/practitioners', {
+          method: 'POST',
+          headers: { Prefer: 'return=representation' },
+          body: JSON.stringify({
+            full_name: s.full_name,
+            phone: s.phone,
+            speciality: s.speciality ?? null,
+            qualification: s.qualification ?? null,
+            reg_number: s.reg_number ?? null,
+            status: 'active',
+          }),
+        })
+        practitionerId = rows[0].id
+      }
+
+      // 3. THE LINE THIS WHOLE BLOCK EXISTS FOR. Route 3 of
+      //    sehat_caller_business_ids reads practitioners.auth_uid; without it
+      //    the login resolves to no business and the dashboard shows nothing.
+      //    Patched separately so a person seeded before their login existed
+      //    gets linked on a later run.
+      if (userId) {
+        await api(`/rest/v1/practitioners?id=eq.${practitionerId}`, {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ auth_uid: userId }),
+        })
+      }
+
+      // 4. The affiliation, carrying the role that is the point of the exercise.
+      const foundLink = await api(
+        `/rest/v1/business_practitioners?select=id,role&business_id=eq.${businessId}` +
+        `&practitioner_id=eq.${practitionerId}&limit=1`)
+      if (foundLink.length) {
+        // Re-assert the role: an earlier run may have created it as the default
+        // 'doctor', and a receptionist silently holding a doctor's role is the
+        // exact failure this seed is meant to make visible.
+        if (foundLink[0].role !== s.role) {
+          await api(`/rest/v1/business_practitioners?id=eq.${foundLink[0].id}`, {
+            method: 'PATCH',
+            headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify({ role: s.role, status: 'active', can_login_web: true }),
+          })
+          console.log(`      ↳ role corrected to ${s.role}`)
+        } else {
+          console.log(`      ↳ affiliation already ${s.role}`)
+        }
+      } else {
+        await api('/rest/v1/business_practitioners', {
+          method: 'POST',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            business_id: businessId,
+            practitioner_id: practitionerId,
+            role: s.role,
+            // Their only posting, so it is the primary one. The partial unique
+            // index allows one per practitioner and each of these is a
+            // different person.
+            is_primary: true,
+            status: 'active',
+            can_login_web: true,
+          }),
+        })
+        console.log(`      ↳ affiliation created as ${s.role}`)
+      }
+    } catch (e) {
+      console.log(`✗ ${e.message}`)
+      failures++
+    }
+  }
+}
+
 if (failures) {
   console.error(`\n  ${failures} problem(s) while seeding.\n`)
   process.exit(1)
 }
 
 console.log(`\n  ✓ Sandbox logins ready — password: ${PASSWORD}`)
+console.log('')
+console.log('    sandbox-doctor@      OWNER of the seed clinic (not a "doctor" for access)')
+console.log('    sandbox-staffdoc@    doctor    — clinical yes, business no')
+console.log('    sandbox-reception@   receptionist — queue/beds/money, NO clinical record')
+console.log('    sandbox-manager@     manager   — business yes, clinical no')
+console.log('    sandbox-admin@       admin panel')
+console.log('')
+console.log('    Test 0057 with sandbox-reception@. Testing it as sandbox-doctor@')
+console.log('    proves nothing: the owner route bypasses every role check.')
 console.log('    The logins survive `Purge sandbox data`; autofill accounts do not.')
 // The rows do NOT. businesses, practitioners, business_practitioners and
 // availability are all classified `isolated`, so a purge takes them and leaves
