@@ -19,6 +19,8 @@ import SiteFooter from '../../components/SiteFooter'
 // old /doctor form: sehat_caller_listing_ids() honours both. It is kept below as
 // a fallback rather than removed, so nobody who can log in today is locked out.
 
+import { IS_STAGING } from '../../lib/env'
+
 type Step = 'phone' | 'code'
 
 // Sentinels from clinic-otp, not prose: the wording belongs to the screen, so
@@ -222,12 +224,28 @@ export default function DoctorLogin() {
               {t('loginPage.registerHere')}
             </Link>
           </p>
-          {!showLegacy && (
+          {/* On staging this is not a legacy footnote, it is THE way in: every
+              seeded test account is email-and-password, and phone login would
+              mint a synthetic user against the number instead. Faint grey text
+              sitting directly under "Register here" got clicked past reliably,
+              and the next screen was a registration wizard — which looks like
+              the login being broken rather than the link being missed.
+
+              Prod keeps the quiet version, and the staging branch really is
+              dropped from the production bundle — verified against a build, not
+              assumed. See the note in env.ts about why that only works while
+              the comparison stays free of String(). */}
+          {!showLegacy && (IS_STAGING ? (
+            <button onClick={() => { setShowLegacy(true); setError('') }}
+              className="w-full text-sm font-medium text-teal-600 hover:underline border border-dashed border-teal-300 rounded-lg py-2">
+              Staging · log in with email and password
+            </button>
+          ) : (
             <button onClick={() => { setShowLegacy(true); setError('') }}
               className="text-xs text-gray-400 hover:text-gray-600">
               Registered before with an email and password?
             </button>
-          )}
+          ))}
         </div>
       </div>
       </div>
