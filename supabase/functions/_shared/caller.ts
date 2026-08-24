@@ -47,15 +47,58 @@ export function caller(req: Request): Caller | null {
     return { asCaller: asService, asService, isServiceRole: true }
   }
 
-  // The anon key is a valid Bearer token as far as PostgREST is concerned, but
-  // it authenticates nobody. Letting it through would mean anyone with the
-  // website bundle could send any document whose id they could guess.
-  if (token === anonKey) return null
+  // ── Is this an actual signed-in person? ──
+  //
+  // This used to compare the token against SUPABASE_ANON_KEY and reject a
+  // match. A smoke test showed the anon key sailing straight through: the
+  // comparison only holds when the two values are byte-identical, and they are
+  // not reliably the same thing — a project issuing the newer publishable key
+  // format sends one shape from the browser while the function's env holds the
+  // legacy JWT. Comparing secrets to decide identity was the wrong idea; what
+  // matters is what the token CLAIMS.
+  //
+  // The gateway has already verified the signature before this function ran, so
+  // reading the payload is safe. `role` is the claim that separates a real
+  // session from the public key: a signed-in user carries 'authenticated' and a
+  // subject, the anon key carries 'anon' and no subject at all.
+  const claims = readClaims(token)
+  if (!claims) return null
+  if (claims.role !== 'authenticated' || !claims.sub) return null
 
-  const asCaller = createClient(url, anonKey || serviceKey, {
+  // No `|| serviceKey` fallback. That was the more dangerous half of the old
+  // code: with SUPABASE_ANON_KEY unset it would have built the caller's client
+  // on the SERVICE ROLE key, and the one thing asCaller must never be is a
+  // client that bypasses RLS — every ownership check in every send function is
+  // "can this caller see the row". Absent anon key is a misconfiguration, and
+  // the right answer to a misconfiguration is to refuse.
+  if (!anonKey) return null
+
+  const asCaller = createClient(url, anonKey, {
     global: { headers: { Authorization: header } },
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
   return { asCaller, asService, isServiceRole: false }
+}
+
+/**
+ * The middle segment of a JWT, decoded. Null for anything that is not a
+ * three-part token with a readable JSON payload.
+ *
+ * Deliberately does NOT verify the signature — the Supabase gateway does that
+ * before the function is invoked, and re-implementing verification here would
+ * be a second, worse copy of it. This reads claims from a token already
+ * established as genuine; it is not a trust boundary of its own.
+ */
+function readClaims(token: string): { role?: string; sub?: string } | null {
+  const parts = token.split('.')
+  if (parts.length !== 3) return null
+  try {
+    // base64url → base64, then pad. atob rejects the url-safe alphabet.
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
+    return JSON.parse(atob(padded))
+  } catch {
+    return null
+  }
 }
