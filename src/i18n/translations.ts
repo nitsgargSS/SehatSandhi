@@ -52,6 +52,8 @@ export const translations: Tree = {
     switchListing: { en: 'Switch listing', hi: 'लिस्टिंग बदलें' },
     noProfileFound: { en: 'No doctor profile found.', hi: 'डॉक्टर प्रोफाइल नहीं मिला।' },
     registerHereLink: { en: 'Register here', hi: 'यहां रजिस्टर करें' },
+    noProfileSignedInAs: { en: 'You are signed in as', hi: 'आप साइन इन हैं' },
+    noProfileSwitch: { en: 'Sign out and use a different account', hi: 'साइन आउट करके दूसरा खाता इस्तेमाल करें' },
     statusActive: { en: '✓ Listing Active', hi: '✓ लिस्टिंग एक्टिव' },
     statusPending: { en: '⏳ Pending Verification', hi: '⏳ वेरिफिकेशन पेंडिंग' },
     logout: { en: 'Logout', hi: 'लॉगआउट' },
