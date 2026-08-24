@@ -253,10 +253,24 @@ create or replace view opd_board as
   with ranked as (
     select
       q.*,
-      row_number() over (
-        partition by q.business_id, q.practitioner_id, q.queue_date
-        order by q.priority desc, q.arrived_at
-      ) filter (where q.status = 'waiting') as waiting_position
+      -- FILTER is only valid on an aggregate, and row_number() is a window
+      -- function — `row_number() over (...) filter (...)` is a syntax error, not
+      -- a subtly wrong answer. The waiting-only numbering has to come from the
+      -- partition instead.
+      --
+      -- The boolean IS part of the partition on purpose. Without it row_number
+      -- counts every row in arrival order, so the first person still waiting
+      -- behind two finished consultations would be told they are third. With it
+      -- the people waiting are numbered among themselves, and the CASE nulls it
+      -- out for everyone else — a position is meaningless once you have been
+      -- seen.
+      case when q.status = 'waiting' then
+        row_number() over (
+          partition by q.business_id, q.practitioner_id, q.queue_date,
+                       (q.status = 'waiting')
+          order by q.priority desc, q.arrived_at
+        )
+      end as waiting_position
     from opd_queue q
     where q.queue_date = (now() at time zone 'Asia/Kolkata')::date
   ),
