@@ -14,7 +14,8 @@ import SiteFooter from '../../components/SiteFooter'
 import { generateBusiness } from '../../lib/sandboxData'
 import {
   computePrice, createRazorpayOrder, verifyRazorpayPayment,
-  loadRazorpayCheckout, businessBackendConfigured, PriceResult, DraftPractitioner,
+  loadRazorpayCheckout, businessBackendConfigured, listCareModules,
+  PriceResult, DraftPractitioner, CareModule,
 } from '../../lib/businessApi'
 import { registerBusiness, registerPractitioner, attachPractitioner } from '../../lib/identityApi'
 import PractitionerPicker from './PractitionerPicker'
@@ -132,18 +133,22 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // paid listings is what shows where signups are being lost.
   useEffect(() => { track('business_lead') }, [])
 
-  // How many months they're buying upfront — always their choice.
+  // Billing is monthly. There used to be a 1-12 term picker here; 0060 pinned
+  // every plan to one month and this is the constant that replaced it.
   //
-  // This used to open at plan.default_months, which was 5, so a business that
-  // wanted one month was pre-committed to five and had to notice the picker to
-  // undo it. It opens at the shortest allowed term instead; default_months only
-  // marks one option as best value (see the ★ below) and never preselects.
-  const [months, setMonths] = useState(plan.min_months)
-  useEffect(() => { setMonths(plan.min_months) }, [plan.min_months])
-  const monthOptions = Array.from(
-    { length: Math.max(1, plan.max_months - plan.min_months + 1) },
-    (_, i) => plan.min_months + i,
-  )
+  // Kept as a named value rather than inlining 1 everywhere: the term still
+  // flows through compute-price, the payment row, the invoice and the renewal
+  // date, and clampMonths on the server is the thing that actually enforces it.
+  // If a longer term is ever wanted again, it is three numbers in pricing_plans
+  // and this line.
+  const months = 1
+
+  // The clinical systems on offer, and which ones they have ticked. Priced by
+  // the server from care_modules — this list is for drawing the choice, never
+  // for deciding an amount.
+  const [careModules, setCareModules] = useState<CareModule[]>([])
+  const [modules, setModules] = useState<string[]>([])
+  useEffect(() => { listCareModules().then(setCareModules).catch(() => setCareModules([])) }, [])
 
   const coverage: CoverageArea[] = useMemo(() => {
     if (areas.length) {
@@ -194,6 +199,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       breakdown: [],
       planCode: plan.code, planLabel: plan.label, mode: plan.mode,
       monthlyTotal, months, total: monthlyTotal * months,
+      modules: [], moduleTotal: 0,
       defaultMonths: plan.default_months, minMonths: plan.min_months, maxMonths: plan.max_months,
       doctorCount: hc.doctorCount,
       includedDoctors: plan.included_doctors ?? 1,
@@ -226,7 +232,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         // yet — and its answer overrides the local one that does count them. A
         // hospital saw one doctor's price and would have been charged for all of
         // them at checkout, where the real doctorId is finally passed.
-        const res = await computePrice(zips, null, vertical, months, namedHospitalDoctors)
+        const res = await computePrice(zips, null, vertical, months, namedHospitalDoctors, modules)
         if (id === priceReq.current) setServerPrice(res)
       } catch {
         if (id === priceReq.current) setServerPrice(null) // fall back to localPrice
@@ -235,7 +241,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [zips, vertical, months, namedHospitalDoctors])
+  }, [zips, vertical, months, namedHospitalDoctors, modules])
 
   // What the summary shows: server total when we have one, else the local sum.
   const price = serverPrice ?? localPrice
@@ -415,7 +421,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         setSubmitting(false)
         return
       }
-      const order = await createRazorpayOrder(zips, id, months, {
+      const order = await createRazorpayOrder(zips, id, months, modules, {
         gstin: gstinState === 'ok' ? form.gstin : undefined,
         gstLegalName: form.gst_legal_name || undefined,
         billingAddress: form.address || undefined,
@@ -425,7 +431,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       const rzp = new Razorpay({
         key: order.keyId, amount: order.amount, currency: order.currency,
         order_id: order.orderId, name: 'Sehatsandhi Business',
-        description: `${verticalObj.label} · ${zips.length} pincode${zips.length === 1 ? '' : 's'} · ${months} month${months === 1 ? '' : 's'}`,
+        description: [verticalObj.label, `${zips.length} pincode${zips.length === 1 ? '' : 's'}`,
+          ...modules.map(c => careModules.find(m => m.code === c)?.label ?? c), 'monthly'].join(' · '),
         // Razorpay wants a bare 10-digit number or +91XXXXXXXXXX with nothing
         // else in it. Our field is placeholdered "+91 ", so what people type
         // usually carries a country code and spaces — passed through raw, the
@@ -859,7 +866,15 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                           ? <ReviewRow label="Plan" value={`${commissionPct}% of ${commissionBasis}`} />
                           : <ReviewRow label="Plan" value={flatPlan ? plan.label : (price.topTier?.tier_name ?? '—')} />}
                         {!onCommission && (
-                          <ReviewRow label="Monthly price" value={`${money(price.monthlyTotal)}/mo × ${months} month${months === 1 ? '' : 's'}`} />
+                          <>
+                            <ReviewRow label="Monthly price" value={`${money(price.monthlyTotal)}/mo`} />
+                            {(price.moduleTotal ?? 0) > 0 && (
+                              <ReviewRow
+                                label="Systems included"
+                                value={(price.modules ?? []).map(m => `${m.label} ${money(m.monthly_price)}`).join(' · ')}
+                              />
+                            )}
+                          </>
                         )}
                         {!onCommission && price.tax?.applied && (
                           <>
@@ -930,43 +945,67 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                         </div>
                       )}
 
-                      {/* Term picker — paying several months upfront holds this
-                          price for the whole term, even if the plan changes. */}
-                      {!onCommission && monthOptions.length > 1 && (
+                      {/* Clinical systems. Bought per month per business and
+                          switched on the moment the payment clears — 0060.
+                          NOT multiplied by consultant headcount: a ward system
+                          is one system whoever is using it. */}
+                      {!onCommission && careModules.length > 0 && (
                         <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>How many months would you like to pay for?</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
+                            Which systems do you want?
+                          </div>
                           <p style={{ fontSize: 13, color: BIZ.muted, margin: '0 0 14px', lineHeight: 1.6 }}>
-                            Start with {plan.min_months} month{plan.min_months === 1 ? '' : 's'} if you prefer — it is entirely your choice.
-                            Your rate is locked for the months you pay now, so a longer term holds {money(price.monthlyTotal)}/mo for longer.
+                            Optional, and each is billed separately on top of your listing.
+                            Whatever you pick is switched on in your dashboard as soon as this payment clears.
                           </p>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {monthOptions.map(m => {
-                              const on = months === m
+                          <div style={{ display: 'grid', gap: 10 }}>
+                            {careModules.map(m => {
+                              const on = modules.includes(m.code)
                               return (
-                                <button key={m} onClick={() => setMonths(m)} style={{
-                                  padding: '9px 14px', borderRadius: 11, cursor: 'pointer', fontFamily: 'inherit',
-                                  fontSize: 14, fontWeight: 700, minWidth: 52,
+                                <label key={m.code} style={{
+                                  display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer',
+                                  padding: '13px 15px', borderRadius: 13,
                                   border: `2px solid ${on ? BIZ.green : '#e9e2d5'}`,
-                                  background: on ? BIZ.green : '#fff',
-                                  color: on ? '#fff' : BIZ.ink,
+                                  background: on ? '#f3faf6' : '#fff',
                                 }}>
-                                  {m}{m === plan.default_months && plan.default_months > plan.min_months ? '★' : ''}
-                                </button>
+                                  <input
+                                    type="checkbox"
+                                    checked={on}
+                                    onChange={() => setModules(prev =>
+                                      prev.includes(m.code) ? prev.filter(c => c !== m.code) : [...prev, m.code])}
+                                    style={{ width: 18, height: 18, marginTop: 2, accentColor: BIZ.green, cursor: 'pointer' }}
+                                  />
+                                  <span style={{ flex: 1 }}>
+                                    <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                                      <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{m.label}</strong>
+                                      <strong style={{ fontSize: 14.5, color: on ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
+                                        {money(m.monthly_price)}/mo
+                                      </strong>
+                                    </span>
+                                    {m.description && (
+                                      <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3, lineHeight: 1.55 }}>
+                                        {m.description}
+                                      </span>
+                                    )}
+                                  </span>
+                                </label>
                               )
                             })}
                           </div>
-                          {/* Spell the arithmetic out. With GST on, months × rate
-                              is the taxable value, not the amount charged — one
-                              "=" across both would be wrong by the tax. */}
-                          <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginTop: 12, lineHeight: 1.7 }}>
-                            {months} month{months === 1 ? '' : 's'} × {money(price.monthlyTotal)} ={' '}
-                            {money((price.monthlyTotal * months))}
+
+                          {/* The arithmetic, spelled out. With GST on, the
+                              monthly total is the taxable value and not the
+                              amount charged — one "=" across both would be
+                              wrong by the tax. */}
+                          <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginTop: 13, lineHeight: 1.7, borderTop: `1px solid ${BIZ.border}`, paddingTop: 11 }}>
+                            Listing {money(price.monthlyTotal - (price.moduleTotal ?? 0))}
+                            {(price.moduleTotal ?? 0) > 0 && <> + systems {money(price.moduleTotal ?? 0)}</>}
+                            {' = '}{money(price.monthlyTotal)} a month
                             {price.tax?.applied && <> + {price.tax.rate}% GST {money(price.tax.taxTotal)}</>}
                             <br />
                             <strong style={{ color: BIZ.ink, fontSize: 15 }}>
-                              {money((price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months))}
-                            </strong> payable today
-                            {plan.default_months > plan.min_months && ` · ★ = best value at ${plan.default_months} months`}
+                              {money((price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal))}
+                            </strong> payable today, then monthly
                           </div>
                         </div>
                       )}

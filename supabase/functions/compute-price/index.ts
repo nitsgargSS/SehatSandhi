@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
 
   let body: {
     pincodes?: unknown; businessId?: unknown; vertical?: unknown
-    months?: unknown; doctorCount?: unknown
+    months?: unknown; doctorCount?: unknown; modules?: unknown
   }
   try {
     body = await req.json()
@@ -51,7 +51,12 @@ Deno.serve(async (req) => {
   try {
     // Hint only, and only while there is no listing to count — see computePrice.
     const doctorCount = Number.isFinite(body.doctorCount) ? Number(body.doctorCount) : null
-    const result = await computePrice(supabase, pincodes, businessId, vertical, months, doctorCount)
+    // Codes only — resolveModules prices them from the database, so the client
+    // can pick WHICH modules but never what they cost.
+    const modules = Array.isArray(body.modules)
+      ? (body.modules as unknown[]).filter((m): m is string => typeof m === 'string')
+      : null
+    const result = await computePrice(supabase, pincodes, businessId, vertical, months, doctorCount, modules)
     return json(result)
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)

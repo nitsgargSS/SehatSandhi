@@ -277,6 +277,32 @@ export const isClinicalRole = (r: RoleLookup): boolean =>
 export const isBusinessRole = (r: RoleLookup): boolean =>
   !r.enforced || r.role === 'owner' || r.role === 'manager'
 
+export interface ModuleAccess {
+  /** Bought OPD AND the term has not lapsed. */
+  opd: boolean
+  /** Bought IPD AND the term has not lapsed. */
+  ipd: boolean
+}
+
+/**
+ * Which clinical systems this business has actually paid for.
+ *
+ * Reads business_modules, which folds the flag together with the term: a
+ * business that stopped paying is not entitled to admit patients this month
+ * however its flags read. Defaults to nothing on any failure — a screen a
+ * paying customer briefly cannot see is a support call, a screen an unpaying
+ * one can see is revenue quietly leaking.
+ */
+export async function getModuleAccess(businessId: string): Promise<ModuleAccess> {
+  const { data, error } = await supabase
+    .from('business_modules')
+    .select('opd_live, ipd_live')
+    .eq('business_id', businessId)
+    .maybeSingle()
+  if (error || !data) return { opd: false, ipd: false }
+  return { opd: Boolean(data.opd_live), ipd: Boolean(data.ipd_live) }
+}
+
 /**
  * Does this database have the patient-records schema (0047 onward)?
  *

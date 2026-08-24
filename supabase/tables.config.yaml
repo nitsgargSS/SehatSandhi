@@ -194,6 +194,14 @@ tables:
     class: isolated
     purgeOrder: 86
 
+  # ── Care modules (0060) ─────────────────────────────────────────────────
+  # What a business can buy. Reference data we set, like pricing_plans — copied
+  # prod→sandbox, never invented by a signup, and a purge must not remove the
+  # catalogue of things for sale.
+  care_modules:
+    class: sync
+    key: [code]
+
   # ── Document retention (0058) ───────────────────────────────────────────
   # Settings, not records. Purged with the business in sandbox: a retention
   # rule for a clinic that no longer exists governs nothing.
@@ -522,6 +530,8 @@ tables:
   discharge_summary_detail: { class: view }
   patient_bill_detail:      { class: view }
   patient_documents_to_purge: { class: view }
+  practitioner_daily_stats: { class: view }
+  business_modules:         { class: view }
   purge_job_history:        { class: view }
   business_bills_outstanding: { class: view }
   opd_board:                { class: view }

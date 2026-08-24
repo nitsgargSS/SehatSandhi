@@ -72,6 +72,16 @@ const ACCOUNTS = [
       working_hours: 'Mon,Tue,Wed,Thu,Fri,Sat 10:00-18:00',
       // Active, so it appears in public listings and the dashboard has data.
       status: 'active',
+      // Both clinical systems switched on WITHOUT a payment, which only ever
+      // happens here. 0060 made OPD and IPD separately bought, so a seed clinic
+      // that has not paid for either shows no Queue, Beds or Patients tab — a
+      // sandbox where the thing you came to test is invisible.
+      //
+      // Deliberately not a one-off UPDATE: these rows are `isolated` and a purge
+      // takes them, so the flags have to be reasserted by the seed or the next
+      // purge quietly removes the EMR from the test environment again.
+      opd_module: true,
+      ipd_module: true,
     },
     practitioner: {
       full_name: '[SEED] Dr. Sandbox Tester',
@@ -240,7 +250,9 @@ for (const acct of ACCOUNTS) {
       await api(`/rest/v1/businesses?id=eq.${businessId}`, {
         method: 'PATCH',
         headers: { Prefer: 'return=minimal' },
-        body: JSON.stringify({ auth_uid: userId }),
+        // Modules re-asserted alongside auth_uid so a business seeded before
+        // 0060 existed picks them up on the next run rather than staying dark.
+        body: JSON.stringify({ auth_uid: userId, opd_module: true, ipd_module: true }),
       })
     }
 
