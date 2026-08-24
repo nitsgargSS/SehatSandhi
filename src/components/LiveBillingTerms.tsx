@@ -39,9 +39,9 @@ export default function LiveBillingTerms({ vertical }: { vertical: VerticalKey }
     // page was the one screen still not asking it.
     const perDoctor = vertical === 'hospital' ? describeDoctorRate(plan) : null
     if (perDoctor) terms.push(perDoctor)
-    if (plan.max_months > plan.min_months) {
-      terms.push(`Pay for ${plan.min_months}–${plan.max_months} months — you pick the term, and your rate is held for whatever you pay`)
-    }
+    // Billing is monthly since 0060, so there is no term to pick and nothing to
+    // say about one. The rate is still held for the month that was paid.
+    terms.push('Billed monthly — cancel by simply not renewing')
   } else {
     terms.push('No monthly listing fee')
   }

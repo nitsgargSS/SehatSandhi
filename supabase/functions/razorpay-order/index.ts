@@ -12,7 +12,8 @@
 // covers it) are rejected here — there is nothing to charge upfront. The plan
 // and the vertical both come from the server, never from the request body.
 //
-// Request:  { pincodes: string[], businessId: string, periodMonths?: number }
+// Request:  { pincodes: string[], businessId: string, periodMonths?: number,
+//             modules?: string[] }   — care_modules codes: 'opd', 'ipd'
 // The amount charged INCLUDES GST when tax_settings has it enabled: the plan
 // price is the taxable value and 18% is added on top (or backed out, for a plan
 // quoted inclusive). The breakdown is stored on the payments row, and
@@ -63,7 +64,7 @@ Deno.serve(async (req) => {
   if (!keyId || !keySecret) return json({ error: 'Razorpay not configured' }, 500)
 
   let body: {
-    pincodes?: unknown; businessId?: unknown; periodMonths?: unknown
+    pincodes?: unknown; businessId?: unknown; periodMonths?: unknown; modules?: unknown
     gstin?: unknown; gstLegalName?: unknown; billingAddress?: unknown
   }
   try {
@@ -75,6 +76,11 @@ Deno.serve(async (req) => {
   const pincodes = Array.isArray(body.pincodes) ? body.pincodes.map(String) : []
   const businessId = typeof body.businessId === 'string' ? body.businessId : null
   const requestedMonths = Number.isFinite(body.periodMonths) ? Number(body.periodMonths) : null
+  // Codes only. computePrice prices them from care_modules, so a tampered body
+  // can choose a different module but not a cheaper one.
+  const requestedModules = Array.isArray(body.modules)
+    ? (body.modules as unknown[]).filter((m): m is string => typeof m === 'string')
+    : []
 
   if (!pincodes.length) return json({ error: 'no pincodes selected' }, 400)
 
@@ -123,7 +129,7 @@ Deno.serve(async (req) => {
   // computePrice clamps the requested months to the plan's min/max.
   let priced
   try {
-    priced = await computePrice(supabase, pincodes, businessId, null, requestedMonths)
+    priced = await computePrice(supabase, pincodes, businessId, null, requestedMonths, null, requestedModules)
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)
   }
@@ -184,6 +190,10 @@ Deno.serve(async (req) => {
       pricing_plan_code: priced.planCode,
       pricing_mode: priced.mode,
       monthly_price: priced.monthlyTotal,
+      // What this payment bought. Read back by fulfilment to raise the flags,
+      // and by the invoice so a document raised today still says what was sold
+      // today even after the business changes its modules.
+      modules: priced.modules.map(m => m.code),
       term_start: isoDate(termStart),
       term_end: isoDate(termEnd),
       taxable_value: priced.tax.taxableValue,

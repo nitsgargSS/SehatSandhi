@@ -29,6 +29,10 @@ export interface PriceResult {
   planLabel: string | null
   mode: PricingMode
 
+  /** Clinical systems bought on top of the listing. Priced per business. */
+  modules: CareModuleLine[]
+  moduleTotal: number
+
   /** Money is always a monthly rate times a term. total = monthlyTotal × months. */
   monthlyTotal: number
   months: number
@@ -112,7 +116,9 @@ export const computePrice = (
   months?: number | null,
   /** Doctors typed into the wizard, before the business exists to count them. */
   doctorCount?: number | null,
-) => callFn<PriceResult>('compute-price', { pincodes, businessId, vertical, months, doctorCount })
+  /** care_modules codes ticked in the wizard. Priced server-side, never here. */
+  modules?: string[] | null,
+) => callFn<PriceResult>('compute-price', { pincodes, businessId, vertical, months, doctorCount, modules })
 
 export interface RazorpayOrder {
   orderId: string
@@ -143,6 +149,35 @@ export interface DraftPractitioner {
   practitioner_id?: string
 }
 
+export interface CareModuleLine {
+  code: string
+  label: string
+  monthly_price: number
+}
+
+/** A module as offered in the wizard, before anything is chosen. */
+export interface CareModule extends CareModuleLine {
+  description: string | null
+}
+
+/**
+ * The systems a business can buy alongside its listing.
+ *
+ * Read straight from care_modules, which is publicly readable — the wizard has
+ * to draw prices before anyone has signed in. The price shown here is only ever
+ * for display: compute-price and razorpay-order both re-read it server-side, so
+ * a tampered response changes the label and never the charge.
+ */
+export async function listCareModules(): Promise<CareModule[]> {
+  const { data, error } = await supabase
+    .from('care_modules')
+    .select('code, label, description, monthly_price')
+    .eq('is_enabled', true)
+    .order('sequence')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as CareModule[]
+}
+
 export interface BuyerGstDetails {
   /** The buyer's own GSTIN, so they can claim the 18% back as input credit. */
   gstin?: string
@@ -151,9 +186,10 @@ export interface BuyerGstDetails {
 }
 
 export const createRazorpayOrder = (
-  pincodes: string[], businessId: string, periodMonths = 1, gst: BuyerGstDetails = {},
+  pincodes: string[], businessId: string, periodMonths = 1,
+  modules: string[] = [], gst: BuyerGstDetails = {},
 ) =>
-  callFn<RazorpayOrder>('razorpay-order', { pincodes, businessId, periodMonths, ...gst })
+  callFn<RazorpayOrder>('razorpay-order', { pincodes, businessId, periodMonths, modules, ...gst })
 
 export const verifyRazorpayPayment = (args: {
   orderId: string

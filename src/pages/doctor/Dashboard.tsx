@@ -9,7 +9,7 @@ import { registerPractitioner, attachPractitioner, detachPractitioner } from '..
 import Patients from './Patients'
 import Wards from './Wards'
 import Queue from './Queue'
-import { getMyRole, isBusinessRole, isClinicalRole, hasPatientRecords, RoleLookup } from '../../lib/identityApi'
+import { getMyRole, isBusinessRole, isClinicalRole, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess } from '../../lib/identityApi'
 import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -73,6 +73,11 @@ export default function DoctorDashboard() {
   // are built and shipped; production may not have run 0047-0054 yet, and a tab
   // that opens onto a 404 is worse than a tab that is not there.
   const [emr, setEmr] = useState(false)
+
+  // Which clinical systems this business has PAID for (0060). Separate question
+  // from `emr`, which asks whether the schema exists at all: a database can have
+  // the tables while this particular clinic has bought neither module.
+  const [access, setAccess] = useState<ModuleAccess>({ opd: false, ipd: false })
 
   // ── Bills ──
   // Until now the only copy of an invoice was the WhatsApp link sent once at
@@ -460,6 +465,7 @@ export default function DoctorDashboard() {
           // looks like a bug and reads like a demotion.
           getMyRole(doc.id).then(setRole).catch(() => setRole({ role: null, enforced: true })),
           hasPatientRecords().then(setEmr).catch(() => setEmr(false)),
+          getModuleAccess(doc.id).then(setAccess).catch(() => setAccess({ opd: false, ipd: false })),
           // Any business that has doctors has a roster now. It used to be
           // hospitals only, because a clinic's doctors had nowhere to live.
           hasPractitioners(doc.vertical as VerticalKey)
@@ -723,19 +729,22 @@ export default function DoctorDashboard() {
       // Above Appointments on purpose: the line is what reception works all
       // day, the booking list is what they check occasionally.
       // `emr` because the queue reads opd_board, which arrives with 0054.
-      ...(emr ? [{ id: 'queue', label: 'Queue', icon: <ListOrdered className="w-4 h-4" /> }] : []),
+      ...(emr && access.opd ? [{ id: 'queue', label: 'Queue', icon: <ListOrdered className="w-4 h-4" /> }] : []),
       { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-4 h-4" /> },
     ] : []),
     // Every vertical keeps records of who it has seen — a lab has patients as
     // much as a clinic does — so this one is not gated on appointments. It IS
     // gated on the schema being there: this ships ahead of 0047-0054, and until
     // those run the tab would open onto a PostgREST 404.
-    ...(emr ? [
+    // Either system gives you a patient record — OPD writes visits into it and
+    // IPD writes admissions. Neither bought, no record.
+    ...(emr && (access.opd || access.ipd) ? [
       { id: 'patients', label: 'Patients', icon: <UserSearch className="w-4 h-4" /> },
     ] : []),
     // Only where somebody is actually admitted. A pharmacy has no beds, and a
     // single-doctor clinic that does day care has no use for a ward board.
-    ...(booksAppointments && emr ? [
+    // Beds are the IPD system, not a function of taking appointments.
+    ...(emr && access.ipd ? [
       { id: 'beds', label: 'Beds', icon: <BedDouble className="w-4 h-4" /> },
     ] : []),
     // Hours and branches matter to a pharmacy and an ambulance service too —
@@ -1328,17 +1337,17 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ QUEUE — today's OPD line ══════════ */}
-        {tab === 'queue' && emr && doctor && (
+        {tab === 'queue' && emr && access.opd && doctor && (
           <Queue businessId={doctor.id} practitionerId={myPractitionerId} />
         )}
 
         {/* ══════════ BEDS — the ward board ══════════ */}
-        {tab === 'beds' && emr && doctor && (
+        {tab === 'beds' && emr && access.ipd && doctor && (
           <Wards businessId={doctor.id} practitionerId={myPractitionerId} />
         )}
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
-        {tab === 'patients' && emr && doctor && (
+        {tab === 'patients' && emr && (access.opd || access.ipd) && doctor && (
           <Patients businessId={doctor.id} practitionerId={myPractitionerId} />
         )}
 

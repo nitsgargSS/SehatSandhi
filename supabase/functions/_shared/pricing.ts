@@ -23,6 +23,12 @@ import { applyHeadcount, headcountFor } from './headcount.ts'
 
 export type PricingMode = 'flat_all_pincodes' | 'flat_per_pincode' | 'pincode_tiers'
 
+export interface ModuleLine {
+  code: string
+  label: string
+  monthly_price: number
+}
+
 export interface PriceLine {
   pin_code: string
   area_name: string
@@ -64,6 +70,11 @@ export interface PriceResult {
   planCode: string | null
   planLabel: string | null
   mode: PricingMode
+
+  // Clinical systems bought alongside the listing. Priced per business per
+  // month and NOT multiplied by consultant headcount — see moduleTotal below.
+  modules: ModuleLine[]
+  moduleTotal: number
 
   // money — always a monthly rate times a number of months
   monthlyTotal: number
@@ -228,6 +239,38 @@ export function clampMonths(plan: PricingPlan, requested?: number | null): numbe
   return Math.min(plan.max_months, Math.max(plan.min_months, n))
 }
 
+/**
+ * Turn the codes a buyer ticked into priced lines.
+ *
+ * The PRICE comes from the database every time, never from the request — the
+ * client sends codes and nothing else, so a tampered payload can select a
+ * different module but never a different amount. Unknown codes and disabled
+ * ones fall out silently, which is what should happen when a module is retired
+ * while somebody has the wizard open.
+ */
+export async function resolveModules(
+  supabase: SupabaseClient,
+  requested?: string[] | null,
+): Promise<ModuleLine[]> {
+  const codes = Array.from(new Set(
+    (requested ?? []).filter((c): c is string => typeof c === 'string' && c.length < 40),
+  ))
+  if (!codes.length) return []
+
+  const { data } = await supabase
+    .from('care_modules')
+    .select('code, label, monthly_price')
+    .in('code', codes)
+    .eq('is_enabled', true)
+    .order('sequence')
+
+  return (data ?? []).map((m: { code: string; label: string; monthly_price: number }) => ({
+    code: m.code,
+    label: m.label,
+    monthly_price: Number(m.monthly_price ?? 0),
+  }))
+}
+
 export async function computePrice(
   supabase: SupabaseClient,
   rawPincodes: string[],
@@ -235,13 +278,16 @@ export async function computePrice(
   verticalHint?: string | null,
   requestedMonths?: number | null,
   doctorCountHint?: number | null,
+  /** care_modules codes the buyer ticked. Unknown or disabled codes are ignored. */
+  requestedModules?: string[] | null,
 ): Promise<PriceResult> {
-  const [plan, vb, taxSettings, recipientState, resolvedCount] = await Promise.all([
+  const [plan, vb, taxSettings, recipientState, resolvedCount, moduleLines] = await Promise.all([
     resolveActivePlan(supabase),
     resolveVerticalBilling(supabase, businessId, verticalHint),
     resolveTaxSettings(supabase),
     resolveRecipientState(supabase, businessId),
     resolveDoctorCount(supabase, businessId),
+    resolveModules(supabase, requestedModules),
   ])
 
   // With a listing, the headcount comes from the database and the client cannot
@@ -413,6 +459,14 @@ export async function computePrice(
     if (customMonthly === null) monthlyTotal = applyHeadcount(monthlyTotal, hc)
   }
 
+  // AFTER applyHeadcount, and that ordering is the whole point. A ward system
+  // is one system whether three consultants use it or nine, so multiplying it
+  // by headcount would quote a nine-doctor hospital ninety thousand a month for
+  // IPD. Added to a negotiated customMonthly too: that agreement was about
+  // coverage, and a module bought later is a separate thing being bought.
+  const moduleTotal = moduleLines.reduce((sum, m) => sum + m.monthly_price, 0)
+  monthlyTotal += moduleTotal
+
   // Tax applies to the whole term, not one month, since the term is what gets
   // charged and invoiced in a single transaction.
   const termTotal = monthlyTotal * months
@@ -426,6 +480,8 @@ export async function computePrice(
     residents,
     topTier: topTier ? { tier_number: topTier.tier_number, tier_name: topTier.tier_name } : null,
     breakdown,
+    modules: moduleLines,
+    moduleTotal,
     monthlyTotal,
     total: termTotal,
     tax,

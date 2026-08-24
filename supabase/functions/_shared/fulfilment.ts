@@ -39,7 +39,7 @@ export async function fulfilPayment(
 
   const { data: existing } = await supabase
     .from('payments')
-    .select('id, status, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end')
+    .select('id, status, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules')
     .eq(paymentRowId ? 'id' : 'razorpay_order_id', paymentRowId ?? orderId)
     .maybeSingle()
 
@@ -55,7 +55,7 @@ export async function fulfilPayment(
     id: string; status: string; business_id: string | null
     pricing_plan_code: string | null; pricing_mode: string | null
     monthly_price: number | null; period_months: number | null
-    term_start: string | null; term_end: string | null
+    term_start: string | null; term_end: string | null; modules: string[] | null
   }
   const alreadyPaid = pay.status === 'paid'
 
@@ -74,7 +74,10 @@ export async function fulfilPayment(
   // never re-prices a business mid-term. At term_end they are quoted whatever is
   // active then — see subscription_renewals_due.
   if (pay.business_id) {
-    await supabase.from('businesses').update({
+    const bought = pay.modules ?? []
+
+    // deno-lint-ignore no-explicit-any
+    const patch: Record<string, any> = {
       status: 'active',
       pricing_plan_code: pay.pricing_plan_code,
       locked_monthly_price: pay.monthly_price,
@@ -83,7 +86,17 @@ export async function fulfilPayment(
       term_start: pay.term_start,
       term_end: pay.term_end,
       locked_at: new Date().toISOString(),
-    }).eq('id', pay.business_id)
+    }
+
+    // Raised, never lowered. A business that adds IPD mid-term pays for IPD
+    // alone, and that payment must not read as "OPD was not bought" and switch
+    // off a system somebody is seeing patients with. Losing a module is
+    // governed by term_end, which lapses everything together, or by an admin
+    // acting deliberately.
+    if (bought.includes('opd')) patch.opd_module = true
+    if (bought.includes('ipd')) patch.ipd_module = true
+
+    await supabase.from('businesses').update(patch).eq('id', pay.business_id)
   }
 
   // After the payment is marked paid and the listing activated, deliberately: if
