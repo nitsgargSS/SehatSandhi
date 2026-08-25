@@ -97,7 +97,7 @@ export default function DoctorProfile() {
       setDoctor(data)
       // A profile open is the signal a business cares most about, and the
       // denominator for "seen 240 times, opened 12".
-      if (data?.id) track('doctor_view', { doctorId: data.id, speciality: data.speciality })
+      if (data?.id) track('doctor_view', { practitionerId: data.id, speciality: data.speciality })
 
       // Everywhere this doctor works, primary first. This used to be the
       // branches of one listing; it is now the businesses they are attached to,
@@ -305,7 +305,7 @@ export default function DoctorProfile() {
             {/* Book button */}
             <a href={`https://wa.me/${WA_NUMBER}?text=${waMsg}`}
                target="_blank" rel="noreferrer"
-               onClick={() => track('whatsapp_click', { doctorId: doctor.id, speciality: doctor.speciality })}
+               onClick={() => track('whatsapp_click', { practitionerId: doctor.id, businessId: posts[0]?.business_id ?? null, speciality: doctor.speciality })}
                className="btn-teal w-full justify-center py-4 text-base shadow-lg shadow-teal-100">
               {t('profilePage.bookButton')}
             </a>

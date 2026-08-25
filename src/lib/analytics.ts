@@ -21,7 +21,11 @@ export type SiteEventType =
 
 interface EventFields {
   path?: string
-  doctorId?: string | null
+  /** The listing that was seen. What a business's own dashboard counts. */
+  businessId?: string | null
+  /** The doctor an event was about, where it was about a person rather than a
+   *  place — a profile view, a WhatsApp tap from their page. */
+  practitionerId?: string | null
   speciality?: string | null
   pinCode?: string | null
 }
@@ -83,7 +87,8 @@ export function track(type: SiteEventType, fields: EventFields = {}): void {
       // Path without the query string: a search page's query can contain what
       // someone typed, and the structured columns already carry what we need.
       path: (fields.path ?? window.location.pathname).slice(0, 200),
-      business_id: fields.doctorId ?? null,
+      business_id: fields.businessId ?? null,
+      practitioner_id: fields.practitionerId ?? null,
       speciality: fields.speciality ?? null,
       pin_code: fields.pinCode ?? null,
       referrer_host: referrerHost(),
@@ -106,7 +111,7 @@ const seenThisSession = new Set<string>()
 
 export function trackImpressions(
   doctorIds: string[],
-  fields: Omit<EventFields, 'doctorId'> = {},
+  fields: Omit<EventFields, 'businessId'> = {},
 ): void {
   if (optedOut() || !doctorIds.length) return
   const path = fields.path ?? window.location.pathname

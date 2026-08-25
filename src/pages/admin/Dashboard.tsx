@@ -330,7 +330,7 @@ export default function AdminDashboard() {
     // vertical_billing is read-only here: the rates are the authority the edge
     // functions price against, so they change in the SQL editor, not behind an
     // admin password.
-    const [doctorsRes, campsRes, couponsRes, billingRes, planRes] = await Promise.all([
+    const [bizRes, campsRes, couponsRes, billingRes, planRes] = await Promise.all([
       supabase.from('businesses').select('*').order('created_at', { ascending: false }),
       supabase.from('camps_offers').select('*, businesses(name)').order('created_at', { ascending: false }),
       supabase.from('discount_codes').select('*').order('created_at', { ascending: false }),
@@ -338,8 +338,8 @@ export default function AdminDashboard() {
       supabase.from('active_pricing_plan').select('*').maybeSingle(),
     ])
 
-    warn('doctors', doctorsRes.error)
-    setDoctors((doctorsRes.data as BusinessRow[]) || [])
+    warn('businesses', bizRes.error)
+    setDoctors((bizRes.data as BusinessRow[]) || [])
     warn('camps_offers', campsRes.error)
     setCamps((campsRes.data as any) || [])
     warn('discount_codes', couponsRes.error)
@@ -542,11 +542,6 @@ export default function AdminDashboard() {
     return matchTab && matchSearch
   })
 
-  // Organisations are no longer how a hospital holds its doctors — that is what
-  // business_practitioners does. These lists are kept empty rather than removed
-  // so the org panel still renders while it is being retired.
-  const orgLinkedDoctors: BusinessRow[] = []
-  const unlinkedMatches: BusinessRow[] = []
 
   // Rendered by both the desktop table and the mobile cards. Defined once: the
   // approve/reject buttons are the whole point of this screen, and two copies

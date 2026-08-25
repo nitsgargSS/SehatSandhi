@@ -65,9 +65,10 @@ export interface BusinessPractitioner {
   sort_order: number
 }
 
-// Where a doctor actually sits. A listing may have several; exactly one is
-// primary, and that is where any booking that does not name a clinic lands —
+// Where a business actually operates. It may have several branches; exactly one
+// is primary, and that is where any booking that does not name one lands —
 // including every booking the WhatsApp bot makes until it starts asking.
+// Belongs to the business, not the doctor: a branch is the establishment's.
 export interface PracticeLocation {
   id: string
   business_id: string
@@ -87,6 +88,9 @@ export interface Appointment {
   patient_name: string
   patient_age: number
   business_id: string
+  /** Which doctor the patient is seeing. Null when the booking is with the
+   *  business itself — a pharmacy order, a lab test. */
+  practitioner_id?: string | null
   slot_datetime: string
   // 'no_show' is distinct from 'cancelled': nobody cancelled, the patient just
   // didn't arrive. Conflating them hides the thing worth measuring.

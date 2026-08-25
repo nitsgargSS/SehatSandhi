@@ -12,6 +12,9 @@ export interface AvailabilityTemplate {
   id: string
   business_id: string
   location_id?: string | null
+  /** Whose hours these are. Null means the business's own opening hours — a
+   *  pharmacy, or a clinic that has not split hours per doctor yet. */
+  business_practitioner_id?: string | null
   day_of_week: number // 0=Sunday ... 6=Saturday, matches JS Date.getDay()
   start_time: string  // "10:00:00"
   end_time: string    // "18:00:00"
