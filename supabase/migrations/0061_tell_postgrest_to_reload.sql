@@ -1,0 +1,24 @@
+-- ============================================================================
+-- Sehatsandhi — tell PostgREST the schema changed
+--
+-- Run AFTER 0060. Safe to re-run.
+--
+-- PostgREST caches the database schema and reloads it only on this notification
+-- or a restart. So 0044 added site_events.practitioner_id, the column existed,
+-- and the API went on rejecting it:
+--
+--   PGRST204: Could not find the 'practitioner_id' column of 'site_events'
+--             in the schema cache
+--
+-- which reads exactly like a migration that never ran. The table has the
+-- column; the API insists it does not.
+--
+-- This belongs at the end of any migration that adds or renames a column.
+-- 0037 needed it too and got away without it only because the functions deploy
+-- restarted the service afterwards.
+--
+-- It is its own migration rather than an edit to 0044 because 0044 has already
+-- been applied, and the runner is right to refuse a rewritten history.
+-- ============================================================================
+
+notify pgrst, 'reload schema';

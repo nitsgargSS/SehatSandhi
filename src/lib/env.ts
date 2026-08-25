@@ -43,8 +43,21 @@ const CONFIG: BackendConfig = {
  * Deliberately not derived from the hostname: a preview URL, a custom domain or
  * a local `vite preview` would each need their own special case, and getting one
  * wrong shows test tooling to the public.
+ *
+ * The comparison is written WITHOUT String(). That wrapper was here until it was
+ * measured, and it defeated the point of the flag: Vite inlines
+ * import.meta.env.VITE_IS_STAGING as a literal, and esbuild will fold
+ * `"false" === "true"` to false and drop the branch — but it will not fold
+ * `String("false") === "true"`, so every staging-gated branch shipped in the
+ * production bundle. Inert, because the runtime check still returned false, but
+ * present and readable. Keep it a bare comparison.
+ *
+ * Note the limit: this only eliminates INLINE branches, `{IS_STAGING && <X/>}`.
+ * A component that guards itself with `if (!IS_STAGING) return null` is still
+ * bundled and simply renders nothing — SandboxAutofill and StagingBanner are
+ * both that shape.
  */
-export const IS_STAGING = String(import.meta.env.VITE_IS_STAGING) === 'true'
+export const IS_STAGING = import.meta.env.VITE_IS_STAGING === 'true'
 
 /** Token for the sandbox-purge function. Only meaningful on staging. */
 export const SANDBOX_PURGE_TOKEN = (import.meta.env.VITE_SANDBOX_PURGE_TOKEN as string) || ''

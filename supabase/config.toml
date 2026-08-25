@@ -1,0 +1,33 @@
+# Supabase CLI config.
+#
+# This exists so `supabase functions deploy` knows which project it is talking
+# to. Without it the CLI asks for --project-ref every time, and the ref is not
+# written down anywhere obvious — it had to be recovered from the URL inside
+# .env.production.local, which is gitignored. That is a bad place for the one
+# identifier a deploy cannot proceed without.
+#
+# A project ref is not a secret: it is the public subdomain of the API URL that
+# every browser hitting the site already sees. The keys are the secrets, and
+# those stay in .env.supabase.
+#
+#   prod     ctxkkqqtasegoowuqbmi   (.env.production.local)
+#   sandbox  xmsycnlztqmyvtcyxkmg   (.env.sandbox)
+#
+# project_id is the DEFAULT target. It points at sandbox deliberately: an
+# unqualified `supabase functions deploy` should not be able to reach
+# production by accident. Deploying to prod is an explicit act:
+#
+#   npx supabase functions deploy --project-ref ctxkkqqtasegoowuqbmi
+#
+# Note that functions and migrations deploy separately, and the schema change
+# in 0037 means old function code cannot talk to the new tables. Deploy them
+# together or checkout and login break in the gap between.
+
+project_id = "xmsycnlztqmyvtcyxkmg"
+
+# Deliberately no [functions.*] blocks. These functions have been deployed with
+# whatever verify_jwt the CLI defaulted to since they were written, and asserting
+# values here that were never verified against the live project would change
+# their auth on the next deploy — silently, and on the payment path. If that
+# needs pinning down, read each function's own auth handling first and add the
+# blocks with intent.

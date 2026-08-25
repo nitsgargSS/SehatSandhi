@@ -47,6 +47,9 @@ export default function DoctorDashboard() {
   // A failed lookup used to be indistinguishable from having no listing, so a
   // paying customer was told to go and register again.
   const [loadError, setLoadError] = useState(false)
+  // Shown only on the no-listing screen. Someone stuck there needs to know
+  // WHICH account they are stuck as — that is usually the whole explanation.
+  const [signedInAs, setSignedInAs] = useState('')
   const [appointments, setAppointments] = useState<Appointment[]>([])
   // Appointment actions. Cancelling asks for a reason and rescheduling shows the
   // doctor's real open slots, so neither is a blind click.
@@ -395,6 +398,7 @@ export default function DoctorDashboard() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { window.location.href = '/business/login'; return }
+      setSignedInAs(user.email ?? user.phone ?? '')
 
       // practitioners_read_own (0038) matches on auth_uid, so this resolves for
       // a doctor and returns nothing for an owner who does not see patients.
@@ -678,11 +682,32 @@ export default function DoctorDashboard() {
       </div>
     </div>
   )
+  // Signed in, but this login owns no listing. Genuinely right for someone who
+  // has not registered yet — and a dead end for everyone else, which is who
+  // actually lands here: a stale session from a half-finished signup, or the
+  // wrong account of two. Telling those people to go and register is how you
+  // get a second listing for a clinic that already has one.
+  //
+  // (No session at all never reaches this screen; the loader redirects to
+  // /business/login before any of this renders.)
   if (!doctor) return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="text-gray-500 text-center text-sm">
-        {t('dashboardPage.noProfileFound')}{' '}
-        <a href="/business/register" className="text-teal-600 hover:underline">{t('dashboardPage.registerHereLink')}</a>
+      <div className="text-center text-sm max-w-xs">
+        <p className="text-gray-500">
+          {t('dashboardPage.noProfileFound')}{' '}
+          <a href="/business/register" className="text-teal-600 hover:underline">{t('dashboardPage.registerHereLink')}</a>
+        </p>
+        {signedInAs && (
+          <p className="text-gray-400 text-xs mt-3">
+            {t('dashboardPage.noProfileSignedInAs')} <strong>{signedInAs}</strong>
+          </p>
+        )}
+        <button
+          onClick={async () => { await supabase.auth.signOut(); window.location.href = '/business/login' }}
+          className="text-teal-600 hover:underline text-xs mt-2"
+        >
+          {t('dashboardPage.noProfileSwitch')}
+        </button>
       </div>
     </div>
   )

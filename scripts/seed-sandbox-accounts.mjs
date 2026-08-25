@@ -106,6 +106,44 @@ const ACCOUNTS = [
       capacity: 4,
     },
   },
+  {
+    // The PAID clinic, and the contrast with the one above is the point of it.
+    //
+    // [SEED] Sandbox Test Clinic has its module flags set by hand and no
+    // term_end, which entitlement treats as never expiring. That is a fixture,
+    // not a customer. This one starts with both modules OFF and gets them by
+    // going through fulfilPayment at the end of this script — real payment row,
+    // real invoice, real term_end a month out, real locked_monthly_price.
+    //
+    // A hospital on purpose: IPD is what hospitals buy, and it exercises the
+    // headcount rule that multiplies the listing fee and must NOT multiply the
+    // module fee.
+    email: 'sandbox-paid@sehatsandhi.test',
+    role: 'doctor',
+    business: {
+      name: '[SEED] Paid Multi-Speciality',
+      vertical: 'hospital',
+      address: '44, Civil Lines, Yamunanagar, Haryana',
+      pin_codes: ['135001'],
+      phone: '9000000005',
+      working_hours: 'Mon,Tue,Wed,Thu,Fri,Sat 09:00-20:00',
+      status: 'active',
+      // Deliberately NOT set here. The payment sets them, which is the whole
+      // reason this account exists.
+    },
+    practitioner: {
+      full_name: '[SEED] Dr. Paid Consultant',
+      speciality: 'GEN',
+      qualification: 'MBBS, MD',
+      reg_number: 'DMC/R/2020/00003',
+      phone: '9000000005',
+      status: 'active',
+    },
+    consultation_fee: 800,
+    hours: { days: [1, 2, 3, 4, 5, 6], start: '09:00', end: '20:00', slot_minutes: 15, capacity: 4 },
+    // Picked up by the payment phase below.
+    buysModules: ['opd', 'ipd'],
+  },
   { email: 'sandbox-admin@sehatsandhi.test', role: 'admin', business: null },
 ]
 
@@ -454,6 +492,53 @@ if (!seedBiz.length) {
   }
 }
 
+// ── The paid state ──────────────────────────────────────────────────────────
+//
+// Driven through sandbox-simulate-payment rather than written directly, so the
+// fixture cannot drift from what fulfilment actually produces — and so the Bills
+// tab has a real invoice in it. Needs that function deployed and the purge
+// token; without either this warns and leaves the clinic unpaid, which is a
+// worse fixture but not a broken script.
+for (const acct of ACCOUNTS.filter(a => a.buysModules?.length)) {
+  process.stdout.write(`      ${acct.email.padEnd(36)} `)
+  try {
+    const found = await api(
+      `/rest/v1/businesses?select=id,term_end&name=eq.${encodeURIComponent(acct.business.name)}&limit=1`)
+    if (!found.length) { console.log('✗ business missing'); failures++; continue }
+
+    // Already paid and still in term — do not stack another payment on every
+    // run. A seed that charges again each time it is run is a seed nobody dares
+    // re-run.
+    const liveUntil = found[0].term_end ? new Date(found[0].term_end) : null
+    if (liveUntil && liveUntil > new Date()) {
+      console.log(`already paid to ${found[0].term_end}`)
+      continue
+    }
+
+    const token = process.env.VITE_SANDBOX_PURGE_TOKEN
+    if (!token) { console.log('⚠ VITE_SANDBOX_PURGE_TOKEN not set — left unpaid'); continue }
+
+    const res = await fetch(`${url}/functions/v1/sandbox-simulate-payment`, {
+      method: 'POST',
+      headers: { ...headers },
+      body: JSON.stringify({
+        token,
+        confirm: 'SIMULATE PAYMENT',
+        businessId: found[0].id,
+        modules: acct.buysModules,
+      }),
+    })
+    const out = await res.json().catch(() => ({}))
+    if (!res.ok || !out.ok) {
+      console.log(`⚠ not paid: ${out.error ?? res.status} — deploy sandbox-simulate-payment first`)
+      continue
+    }
+    console.log(`paid ${out.modules.join('+')} · ${out.monthlyTotal}/mo · invoice ${out.invoiceNumber ?? '—'}`)
+  } catch (e) {
+    console.log(`⚠ not paid: ${e.message}`)
+  }
+}
+
 if (failures) {
   console.error(`\n  ${failures} problem(s) while seeding.\n`)
   process.exit(1)
@@ -465,6 +550,7 @@ console.log('    sandbox-doctor@      OWNER of the seed clinic (not a "doctor" f
 console.log('    sandbox-staffdoc@    doctor    — clinical yes, business no')
 console.log('    sandbox-reception@   receptionist — queue/beds/money, NO clinical record')
 console.log('    sandbox-manager@     manager   — business yes, clinical no')
+console.log('    sandbox-paid@        owner of a PAID hospital — modules bought, real invoice')
 console.log('    sandbox-admin@       admin panel')
 console.log('')
 console.log('    Test 0057 with sandbox-reception@. Testing it as sandbox-doctor@')

@@ -147,44 +147,6 @@ export function generateBusiness(vertical: VerticalKey): BusinessFill {
   }
 }
 
-export interface DoctorFill {
-  form: {
-    name: string; qualification: string; speciality: string; reg_number: string
-    clinic_name: string; address: string; consultation_fee: string
-    phone: string; email: string; password: string
-  }
-  runId: number
-}
-
-/**
- * Doctor registration (/doctor).
- *
- * speciality and qualification come from the same arrays the <select> options
- * are built from, so the values always match an existing option. working_days,
- * from_time and to_time are left alone — their defaults are already valid, and
- * overwriting them would only make the fill noisier.
- */
-export function generateDoctor(): DoctorFill {
-  const runId = newRunId()
-  const name = personName()
-  const speciality = pick(SPECIALITIES).id
-  return {
-    runId,
-    form: {
-      name: `[TEST] Dr. ${name} ${runId}`,
-      qualification: qualificationFor(speciality),
-      speciality,
-      reg_number: medicalRegNumber(),
-      clinic_name: tag(`${pick(SURNAMES)} ${pick(BUSINESS_SUFFIX.clinic)}`, runId),
-      address: address(),
-      consultation_fee: String(pick([200, 300, 400, 500, 600])),
-      phone: testPhone(),
-      email: testEmail(runId),
-      password: TEST_PASSWORD,
-    },
-  }
-}
-
 export type PartnerType = 'pharmacy' | 'lab' | 'insurance' | 'ambulance'
 
 export interface PartnerFill {
