@@ -174,7 +174,7 @@ export default function DoctorDashboard() {
     if (tab !== 'reports' || !doctor) return
     let cancelled = false
     setReportLoading(true)
-    supabase.rpc('sehat_business_report', { p_doctor_id: doctor.id, p_days: reportDays })
+    supabase.rpc('sehat_business_report', { p_business_id: doctor.id, p_days: reportDays })
       .then(({ data }) => {
         if (cancelled) return
         setReport((data as ReportRow[]) || [])
@@ -742,6 +742,13 @@ export default function DoctorDashboard() {
     ...(businessRole ? [
       { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
       { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
+    ] : []),
+    // Reports sits with the clinicians, not the business cluster. How the
+    // practice is actually doing — reach, bookings, conversion — is for the
+    // owner and the doctors, and deliberately not for reception or an
+    // administrative manager. 0065 enforces the same rule in the RPC, so
+    // hiding the tab is not the only thing stopping them.
+    ...(isClinician ? [
       { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
     ] : []),
   ]

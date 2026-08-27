@@ -609,3 +609,110 @@ export async function registerPatient(businessId: string, p: NewPatient): Promis
   if (error) throw new Error(error.message)
   return data as string
 }
+
+// ── What this speciality actually examines ──────────────────────────────────
+//
+// A visit carries chief_complaint, diagnosis and advice, all free text, and
+// vitals has fixed columns for BP and weight. That is a general physician's
+// consultation and nobody else's. An eye doctor's finding IS the refraction;
+// a dentist's is a chart of thirty-two teeth.
+//
+// Fields are defined per speciality in the database (0066), so a new speciality
+// is rows rather than a release. `sites` is what makes one mechanism carry a
+// pair, a chart and a scalar: 'R'/'L' for eyes, FDI numbers for teeth, null for
+// everything else.
+
+export interface SpecialityField {
+  id: string
+  speciality: string
+  section: string | null
+  code: string
+  label: string
+  kind: 'number' | 'text' | 'select' | 'boolean'
+  unit: string | null
+  options: string[] | null
+  /** null = one value. Otherwise the field repeats once per site. */
+  sites: string[] | null
+  min_value: number | null
+  max_value: number | null
+  help: string | null
+  sort_order: number
+}
+
+export interface Finding {
+  field_code: string
+  site: string | null
+  value_num: number | null
+  value_text: string | null
+  unit: string | null
+  label?: string | null
+  section?: string | null
+  visit_date?: string
+}
+
+/** The examination form for one speciality. Empty for specialities not yet defined. */
+export async function getSpecialityFields(speciality: string): Promise<SpecialityField[]> {
+  const { data, error } = await supabase
+    .from('speciality_fields').select('*')
+    .eq('speciality', speciality).eq('is_active', true)
+    .order('sort_order')
+  oops(error)
+  return (data ?? []) as SpecialityField[]
+}
+
+export async function getFindings(visitId: string): Promise<Finding[]> {
+  const { data, error } = await supabase
+    .from('visit_findings_detail').select('*')
+    .eq('visit_id', visitId).order('sort_order')
+  oops(error)
+  return (data ?? []) as Finding[]
+}
+
+/**
+ * The whole examination in one call.
+ *
+ * Replaces the visit's findings wholesale rather than diffing: a refraction is
+ * eight fields across two eyes, and a half-saved one is worse than none.
+ * Blanks are dropped server-side, so an unexamined tooth stays distinguishable
+ * from a sound one.
+ */
+export async function saveFindings(
+  visitId: string, speciality: string,
+  findings: { code: string; site?: string | null; num?: string | null; text?: string | null }[],
+  recordedBy?: string | null,
+): Promise<number> {
+  const { data, error } = await supabase.rpc('sehat_save_findings', {
+    p_visit_id: visitId,
+    p_speciality: speciality,
+    p_findings: findings,
+    p_recorded_by: recordedBy ?? null,
+  })
+  oops(error)
+  return Number(data ?? 0)
+}
+
+/** One field's history for a patient — what a refraction is actually for. */
+export async function getFindingSeries(
+  memberId: string, fieldCode: string,
+): Promise<Finding[]> {
+  const { data, error } = await supabase
+    .from('visit_findings_detail').select('*')
+    .eq('patient_member_id', memberId).eq('field_code', fieldCode)
+    .order('recorded_at', { ascending: false }).limit(20)
+  oops(error)
+  return (data ?? []) as Finding[]
+}
+
+/**
+ * Which speciality this doctor practises.
+ *
+ * Read from the practitioner rather than the clinic: a hospital has an eye
+ * surgeon and a dentist, and the examination form has to follow whoever is
+ * holding the consultation, not the building they are in.
+ */
+export async function getPractitionerSpeciality(practitionerId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('practitioners').select('speciality').eq('id', practitionerId).maybeSingle()
+  if (error) return null
+  return (data?.speciality as string) ?? null
+}

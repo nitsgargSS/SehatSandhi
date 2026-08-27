@@ -194,6 +194,20 @@ tables:
     class: isolated
     purgeOrder: 86
 
+  # ── Speciality examination fields (0066) ────────────────────────────────
+  # The catalogue is reference data we author, like pricing_plans — a purge
+  # must not empty the list of what an eye doctor examines.
+  speciality_fields:
+    class: sync
+    key: [speciality, code]
+
+  # The findings themselves are patient data.
+  # Before patient_visits (160), which it hangs off, and before practitioners
+  # (120) — recorded_by is SET NULL so it is convention, not necessity.
+  visit_findings:
+    class: isolated
+    purgeOrder: 91
+
   # ── Care modules (0060) ─────────────────────────────────────────────────
   # What a business can buy. Reference data we set, like pricing_plans — copied
   # prod→sandbox, never invented by a signup, and a purge must not remove the
@@ -532,6 +546,7 @@ tables:
   patient_documents_to_purge: { class: view }
   practitioner_daily_stats: { class: view }
   business_modules:         { class: view }
+  visit_findings_detail:    { class: view }
   purge_job_history:        { class: view }
   business_bills_outstanding: { class: view }
   opd_board:                { class: view }
