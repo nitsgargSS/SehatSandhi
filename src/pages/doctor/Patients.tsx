@@ -5,7 +5,7 @@ import { Spinner } from '../../components/Loading'
 import {
   searchPatients, getPatientSummary, getVisits, getVitals, getAllergies,
   getConditions, getMedications, addVisit, addVital, addAllergy, addCondition,
-  addMedication, stopMedication, grantRecordingConsent, withdrawRecordingConsent,
+  addMedication, stopMedication, registerPatient, grantRecordingConsent, withdrawRecordingConsent,
   logAccess, canRecord, startMicrophone, uploadConsultationAudio,
   requestTranscription, requestMedicineSuggestions, discardConsultationAudio,
   startRecording, stopRecording, confirmTranscript, getRecording,
@@ -89,6 +89,7 @@ export default function Patients({ businessId, practitionerId }: {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PatientSearchResult[]>([])
   const [searching, setSearching] = useState(false)
+  const [registering, setRegistering] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [error, setError] = useState('')
 
@@ -126,8 +127,26 @@ export default function Patients({ businessId, practitionerId }: {
             style={{ ...input, border: 'none', padding: '4px 0', fontSize: 15 }}
           />
           {searching && <Spinner />}
+          <button style={{ ...btn(true), fontSize: 12.5, flex: '0 0 auto' }}
+            onClick={() => { setRegistering(true); setSelected(null) }}>
+            <Plus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />
+            New patient
+          </button>
         </div>
       </div>
+
+      {registering && (
+        <RegisterPatient
+          businessId={businessId}
+          // Prefill from whatever they were searching for: reception usually
+          // types the name or number, finds nothing, and then registers exactly
+          // that person. Retyping it is the sort of small friction that gets a
+          // patient recorded twice under two spellings.
+          initial={query.trim()}
+          onCancel={() => setRegistering(false)}
+          onDone={id => { setRegistering(false); setQuery(''); setSelected(id) }}
+        />
+      )}
 
       {error && (
         <div style={{ ...card, borderColor: '#f0c9c9', background: '#fdf4f4', color: '#8a2b2b', fontSize: 13 }}>
@@ -169,8 +188,12 @@ export default function Patients({ businessId, practitionerId }: {
 
       {!selected && query.trim().length >= 2 && !searching && results.length === 0 && (
         <div style={{ ...card, textAlign: 'center', color: BIZ.muted, fontSize: 13.5 }}>
-          Nobody on your list matches that. A patient appears here once they book,
-          scan your reception QR, or are added at the front desk.
+          Nobody on your list matches that.
+          <div style={{ marginTop: 9 }}>
+            <button style={btn(true)} onClick={() => setRegistering(true)}>
+              Register “{query.trim()}” as a new patient
+            </button>
+          </div>
         </div>
       )}
 
@@ -182,6 +205,125 @@ export default function Patients({ businessId, practitionerId }: {
           onClose={() => setSelected(null)}
         />
       )}
+    </div>
+  )
+}
+
+// ── Registering a walk-in ───────────────────────────────────────────────────
+//
+// The front desk's job, and reception can do it: 0057 gates the medical record,
+// not the act of writing somebody's name down.
+//
+// Relation is on the form and not buried, because it is the field that decides
+// whether this is a new person or the same one again. One handset serves a
+// household — 0047 split patient_members out of patients precisely so a mother
+// and her three children on one number are four records rather than one merged
+// chart. Getting this wrong is how an allergy ends up on the wrong person.
+
+const RELATIONS: [string, string][] = [
+  ['self', 'The patient owns this number'],
+  ['spouse', 'Spouse'], ['child', 'Child'], ['parent', 'Parent'],
+  ['sibling', 'Sibling'], ['other', 'Someone else'],
+]
+
+function RegisterPatient({ businessId, initial, onCancel, onDone }: {
+  businessId: string
+  initial: string
+  onCancel: () => void
+  onDone: (memberId: string) => void
+}) {
+  // A search that found nothing is usually either a name or a number. Put it
+  // in whichever field it looks like.
+  const digits = initial.replace(/\D/g, '')
+  const [form, setForm] = useState({
+    fullName: digits.length >= 10 ? '' : initial,
+    phone: digits.length >= 10 ? digits.slice(-10) : '',
+    relation: 'self',
+    gender: '',
+    age: '',
+    bloodGroup: '',
+    mrn: '',
+  })
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const save = async () => {
+    setBusy(true); setErr('')
+    try {
+      const id = await registerPatient(businessId, {
+        fullName: form.fullName.trim(),
+        phone: form.phone.trim(),
+        relation: form.relation,
+        gender: form.gender || undefined,
+        ageYears: form.age ? Number(form.age) : null,
+        bloodGroup: form.bloodGroup || undefined,
+        mrn: form.mrn.trim() || undefined,
+      })
+      onDone(id)
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  const ready = form.fullName.trim().length > 1 && form.phone.replace(/\D/g, '').length >= 10
+
+  return (
+    <div style={card}>
+      <div style={{ ...label, marginBottom: 10 }}>New patient</div>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ flex: '2 1 220px' }}><div style={label}>Full name</div>
+            <input style={input} value={form.fullName} autoFocus
+              onChange={e => setForm({ ...form, fullName: e.target.value })} /></div>
+          <div style={{ flex: '1 1 150px' }}><div style={label}>Mobile number</div>
+            <input style={input} inputMode="numeric" placeholder="10 digits"
+              value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+        </div>
+
+        <div><div style={label}>Whose number is this?</div>
+          <select style={input} value={form.relation}
+            onChange={e => setForm({ ...form, relation: e.target.value })}>
+            {RELATIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 4 }}>
+            One number often covers a whole family. Each person gets their own
+            record, so the right history and the right allergies come up.
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ flex: '0 1 110px' }}><div style={label}>Age</div>
+            <input style={input} inputMode="numeric" value={form.age}
+              onChange={e => setForm({ ...form, age: e.target.value })} /></div>
+          <div style={{ flex: '0 1 130px' }}><div style={label}>Gender</div>
+            <select style={input} value={form.gender}
+              onChange={e => setForm({ ...form, gender: e.target.value })}>
+              <option value="">—</option><option value="male">Male</option>
+              <option value="female">Female</option><option value="other">Other</option>
+            </select></div>
+          <div style={{ flex: '0 1 120px' }}><div style={label}>Blood group</div>
+            <select style={input} value={form.bloodGroup}
+              onChange={e => setForm({ ...form, bloodGroup: e.target.value })}>
+              <option value="">—</option>
+              {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(g => <option key={g} value={g}>{g}</option>)}
+            </select></div>
+          <div style={{ flex: '1 1 140px' }}><div style={label}>File number (optional)</div>
+            <input style={input} value={form.mrn} placeholder="your own numbering"
+              onChange={e => setForm({ ...form, mrn: e.target.value })} /></div>
+        </div>
+
+        {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
+
+        <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>
+          Registering somebody already on your list is safe — the same name on
+          the same number is treated as them coming back, not as a new record.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={btn(true)} disabled={!ready || busy} onClick={save}>
+            {busy ? 'Registering…' : 'Register and open'}
+          </button>
+          <button style={btn()} onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -560,3 +560,52 @@ export function logAccess(
     detail: detail ?? null,
   }).then(() => undefined, () => undefined)
 }
+
+// ── Registering a walk-in ───────────────────────────────────────────────────
+//
+// Until 0063 a patient could only exist by having booked: the appointment
+// trigger was the single way in, and a clinic could not write down somebody who
+// walked through the door. In Indian OPD that is most of the day.
+//
+// One RPC rather than three inserts, because registering one person touches
+// patients, patient_members and business_patients, and getting it wrong
+// produces a second record for someone already on the list — so the allergy
+// noted last month is not on the chart the doctor opens today.
+
+export interface NewPatient {
+  /** 10 digits as typed at the counter; the server normalises to 91XXXXXXXXXX. */
+  phone: string
+  fullName: string
+  /** Who they are to the phone's owner. 'self' for the owner themselves. */
+  relation?: string
+  gender?: string
+  ageYears?: number | null
+  dateOfBirth?: string | null
+  bloodGroup?: string | null
+  /** The clinic's own file number, if they keep one. */
+  mrn?: string
+}
+
+/**
+ * Register a patient at the front desk. Returns their patient_member_id.
+ *
+ * Safe to call for somebody already on the list: same phone AND same name is
+ * treated as the same person returning, and only blank fields are filled in —
+ * a doctor's earlier entry outranks a hurried one at the counter.
+ */
+export async function registerPatient(businessId: string, p: NewPatient): Promise<string> {
+  const { data, error } = await supabase.rpc('sehat_register_patient', {
+    p_business: businessId,
+    p_phone: p.phone,
+    p_full_name: p.fullName,
+    p_relation: p.relation || 'self',
+    p_gender: p.gender || null,
+    p_age_years: p.ageYears ?? null,
+    p_date_of_birth: p.dateOfBirth || null,
+    p_blood_group: p.bloodGroup || null,
+    p_mrn: p.mrn || null,
+    p_source: 'walk_in',
+  })
+  if (error) throw new Error(error.message)
+  return data as string
+}
