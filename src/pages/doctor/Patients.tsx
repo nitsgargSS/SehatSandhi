@@ -15,7 +15,8 @@ import {
 import {
   getAdmissions, admitPatient, dischargePatient, getOccupancy,
   getAdmissionNotes, addAdmissionNote,
-  Admission, AdmissionNote, OccupancyRow,
+  getBedHistory, correctBedStay, undoBedMove,
+  Admission, AdmissionNote, OccupancyRow, BedStay,
 } from '../../lib/admissionsApi'
 import {
   issuePrescription, getPrescriptions, cancelPrescription, sendPrescription,
@@ -1149,6 +1150,7 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange 
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [openNotes, setOpenNotes] = useState<string | null>(null)
+  const [openBeds, setOpenBeds] = useState<string | null>(null)
 
   const current = stays.find(s => s.status === 'admitted')
 
@@ -1273,9 +1275,18 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange 
             onClick={() => setOpenNotes(openNotes === a.id ? null : a.id)}>
             {openNotes === a.id ? 'Hide ward notes' : 'Ward notes'}
           </button>
+          <button style={{ ...btn(), fontSize: 12, marginTop: 10, marginLeft: 7 }}
+            onClick={() => setOpenBeds(openBeds === a.id ? null : a.id)}>
+            {openBeds === a.id ? 'Hide bed history' : 'Bed history'}
+          </button>
 
           {openNotes === a.id && (
             <WardNotes admissionId={a.id} businessId={businessId} practitionerId={practitionerId} />
+          )}
+
+          {openBeds === a.id && (
+            <BedHistory admissionId={a.id} businessId={businessId}
+              practitionerId={practitionerId} onChange={onChange} />
           )}
 
           {/* The document they leave with. Only once the stay has ended —
@@ -1512,6 +1523,176 @@ function DischargeSummarySection({ admission, memberId, businessId, practitioner
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Which beds, and when ────────────────────────────────────────────────────
+//
+// A stay is a series of periods, one per bed occupied, and the bill multiplies
+// each by its own nightly rate. So this is not a log — it is the arithmetic,
+// and a period recorded wrongly is money charged wrongly.
+//
+// Corrections go through 0062's functions rather than an edit, because the
+// table is SELECT-only on purpose: an unvalidated UPDATE here could put a
+// patient in two beds at once, or start a stay before they were admitted, and
+// either would bill them for it. The functions check, then re-post the charges.
+//
+// Everything locks once the charges are on an issued bill. That is deliberate
+// and it is the same rule the rest of billing follows: a document that has been
+// handed to a patient or an insurer is changed by cancelling it, not by editing
+// what it was built from.
+
+function BedHistory({ admissionId, businessId, practitionerId, onChange }: {
+  admissionId: string
+  businessId: string
+  practitionerId?: string | null
+  onChange: () => void
+}) {
+  const [stays, setStays] = useState<BedStay[]>([])
+  const [beds, setBeds] = useState<OccupancyRow[]>([])
+  const [editing, setEditing] = useState<string | null>(null)
+  const [form, setForm] = useState({ from: '', to: '', bedId: '', reason: '' })
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => {
+    getBedHistory(admissionId).then(setStays).catch(e => setErr((e as Error).message))
+  }, [admissionId])
+  useEffect(load, [load])
+  useEffect(() => {
+    if (!editing) return
+    getOccupancy(businessId).then(rows => setBeds(rows.filter(r => !r.occupied))).catch(() => setBeds([]))
+  }, [editing, businessId])
+
+  // datetime-local wants 'YYYY-MM-DDTHH:mm' in local time; a timestamptz from
+  // the database is UTC with an offset, and slicing it would shift by 5h30.
+  const forInput = (iso: string | null) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const billed = stays.find(s => s.billed_on)?.billed_on ?? null
+
+  const openEdit = (s: BedStay) => {
+    setEditing(s.id); setErr('')
+    setForm({ from: forInput(s.from_at), to: forInput(s.to_at), bedId: '', reason: '' })
+  }
+
+  const save = async (s: BedStay) => {
+    setBusy(true); setErr('')
+    try {
+      await correctBedStay(s.id, form.reason.trim(), {
+        // Only send what changed. The function treats null as "leave it", and
+        // restating an unchanged value is how you alter it by accident.
+        fromAt: form.from && form.from !== forInput(s.from_at) ? new Date(form.from).toISOString() : null,
+        toAt: form.to && form.to !== forInput(s.to_at) ? new Date(form.to).toISOString() : null,
+        bedId: form.bedId || null,
+      }, practitionerId)
+      setEditing(null); load(); onChange()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ marginTop: 11, borderTop: `1px solid ${BIZ.border}`, paddingTop: 11 }}>
+      <div style={{ ...label, marginBottom: 7 }}>Bed history</div>
+
+      {billed && (
+        <div style={{ fontSize: 12.5, color: '#8a5a00', marginBottom: 9 }}>
+          These charges are on bill <strong>{billed}</strong>, so the record is locked.
+          Cancel that bill to correct it.
+        </div>
+      )}
+
+      {stays.length === 0 && (
+        <div style={{ fontSize: 12.5, color: BIZ.muted }}>No bed recorded for this stay.</div>
+      )}
+
+      {stays.map((s, i) => (
+        <div key={s.id} style={{ padding: '8px 0', borderBottom: `1px solid ${BIZ.border}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.ink }}>
+                {[s.ward_name, s.bed_label && `bed ${s.bed_label}`].filter(Boolean).join(' / ') || 'Bed'}
+                {s.current && (
+                  <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 7, color: BIZ.green }}>current</span>
+                )}
+              </div>
+              <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
+                {when(s.from_at)} → {s.to_at ? when(s.to_at) : 'now'}
+                {' · '}{s.days} day{s.days === 1 ? '' : 's'}
+                {s.daily_charge_snapshot != null && ` × ${moneyExact(s.daily_charge_snapshot)}`}
+                {s.corrected_at && ' · corrected'}
+              </div>
+              {s.correction_reason && (
+                <div style={{ fontSize: 11.5, color: BIZ.muted, marginTop: 2 }}>
+                  {s.correction_reason}
+                </div>
+              )}
+            </div>
+            {!billed && editing !== s.id && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button style={{ ...btn(), fontSize: 12 }} onClick={() => openEdit(s)}>Correct</button>
+                {/* Only a move can be undone. The first period is the admission
+                    itself — undoing that is a discharge, not a correction. */}
+                {i > 0 && (
+                  <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
+                    onClick={async () => {
+                      const why = window.prompt('Why is this move being undone? (it never happened)')
+                      if (!why?.trim()) return
+                      setBusy(true); setErr('')
+                      try { await undoBedMove(s.id, why.trim(), practitionerId); load(); onChange() }
+                      catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+                    }}>Undo move</button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {editing === s.id && (
+            <div style={{ display: 'grid', gap: 8, marginTop: 9 }}>
+              <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                <div><div style={label}>Moved in</div>
+                  <input type="datetime-local" style={input} value={form.from}
+                    onChange={e => setForm({ ...form, from: e.target.value })} /></div>
+                {s.to_at && (
+                  <div><div style={label}>Moved out</div>
+                    <input type="datetime-local" style={input} value={form.to}
+                      onChange={e => setForm({ ...form, to: e.target.value })} /></div>
+                )}
+              </div>
+              <div><div style={label}>Wrong bed? Move this period to</div>
+                <select style={input} value={form.bedId}
+                  onChange={e => setForm({ ...form, bedId: e.target.value })}>
+                  <option value="">Leave as {s.ward_name} / {s.bed_label}</option>
+                  {beds.map(b => (
+                    <option key={b.bed_id} value={b.bed_id}>{b.ward_name} / bed {b.bed_label}</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 4 }}>
+                  The nightly rate follows the bed — this re-prices the period.
+                </div>
+              </div>
+              <div><div style={label}>Why</div>
+                <input style={input} placeholder="transfer recorded two days late"
+                  value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} /></div>
+              <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>
+                Saving re-posts the bed charges for this stay.
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={btn(true)} disabled={busy || !form.reason.trim()} onClick={() => save(s)}>
+                  {busy ? 'Saving…' : 'Save correction'}
+                </button>
+                <button style={btn()} onClick={() => { setEditing(null); setErr('') }}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {err && <div style={{ fontSize: 12.5, color: '#8a2b2b', marginTop: 8 }}>{err}</div>}
     </div>
   )
 }
