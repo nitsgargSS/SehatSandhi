@@ -20,6 +20,7 @@ import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from
 // that hands it out is a screen that hands out the ability to change the GSTIN.
 const ROSTER_ROLES: [string, string, string][] = [
   ['doctor',       'Doctor',       'Sees patients, prescribes, reads the full record'],
+  ['nurse',        'Nurse',        'Charts the ward: gives medicines, records vitals. Cannot prescribe'],
   ['receptionist', 'Reception',    'Queue, beds and billing — no medical record'],
   ['manager',      'Manager',      'Listing, invoices and reports — no medical record'],
 ]

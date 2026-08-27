@@ -300,3 +300,174 @@ export async function undoBedMove(stayId: string, reason: string, correctedBy?: 
   })
   oops(error)
 }
+
+// ── The drug chart ──────────────────────────────────────────────────────────
+//
+// In OPD a prescription is a slip the patient carries away. In IPD it is a
+// chart the nurse works from every shift, and prescribed is not the same fact
+// as administered — the gap between them is where harm lives, so they are two
+// tables and two calls.
+//
+// A doctor orders; a NURSE administers. 0067 added the role for exactly this,
+// because until then a nurse had to be given 'doctor', which means allowed to
+// prescribe.
+
+export type DoseStatus = 'due' | 'given' | 'missed' | 'refused' | 'withheld' | 'omitted' | 'self_administered'
+
+export interface MedicationOrder {
+  id: string
+  admission_id: string
+  drug_name: string
+  strength: string | null
+  form: string | null
+  route: string
+  dose_text: string
+  frequency_code: string
+  times: string[]
+  prn: boolean
+  prn_indication: string | null
+  max_per_day: number | null
+  start_at: string
+  stop_at: string | null
+  instructions: string | null
+  status: 'active' | 'stopped' | 'completed'
+  stop_reason: string | null
+  allergy_override: string | null
+}
+
+/** One scheduled dose: what is due, and what happened to it. */
+export interface DueDose {
+  order_id: string
+  drug_name: string
+  strength: string | null
+  dose_text: string
+  route: string
+  frequency_code: string
+  instructions: string | null
+  due_at: string
+  administration_id: string | null
+  given_at: string | null
+  dose_given: string | null
+  reason: string | null
+  slot_status: DoseStatus
+}
+
+export interface AllergyWarning {
+  substance: string
+  severity: string | null
+  reaction: string | null
+}
+
+export async function getMedicationOrders(admissionId: string): Promise<MedicationOrder[]> {
+  const { data, error } = await supabase
+    .from('admission_medication_orders').select('*')
+    .eq('admission_id', admissionId)
+    .order('status').order('ordered_at', { ascending: false })
+  oops(error)
+  return (data ?? []) as MedicationOrder[]
+}
+
+/** The chart itself — scheduled doses a few days either side of now. */
+export async function getDueDoses(admissionId: string): Promise<DueDose[]> {
+  const { data, error } = await supabase
+    .from('medication_due').select('*')
+    .eq('admission_id', admissionId).order('due_at')
+  oops(error)
+  return (data ?? []) as DueDose[]
+}
+
+/**
+ * Anything recorded against this patient that looks like the drug being
+ * ordered. WARNS — it never blocks. There are real reasons to give a drug
+ * somebody once reacted to, and the decision is the prescriber's; what the
+ * system owes is that they saw it, which is why the order carries the override.
+ */
+export async function checkAllergy(memberId: string, drug: string): Promise<AllergyWarning[]> {
+  const { data, error } = await supabase.rpc('sehat_allergy_warning', {
+    p_member: memberId, p_drug: drug,
+  })
+  if (error) return []
+  return (data ?? []) as AllergyWarning[]
+}
+
+export interface NewMedicationOrder {
+  drugName: string
+  doseText: string
+  frequencyCode?: string
+  times?: string[] | null
+  route?: string
+  strength?: string
+  form?: string
+  prn?: boolean
+  prnIndication?: string
+  maxPerDay?: number | null
+  instructions?: string
+  /** Set when the prescriber saw an allergy warning and went ahead. */
+  allergyOverride?: string | null
+}
+
+export async function orderMedication(
+  admissionId: string, o: NewMedicationOrder, orderedBy?: string | null,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('sehat_order_medication', {
+    p_admission_id: admissionId,
+    p_drug_name: o.drugName,
+    p_dose_text: o.doseText,
+    p_frequency_code: o.frequencyCode ?? 'BD',
+    p_times: o.times ?? null,
+    p_route: o.route ?? 'oral',
+    p_strength: o.strength || null,
+    p_form: o.form || null,
+    p_prn: o.prn ?? false,
+    p_prn_indication: o.prnIndication || null,
+    p_max_per_day: o.maxPerDay ?? null,
+    p_instructions: o.instructions || null,
+    p_ordered_by: orderedBy ?? null,
+    p_allergy_override: o.allergyOverride || null,
+  })
+  oops(error)
+  return data as string
+}
+
+// Named for the ward, not for OPD: patientsApi.stopMedication ends a long-term
+// medication on someone's record; this ends an inpatient order and with it the
+// remaining slots on the chart. Two different acts, so two different names.
+export async function stopDrugOrder(orderId: string, reason: string, by?: string | null) {
+  const { error } = await supabase.rpc('sehat_stop_medication', {
+    p_order_id: orderId, p_reason: reason, p_stopped_by: by ?? null,
+  })
+  oops(error)
+}
+
+/** The nursing act. A dose not given needs a reason, enforced server-side. */
+export async function recordDose(args: {
+  orderId: string
+  status: 'given' | 'refused' | 'withheld' | 'omitted' | 'self_administered'
+  dueAt?: string | null
+  doseGiven?: string
+  reason?: string
+  givenBy?: string | null
+  witnessedBy?: string | null
+  notes?: string
+}): Promise<string> {
+  const { data, error } = await supabase.rpc('sehat_record_administration', {
+    p_order_id: args.orderId,
+    p_status: args.status,
+    p_due_at: args.dueAt ?? null,
+    p_dose_given: args.doseGiven || null,
+    p_reason: args.reason || null,
+    p_given_by: args.givenBy ?? null,
+    p_witnessed_by: args.witnessedBy ?? null,
+    p_notes: args.notes || null,
+  })
+  oops(error)
+  return data as string
+}
+
+/** Struck through, never erased — the same as a line through a paper chart. */
+export async function voidDose(id: string, reason: string, by?: string | null) {
+  const { error } = await supabase.rpc('sehat_void_administration', {
+    p_id: id, p_reason: reason, p_voided_by: by ?? null,
+  })
+  oops(error)
+}
