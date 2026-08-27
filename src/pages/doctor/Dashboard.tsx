@@ -11,6 +11,18 @@ import Wards from './Wards'
 import Queue from './Queue'
 import { getMyRole, isBusinessRole, isClinicalRole, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess } from '../../lib/identityApi'
 import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
+
+// What a person does at this clinic. The affiliation carries it, not the login,
+// because the same doctor can be a consultant here and the owner elsewhere —
+// and it is what 0057 reads to decide who sees the medical record.
+//
+// 'owner' is not offered. It is granted by signing the clinic up, and a screen
+// that hands it out is a screen that hands out the ability to change the GSTIN.
+const ROSTER_ROLES: [string, string, string][] = [
+  ['doctor',       'Doctor',       'Sees patients, prescribes, reads the full record'],
+  ['receptionist', 'Reception',    'Queue, beds and billing — no medical record'],
+  ['manager',      'Manager',      'Listing, invoices and reports — no medical record'],
+]
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
@@ -201,6 +213,9 @@ export default function DoctorDashboard() {
     practitioners: {
       id: string; full_name: string; speciality: string | null
       qualification: string | null; reg_number: string | null; status: string
+      // Read so the roster can say who cannot sign in. It is the only thing
+      // that gets somebody a login — clinic-otp matches on it.
+      phone: string | null
     } | null
   }
   const [roster, setRoster] = useState<RosterRow[]>([])
@@ -211,7 +226,7 @@ export default function DoctorDashboard() {
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
   const [showAddDoc, setShowAddDoc] = useState(false)
-  const [docForm, setDocForm] = useState({ name: '', speciality: 'GEN', qualification: '', phone: '' })
+  const [docForm, setDocForm] = useState({ name: '', speciality: 'GEN', qualification: '', phone: '', role: 'doctor' })
   interface PlanTerms {
     doctor_billing: string
     monthly_price: number | null
@@ -222,7 +237,7 @@ export default function DoctorDashboard() {
 
   const loadRoster = async (businessId: string) => {
     const { data } = await supabase.from('business_practitioners')
-      .select('*, practitioners(id, full_name, speciality, qualification, reg_number, status)')
+      .select('*, practitioners(id, full_name, speciality, qualification, reg_number, status, phone)')
       .eq('business_id', businessId)
       .order('sort_order')
     setRoster((data as RosterRow[]) || [])
@@ -250,10 +265,10 @@ export default function DoctorDashboard() {
       await attachPractitioner({
         businessId: doctor.id,
         practitionerId,
-        role: 'doctor',
+        role: docForm.role as 'owner' | 'doctor' | 'receptionist' | 'manager',
         consultationFee: 0,
       })
-      setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '' })
+      setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', role: 'doctor' })
       setShowAddDoc(false)
       await loadRoster(doctor.id)
     } catch (e) {
@@ -1570,16 +1585,17 @@ export default function DoctorDashboard() {
             {hasPractitioners(myVertical) && (
               <div className="card shadow-sm">
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-                  <h3 className="font-bold text-navy-700">Your doctors</h3>
+                  <h3 className="font-bold text-navy-700">Your team</h3>
                   {!showAddDoc && (
                     <button onClick={() => setShowAddDoc(true)} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
-                      <Plus className="w-4 h-4" /> Add doctor
+                      <Plus className="w-4 h-4" /> Add person
                     </button>
                   )}
                 </div>
                 <p className="text-sm text-gray-500 mb-3">
-                  Each doctor gets their own profile and appointment calendar. A new one is checked by our
-                  team before going live, the same as any listing.
+                  Doctors get their own profile and appointment calendar, and are checked by our team
+                  before going live. Reception and managers do not appear publicly — they are here so
+                  they can sign in, and what they can see is set by the role you give them.
                 </p>
 
                 {/* What the roster costs, stated where it is changed rather than
@@ -1596,26 +1612,62 @@ export default function DoctorDashboard() {
 
                 {showAddDoc && (
                   <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <input className="input-field text-sm" placeholder="Doctor's name"
-                        value={docForm.name} onChange={e => setDocForm(f => ({ ...f, name: e.target.value }))} />
-                      <select className="input-field text-sm" value={docForm.speciality}
-                        onChange={e => setDocForm(f => ({ ...f, speciality: e.target.value }))}>
-                        {SPECIALITIES.map(sp => <option key={sp.id} value={sp.id}>{sp.en}</option>)}
-                      </select>
-                      <input className="input-field text-sm" placeholder="Qualification, e.g. MD"
-                        value={docForm.qualification} onChange={e => setDocForm(f => ({ ...f, qualification: e.target.value }))} />
-                      <input className="input-field text-sm" placeholder="Phone (optional)"
-                        value={docForm.phone} onChange={e => setDocForm(f => ({ ...f, phone: e.target.value }))} />
+                    {/* Role first, because it changes what the rest of the form
+                        should even ask. A receptionist has no speciality and no
+                        qualification; asking for them implies they are a doctor
+                        and makes the medical register search below nonsense. */}
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 mb-1 block">What do they do here?</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {ROSTER_ROLES.map(([value, label, blurb]) => {
+                          const on = docForm.role === value
+                          return (
+                            <button key={value} type="button"
+                              onClick={() => setDocForm(f => ({ ...f, role: value }))}
+                              className={`text-left rounded-xl border-2 px-3 py-2 flex-1 min-w-[150px] ${on ? 'border-teal-500 bg-teal-50' : 'border-gray-200 bg-white'}`}>
+                              <span className="block text-sm font-bold text-navy-700">{label}</span>
+                              <span className="block text-[11px] text-gray-500 leading-snug mt-0.5">{blurb}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                    {marginalCost > 0 && (
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input className="input-field text-sm" placeholder="Full name"
+                        value={docForm.name} onChange={e => setDocForm(f => ({ ...f, name: e.target.value }))} />
+                      <input className="input-field text-sm" placeholder="Mobile number *" inputMode="numeric"
+                        value={docForm.phone} onChange={e => setDocForm(f => ({ ...f, phone: e.target.value }))} />
+                      {docForm.role === 'doctor' && (
+                        <>
+                          <select className="input-field text-sm" value={docForm.speciality}
+                            onChange={e => setDocForm(f => ({ ...f, speciality: e.target.value }))}>
+                            {SPECIALITIES.map(sp => <option key={sp.id} value={sp.id}>{sp.en}</option>)}
+                          </select>
+                          <input className="input-field text-sm" placeholder="Qualification, e.g. MD"
+                            value={docForm.qualification} onChange={e => setDocForm(f => ({ ...f, qualification: e.target.value }))} />
+                        </>
+                      )}
+                    </div>
+
+                    {/* The number is how they sign in — clinic-otp matches a login
+                        against practitioners.phone and sets auth_uid on the way
+                        through. Without one this is a name on a list that can
+                        never be used, which is what the signup wizard was
+                        producing until it was fixed the same way. */}
+                    <p className="text-xs text-gray-500">
+                      They sign in at <strong>/business/login</strong> with this number — nobody
+                      sends them a password. Without it they cannot get in at all.
+                    </p>
+                    {marginalCost > 0 && docForm.role === 'doctor' && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
                         Adding this doctor takes you to {billableDoctors + 1}, which adds
                         {money(marginalCost)}/month from your next renewal.
                       </p>
                     )}
                     <div className="flex gap-2">
-                      <button onClick={() => addRosterDoctor()} disabled={rosterBusy || !docForm.name.trim()}
+                      <button onClick={() => addRosterDoctor()}
+                        disabled={rosterBusy || !docForm.name.trim() || docForm.phone.replace(/\D/g, '').length < 10}
                         className="btn-teal text-sm py-2 px-5 disabled:opacity-50">
                         {rosterBusy ? 'Adding…' : 'Add'}
                       </button>
@@ -1627,7 +1679,7 @@ export default function DoctorDashboard() {
 
                 <div className="space-y-2">
                   {roster.length === 0 && (
-                    <p className="text-sm text-gray-400 py-2">No doctors added yet.</p>
+                    <p className="text-sm text-gray-400 py-2">Nobody added yet.</p>
                   )}
                   {roster.map(d => {
                     const suspended = d.status === 'suspended'
@@ -1650,12 +1702,42 @@ export default function DoctorDashboard() {
                             )}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {SPECIALITIES.find(sp => sp.id === person?.speciality)?.en ?? person?.speciality ?? 'Doctor'}
-                            {person?.qualification ? ` · ${person.qualification}` : ''}
-                            {d.consultation_fee > 0 ? ` · ₹${d.consultation_fee} here` : ''}
+                            {d.role === 'doctor'
+                              ? (SPECIALITIES.find(sp => sp.id === person?.speciality)?.en ?? person?.speciality ?? 'Doctor')
+                              : (ROSTER_ROLES.find(r => r[0] === d.role)?.[1] ?? d.role)}
+                            {d.role === 'doctor' && person?.qualification ? ` · ${person.qualification}` : ''}
+                            {d.role === 'doctor' && d.consultation_fee > 0 ? ` · ₹${d.consultation_fee} here` : ''}
                             {suspended ? ' · not on your bill' : ''}
+                            {/* Whether they can actually get in. A roster entry with
+                                no number is a name nobody can use, and that was
+                                invisible until it was too late. */}
+                            {!person?.phone && ' · no number — cannot sign in'}
                           </div>
                         </div>
+                        {!suspended && (
+                          <select
+                            className="input-field text-xs py-1.5 px-2 w-auto"
+                            value={d.role ?? 'doctor'}
+                            disabled={rosterBusy}
+                            onChange={async e => {
+                              if (!doctor) return
+                              setRosterBusy(true); setRosterErr('')
+                              try {
+                                // attach upserts and sets the role, so changing it
+                                // is the same call as adding — no separate RPC.
+                                await attachPractitioner({
+                                  businessId: doctor.id,
+                                  practitionerId: d.practitioner_id,
+                                  role: e.target.value as 'owner' | 'doctor' | 'receptionist' | 'manager',
+                                  consultationFee: d.consultation_fee ?? 0,
+                                })
+                                await loadRoster(doctor.id)
+                              } catch (err) { setRosterErr((err as Error).message) }
+                              finally { setRosterBusy(false) }
+                            }}>
+                            {ROSTER_ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                          </select>
+                        )}
                         <button disabled={rosterBusy}
                           onClick={() => setRosterStatus(d.practitioner_id, suspended ? 'active' : 'suspended')}
                           className={`text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50 ${
