@@ -85,7 +85,10 @@ const ACCOUNTS = [
     },
     practitioner: {
       full_name: '[SEED] Dr. Sandbox Tester',
-      speciality: 'GEN',
+      // EYE so the speciality examination form (0066) has something to render.
+      // GEN has no fields defined, which is correct but means the feature is
+      // invisible in a fresh sandbox and reads as broken.
+      speciality: 'EYE',
       qualification: 'MBBS',
       reg_number: 'DMC/R/2020/00001',
       phone: '9000000001',
@@ -311,6 +314,20 @@ for (const acct of ACCOUNTS) {
       })
       practitionerId = rows[0].id
       console.log('      ↳ practitioner created')
+    }
+
+    // The doctor gets the SAME login as the business when they share a number,
+    // which is what clinic-otp does on first sign-in and what a solo practice
+    // actually is. Without it the owner resolves to no practitioner, and both
+    // prescribing and the examination form refuse them — the owner is not
+    // automatically a doctor, and should not be.
+    if (userId && acct.practitioner?.phone === acct.business.phone) {
+      await api(`/rest/v1/practitioners?id=eq.${practitionerId}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ auth_uid: userId }),
+      })
+      console.log('      ↳ doctor shares the number — linked to the same login')
     }
 
     let affiliationId
