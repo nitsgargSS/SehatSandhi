@@ -323,6 +323,29 @@ for (const acct of ACCOUNTS) {
     continue
   }
 
+  // The admin account carries role:'admin' and no business. Nothing used to read
+  // that flag, so the login was created and then granted nothing: sehat_is_admin()
+  // answered false for it and the whole admin panel was unreachable in sandbox.
+  // admin_users is the only thing that predicate looks at.
+  if (acct.role === 'admin' && userId) {
+    try {
+      const already = await api(`/rest/v1/admin_users?select=id&auth_uid=eq.${userId}&limit=1`)
+      if (already.length) {
+        console.log('      ↳ already an admin')
+      } else {
+        await api('/rest/v1/admin_users', {
+          method: 'POST',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ auth_uid: userId, role: 'owner', is_active: true }),
+        })
+        console.log('      ↳ granted admin')
+      }
+    } catch (e) {
+      console.log(`      ↳ ✗ could not grant admin: ${e.message}`)
+      failures++
+    }
+  }
+
   if (!acct.business) continue
 
   // The listing, the person, and the affiliation — so /doctor/dashboard has

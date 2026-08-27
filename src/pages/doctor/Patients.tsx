@@ -1603,7 +1603,10 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange,
                 {a.attending_name && ` · ${a.attending_name}`}
               </div>
             </div>
-            {a.status === 'admitted' && (
+            {/* Clinical only since 0071. Discharging writes a discharge
+                diagnosis and a condition on discharge, which are findings, not
+                desk work — the front desk keeps the bed, not the reason. */}
+            {clinical && a.status === 'admitted' && (
               <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
                 onClick={async () => {
                   const summary = window.prompt('Discharge summary (optional):')
