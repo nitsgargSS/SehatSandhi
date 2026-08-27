@@ -513,6 +513,116 @@ if (appt && !skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+sec('doublebooking')
+// 0072: a doctor booked at one business is busy at every other one.
+//
+// This whole section runs inside a transaction that is rolled back, because it
+// has to publish opening hours at two businesses to have any windows to offer,
+// and those hours are not something the suite should leave behind.
+//
+// The scenario is the real one: Dr. Sunita Mehra is affiliated to both a clinic
+// on 30-minute slots and a hospital on 15-minute ones. A 10:00 booking at the
+// clinic occupies 10:00-10:30, so the hospital must stop offering both 10:00
+// and 10:15 — the overlap, not just the equal minute.
+const MULTI = (await raw(`
+  select distinct bp.practitioner_id as id, p.full_name
+    from business_practitioners bp
+    join practitioners p on p.id = bp.practitioner_id
+   where exists (select 1 from business_practitioners x
+                  where x.practitioner_id = bp.practitioner_id and x.business_id <> bp.business_id)
+   limit 1`))[0]
+
+if (!MULTI && !skip()) {
+  record('a practitioner affiliated to two businesses exists to test with', 'warn',
+    'no multi-clinic doctor in this database — the cross-clinic checks did not run')
+}
+
+if (MULTI && !skip()) {
+  const twoBiz = await raw(`select business_id from business_practitioners
+     where practitioner_id=$1 order by business_id limit 2`, [MULTI.id])
+  const [HOME, AWAY] = twoBiz.map(r => r.business_id)
+
+  await db.query('begin')
+  try {
+    const day = (await db.query(`select ((now() at time zone 'Asia/Kolkata')::date + 3) d,
+        extract(dow from ((now() at time zone 'Asia/Kolkata')::date + 3))::int dow`)).rows[0]
+    // 30-minute slots where the booking lands, 15-minute where it must block.
+    for (const [biz, mins] of [[HOME, 30], [AWAY, 15]]) {
+      await db.query(`insert into availability (business_id, day_of_week, start_time, end_time,
+          slot_duration_minutes, slot_capacity, is_active, location_id)
+        values ($1,$2,'10:00','13:00',$3,1,true,
+          (select id from practice_locations where business_id=$1 and is_primary and is_active limit 1))`,
+        [biz, day.dow, mins])
+    }
+    const at = async (h, m) => (await db.query(
+      `select (($1::date + make_time($2,$3,0)) at time zone 'Asia/Kolkata') t`, [day.d, h, m])).rows[0].t
+    const book = async (biz, t) => db.query(
+      `insert into appointments (business_id, practitioner_id, patient_phone, patient_name,
+         patient_age, slot_datetime, status, booked_via)
+       values ($1,$2,$3,'[TEST] Double-booking',40,$4,'booked','test')`,
+      [biz, MULTI.id, phone(880000001), t])
+
+    await book(HOME, await at(10, 0))
+
+    // As service_role and as a logged-in clinic user. The guard used to be
+    // SECURITY INVOKER, so RLS hid the other business's rows from it and it
+    // fired for the first and not the second — the bug that let this through.
+    for (const who of ['service_role', 'authenticated']) {
+      for (const [label, h, m, shouldRefuse] of [
+        ['the same minute', 10, 0, true],
+        ['an overlapping 10:15', 10, 15, true],
+        ['10:30, after that window ends', 10, 30, false],
+      ]) {
+        await db.query('savepoint dbk')
+        let err = null
+        try {
+          await db.query(`select set_config('request.jwt.claims',$1,true)`,
+            [JSON.stringify({ sub: uid.owner, role: who })])
+          await db.query(`set local role ${who}`)
+          await book(AWAY, await at(h, m))
+        } catch (e) { err = e.message.split('\n')[0] }
+        finally { await db.query('rollback to savepoint dbk'); await db.query('reset role') }
+
+        if (shouldRefuse) {
+          expectTrue(`${who}: ${label} at the other business is refused`, err != null,
+            'it was accepted — the doctor is in two places at once')
+        } else {
+          expectTrue(`${who}: ${label} is still allowed`, err == null, err)
+        }
+      }
+    }
+
+    // And the offer, which is what the patient actually sees.
+    const away = (await db.query(
+      `select window_start, seats_left, blocked_elsewhere
+         from sehat_open_windows($1,$2,$3) order by window_start`, [AWAY, day.d, MULTI.id])).rows
+    const hhmm = t => new Date(t).toLocaleTimeString('en-IN',
+      { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false })
+    const blocked = away.filter(w => w.blocked_elsewhere).map(w => hhmm(w.window_start))
+    expectEq('both overlapping windows are withdrawn at the other business', blocked, ['10:00', '10:15'],
+      `of ${away.length} windows offered`)
+    expectTrue('a withdrawn window offers no seats',
+      away.filter(w => w.blocked_elsewhere).every(w => w.seats_left === 0))
+    expectTrue('the rest of the day is still offered',
+      away.filter(w => !w.blocked_elsewhere).every(w => w.seats_left > 0),
+      JSON.stringify(away.filter(w => !w.blocked_elsewhere && w.seats_left <= 0)))
+
+    // The business that holds the booking sees a full window, not a foreign one.
+    const home = (await db.query(
+      `select window_start, seats_left, blocked_elsewhere
+         from sehat_open_windows($1,$2,$3) order by window_start`, [HOME, day.d, MULTI.id])).rows
+    const own = home.find(w => hhmm(w.window_start) === '10:00')
+    expectTrue('its own booked window reads as full, not as booked elsewhere',
+      own && own.seats_left === 0 && own.blocked_elsewhere === false,
+      own ? `seats_left=${own.seats_left} blocked_elsewhere=${own.blocked_elsewhere}` : 'window missing')
+  } catch (e) {
+    record('the double-booking scenario ran', false, e.message.split('\n')[0])
+  } finally {
+    await db.query('rollback')
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 sec('modules')
 // Entitlement: a clinic that stopped paying must not be able to admit.
 const PAID = (await raw(`select id from businesses where name='[SEED] Paid Multi-Speciality'`))[0]
