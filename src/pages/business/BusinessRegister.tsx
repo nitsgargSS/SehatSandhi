@@ -814,6 +814,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             added={practitioners}
                             onAdd={d => setPractitioners(list => [...list, d])}
                             onRemove={i => setPractitioners(list => list.filter((_, j) => j !== i))}
+                            clinicPhone={form.phone}
                           />
 
                           {namedHospitalDoctors > 0 && (

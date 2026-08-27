@@ -27,10 +27,12 @@ const input: React.CSSProperties = {
   fontFamily: 'inherit', fontSize: 15, color: BIZ.ink, background: '#fff', width: '100%',
 }
 
-export default function PractitionerPicker({ added, onAdd, onRemove }: {
+export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone }: {
   added: DraftPractitioner[]
   onAdd: (d: DraftPractitioner) => void
   onRemove: (index: number) => void
+  /** The number the clinic itself registered on, for the "this doctor is me" case. */
+  clinicPhone?: string
 }) {
   const [query, setQuery] = useState('')
   const [matches, setMatches] = useState<PractitionerMatch[]>([])
@@ -43,6 +45,12 @@ export default function PractitionerPicker({ added, onAdd, onRemove }: {
   const [manual, setManual] = useState(false)
 
   const req = useRef(0)
+
+  // Name and a usable Indian mobile. Ten digits after stripping punctuation is
+  // what normalisePhone in clinic-otp accepts, and matching that here means the
+  // wizard cannot record a number the login flow would later reject.
+  const ready = draft.name.trim().length > 1
+    && (draft.phone ?? '').replace(/\D/g, '').length >= 10
   useEffect(() => {
     const q = query.trim()
     if (q.length < 2) { setMatches([]); setRegistry([]); setSearched(false); return }
@@ -77,16 +85,31 @@ export default function PractitionerPicker({ added, onAdd, onRemove }: {
     setManual(false); setDraft({ name: '', speciality: 'GEN' })
   }
 
+  // Picking a doctor from the search used to add them immediately. It now fills
+  // the form instead, because there is one thing the search cannot tell us and
+  // the doctor cannot work without: their phone number.
+  //
+  // practitioners.auth_uid is set by clinic-otp matching a login against a
+  // phone. No phone means no login, no login means auth_uid stays null, and a
+  // practitioner with a null auth_uid can never issue a prescription — the
+  // Prescriptions pane refuses, correctly, because a prescription carries a
+  // registration number and the person it belongs to should have signed in.
+  //
+  // Registering a doctor without a number produced a name on a roster who could
+  // never use the system. Two clinics were registered that way before this was
+  // caught.
   const addExisting = (m: PractitionerMatch) => {
-    onAdd({
+    setDraft({
       name: m.full_name,
       speciality: m.speciality ?? 'GEN',
       qualification: m.qualification ?? undefined,
       reg_number: m.reg_number ?? undefined,
       smc_id: m.smc_id ?? undefined,
       practitioner_id: m.id,
+      phone: '',
     })
-    reset()
+    setManual(true)
+    setQuery(''); setMatches([]); setRegistry([]); setSearched(false)
   }
 
   return (
@@ -191,11 +214,12 @@ export default function PractitionerPicker({ added, onAdd, onRemove }: {
               </div>
               {registry.map(d => (
                 <button key={`${d.smcId}-${d.regNo}`} onClick={() => {
-                  onAdd({
-                    name: d.name, speciality: 'GEN',
+                  setDraft({
+                    name: d.name, speciality: 'GEN', phone: '',
                     reg_number: d.regNo, smc_id: d.smcId,
                   })
-                  reset()
+                  setManual(true)
+                  setQuery(''); setMatches([]); setRegistry([]); setSearched(false)
                 }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
@@ -261,16 +285,38 @@ export default function PractitionerPicker({ added, onAdd, onRemove }: {
               onChange={e => setDraft(d => ({ ...d, qualification: e.target.value }))} style={input} />
             <input placeholder="Registration number (optional)" value={draft.reg_number ?? ''}
               onChange={e => setDraft(d => ({ ...d, reg_number: e.target.value }))} style={input} />
+            <input placeholder="Mobile number *" inputMode="numeric" value={draft.phone ?? ''}
+              onChange={e => setDraft(d => ({ ...d, phone: e.target.value }))} style={input} />
+          </div>
+
+          {/* The solo case, which is most clinics: the owner IS the doctor. They
+              had to know to type the same number twice, and nothing said so. */}
+          {clinicPhone && clinicPhone.replace(/\D/g, '').length >= 10 && (
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, cursor: 'pointer' }}>
+              <input type="checkbox"
+                checked={(draft.phone ?? '').replace(/\D/g, '') === clinicPhone.replace(/\D/g, '')}
+                onChange={e => setDraft(d => ({ ...d, phone: e.target.checked ? clinicPhone : '' }))}
+                style={{ width: 16, height: 16, accentColor: BIZ.green, cursor: 'pointer' }} />
+              <span style={{ fontSize: 13, color: BIZ.ink }}>
+                This doctor is me — use the clinic’s number ({clinicPhone})
+              </span>
+            </label>
+          )}
+
+          <div style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 8, lineHeight: 1.55 }}>
+            The number matters: it is how this doctor signs in, and only a
+            signed-in doctor can issue a prescription. One number can be both the
+            clinic and the doctor.
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <button disabled={!draft.name.trim()}
-              onClick={() => { onAdd({ ...draft, name: draft.name.trim() }); reset() }}
+            <button disabled={!ready}
+              onClick={() => { onAdd({ ...draft, name: draft.name.trim(), phone: (draft.phone ?? '').trim() }); reset() }}
               style={{
                 padding: '10px 18px', borderRadius: 10, border: 'none',
                 background: BIZ.green, color: '#fff', fontFamily: 'inherit',
                 fontSize: 14, fontWeight: 800,
-                cursor: draft.name.trim() ? 'pointer' : 'not-allowed',
-                opacity: draft.name.trim() ? 1 : 0.5,
+                cursor: ready ? 'pointer' : 'not-allowed',
+                opacity: ready ? 1 : 0.5,
               }}>
               Add doctor
             </button>
