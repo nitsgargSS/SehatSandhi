@@ -660,57 +660,19 @@ export default function DoctorDashboard() {
 
   const roleLabel = (r: string) => r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
-        <Spinner size={40} label={t('dashboardPage.loading')} />
-        <span className="text-gray-400 text-sm">{t('dashboardPage.loading')}</span>
-      </div>
-    </div>
-  )
-  // A lookup that failed is not the same as having no listing. Telling a paying
-  // customer to go and register again because a query 500'd is the worse of the
-  // two mistakes, so they are now separate screens.
-  if (loadError) return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="text-center max-w-sm">
-        <p className="text-navy-700 font-semibold mb-1">{t('dashboardPage.loadFailedTitle')}</p>
-        <p className="text-gray-500 text-sm mb-4">{t('dashboardPage.loadFailedBody')}</p>
-        <button onClick={() => window.location.reload()} className="btn-teal text-sm">
-          {t('dashboardPage.loadFailedRetry')}
-        </button>
-      </div>
-    </div>
-  )
-  // Signed in, but this login owns no listing. Genuinely right for someone who
-  // has not registered yet — and a dead end for everyone else, which is who
-  // actually lands here: a stale session from a half-finished signup, or the
-  // wrong account of two. Telling those people to go and register is how you
-  // get a second listing for a clinic that already has one.
+  // ── Everything below runs BEFORE the early returns, and must ──────────────
   //
-  // (No session at all never reaches this screen; the loader redirects to
-  // /business/login before any of this renders.)
-  if (!doctor) return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="text-center text-sm max-w-xs">
-        <p className="text-gray-500">
-          {t('dashboardPage.noProfileFound')}{' '}
-          <a href="/business/register" className="text-teal-600 hover:underline">{t('dashboardPage.registerHereLink')}</a>
-        </p>
-        {signedInAs && (
-          <p className="text-gray-400 text-xs mt-3">
-            {t('dashboardPage.noProfileSignedInAs')} <strong>{signedInAs}</strong>
-          </p>
-        )}
-        <button
-          onClick={async () => { await supabase.auth.signOut(); window.location.href = '/business/login' }}
-          className="text-teal-600 hover:underline text-xs mt-2"
-        >
-          {t('dashboardPage.noProfileSwitch')}
-        </button>
-      </div>
-    </div>
-  )
+  // The tab list is derived here rather than further down for one reason: the
+  // effect that keeps `tab` pointing at a tab that exists is a HOOK, and hooks
+  // cannot live after a conditional return. It sat below `if (loading) return`
+  // for three days, which meant React called five hooks on the first render and
+  // six on the next — "rendered more hooks than during the previous render",
+  // the component unmounts, and the page goes white with nothing in the network
+  // tab to explain it.
+  //
+  // doctor is still null at this point on the first pass, which is why
+  // myVertical falls back to 'clinic' and the role flags default closed. None
+  // of it is rendered until after the guards below.
 
   // The dashboard was written for a clinic and shown to everyone. A pharmacy saw
   // "today's appointment slots" and an Appointments tab; an insurance agent saw
@@ -804,6 +766,59 @@ export default function DoctorDashboard() {
     // otherwise re-run this forever.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, tab, tabIds])
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <Spinner size={40} label={t('dashboardPage.loading')} />
+        <span className="text-gray-400 text-sm">{t('dashboardPage.loading')}</span>
+      </div>
+    </div>
+  )
+  // A lookup that failed is not the same as having no listing. Telling a paying
+  // customer to go and register again because a query 500'd is the worse of the
+  // two mistakes, so they are now separate screens.
+  if (loadError) return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="text-center max-w-sm">
+        <p className="text-navy-700 font-semibold mb-1">{t('dashboardPage.loadFailedTitle')}</p>
+        <p className="text-gray-500 text-sm mb-4">{t('dashboardPage.loadFailedBody')}</p>
+        <button onClick={() => window.location.reload()} className="btn-teal text-sm">
+          {t('dashboardPage.loadFailedRetry')}
+        </button>
+      </div>
+    </div>
+  )
+  // Signed in, but this login owns no listing. Genuinely right for someone who
+  // has not registered yet — and a dead end for everyone else, which is who
+  // actually lands here: a stale session from a half-finished signup, or the
+  // wrong account of two. Telling those people to go and register is how you
+  // get a second listing for a clinic that already has one.
+  //
+  // (No session at all never reaches this screen; the loader redirects to
+  // /business/login before any of this renders.)
+  if (!doctor) return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="text-center text-sm max-w-xs">
+        <p className="text-gray-500">
+          {t('dashboardPage.noProfileFound')}{' '}
+          <a href="/business/register" className="text-teal-600 hover:underline">{t('dashboardPage.registerHereLink')}</a>
+        </p>
+        {signedInAs && (
+          <p className="text-gray-400 text-xs mt-3">
+            {t('dashboardPage.noProfileSignedInAs')} <strong>{signedInAs}</strong>
+          </p>
+        )}
+        <button
+          onClick={async () => { await supabase.auth.signOut(); window.location.href = '/business/login' }}
+          className="text-teal-600 hover:underline text-xs mt-2"
+        >
+          {t('dashboardPage.noProfileSwitch')}
+        </button>
+      </div>
+    </div>
+  )
+
 
   // Same shell as the /business/register wizard: dark ink rail down the left
   // holding the nav, cream content pane beside it. The rail replaces what used

@@ -492,6 +492,68 @@ if (!seedBiz.length) {
   }
 }
 
+// ── Something to actually look at ───────────────────────────────────────────
+//
+// A dashboard with no patients and no beds is a dashboard where every tab looks
+// broken. The fixture patient was attached to the seed CLINIC only, so logging
+// in to the paid hospital showed empty everything — which reads as "the OPD and
+// IPD systems are missing" rather than "nobody has been seen here yet".
+//
+// Two wards at DIFFERENT daily rates on purpose. 0053 bills a stay per bed
+// occupied rather than one line at one rate, so moving a patient from general
+// to ICU should produce two charge lines at two prices — and that is the one
+// piece of billing arithmetic never exercised against real data.
+for (const acct of ACCOUNTS.filter(a => a.business)) {
+  const found = await api(
+    `/rest/v1/businesses?select=id&name=eq.${encodeURIComponent(acct.business.name)}&limit=1`).catch(() => [])
+  if (!found.length) continue
+  const businessId = found[0].id
+  process.stdout.write(`      ${acct.business.name.padEnd(36)} `)
+  const bits = []
+  try {
+    // Wards and beds.
+    const wards = await api(`/rest/v1/wards?select=id,name&business_id=eq.${businessId}`)
+    if (!wards.length) {
+      for (const w of [
+        { name: 'General Ward', kind: 'general', beds: [['G1', 1500], ['G2', 1500]] },
+        { name: 'ICU',          kind: 'icu',     beds: [['ICU-1', 6000]] },
+      ]) {
+        const [ward] = await api('/rest/v1/wards', {
+          method: 'POST', headers: { Prefer: 'return=representation' },
+          body: JSON.stringify({ business_id: businessId, name: w.name, kind: w.kind }),
+        })
+        await api('/rest/v1/beds', {
+          method: 'POST', headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify(w.beds.map(([label, rate]) => ({
+            business_id: businessId, ward_id: ward.id, label, daily_charge: rate,
+          }))),
+        })
+      }
+      bits.push('3 beds in 2 wards')
+    } else bits.push('beds already there')
+
+    // The fixture patient, linked to THIS business too. One person can be seen
+    // at several clinics — business_patients is the join that says so, and the
+    // record stays theirs rather than being copied per clinic.
+    const mem = await api(
+      `/rest/v1/patient_members?select=id&full_name=eq.${encodeURIComponent('[SEED] Test Patient')}&limit=1`)
+    if (mem.length) {
+      const link = await api(
+        `/rest/v1/business_patients?select=patient_member_id&business_id=eq.${businessId}&patient_member_id=eq.${mem[0].id}`)
+      if (!link.length) {
+        await api('/rest/v1/business_patients', {
+          method: 'POST', headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ business_id: businessId, patient_member_id: mem[0].id }),
+        })
+        bits.push('patient linked')
+      } else bits.push('patient already linked')
+    }
+    console.log(bits.join(' · '))
+  } catch (e) {
+    console.log(`⚠ ${e.message}`)
+  }
+}
+
 // ── The paid state ──────────────────────────────────────────────────────────
 //
 // Driven through sandbox-simulate-payment rather than written directly, so the

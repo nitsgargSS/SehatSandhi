@@ -231,3 +231,72 @@ export async function addAdmissionNote(
   })
   oops(error)
 }
+
+// ── Bed history, and correcting it ──────────────────────────────────────────
+//
+// The periods a stay is made of. 0053 writes them by trigger when the bed on an
+// admission changes; 0062 added a way to fix one that was recorded wrongly,
+// because until then the only route back was to discharge and re-admit — which
+// invents a second admission for a patient who never left.
+//
+// The table itself stays SELECT-only. A bed stay multiplies into a charge, so a
+// plain UPDATE would be an unvalidated edit of a bill; both calls below go
+// through functions that check the invariants and re-post the charges.
+
+export interface BedStay {
+  id: string
+  admission_id: string
+  business_id: string
+  ward_name: string | null
+  bed_label: string | null
+  daily_charge_snapshot: number | null
+  from_at: string
+  to_at: string | null
+  days: number
+  /** The bed they are in now. Exactly one period per admission has this. */
+  current: boolean
+  corrected_at: string | null
+  correction_reason: string | null
+  /** Bill number holding these charges, or null while they are still editable. */
+  billed_on: string | null
+}
+
+export async function getBedHistory(admissionId: string): Promise<BedStay[]> {
+  const { data, error } = await supabase
+    .from('admission_bed_history').select('*')
+    .eq('admission_id', admissionId)
+  oops(error)
+  return (data ?? []) as BedStay[]
+}
+
+export interface BedStayCorrection {
+  /** Omit to leave unchanged — restating a value is how you change it by accident. */
+  fromAt?: string | null
+  toAt?: string | null
+  bedId?: string | null
+}
+
+/** Fix a period's times, its bed, or both. Re-posts the bed charges after. */
+export async function correctBedStay(
+  stayId: string, reason: string, c: BedStayCorrection = {}, correctedBy?: string | null,
+) {
+  const { error } = await supabase.rpc('sehat_correct_bed_stay', {
+    p_stay_id: stayId,
+    p_reason: reason,
+    p_from_at: c.fromAt ?? null,
+    p_to_at: c.toAt ?? null,
+    p_bed_id: c.bedId ?? null,
+    p_corrected_by: correctedBy ?? null,
+  })
+  oops(error)
+}
+
+/** A transfer that never happened: drop this period and reopen the one before. */
+export async function undoBedMove(stayId: string, reason: string, correctedBy?: string | null) {
+  const { error } = await supabase.rpc('sehat_undo_bed_move', {
+    p_stay_id: stayId,
+    p_reason: reason,
+    p_corrected_by: correctedBy ?? null,
+  })
+  oops(error)
+}
