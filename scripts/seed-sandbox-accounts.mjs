@@ -28,6 +28,8 @@ import dotenv from 'dotenv'
 import { ROOT } from './lib/tables-config.mjs'
 
 dotenv.config({ path: join(ROOT, '.env.supabase'), quiet: true })
+// The anon key lives with the dev server's own config, not with the DB URLs.
+dotenv.config({ path: join(ROOT, '.env.local'), quiet: true })
 
 function fail(msg) {
   console.error(`\n  ✗ ${msg}\n`)
@@ -36,6 +38,12 @@ function fail(msg) {
 
 const url = process.env.SANDBOX_SUPABASE_URL
 const serviceKey = process.env.SANDBOX_SERVICE_ROLE_KEY
+// Signing in as a real user needs the anon key, not the service key — the auth
+// endpoint wants the key the browser would send. Falls back to the dev server's
+// own value so the seed works from a normal checkout.
+const anonKey = process.env.SANDBOX_ANON_KEY
+  ?? process.env.VITE_SUPABASE_ANON_KEY
+  ?? process.env.SUPABASE_ANON_KEY
 if (!url) fail('SANDBOX_SUPABASE_URL is not set (see .env.supabase).')
 if (!serviceKey) fail('SANDBOX_SERVICE_ROLE_KEY is not set (see .env.supabase).')
 
@@ -193,6 +201,17 @@ const STAFF = [
     reg_number: 'DMC/R/2020/00002',
   },
   {
+    email: 'sandbox-nurse@sehatsandhi.test',
+    role: 'nurse',
+    // Expect: clinical, but NOT allowed to prescribe. Sees the record and the
+    // drug chart, gives doses and records vitals; ordering a drug is refused
+    // with "only a doctor can order medication", and there is no Reports tab.
+    // The role exists (0067) precisely so a nurse no longer has to be given
+    // 'doctor' — which would also have made them able to prescribe.
+    full_name: '[SEED] Sunita Rao (nurse)',
+    phone: '9000000005',
+  },
+  {
     email: 'sandbox-manager@sehatsandhi.test',
     role: 'manager',
     // Expect: the mirror image of the doctor — Clinic, Bills, Reports and
@@ -201,6 +220,49 @@ const STAFF = [
     phone: '9000000004',
   },
 ]
+
+// Calling a SECURITY DEFINER function from the seed.
+//
+// NOT with the service key. Every one of these RPCs starts by asking
+// sehat_caller_owns_business(), which reads the JWT — and the service key
+// carries no user claims, so the answer is "not your business" no matter how
+// much privilege the key has. Bypassing RLS and satisfying an ownership check
+// are different things.
+//
+// So the seed signs in as the clinic's owner and calls as them. That is also
+// the more honest fixture: it goes through the same path the dashboard does,
+// ownership check included, rather than round it.
+const tokenCache = new Map()
+async function tokenFor(email) {
+  if (tokenCache.has(email)) return tokenCache.get(email)
+  const r = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: PASSWORD }),
+  })
+  const body = await r.json()
+  if (!r.ok) throw new Error(body?.error_description || body?.msg || 'sign-in failed')
+  tokenCache.set(email, body.access_token)
+  return body.access_token
+}
+
+async function rpcAs(email, name, args) {
+  const token = await tokenFor(email)
+  const r = await fetch(`${url}/rest/v1/rpc/${name}`, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(args),
+  })
+  const text = await r.text()
+  let body = null
+  try { body = text ? JSON.parse(text) : null } catch { body = text }
+  if (!r.ok) throw new Error(body?.message || body?.hint || text || `HTTP ${r.status}`)
+  return body
+}
 
 // Talk to the REST and Admin endpoints directly rather than through
 // @supabase/supabase-js: its constructor initialises a realtime client, which
@@ -564,6 +626,66 @@ for (const acct of ACCOUNTS.filter(a => a.business)) {
         })
         bits.push('patient linked')
       } else bits.push('patient already linked')
+
+      // ── Someone actually in a bed ────────────────────────────────────────
+      //
+      // Beds with nobody in them make the whole IPD half of the product look
+      // empty: no ward round, no drug chart, no discharge summary, nothing to
+      // bill. The chart in particular cannot be tested at all without an
+      // admission, and testing it is the point of 0067.
+      //
+      // Written through the RPCs rather than by INSERT, so the fixture goes
+      // through the same triggers, numbering and bed-stay bookkeeping a real
+      // admission does. A fixture that skips those proves nothing.
+      const openAdm = await api(
+        `/rest/v1/admissions?select=id&business_id=eq.${businessId}&status=eq.admitted&limit=1`)
+      if (!openAdm.length) {
+        // Not ward_occupancy, even though that is the view built for exactly
+        // this question. It scopes itself to sehat_caller_business_ids(), and
+        // the seed holds the service key with no JWT claims — so the caller has
+        // no businesses and the view returns nothing at all. Service-role
+        // bypasses RLS; it does not bypass a WHERE clause inside a view.
+        //
+        // A bed is free when it has no open admission_bed_stays row (to_at is
+        // null). Asked directly, of the tables.
+        const allBeds = await api(
+          `/rest/v1/beds?select=id,label&business_id=eq.${businessId}&is_active=is.true`)
+        const openStays = await api(
+          `/rest/v1/admission_bed_stays?select=bed_id&business_id=eq.${businessId}&to_at=is.null`)
+        const taken = new Set(openStays.map(x => x.bed_id))
+        const freeBed = allBeds.filter(b => !taken.has(b.id)).slice(0, 1)
+        const doc = await api(
+          `/rest/v1/practitioners?select=id&full_name=eq.${encodeURIComponent('[SEED] Dr. Staff Doctor')}&limit=1`)
+        if (freeBed.length) {
+          const admissionId = await rpcAs(acct.email, 'sehat_admit_patient', {
+            p_patient_member_id: mem[0].id,
+            p_business_id: businessId,
+            p_bed_id: freeBed[0].id,
+            p_attending_practitioner_id: doc[0]?.id ?? null,
+            p_reason: 'Fever with dehydration',
+            p_admitting_diagnosis: 'Acute gastroenteritis',
+          })
+          bits.push(`admitted to ${freeBed[0].label}`)
+
+          // A chart with something on it. One regular drug so the grid has
+          // slots to tick, and one SOS so the as-required list is not empty.
+          if (admissionId) {
+            await rpcAs(acct.email, 'sehat_order_medication', {
+              p_admission_id: admissionId, p_drug_name: 'Ceftriaxone',
+              p_strength: '1 g', p_dose_text: '1 g', p_frequency_code: 'BD',
+              p_route: 'iv', p_ordered_by: doc[0]?.id ?? null,
+            })
+            await rpcAs(acct.email, 'sehat_order_medication', {
+              p_admission_id: admissionId, p_drug_name: 'Paracetamol',
+              p_strength: '650 mg', p_dose_text: '1 tab', p_frequency_code: 'SOS',
+              p_route: 'oral', p_prn: true,
+              p_prn_indication: 'for fever above 101F',
+              p_ordered_by: doc[0]?.id ?? null,
+            })
+            bits.push('drug chart seeded')
+          }
+        } else bits.push('no free bed to admit into')
+      } else bits.push('already admitted')
     }
     console.log(bits.join(' · '))
   } catch (e) {
@@ -628,6 +750,7 @@ console.log('')
 console.log('    sandbox-doctor@      OWNER of the seed clinic (not a "doctor" for access)')
 console.log('    sandbox-staffdoc@    doctor    — clinical yes, business no')
 console.log('    sandbox-reception@   receptionist — queue/beds/money, NO clinical record')
+console.log('    sandbox-nurse@       nurse     — charts and gives doses, CANNOT prescribe')
 console.log('    sandbox-manager@     manager   — business yes, clinical no')
 console.log('    sandbox-paid@        owner of a PAID hospital — modules bought, real invoice')
 console.log('    sandbox-admin@       admin panel')
