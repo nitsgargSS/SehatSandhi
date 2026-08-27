@@ -37,7 +37,7 @@ import {
   getBills, issueBill, cancelBill, sendBill,
   Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod, Bill,
 } from '../../lib/billingApi'
-import { getMyRole, isClinicalRole } from '../../lib/identityApi'
+import { getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
 import { moneyExact } from '../../lib/format'
 
 // The clinic's patient records — search, history, and the clinical detail a
@@ -363,12 +363,15 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   // has no allergies" rather than "you cannot see them", and that is the more
   // dangerous of the two. Assume not-clinical until told otherwise.
   const [clinical, setClinical] = useState(false)
+  // A nurse is clinical but is not a prescriber. Same reason as above for
+  // starting false: the ordering form is offered only once we know.
+  const [prescriber, setPrescriber] = useState(false)
   const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'money'>('history')
 
   useEffect(() => {
     let cancelled = false
     getMyRole(businessId)
-      .then(r => { if (!cancelled) setClinical(isClinicalRole(r)) })
+      .then(r => { if (!cancelled) { setClinical(isClinicalRole(r)); setPrescriber(mayPrescribe(r)) } })
       .catch(() => { /* stays false — the database refuses either way */ })
     return () => { cancelled = true }
   }, [businessId])
@@ -546,6 +549,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         <AdmissionsPane
           stays={stays} memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} onChange={reload}
+          clinical={clinical} prescriber={prescriber}
         />
       )}
       {shown === 'money' && (
@@ -1484,12 +1488,14 @@ function VitalsPane({ memberId, businessId, vitals, onChange }: {
 // a stay is part of one person's story, so it belongs here beside their visits
 // and prescriptions rather than somewhere a doctor has to go looking.
 
-function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange }: {
+function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange, clinical, prescriber }: {
   stays: Admission[]
   memberId: string
   businessId: string
   practitionerId?: string | null
   onChange: () => void
+  clinical: boolean
+  prescriber: boolean
 }) {
   const [admitting, setAdmitting] = useState(false)
   const [free, setFree] = useState<OccupancyRow[]>([])
@@ -1627,10 +1633,18 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange 
             onClick={() => setOpenBeds(openBeds === a.id ? null : a.id)}>
             {openBeds === a.id ? 'Hide bed history' : 'Bed history'}
           </button>
-          <button style={{ ...btn(), fontSize: 12, marginTop: 10, marginLeft: 7 }}
-            onClick={() => setOpenDrugs(openDrugs === a.id ? null : a.id)}>
-            {openDrugs === a.id ? 'Hide drug chart' : 'Drug chart'}
-          </button>
+          {/* Same rule as the clinical panes, and for the same reason: RLS denies
+              the orders rather than erroring, so reception opening this got a
+              chart reading "Nothing prescribed yet" over a patient who is on
+              Ceftriaxone. On a drug chart that is the worst possible wrong
+              answer — an empty chart is how a missed dose is recorded. Don't
+              offer the button to somebody the database will not answer. */}
+          {clinical && (
+            <button style={{ ...btn(), fontSize: 12, marginTop: 10, marginLeft: 7 }}
+              onClick={() => setOpenDrugs(openDrugs === a.id ? null : a.id)}>
+              {openDrugs === a.id ? 'Hide drug chart' : 'Drug chart'}
+            </button>
+          )}
 
           {openNotes === a.id && (
             <WardNotes admissionId={a.id} businessId={businessId} practitionerId={practitionerId} />
@@ -1641,8 +1655,8 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange 
               practitionerId={practitionerId} onChange={onChange} />
           )}
 
-          {openDrugs === a.id && (
-            <DrugChart admissionId={a.id} memberId={memberId}
+          {clinical && openDrugs === a.id && (
+            <DrugChart admissionId={a.id} memberId={memberId} prescriber={prescriber}
               practitionerId={practitionerId} closed={a.status !== 'admitted'} />
           )}
 
@@ -1915,11 +1929,12 @@ const FREQUENCIES: [string, string][] = [
 ]
 const ROUTES = ['oral','iv','im','sc','sl','ng','pr','pv','topical','inhaled','eye','ear']
 
-function DrugChart({ admissionId, memberId, practitionerId, closed }: {
+function DrugChart({ admissionId, memberId, practitionerId, closed, prescriber }: {
   admissionId: string
   memberId: string
   practitionerId?: string | null
   closed: boolean
+  prescriber: boolean
 }) {
   const [orders, setOrders] = useState<MedicationOrder[]>([])
   const [doses, setDoses] = useState<DueDose[]>([])
@@ -1998,7 +2013,9 @@ function DrugChart({ admissionId, memberId, practitionerId, closed }: {
     <div style={{ marginTop: 11, borderTop: `1px solid ${BIZ.border}`, paddingTop: 11 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={label}>Drug chart</div>
-        {!closed && !ordering && (
+        {/* The split the comment above describes, now actually applied: a nurse
+            reads the chart and gives the dose, a prescriber orders. */}
+        {prescriber && !closed && !ordering && (
           <button style={{ ...btn(true), fontSize: 12 }} onClick={() => setOrdering(true)}>
             <Plus className="w-3 h-3" style={{ display: 'inline', marginRight: 4 }} /> Order a drug
           </button>
@@ -2097,7 +2114,10 @@ function DrugChart({ admissionId, memberId, practitionerId, closed }: {
                       {o.dose_text} · {o.route.toUpperCase()} · {o.frequency_code}
                       {o.allergy_override && <span style={{ color: '#8a2b2b' }}> · ⚠ allergy noted</span>}
                     </div>
-                    {!closed && (
+                    {/* sehat_stop_medication refuses anyone who cannot prescribe
+                        — stopping a drug is a prescribing decision. Same rule as
+                        the order button: don't offer what the database refuses. */}
+                    {prescriber && !closed && (
                       <button style={{ ...btn(), fontSize: 11, padding: '3px 8px', marginTop: 3 }} disabled={busy}
                         onClick={() => act(async () => {
                           const why = window.prompt(`Stop ${o.drug_name}? Why?`)

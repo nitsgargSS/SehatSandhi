@@ -9,7 +9,7 @@ import { registerPractitioner, attachPractitioner, detachPractitioner } from '..
 import Patients from './Patients'
 import Wards from './Wards'
 import Queue from './Queue'
-import { getMyRole, isBusinessRole, isClinicalRole, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess } from '../../lib/identityApi'
+import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess, AffiliationRole } from '../../lib/identityApi'
 import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 
 // What a person does at this clinic. The affiliation carries it, not the login,
@@ -266,7 +266,7 @@ export default function DoctorDashboard() {
       await attachPractitioner({
         businessId: doctor.id,
         practitionerId,
-        role: docForm.role as 'owner' | 'doctor' | 'receptionist' | 'manager',
+        role: docForm.role as AffiliationRole,
         consultationFee: 0,
       })
       setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', role: 'doctor' })
@@ -725,6 +725,11 @@ export default function DoctorDashboard() {
   // owner on a database that has no roles to check them against.
   const businessRole = isBusinessRole(role)
   const isClinician = isClinicalRole(role)
+  // Both tabs below meant "owner or doctor" when they were written, back when
+  // isClinicalRole meant only that. It now includes nurses, so they point at
+  // the narrower test to keep meaning what they meant — the same repointing
+  // 0067 did to sehat_business_report on the database side.
+  const prescriber = mayPrescribe(role)
 
   const tabs = [
     ...(booksAppointments ? [
@@ -752,7 +757,7 @@ export default function DoctorDashboard() {
     ] : []),
     // Hours and branches matter to a pharmacy and an ambulance service too —
     // patients need to know when they are open and where.
-    ...(businessRole || isClinician ? [
+    ...(businessRole || prescriber ? [
       { id: 'schedule', label: booksAppointments ? t('dashboardPage.tabSchedule') : 'Hours & branches', icon: <Clock className="w-4 h-4" /> },
     ] : []),
     ...(businessRole ? [
@@ -764,7 +769,7 @@ export default function DoctorDashboard() {
     // owner and the doctors, and deliberately not for reception or an
     // administrative manager. 0065 enforces the same rule in the RPC, so
     // hiding the tab is not the only thing stopping them.
-    ...(isClinician ? [
+    ...(prescriber ? [
       { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
     ] : []),
   ]
@@ -1729,7 +1734,7 @@ export default function DoctorDashboard() {
                                 await attachPractitioner({
                                   businessId: doctor.id,
                                   practitionerId: d.practitioner_id,
-                                  role: e.target.value as 'owner' | 'doctor' | 'receptionist' | 'manager',
+                                  role: e.target.value as AffiliationRole,
                                   consultationFee: d.consultation_fee ?? 0,
                                 })
                                 await loadRoster(doctor.id)
