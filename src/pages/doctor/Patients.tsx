@@ -6,6 +6,8 @@ import {
   searchPatients, getPatientSummary, getVisits, getVitals, getAllergies,
   getConditions, getMedications, addVisit, addVital, addAllergy, addCondition,
   addMedication, stopMedication, registerPatient, grantRecordingConsent, withdrawRecordingConsent,
+  getSpecialityFields, getFindings, saveFindings, getPractitionerSpeciality,
+  SpecialityField, Finding,
   logAccess, canRecord, startMicrophone, uploadConsultationAudio,
   requestTranscription, requestMedicineSuggestions, discardConsultationAudio,
   startRecording, stopRecording, confirmTranscript, getRecording,
@@ -1053,8 +1055,209 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, onAdded }:
           {v.advice && <Row k="Advice" v={v.advice} />}
           {/* Imported register lines carry notes and nothing else. */}
           {v.notes && <Row k="Notes" v={v.notes} />}
+
+          <Examination visitId={v.id} practitionerId={practitionerId} />
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── The examination this speciality actually performs ───────────────────────
+//
+// An eye doctor's finding IS the refraction and a dentist's is a chart of
+// thirty-two teeth; neither fits "complaint, diagnosis, advice". 0066 holds the
+// fields as data, so this renders whatever the doctor's speciality asks for and
+// a new speciality needs no release.
+//
+// Two layouts, decided by how many sites a field has. A few sites is a table —
+// which is how a refraction is written on paper, fields down and eyes across.
+// Thirty-two is a chart, laid out in quadrants the way a dentist reads it.
+
+function Examination({ visitId, practitionerId }: {
+  visitId: string
+  practitionerId?: string | null
+}) {
+  const [open, setOpen] = useState(false)
+  const [speciality, setSpeciality] = useState<string | null>(null)
+  const [fields, setFields] = useState<SpecialityField[]>([])
+  const [saved, setSaved] = useState<Finding[]>([])
+  // keyed `${code}::${site ?? ''}`
+  const [values, setValues] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const key = (code: string, site?: string | null) => `${code}::${site ?? ''}`
+
+  const load = useCallback(async () => {
+    try {
+      const rows = await getFindings(visitId)
+      setSaved(rows)
+      const v: Record<string, string> = {}
+      rows.forEach(r => {
+        v[key(r.field_code, r.site)] = r.value_text ?? (r.value_num != null ? String(r.value_num) : '')
+      })
+      setValues(v)
+    } catch (e) { setErr((e as Error).message) }
+  }, [visitId])
+  useEffect(() => { load() }, [load])
+
+  // The speciality comes from the doctor, not the clinic: a hospital has an eye
+  // surgeon and a dentist, and the form has to follow whoever is examining.
+  useEffect(() => {
+    if (!practitionerId) return
+    let off = false
+    getPractitionerSpeciality(practitionerId)
+      .then(sp => { if (!off) setSpeciality(sp) })
+      .catch(() => { /* no speciality, no form — the general case */ })
+    return () => { off = true }
+  }, [practitionerId])
+
+  useEffect(() => {
+    if (!speciality) return
+    getSpecialityFields(speciality).then(setFields).catch(() => setFields([]))
+  }, [speciality])
+
+  const save = async () => {
+    if (!speciality) return
+    setBusy(true); setErr('')
+    try {
+      const payload = fields.flatMap(f => (f.sites ?? [null]).map(site => {
+        const raw = (values[key(f.code, site)] ?? '').trim()
+        return {
+          code: f.code,
+          site,
+          num: f.kind === 'number' && raw ? raw : null,
+          text: f.kind === 'number' ? null : (raw || null),
+        }
+      }))
+      await saveFindings(visitId, speciality, payload, practitionerId)
+      await load(); setOpen(false)
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  // Nothing defined for this speciality yet, and nothing recorded. Say nothing
+  // rather than showing an empty box on every visit of every general clinic.
+  if (!fields.length && !saved.length) return null
+
+  const sections = Array.from(new Set(fields.map(f => f.section ?? 'Examination')))
+  const cell: React.CSSProperties = { ...input, padding: '7px 9px', fontSize: 13 }
+
+  const control = (f: SpecialityField, site: string | null) => {
+    const k = key(f.code, site)
+    const set = (val: string) => setValues(v => ({ ...v, [k]: val }))
+    if (f.kind === 'select') {
+      return (
+        <select style={cell} value={values[k] ?? ''} onChange={e => set(e.target.value)}>
+          <option value="">—</option>
+          {(f.options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      )
+    }
+    return (
+      <input style={cell} value={values[k] ?? ''}
+        inputMode={f.kind === 'number' ? 'decimal' : 'text'}
+        placeholder={f.unit ?? ''} onChange={e => set(e.target.value)} />
+    )
+  }
+
+  return (
+    <div style={{ marginTop: 10, borderTop: `1px solid ${BIZ.border}`, paddingTop: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+        <div style={label}>Examination{speciality ? ` · ${speciality}` : ''}</div>
+        {fields.length > 0 && (
+          <button style={{ ...btn(), fontSize: 12 }} onClick={() => setOpen(o => !o)}>
+            {open ? 'Close' : saved.length ? 'Edit' : 'Record'}
+          </button>
+        )}
+      </div>
+
+      {/* What was found, read-only, so it reads as part of the visit. */}
+      {!open && saved.length > 0 && (
+        <div style={{ fontSize: 13, color: BIZ.ink, marginTop: 6, display: 'grid', gap: 3 }}>
+          {sections.map(sec => {
+            const rows = saved.filter(r => (r.section ?? 'Examination') === sec)
+            if (!rows.length) return null
+            return (
+              <div key={sec}>
+                <span style={{ color: BIZ.mutedWarm, fontSize: 12 }}>{sec}: </span>
+                {rows.map((r, i) => (
+                  <span key={i}>
+                    {i > 0 && ' · '}
+                    {r.label ?? r.field_code}{r.site ? ` ${r.site}` : ''}{' '}
+                    <strong>{r.value_text ?? r.value_num}{r.unit ? ` ${r.unit}` : ''}</strong>
+                  </span>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {open && (
+        <div style={{ marginTop: 10, display: 'grid', gap: 14 }}>
+          {sections.map(sec => {
+            const inSec = fields.filter(f => (f.section ?? 'Examination') === sec)
+            return (
+              <div key={sec}>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: BIZ.ink, marginBottom: 6 }}>{sec}</div>
+
+                {inSec.map(f => {
+                  const sites = f.sites ?? []
+
+                  // A chart. Quadrants, because that is how a dentist reads a
+                  // mouth — not one long list of thirty-two boxes.
+                  if (sites.length > 4) {
+                    const quads = [sites.slice(0, 8), sites.slice(8, 16), sites.slice(16, 24), sites.slice(24, 32)]
+                    return (
+                      <div key={f.code} style={{ marginBottom: 8 }}>
+                        {f.help && <div style={{ fontSize: 11.5, color: BIZ.mutedWarm, marginBottom: 5 }}>{f.help}</div>}
+                        <div style={{ display: 'grid', gap: 6 }}>
+                          {quads.map((q, qi) => (
+                            <div key={qi} style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {q.map(site => (
+                                <div key={site} style={{ width: 74 }}>
+                                  <div style={{ fontSize: 10.5, color: BIZ.mutedWarm, textAlign: 'center' }}>{site}</div>
+                                  {control(f, site)}
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  // A pair, or a scalar. Fields down, sites across — a refraction
+                  // written the way it is written on paper.
+                  return (
+                    <div key={f.code} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 7, flexWrap: 'wrap' }}>
+                      <div style={{ flex: '1 1 150px', minWidth: 120 }}>
+                        <div style={label}>{f.label}{f.unit ? ` (${f.unit})` : ''}</div>
+                        {f.help && <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>{f.help}</div>}
+                      </div>
+                      {(sites.length ? sites : [null]).map(site => (
+                        <div key={site ?? 'one'} style={{ width: sites.length ? 120 : 200 }}>
+                          {site && <div style={{ fontSize: 11, color: BIZ.mutedWarm }}>{site === 'R' ? 'Right' : site === 'L' ? 'Left' : site}</div>}
+                          {control(f, site)}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+
+          {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={btn(true)} disabled={busy} onClick={save}>
+              {busy ? 'Saving…' : 'Save examination'}
+            </button>
+            <button style={btn()} onClick={() => { setOpen(false); load() }}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
