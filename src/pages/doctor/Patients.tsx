@@ -18,7 +18,9 @@ import {
   getAdmissions, admitPatient, dischargePatient, getOccupancy,
   getAdmissionNotes, addAdmissionNote,
   getBedHistory, correctBedStay, undoBedMove,
-  Admission, AdmissionNote, OccupancyRow, BedStay,
+  getMedicationOrders, getDueDoses, orderMedication, stopDrugOrder,
+  recordDose, checkAllergy,
+  Admission, AdmissionNote, OccupancyRow, BedStay, MedicationOrder, DueDose,
 } from '../../lib/admissionsApi'
 import {
   issuePrescription, getPrescriptions, cancelPrescription, sendPrescription,
@@ -1496,6 +1498,7 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange 
   const [err, setErr] = useState('')
   const [openNotes, setOpenNotes] = useState<string | null>(null)
   const [openBeds, setOpenBeds] = useState<string | null>(null)
+  const [openDrugs, setOpenDrugs] = useState<string | null>(null)
 
   const current = stays.find(s => s.status === 'admitted')
 
@@ -1624,6 +1627,10 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange 
             onClick={() => setOpenBeds(openBeds === a.id ? null : a.id)}>
             {openBeds === a.id ? 'Hide bed history' : 'Bed history'}
           </button>
+          <button style={{ ...btn(), fontSize: 12, marginTop: 10, marginLeft: 7 }}
+            onClick={() => setOpenDrugs(openDrugs === a.id ? null : a.id)}>
+            {openDrugs === a.id ? 'Hide drug chart' : 'Drug chart'}
+          </button>
 
           {openNotes === a.id && (
             <WardNotes admissionId={a.id} businessId={businessId} practitionerId={practitionerId} />
@@ -1632,6 +1639,11 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange 
           {openBeds === a.id && (
             <BedHistory admissionId={a.id} businessId={businessId}
               practitionerId={practitionerId} onChange={onChange} />
+          )}
+
+          {openDrugs === a.id && (
+            <DrugChart admissionId={a.id} memberId={memberId}
+              practitionerId={practitionerId} closed={a.status !== 'admitted'} />
           )}
 
           {/* The document they leave with. Only once the stay has ended —
@@ -1866,6 +1878,303 @@ function DischargeSummarySection({ admission, memberId, businessId, practitioner
             </button>
             <button onClick={() => { setOpen(false); setErr('') }} style={btn()}>Cancel</button>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── The drug chart ──────────────────────────────────────────────────────────
+//
+// A grid, because that is what a paper chart is: drugs down the left, times
+// across, one cell per dose. A ward reads it at a glance and that glance is the
+// whole point — a list of events would not be.
+//
+// Prescribed and administered are separate facts (0067) and the gap between
+// them is the record: an empty cell in the past is a MISSED dose, not an
+// absence of data, and it is coloured accordingly.
+//
+// A doctor orders. A nurse gives. The buttons follow the same split the
+// database enforces, so a nurse simply does not see "Order a drug" rather than
+// seeing it and being refused.
+
+const DOSE_COLOUR: Record<string, { bg: string; fg: string; label: string }> = {
+  given:             { bg: '#e8f6ee', fg: '#1c6b4a', label: '✓' },
+  due:               { bg: '#fff8e8', fg: '#8a5a00', label: '·' },
+  missed:            { bg: '#fdf1f1', fg: '#8a2b2b', label: '!' },
+  refused:           { bg: '#f3eefb', fg: '#5b21b6', label: 'R' },
+  withheld:          { bg: '#f1f3f5', fg: '#495057', label: 'W' },
+  omitted:           { bg: '#f1f3f5', fg: '#495057', label: 'O' },
+  self_administered: { bg: '#e8f6ee', fg: '#1c6b4a', label: 'S' },
+}
+
+const FREQUENCIES: [string, string][] = [
+  ['OD', 'Once a day'], ['BD', 'Twice a day'], ['TDS', 'Three times a day'],
+  ['QID', 'Four times a day'], ['HS', 'At night'], ['Q6H', 'Every 6 hours'],
+  ['Q8H', 'Every 8 hours'], ['SOS', 'As required (SOS)'], ['STAT', 'Once, now (STAT)'],
+]
+const ROUTES = ['oral','iv','im','sc','sl','ng','pr','pv','topical','inhaled','eye','ear']
+
+function DrugChart({ admissionId, memberId, practitionerId, closed }: {
+  admissionId: string
+  memberId: string
+  practitionerId?: string | null
+  closed: boolean
+}) {
+  const [orders, setOrders] = useState<MedicationOrder[]>([])
+  const [doses, setDoses] = useState<DueDose[]>([])
+  const [ordering, setOrdering] = useState(false)
+  const [form, setForm] = useState({ drug: '', dose: '', freq: 'BD', route: 'oral', prn: false, indication: '', instructions: '' })
+  const [warn, setWarn] = useState<{ substance: string; severity: string | null; reaction: string | null }[]>([])
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = useCallback(async () => {
+    try {
+      const [o, d] = await Promise.all([getMedicationOrders(admissionId), getDueDoses(admissionId)])
+      setOrders(o); setDoses(d)
+    } catch (e) { setErr((e as Error).message) }
+  }, [admissionId])
+  useEffect(() => { load() }, [load])
+
+  // Checked as they type the name, not on submit: a warning that arrives after
+  // the decision is a warning that arrived too late.
+  useEffect(() => {
+    const drug = form.drug.trim()
+    if (drug.length < 3) { setWarn([]); return }
+    let off = false
+    const t = setTimeout(() => {
+      checkAllergy(memberId, drug).then(w => { if (!off) setWarn(w) })
+    }, 350)
+    return () => { off = true; clearTimeout(t) }
+  }, [form.drug, memberId])
+
+  const active = orders.filter(o => o.status === 'active')
+  const scheduled = active.filter(o => !o.prn && o.times?.length)
+  const asRequired = active.filter(o => o.prn || o.frequency_code === 'SOS' || o.frequency_code === 'STAT')
+
+  // Columns are the distinct due times in the window, oldest first.
+  const columns = Array.from(new Set(doses.map(d => d.due_at))).sort()
+  const cellFor = (orderId: string, at: string) =>
+    doses.find(d => d.order_id === orderId && d.due_at === at)
+
+  const timeLabel = (iso: string) => new Date(iso).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setBusy(true); setErr('')
+    try { await fn(); await load() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  const give = (d: DueDose) => act(async () => {
+    await recordDose({ orderId: d.order_id, status: 'given', dueAt: d.due_at, givenBy: practitionerId })
+  })
+  const notGiven = (d: DueDose) => act(async () => {
+    const why = window.prompt('Not given — why? (refused, withheld, patient in theatre…)')
+    if (!why?.trim()) return
+    await recordDose({ orderId: d.order_id, status: 'withheld', dueAt: d.due_at, reason: why.trim(), givenBy: practitionerId })
+  })
+
+  const submit = () => act(async () => {
+    await orderMedication(admissionId, {
+      drugName: form.drug.trim(),
+      doseText: form.dose.trim(),
+      frequencyCode: form.freq,
+      route: form.route,
+      prn: form.prn || form.freq === 'SOS',
+      prnIndication: form.indication,
+      instructions: form.instructions,
+      // What makes the warning meaningful: the record shows the prescriber saw
+      // it and decided, rather than never having been told.
+      allergyOverride: warn.length
+        ? `prescribed despite ${warn.map(w => w.substance).join(', ')}` : null,
+    }, practitionerId)
+    setForm({ drug: '', dose: '', freq: 'BD', route: 'oral', prn: false, indication: '', instructions: '' })
+    setWarn([]); setOrdering(false)
+  })
+
+  return (
+    <div style={{ marginTop: 11, borderTop: `1px solid ${BIZ.border}`, paddingTop: 11 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={label}>Drug chart</div>
+        {!closed && !ordering && (
+          <button style={{ ...btn(true), fontSize: 12 }} onClick={() => setOrdering(true)}>
+            <Plus className="w-3 h-3" style={{ display: 'inline', marginRight: 4 }} /> Order a drug
+          </button>
+        )}
+      </div>
+
+      {closed && (
+        <div style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 6 }}>
+          This stay has ended — the chart is kept as it was.
+        </div>
+      )}
+
+      {ordering && (
+        <div style={{ display: 'grid', gap: 9, marginTop: 10, padding: 12, borderRadius: 12, background: '#fdfcfa', border: `1px solid ${BIZ.border}` }}>
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            <input style={{ ...input, flex: '2 1 180px' }} placeholder="Drug name" autoFocus
+              value={form.drug} onChange={e => setForm({ ...form, drug: e.target.value })} />
+            <input style={{ ...input, flex: '1 1 110px' }} placeholder="Dose — 1 tab, 500 mg"
+              value={form.dose} onChange={e => setForm({ ...form, dose: e.target.value })} />
+          </div>
+
+          {/* Loud on purpose. It does not stop the order — the decision is the
+              prescriber's — but it must not be missable. */}
+          {warn.length > 0 && (
+            <div style={{ padding: '10px 12px', borderRadius: 10, background: '#fdf1f1', border: '2px solid #e88', color: '#8a2b2b' }}>
+              <strong style={{ fontSize: 13 }}>⚠ Allergy recorded for this patient</strong>
+              {warn.map((w, i) => (
+                <div key={i} style={{ fontSize: 12.5, marginTop: 3 }}>
+                  {w.substance}{w.severity ? ` · ${w.severity}` : ''}{w.reaction ? ` · ${w.reaction}` : ''}
+                </div>
+              ))}
+              <div style={{ fontSize: 12, marginTop: 5 }}>
+                You can still prescribe it. The order will record that you were shown this.
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            <select style={{ ...input, flex: '1 1 150px' }} value={form.freq}
+              onChange={e => setForm({ ...form, freq: e.target.value })}>
+              {FREQUENCIES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+            <select style={{ ...input, flex: '0 1 110px' }} value={form.route}
+              onChange={e => setForm({ ...form, route: e.target.value })}>
+              {ROUTES.map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+            </select>
+          </div>
+
+          {(form.prn || form.freq === 'SOS') && (
+            <input style={input} placeholder="When should it be given? e.g. for fever above 101"
+              value={form.indication} onChange={e => setForm({ ...form, indication: e.target.value })} />
+          )}
+          <input style={input} placeholder="Instructions (optional) — after food, with water…"
+            value={form.instructions} onChange={e => setForm({ ...form, instructions: e.target.value })} />
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={btn(true)} disabled={busy || !form.drug.trim() || !form.dose.trim()
+              || ((form.prn || form.freq === 'SOS') && !form.indication.trim())}
+              onClick={submit}>{busy ? 'Ordering…' : 'Order'}</button>
+            <button style={btn()} onClick={() => { setOrdering(false); setWarn([]); setErr('') }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {err && <div style={{ fontSize: 12.5, color: '#8a2b2b', marginTop: 8 }}>{err}</div>}
+
+      {scheduled.length === 0 && asRequired.length === 0 && (
+        <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 8 }}>Nothing prescribed yet.</div>
+      )}
+
+      {/* The grid. Horizontally scrollable rather than wrapped: a chart that
+          reflows is a chart you cannot read across. */}
+      {scheduled.length > 0 && (
+        <div style={{ marginTop: 10, overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '5px 10px 5px 0', position: 'sticky', left: 0, background: '#fff', minWidth: 170 }}>
+                  <span style={label}>Drug</span>
+                </th>
+                {columns.map(at => (
+                  <th key={at} style={{ padding: '5px 4px', fontSize: 10.5, color: BIZ.mutedWarm, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {timeLabel(at)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {scheduled.map(o => (
+                <tr key={o.id} style={{ borderTop: `1px solid ${BIZ.border}` }}>
+                  <td style={{ padding: '7px 10px 7px 0', position: 'sticky', left: 0, background: '#fff' }}>
+                    <div style={{ fontWeight: 700, color: BIZ.ink }}>
+                      {o.drug_name}{o.strength ? ` ${o.strength}` : ''}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
+                      {o.dose_text} · {o.route.toUpperCase()} · {o.frequency_code}
+                      {o.allergy_override && <span style={{ color: '#8a2b2b' }}> · ⚠ allergy noted</span>}
+                    </div>
+                    {!closed && (
+                      <button style={{ ...btn(), fontSize: 11, padding: '3px 8px', marginTop: 3 }} disabled={busy}
+                        onClick={() => act(async () => {
+                          const why = window.prompt(`Stop ${o.drug_name}? Why?`)
+                          if (!why?.trim()) return
+                          await stopDrugOrder(o.id, why.trim(), practitionerId)
+                        })}>Stop</button>
+                    )}
+                  </td>
+                  {columns.map(at => {
+                    const d = cellFor(o.id, at)
+                    if (!d) return <td key={at} style={{ padding: 3 }} />
+                    const c = DOSE_COLOUR[d.slot_status] ?? DOSE_COLOUR.due
+                    const actionable = !closed && (d.slot_status === 'due' || d.slot_status === 'missed')
+                    return (
+                      <td key={at} style={{ padding: 3, textAlign: 'center' }}>
+                        <div title={d.reason ?? d.slot_status} style={{
+                          background: c.bg, color: c.fg, borderRadius: 8, padding: '5px 4px',
+                          fontWeight: 800, minWidth: 42,
+                        }}>
+                          {c.label}
+                          {actionable && (
+                            <div style={{ display: 'flex', gap: 2, marginTop: 3, justifyContent: 'center' }}>
+                              <button title="Given" disabled={busy} onClick={() => give(d)}
+                                style={{ border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 10, padding: '1px 5px', background: '#1c6b4a', color: '#fff' }}>✓</button>
+                              <button title="Not given" disabled={busy} onClick={() => notGiven(d)}
+                                style={{ border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 10, padding: '1px 5px', background: '#c99', color: '#fff' }}>✕</button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* As-required and one-off drugs have no slots to sit in — they answer to
+          an indication, not a clock. */}
+      {asRequired.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ ...label, marginBottom: 5 }}>As required / one-off</div>
+          {asRequired.map(o => (
+            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center',
+              padding: '7px 0', borderTop: `1px solid ${BIZ.border}`, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: BIZ.ink }}>
+                  {o.drug_name}{o.strength ? ` ${o.strength}` : ''} · {o.dose_text}
+                </div>
+                <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
+                  {o.route.toUpperCase()} · {o.frequency_code}
+                  {o.prn_indication ? ` · ${o.prn_indication}` : ''}
+                  {o.max_per_day ? ` · max ${o.max_per_day}/day` : ''}
+                </div>
+              </div>
+              {!closed && (
+                <button style={{ ...btn(true), fontSize: 12 }} disabled={busy}
+                  onClick={() => act(() => recordDose({ orderId: o.id, status: 'given', givenBy: practitionerId }))}>
+                  Give now
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {orders.some(o => o.status === 'stopped') && (
+        <div style={{ marginTop: 12, fontSize: 12, color: BIZ.mutedWarm }}>
+          <div style={{ ...label, marginBottom: 4 }}>Stopped</div>
+          {orders.filter(o => o.status === 'stopped').map(o => (
+            <div key={o.id} style={{ textDecoration: 'line-through' }}>
+              {o.drug_name} {o.dose_text} · {o.frequency_code}
+              {o.stop_reason && <span style={{ textDecoration: 'none' }}> — {o.stop_reason}</span>}
+            </div>
+          ))}
         </div>
       )}
     </div>

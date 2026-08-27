@@ -194,6 +194,17 @@ tables:
     class: isolated
     purgeOrder: 86
 
+  # ── The drug chart (0067) ───────────────────────────────────────────────
+  # Administrations before orders, orders before admissions — child first, as
+  # everywhere else here.
+  medication_administrations:
+    class: isolated
+    purgeOrder: 89.5
+
+  admission_medication_orders:
+    class: isolated
+    purgeOrder: 89.6
+
   # ── Speciality examination fields (0066) ────────────────────────────────
   # The catalogue is reference data we author, like pricing_plans — a purge
   # must not empty the list of what an eye doctor examines.
@@ -547,6 +558,7 @@ tables:
   practitioner_daily_stats: { class: view }
   business_modules:         { class: view }
   visit_findings_detail:    { class: view }
+  medication_due:           { class: view }
   purge_job_history:        { class: view }
   business_bills_outstanding: { class: view }
   opd_board:                { class: view }
