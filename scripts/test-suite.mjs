@@ -733,16 +733,44 @@ await expectDeny('anon cannot probe whether a named person consented',
 
 // ═══════════════════════════════════════════════════════════════════════════
 sec('exposure')
-// The 0068 regression net, in assertion form.
+// The 0068 regression net, in assertion form — tightened by 0074, which revoked
+// anon from every view below rather than relying on each one's own WHERE.
+//
+// The second list used to accept "0 rows" as a pass. It should not have: a zero
+// can mean an empty table rather than a closed door, which is exactly how
+// appointment_detail read safe until the first booking armed it. They are all
+// refusals now, and asserted as such.
 for (const v of ['appointment_detail', 'appointment_outcomes', 'business_effective_pricing',
-                 'practitioner_daily_stats', 'business_daily_stats', 'purge_job_history']) {
+                 'practitioner_daily_stats', 'business_daily_stats', 'purge_job_history',
+                 'patient_summary', 'patient_account', 'admission_detail', 'prescription_detail',
+                 'visit_findings_detail', 'ward_occupancy', 'opd_board', 'patient_bill_detail',
+                 'admission_bed_history', 'business_appointment_list', 'business_outstanding',
+                 'business_bills_outstanding', 'discharge_summary_detail', 'business_modules',
+                 // Unscoped, owner-run and anon-readable until 0074. They read 0
+                 // rows only because nothing has passed retention yet.
+                 'patient_documents_to_purge', 'consultation_audio_to_purge', 'unmet_demand_summary']) {
   await expectDeny(`anon cannot read ${v}`, () => probe('anon', `select count(*) from public.${v}`), 'permission denied')
 }
-for (const v of ['patient_summary', 'patient_account', 'admission_detail', 'prescription_detail',
-                 'visit_findings_detail', 'ward_occupancy', 'opd_board', 'patient_bill_detail']) {
-  const n = await tryProbe('anon', `select count(*)::int from public.${v}`).catch(() => 'refused')
-  expectTrue(`anon sees nothing in ${v}`, n === 0 || n === 'refused', `anon got ${n} rows`)
+
+// 0074: an invoker view reads its base table as the caller, so findable_clinics
+// needs anon to hold SELECT on seed_clinics — but only on the columns the view
+// uses. The table carries phone numbers and import notes for 80 clinics that the
+// view deliberately does not project.
+await expectAllow('anon can still read the public clinic directory',
+  () => probe('anon', `select count(*) from findable_clinics`))
+for (const col of ['phone', 'notes', 'latitude', 'claimed_by_business_id']) {
+  await expectDeny(`anon cannot read seed_clinics.${col} behind the view`,
+    () => probe('anon', `select ${col} from seed_clinics limit 1`), 'permission denied')
 }
+
+// Every view runs as its caller now, bar the two named in 0074's closing note.
+const stillOwner = (await raw(`select c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
+   where n.nspname='public' and c.relkind='v'
+     and not coalesce(array_to_string(c.reloptions,',') like '%security_invoker%', false)
+   order by 1`)).map(r => r.relname)
+expectEq('only the two documented views still run as their owner', stillOwner,
+  ['patient_summary', 'purge_job_history'],
+  'a new view without security_invoker skips the RLS on everything it reads')
 // Cross-tenant: the other clinic must not see this clinic's admission.
 if (admissionId) {
   const cross = await tryProbe('other', `select count(*)::int from admission_detail where id=$1`, [admissionId])

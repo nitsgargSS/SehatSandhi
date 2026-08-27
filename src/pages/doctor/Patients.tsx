@@ -1665,8 +1665,14 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange,
 
           {/* The document they leave with. Only once the stay has ended —
               a summary of an unfinished admission is not one, and the
-              database refuses it too. */}
-          {a.status !== 'admitted' && (
+              database refuses it too.
+
+              Clinical only, to match discharge_summaries, whose read policy has
+              always been sehat_caller_is_clinical(). Reception could see the
+              list until 0074 solely because discharge_summary_detail ran as its
+              owner and skipped that policy; issuing one has been refused since
+              0071 either way, so the section was already half-dead for them. */}
+          {clinical && a.status !== 'admitted' && (
             <DischargeSummarySection
               admission={a} memberId={memberId} businessId={businessId}
               practitionerId={practitionerId}
