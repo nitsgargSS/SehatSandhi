@@ -389,6 +389,15 @@ export default function DoctorDashboard() {
   const [availability, setAvailability] = useState<AvailabilityTemplate[]>([])
   const [availSaving, setAvailSaving] = useState(false)
   const [availSaved, setAvailSaved] = useState(false)
+  // A refusal used to set "Saved ✓" like anything else, because nothing read the
+  // error back. availability had no INSERT policy at all until 0076, so every
+  // save any clinic ever made was rejected and reported as success.
+  const [availError, setAvailError] = useState('')
+  // Whose hours are being edited: '' is the business's own, applying to whoever
+  // is on that day; otherwise a business_practitioners.id. A doctor working at
+  // two places needs their own row, or the hospital's opening hours would speak
+  // for their morning at the clinic.
+  const [activeBp, setActiveBp] = useState<string>('')
 
 
   const [showAddCamp, setShowAddCamp] = useState(false)
@@ -564,17 +573,21 @@ export default function DoctorDashboard() {
   // ── Availability management ──
   // Scoped to the location being edited — otherwise Monday at the branch would
   // silently show Monday at the main clinic.
-  const getDayRow = (dow: number) =>
-    availability.find(a => a.day_of_week === dow && (a.location_id ?? '') === activeLoc)
+  const inScope = (a: AvailabilityTemplate, dow: number) =>
+    a.day_of_week === dow
+    && (a.location_id ?? '') === activeLoc
+    && (a.business_practitioner_id ?? '') === activeBp
+
+  const getDayRow = (dow: number) => availability.find(a => inScope(a, dow))
 
   const toggleWorkingDay = (dow: number) => {
     const existing = getDayRow(dow)
     if (existing) {
-      setAvailability(prev => prev.filter(
-        a => !(a.day_of_week === dow && (a.location_id ?? '') === activeLoc)))
+      setAvailability(prev => prev.filter(a => !inScope(a, dow)))
     } else {
       setAvailability(prev => [...prev, {
-        id: `new-${dow}-${activeLoc}`, business_id: doctor?.id || '', location_id: activeLoc,
+        id: `new-${dow}-${activeLoc}-${activeBp}`, business_id: doctor?.id || '',
+        location_id: activeLoc, business_practitioner_id: activeBp || null,
         day_of_week: dow,
         // Hourly by default: patients are given a 12-1 window to arrive in
         // rather than a 15-minute appointment nobody can keep to.
@@ -589,25 +602,45 @@ export default function DoctorDashboard() {
     field: 'start_time' | 'end_time' | 'slot_duration_minutes' | 'slot_capacity',
     value: string | number,
   ) => {
-    setAvailability(prev => prev.map(a =>
-      a.day_of_week === dow && (a.location_id ?? '') === activeLoc ? { ...a, [field]: value } : a))
+    setAvailability(prev => prev.map(a => inScope(a, dow) ? { ...a, [field]: value } : a))
   }
 
   const saveAvailability = async () => {
     if (!doctor) return
     setAvailSaving(true)
-    // Delete-then-insert scoped to the location being edited. Unscoped, saving
-    // the Radaur branch would delete the main clinic's hours, because the editor
-    // only ever holds the rows for one location.
-    await supabase.from('availability')
-      .delete().eq('business_id', doctor.id).eq('location_id', activeLoc)
+    setAvailError('')
+    // Delete-then-insert scoped to the location AND the person being edited.
+    // Unscoped on location, saving the Radaur branch would delete the main
+    // clinic's hours; unscoped on the affiliation, saving one doctor's week
+    // would delete the clinic's own hours and every other doctor's with it,
+    // because the editor only ever holds the rows for one of them.
+    // .is(col, null) rather than .eq(col, null): PostgREST needs `is.null`, and
+    // `eq.null` matches nothing — which would leave the clinic's own hours in
+    // place and then insert a duplicate set beside them.
+    const delQ = supabase.from('availability')
+      .delete()
+      .eq('business_id', doctor.id)
+      .eq('location_id', activeLoc)
+    const del = await (activeBp
+      ? delQ.eq('business_practitioner_id', activeBp)
+      : delQ.is('business_practitioner_id', null))
+    if (del.error) {
+      setAvailError(del.error.message)
+      setAvailSaving(false)
+      return
+    }
 
-    const rows = availability.filter(a => (a.location_id ?? '') === activeLoc)
+    const rows = availability.filter(
+      a => (a.location_id ?? '') === activeLoc && (a.business_practitioner_id ?? '') === activeBp)
     if (rows.length > 0) {
-      await supabase.from('availability').insert(
+      // The clash guard added in 0076 refuses the whole insert if any one row
+      // overlaps this doctor's hours somewhere else, which is what makes the
+      // calendar trustworthy — so the message it raises is the one to show.
+      const { error } = await supabase.from('availability').insert(
         rows.map(a => ({
           business_id: doctor.id,
           location_id: activeLoc || null,
+          business_practitioner_id: activeBp || null,
           day_of_week: a.day_of_week,
           start_time: a.start_time,
           end_time: a.end_time,
@@ -616,6 +649,12 @@ export default function DoctorDashboard() {
           is_active: true,
         }))
       )
+      if (error) {
+        setAvailError(error.message)
+        await loadAvailability(doctor.id)
+        setAvailSaving(false)
+        return
+      }
     }
     await loadAvailability(doctor.id)
     setAvailSaving(false)
@@ -655,7 +694,13 @@ export default function DoctorDashboard() {
   useEffect(() => {
     if (!rescheduling || !doctor) { setReschedSlots([]); return }
     let cancelled = false
-    fetchOpenWindows(doctor.id, new Date(reschedDate + 'T00:00:00')).then(w => {
+    // Pass the practitioner: without one the RPC offers every window the
+    // business publishes and has no person to check against, so it would go on
+    // offering hours this doctor spends at another clinic. The trigger refuses
+    // those on submit either way, but an offer that cannot be taken is a bad
+    // offer.
+    fetchOpenWindows(doctor.id, new Date(reschedDate + 'T00:00:00'),
+                     rescheduling.practitioner_id ?? undefined).then(w => {
       if (cancelled) return
       // Keep the window this appointment already sits on: it is "full" only
       // because of this booking, and hiding it makes a same-day location change
@@ -695,6 +740,10 @@ export default function DoctorDashboard() {
   // a schedule of consultation hours. The plumbing underneath — login, bills,
   // reports, locations — is identical for every vertical because they all share
   // the doctors table, so only what is offered needs to differ.
+  // Only doctors get their own hours. A receptionist has no calendar to publish,
+  // and a nurse's day follows the ward rather than a booking grid.
+  const doctorRoster = roster.filter(r => r.role === 'doctor' && r.status === 'active')
+
   const myVertical = (doctor?.vertical ?? 'clinic') as VerticalKey
   const booksAppointments = takesAppointments(myVertical)
   const verticalLabel = verticalFor(myVertical).label
@@ -1344,6 +1393,36 @@ export default function DoctorDashboard() {
                   ))}
                 </div>
               )}
+
+              {/* Whose hours. "Everyone" is the clinic's own opening hours and
+                  is what a single-doctor practice wants; a named doctor gets
+                  their own week, which is what a consultant who also works at a
+                  hospital needs — otherwise this clinic's opening hours would
+                  claim a morning they spend somewhere else. */}
+              {doctorRoster.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-xs font-semibold text-gray-500 mb-2">Whose hours</div>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => setActiveBp('')}
+                      className={`text-sm font-semibold px-4 py-2 rounded-xl transition ${
+                        activeBp === '' ? 'bg-navy-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                      Everyone
+                    </button>
+                    {doctorRoster.map(r => (
+                      <button key={r.id} onClick={() => setActiveBp(r.id)}
+                        className={`text-sm font-semibold px-4 py-2 rounded-xl transition ${
+                          activeBp === r.id ? 'bg-navy-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {r.practitioners?.full_name ?? 'Doctor'}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    {activeBp === ''
+                      ? 'These apply to any doctor without their own hours set.'
+                      : 'These replace the clinic hours for this doctor. Hours they have given another clinic cannot be set here.'}
+                  </p>
+                </div>
+              )}
               <div className="bg-navy-50 border border-navy-100 rounded-xl p-3 mb-4 text-sm text-navy-700">
                 Patients book an <strong>hourly window</strong> — 12–1, 1–2 and so on — not an exact minute.
                 Set how many patients you can see in one hour and we will stop taking bookings once that
@@ -1400,6 +1479,11 @@ export default function DoctorDashboard() {
                 </button>
                 {availSaved && <span className="text-teal-600 text-sm font-medium">{t('dashboardPage.availabilitySaved')}</span>}
               </div>
+              {availError && (
+                <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                  {availError}
+                </p>
+              )}
             </div>
           </div>
         )}

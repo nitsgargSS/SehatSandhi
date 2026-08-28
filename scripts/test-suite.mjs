@@ -623,6 +623,118 @@ if (MULTI && !skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+sec('hours')
+// 0076: a doctor's published hours are theirs, they do not overlap across
+// businesses, and the calendar follows them.
+//
+// The floor first. `availability` carried a SELECT policy and nothing else, so
+// every save from the Schedule tab had been refused since RLS was enabled —
+// and Dashboard.tsx never read the error, so the button said "Saved". No clinic
+// had ever set its opening hours through the product.
+if (!skip()) {
+  const LOC = (await raw(`select id from practice_locations
+     where business_id=$1 and is_primary and is_active limit 1`, [BIZ.id]))[0]?.id
+  const MY_BP = (await raw(`select bp.id from business_practitioners bp
+     join practitioners p on p.id=bp.practitioner_id
+    where bp.business_id=$1 and p.auth_uid=$2`, [BIZ.id, uid.doctor]))[0]?.id
+  const OTHER_BP = (await raw(`select bp.id from business_practitioners bp
+     join practitioners p on p.id=bp.practitioner_id
+    where bp.business_id=$1 and p.auth_uid is distinct from $2 and bp.role='doctor'
+    limit 1`, [BIZ.id, uid.doctor]))[0]?.id
+
+  // Sunday at dawn: nothing seeded is there, so a refusal is the policy talking
+  // and not the clash guard.
+  const setHours = (who, bp) => probe(who,
+    `insert into availability (business_id, business_practitioner_id, location_id,
+       day_of_week, start_time, end_time, slot_duration_minutes, slot_capacity, is_active)
+     values ($1,$2,$3,0,'06:00','08:00',60,4,true) returning id`, [BIZ.id, bp, LOC])
+
+  if (LOC && MY_BP) {
+    await expectAllow('the owner can set the clinic\'s own hours', () => setHours('owner', null))
+    await expectAllow('a manager can set the clinic\'s own hours', () => setHours('manager', null))
+    await expectAllow('a doctor can set their own hours', () => setHours('doctor', MY_BP))
+    await expectDeny('a doctor cannot rewrite the clinic\'s hours', () => setHours('doctor', null))
+    await expectDeny('reception cannot set hours', () => setHours('reception', null))
+    // sehat_caller_practitioner_ids() returns everyone the caller can SEE, not
+    // everyone they ARE. Written against it, this policy let a nurse set a
+    // consultant's hours.
+    await expectDeny('a nurse cannot set a doctor\'s hours', () => setHours('nurse', MY_BP))
+    if (OTHER_BP) {
+      await expectAllow('a manager can set a doctor\'s hours', () => setHours('manager', OTHER_BP))
+      await expectDeny('a doctor cannot set another doctor\'s hours', () => setHours('doctor', OTHER_BP))
+    }
+  } else {
+    record('the clinic has a location and a doctor to set hours for', 'warn',
+      `location=${LOC ?? 'missing'} affiliation=${MY_BP ?? 'missing'}`)
+  }
+
+  // The rule, and the calendar that follows it. Rolled back: it publishes hours
+  // at two businesses, which is not something to leave behind.
+  if (MULTI) {
+    const twoBiz = await raw(`select business_id from business_practitioners
+       where practitioner_id=$1 order by business_id limit 2`, [MULTI.id])
+    const [HOME, AWAY] = twoBiz.map(r => r.business_id)
+    const bpOf = async biz => (await raw(`select id from business_practitioners
+       where business_id=$1 and practitioner_id=$2`, [biz, MULTI.id]))[0]?.id
+    const locOf = async biz => (await raw(`select id from practice_locations
+       where business_id=$1 and is_primary limit 1`, [biz]))[0]?.id
+
+    await db.query('begin')
+    try {
+      const [bpH, bpA, locH, locA] = [await bpOf(HOME), await bpOf(AWAY), await locOf(HOME), await locOf(AWAY)]
+      const publish = (biz, bp, loc, dow, from_, to_, mins) => db.query(
+        `insert into availability (business_id, business_practitioner_id, location_id, day_of_week,
+           start_time, end_time, slot_duration_minutes, slot_capacity, is_active)
+         values ($1,$2,$3,$4,$5,$6,$7,1,true)`, [biz, bp, loc, dow, from_, to_, mins])
+
+      await publish(HOME, bpH, locH, 1, '10:00', '13:00', 30)
+      for (const [label, from_, to_, refuse] of [
+        ['the same window at the other business', '10:00', '13:00', true],
+        ['an overlapping 12:00-15:00', '12:00', '15:00', true],
+        ['13:00-16:00, starting as the other ends', '13:00', '16:00', false],
+      ]) {
+        await db.query('savepoint hrs')
+        let err = null
+        try { await publish(AWAY, bpA, locA, 1, from_, to_, 15) }
+        catch (e) { err = e.message.split('\n')[0] }
+        finally { await db.query('rollback to savepoint hrs') }
+        expectTrue(`${label} is ${refuse ? 'refused' : 'allowed'}`, refuse ? err != null : err == null, err ?? 'it was allowed')
+        if (refuse && err) {
+          expectTrue('  and the refusal does not name the other business',
+            !/Clinic|Hospital|Multi-Speciality/i.test(err.replace(/^[^]*?is already scheduled/, '')), err)
+        }
+      }
+
+      // House hours are never refused — they are the business's, not a person's
+      // — so the calendar is what has to withdraw them.
+      await publish(AWAY, null, locA, 1, '09:00', '17:00', 30)
+      const monday = (await db.query(`select (date_trunc('week',
+        (now() at time zone 'Asia/Kolkata')::date) + interval '7 days')::date d`)).rows[0].d
+      const away = (await db.query(`select window_start, seats_left, blocked_elsewhere
+         from sehat_open_windows($1,$2,$3) order by window_start`, [AWAY, monday, MULTI.id])).rows
+      const hhmm = t => new Date(t).toLocaleTimeString('en-IN',
+        { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false })
+      const blocked = away.filter(w => w.blocked_elsewhere).map(w => hhmm(w.window_start))
+      expectEq('hours given to one business are withdrawn from the other\'s calendar',
+        [blocked[0], blocked[blocked.length - 1]], ['10:00', '12:30'],
+        `${blocked.length} blocked of ${away.length}`)
+      expectTrue('the other business keeps the rest of its day',
+        away.some(w => !w.blocked_elsewhere && hhmm(w.window_start) === '09:00')
+        && away.some(w => !w.blocked_elsewhere && hhmm(w.window_start) === '13:00'))
+      expectTrue('a withdrawn window offers no seats',
+        away.filter(w => w.blocked_elsewhere).every(w => w.seats_left === 0))
+      const home = (await db.query(`select blocked_elsewhere
+         from sehat_open_windows($1,$2,$3)`, [HOME, monday, MULTI.id])).rows
+      expectTrue('the business that holds the hours still offers them all',
+        home.length > 0 && home.every(w => !w.blocked_elsewhere),
+        `${home.filter(w => w.blocked_elsewhere).length} of ${home.length} blocked`)
+    } catch (e) {
+      record('the per-clinic hours scenario ran', false, e.message.split('\n')[0])
+    } finally { await db.query('rollback') }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 sec('modules')
 // Entitlement: a clinic that stopped paying must not be able to admit.
 const PAID = (await raw(`select id from businesses where name='[SEED] Paid Multi-Speciality'`))[0]
