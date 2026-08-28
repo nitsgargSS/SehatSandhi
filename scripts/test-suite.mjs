@@ -694,6 +694,75 @@ expectTrue('the bot listing carries no patient name or phone',
   !/9\d{9}/.test(leak.replace(/9000000\d{3}/g, '')) , 'a 10-digit number that is not the clinic\'s own appears in bot output')
 
 // ═══════════════════════════════════════════════════════════════════════════
+sec('notifications')
+// 0075: the outbox drain is scheduled at last, and loses nothing when the
+// messaging providers are not configured yet — which is the state both
+// databases are in.
+//
+// Rolled back: it writes outbox rows and claims them, and a half-claimed
+// notification is not something to leave lying about.
+if (!skip()) {
+  await db.query('begin')
+  try {
+    const mk = async (status, lastError, attempts, ageMin) => (await db.query(
+      `insert into notification_outbox (recipient, event, phone, status, last_error, attempts, created_at)
+       values ('patient','rescheduled','9000000009',$1,$2,$3, now() - make_interval(mins => $4))
+       returning id`, [status, lastError, attempts, ageMin])).rows[0].id
+    const statusOf = async id => (await db.query(
+      `select status, claimed_at from notification_outbox where id=$1`, [id])).rows[0]
+
+    // The claim stamp, and the reason it exists. Requeueing on created_at would
+    // hand a second drain a row the first is still sending — the exact
+    // double-send the claim was there to prevent.
+    const id = await mk('pending', null, 0, 60)
+    expectTrue('a pending notification has no claimed_at', (await statusOf(id)).claimed_at === null)
+    await db.query(`update notification_outbox set status='sending' where id=$1`, [id])
+    expectTrue('claiming a notification stamps claimed_at', (await statusOf(id)).claimed_at !== null)
+    await db.query(`select sehat_requeue_stuck_notifications()`)
+    expectEq('a freshly claimed row is left alone however old the queue entry',
+      (await statusOf(id)).status, 'sending', 'requeuing this one would send it twice')
+
+    await db.query(`update notification_outbox set claimed_at = now() - interval '30 minutes' where id=$1`, [id])
+    await db.query(`select sehat_requeue_stuck_notifications()`)
+    const stuck = await statusOf(id)
+    expectEq('a claim stuck for 30 minutes goes back to pending', stuck.status, 'pending')
+    expectTrue('requeuing clears claimed_at', stuck.claimed_at === null)
+
+    // Ours to retry, or theirs to refuse.
+    const cases = [
+      ['AISENSY env not set', 0, 'pending', 'a run with no provider configured is retried'],
+      ['no phone number', 0, 'failed', 'a notification with no phone number stays failed'],
+      ['whatsapp 400: invalid destination', 0, 'failed', 'a provider that answered and refused stays failed'],
+      ['AISENSY env not set', 5, 'failed', 'a notification at the attempt cap stays failed'],
+    ]
+    const ids = []
+    for (const [err, att] of cases) ids.push(await mk('failed', err, att, 5))
+    await db.query(`select sehat_requeue_stuck_notifications()`)
+    for (let i = 0; i < cases.length; i++) {
+      const [, , want, label] = cases[i]
+      expectEq(label, (await statusOf(ids[i])).status, want)
+    }
+  } catch (e) {
+    record('the requeue scenario ran', false, e.message.split('\n')[0])
+  } finally { await db.query('rollback') }
+
+  for (const who of ['anon', 'owner']) {
+    await expectDeny(`${who} cannot run the notification requeue`,
+      () => probe(who, `select sehat_requeue_stuck_notifications()`))
+  }
+
+  // The job itself. A cron that was never scheduled is this project's
+  // longstanding failure mode — 0008, 0005 and 0046 each left one as a comment.
+  const jobs = (await raw(`select jobname, schedule, active from cron.job order by jobname`))
+  expectTrue('the notification drain is scheduled and active',
+    jobs.some(j => j.jobname === 'drain-appointment-notifications' && j.active),
+    `jobs: ${jobs.map(j => j.jobname).join(', ') || '(none)'}`)
+  expectTrue('its runs are visible in purge_job_history',
+    (await raw(`select pg_get_viewdef('purge_job_history'::regclass, true) d`))[0]
+      ?.d?.includes('drain-appointment-notifications'))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 sec('numbering')
 // Statutory series: per business, per financial year, never handed out twice.
 //
