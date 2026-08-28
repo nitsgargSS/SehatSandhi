@@ -735,6 +735,66 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+sec('practitioner identity')
+// 0077: reception could rewrite a consultant's council registration.
+//
+// practitioners_update_own was `id in (select sehat_caller_practitioner_ids())`,
+// and that helper returns everyone the caller can SEE. So the policy read "a
+// practitioner may update their own record" and granted "anybody with a login
+// at a clinic may update every practitioner there" — reg_number included, which
+// is the field the hand verification and the public "verified" wording rest on.
+if (!skip()) {
+  const TARGET = (await raw(`select p.id, p.full_name from business_practitioners bp
+     join practitioners p on p.id = bp.practitioner_id
+    where bp.business_id = $1 and p.auth_uid is distinct from $2 and bp.role = 'doctor'
+    limit 1`, [BIZ.id, uid.doctor]))[0]
+  const SELF = (await raw(`select id from practitioners where auth_uid = $1`, [uid.doctor]))[0]
+
+  // An UPDATE filtered away by RLS affects 0 rows rather than raising, so a
+  // silent no-op has to count as a refusal — otherwise every one of these
+  // passes against a policy that does nothing.
+  const change = async (who, id, col, val) => {
+    const r = await probe(who, `with u as (update practitioners set ${col} = $1 where id = $2 returning 1)
+                                select count(*)::int from u`, [val, id])
+    if (r === 0) throw new Error('no rows: filtered by RLS')
+    return r
+  }
+
+  if (TARGET && SELF) {
+    for (const who of ['reception', 'nurse', 'doctor', 'manager', 'owner']) {
+      await expectDeny(`${who} cannot rewrite a consultant's registration number`,
+        () => change(who, TARGET.id, 'reg_number', '[TEST] FORGED'))
+    }
+    await expectAllow('an admin can correct a registration number',
+      () => change('admin', TARGET.id, 'reg_number', '[TEST] corrected'))
+
+    // The rest of the protected set. Checked as a manager, who passes the
+    // policy — so a pass here is the trigger talking, not RLS.
+    for (const [col, val] of [['status', 'inactive'], ['auth_uid', uid.reception],
+                              ['imr_status', 'matched'], ['smc_id', 999999]]) {
+      await expectDeny(`a manager cannot change ${col}`,
+        () => change('manager', TARGET.id, col, val), 'Only Sehatsandhi')
+    }
+
+    // And what stays editable, because a profile is not a claim.
+    await expectAllow("a manager can fix a consultant's phone number",
+      () => change('manager', TARGET.id, 'phone', '9000000123'))
+    await expectAllow('a doctor can fix their own phone number',
+      () => change('doctor', SELF.id, 'phone', '9000000124'))
+    await expectDeny("a doctor cannot touch another doctor's phone number",
+      () => change('doctor', TARGET.id, 'phone', '9000000125'))
+    await expectDeny("reception cannot touch a consultant's phone number",
+      () => change('reception', TARGET.id, 'phone', '9000000126'))
+    // admin/Dashboard.tsx:204 is the only UPDATE against this table in src/.
+    await expectAllow('the admin speciality change still works',
+      () => change('admin', TARGET.id, 'speciality', 'cardiology'))
+  } else {
+    record('a second consultant exists to test against', 'warn',
+      `target=${TARGET?.id ?? 'missing'} self=${SELF?.id ?? 'missing'}`)
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 sec('modules')
 // Entitlement: a clinic that stopped paying must not be able to admit.
 const PAID = (await raw(`select id from businesses where name='[SEED] Paid Multi-Speciality'`))[0]
