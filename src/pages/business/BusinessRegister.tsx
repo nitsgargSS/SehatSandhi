@@ -18,6 +18,7 @@ import {
   PriceResult, DraftPractitioner, CareModule,
 } from '../../lib/businessApi'
 import { registerBusiness, registerPractitioner, attachPractitioner } from '../../lib/identityApi'
+import { isValidEmail, isValidPhone, isValidRegNumber } from '../../lib/credentials'
 import PractitionerPicker from './PractitionerPicker'
 import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
 import { useTaxSettings, localTax, isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
@@ -253,18 +254,31 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
     // exactly — so it is required rather than defaulted to something wrong.
     // The doctor path needs the person's own name and speciality: they become
     // a practitioner row, and a doctor with neither is unsearchable.
-    if (s === 2) return !!(form.business_name?.trim() && form.phone?.trim()
-      && (!soloDoctor || (form.speciality && form.owner_name?.trim())))
+    // Email, phone, name — and a registration number for anyone who will be
+    // listed as a doctor. These are what sehat_register_business_with_doctors
+    // requires since 0079, checked here so the refusal arrives before the
+    // submit rather than after it.
+    if (s === 2) return !!(form.business_name?.trim()
+      && isValidPhone(form.phone)
+      && isValidEmail(form.email)
+      && (!soloDoctor || (form.speciality && form.owner_name?.trim()
+                          && isValidRegNumber(form.reg_number))))
     return true
   }
   const nextStep = () => {
     if (!stepValid(step)) {
       setError(step === 2
-        ? (soloDoctor && !form.speciality
-            ? 'Please choose a speciality — it is how patients find you.'
-            : soloDoctor && !form.owner_name?.trim()
-              ? 'Please enter your name — it is what patients see.'
-              : 'Please enter at least a business name and WhatsApp number.')
+        ? (!form.business_name?.trim()
+            ? 'Please enter the name of your clinic or practice.'
+            : !isValidPhone(form.phone)
+              ? 'Please enter a 10-digit mobile number.'
+              : !isValidEmail(form.email)
+                ? 'Please enter an email address — it is how you will sign in.'
+                : soloDoctor && !form.speciality
+                  ? 'Please choose a speciality — it is how patients find you.'
+                  : soloDoctor && !form.owner_name?.trim()
+                    ? 'Please enter your name — it is what patients see.'
+                    : 'Please enter your council registration number.')
         : 'Please complete this step.')
       return
     }
@@ -345,6 +359,10 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
           reg_number: form.reg_number || undefined,
           smc_id: form.smc_id ? Number(form.smc_id) : undefined,
           phone: form.phone || undefined,
+          // A solo doctor is one person with one login: the same address on the
+          // business row and the practitioner row. 0079 allows exactly that
+          // pair and rejects any other repeat.
+          email: form.email || undefined,
         }]
       : practitioners
 
@@ -374,6 +392,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         reg_number: d.reg_number,
         smc_id: d.smc_id,
         phone: d.phone,
+        // Was missing entirely until 0079: the wizard asked for it, the payload
+        // dropped it, and the column was never written. It is how they sign in.
+        email: d.email,
         consultation_fee: d.consultation_fee ?? 0,
         // A doctor registering their own practice is primarily there. Somebody a
         // clinic added may already be primary elsewhere, and the server leaves
@@ -753,7 +774,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             emptyNote="Not found — type it in the box below instead."
                           />
                         ) : (
-                          <Field label="Registration number" placeholder="e.g. HR-12345 (optional)" value={form.reg_number} onChange={v => upd('reg_number', v)} />
+                          <Field label="Registration number *" placeholder="e.g. HR-12345" value={form.reg_number} onChange={v => upd('reg_number', v)} />
                         )}
                         {/* The register is not complete — it has nobody who
                             qualified in the last few months, and the search only
@@ -761,10 +782,13 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             the number has to stay possible. */}
                         {soloDoctor && (
                           <Field label="Registration number"
-                            placeholder={form.reg_number ? '' : 'or type it — e.g. HR-12345 (optional)'}
+                            placeholder={form.reg_number ? '' : 'or type it — e.g. HR-12345'}
                             value={form.reg_number} onChange={v => upd('reg_number', v)} />
                         )}
-                        <Field label="Email" placeholder="you@example.com (optional)" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />
+                        <Field label="Email *" placeholder="you@example.com" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />
+                        <p className="text-xs text-gray-500 -mt-2">
+                          This is your sign-in, and where your login code is sent. One account per address.
+                        </p>
                         <div className="sm:col-span-2 xl:col-span-3">
                           {/* Also a lookup, in address mode rather than business
                               mode. Picking the clinic by name fills this in, but

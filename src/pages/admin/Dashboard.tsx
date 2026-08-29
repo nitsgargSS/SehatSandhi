@@ -1,6 +1,7 @@
 import { useEffect, useState, Fragment } from 'react'
 import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Plus, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { markPasswordChanged } from '../../lib/passwordState'
 import StatusBadge from '../../components/StatusBadge'
 import { money, num, shortDate, dateTime, isoDate } from '../../lib/format'
 import { Business, Practitioner, SPECIALITIES, PIN_CODES } from '../../types'
@@ -502,6 +503,8 @@ export default function AdminDashboard() {
 
       const { error } = await supabase.auth.updateUser({ password: pw.next })
       if (error) { setPwErr(error.message); return }
+      // Same reason as EmailSignIn: without this the 0080 clock never restarts.
+      await markPasswordChanged().catch(() => {})
 
       setPw({ current: '', next: '', confirm: '' })
       setPwMsg('Password changed. Other devices stay signed in until their sessions expire — use "Sign out everywhere" if one is lost.')

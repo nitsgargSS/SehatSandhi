@@ -32,6 +32,13 @@ export interface TimeSlot {
   capacity?: number
   locationId?: string | null
   locationName?: string | null
+  /**
+   * This practitioner is already expected somewhere else in this window —
+   * another business, or another location of this one. Distinct from a full
+   * window: there are no seats to free here, and none will appear.
+   * Only ever true when a practitioner was passed; server-side since 0072.
+   */
+  blockedElsewhere?: boolean
 }
 
 /**
@@ -46,6 +53,11 @@ export interface TimeSlot {
  * business, and occupancy counted for them alone. Without one you get every
  * window the business publishes — right for a clinic looking at its whole day,
  * wrong for booking a named doctor at a clinic that has several.
+ *
+ * A practitioner also buys the cross-clinic check: windows this doctor is
+ * already committed to at another business come back with blockedElsewhere set
+ * and no seats. Without one there is no person to be double-booked, so nothing
+ * is blocked.
  */
 export async function fetchOpenWindows(
   businessId: string,
@@ -64,6 +76,7 @@ export async function fetchOpenWindows(
   return (data as {
     location_id: string | null; location_name: string | null
     window_start: string; capacity: number; booked: number; seats_left: number
+    blocked_elsewhere: boolean
   }[]).map(w => ({
     time: new Date(w.window_start).toLocaleTimeString('en-IN', {
       hour: '2-digit', minute: '2-digit', hour12: true,
@@ -74,6 +87,7 @@ export async function fetchOpenWindows(
     capacity: w.capacity,
     locationId: w.location_id,
     locationName: w.location_name,
+    blockedElsewhere: w.blocked_elsewhere,
   }))
 }
 

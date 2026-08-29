@@ -9,7 +9,10 @@
 import { supabase } from './supabase'
 
 export type Vertical = 'clinic' | 'hospital' | 'pharmacy' | 'lab' | 'insurance' | 'ambulance'
-export type AffiliationRole = 'owner' | 'doctor' | 'receptionist' | 'manager'
+// Mirrors business_practitioners_role_check. 'nurse' arrived in 0067 and was
+// never added here, which is why the frontend could not tell a nurse from a
+// receptionist and showed them neither the record nor the drug chart.
+export type AffiliationRole = 'owner' | 'doctor' | 'nurse' | 'receptionist' | 'manager'
 
 export interface PractitionerMatch {
   id: string
@@ -218,7 +221,7 @@ export async function loadPosts(practitionerId: string) {
 //
 // The database is still the authority. This only decides what to draw.
 
-export type ClinicRole = 'owner' | 'doctor' | 'receptionist' | 'manager'
+export type ClinicRole = 'owner' | 'doctor' | 'nurse' | 'receptionist' | 'manager'
 
 export interface RoleLookup {
   role: ClinicRole | null
@@ -271,6 +274,22 @@ export async function getMyRole(businessId: string): Promise<RoleLookup> {
  * which is the pre-0057 behaviour rather than a hole being punched.
  */
 export const isClinicalRole = (r: RoleLookup): boolean =>
+  !r.enforced || r.role === 'owner' || r.role === 'doctor' || r.role === 'nurse'
+
+/**
+ * May this login WRITE a drug order, a prescription or a discharge summary,
+ * and read the business's money? Owner and doctor only.
+ *
+ * The narrower half of the pair, and it has to exist separately. 0067 added the
+ * nurse role and widened sehat_caller_is_clinical to include it — a nurse sees
+ * the record and charts a dose — then repointed everything that meant
+ * "prescriber" at sehat_caller_may_prescribe, precisely because widening a
+ * predicate silently widens everything downstream of it.
+ *
+ * The frontend never got that second half, so isClinicalRole was left standing
+ * in for both and simply omitted nurses. Mirrors sehat_caller_may_prescribe.
+ */
+export const mayPrescribe = (r: RoleLookup): boolean =>
   !r.enforced || r.role === 'owner' || r.role === 'doctor'
 
 /** May this login act on the business itself — its listing, plan and invoices? */
