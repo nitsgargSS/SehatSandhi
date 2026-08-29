@@ -795,6 +795,103 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+sec('role escalation')
+// 0078: a receptionist could make themselves an owner.
+//
+// affiliations_manage_own was `using (sehat_caller_owns_business(business_id))`,
+// and that helper is not ownership — it is "may act on this business at all",
+// true for anyone with a web login. business_practitioners.role is the input to
+// sehat_caller_role(), so one UPDATE on their own row turned reception into a
+// prescriber with every patient's conditions, prescriptions and discharge
+// summaries. sehat_attach_practitioner carried the same gate and upserts role,
+// so the same promotion worked through the RPC with no RLS involved — which is
+// why both routes are checked here for every role.
+if (!skip()) {
+  const affOf = async who => (await raw(`select bp.id from business_practitioners bp
+     join practitioners p on p.id = bp.practitioner_id
+    where bp.business_id = $1 and p.auth_uid = $2`, [BIZ.id, uid[who]]))[0]?.id
+  const pracOf = async who => (await raw(`select id from practitioners where auth_uid = $1`, [uid[who]]))[0]?.id
+
+  // An UPDATE filtered by RLS changes 0 rows rather than raising, so a silent
+  // no-op has to count as a refusal or these pass against a policy that is gone.
+  const mustChange = async (who, sql, params) => {
+    const n = await probe(who, sql, params)
+    if (n === 0) throw new Error('no rows: filtered by RLS')
+    return n
+  }
+  const setRole = (who, affId, role) => mustChange(who,
+    `with u as (update business_practitioners set role = $1 where id = $2 returning 1)
+     select count(*)::int from u`, [role, affId])
+  const attach = (who, pracId, role) => probe(who,
+    `select sehat_attach_practitioner($1, $2, $3, false, 0)`, [BIZ.id, pracId, role])
+
+  for (const who of ['reception', 'nurse', 'doctor', 'manager']) {
+    const aff = await affOf(who), prac = await pracOf(who)
+    if (!aff || !prac) { record(`${who} has an affiliation to test with`, 'warn', 'not seeded'); continue }
+    await expectDeny(`${who} cannot make themselves an owner by table update`,
+      () => setRole(who, aff, 'owner'))
+    await expectDeny(`${who} cannot attach themselves as an owner through the RPC`,
+      () => attach(who, prac, 'owner'))
+  }
+
+  // The owner-role check does not intercept a sideways move, so the
+  // "not your own row" rule is what has to catch this one.
+  const mgrAff = await affOf('manager'), mgrPrac = await pracOf('manager')
+  if (mgrAff && mgrPrac) {
+    await expectDeny('a manager cannot make themselves a doctor by table update',
+      () => setRole('manager', mgrAff, 'doctor'), 'your own')
+    await expectDeny('a manager cannot make themselves a doctor through the RPC',
+      () => attach('manager', mgrPrac, 'doctor'), 'your own')
+    await expectDeny('a manager cannot change their own status or web-login flag',
+      () => mustChange('manager', `with u as (update business_practitioners
+             set can_login_web = false, status = 'pending' where id = $1 returning 1)
+           select count(*)::int from u`, [mgrAff]), 'your own')
+  }
+
+  const docAff = await affOf('doctor'), docPrac = await pracOf('doctor')
+  if (docAff && docPrac) {
+    await expectAllow("a manager can change a doctor's consultation fee",
+      () => mustChange('manager', `with u as (update business_practitioners set consultation_fee = 555
+             where id = $1 returning 1) select count(*)::int from u`, [docAff]))
+    await expectDeny('a manager cannot make somebody else an owner',
+      () => setRole('manager', docAff, 'owner'), 'owner')
+    await expectAllow('an owner can make somebody else an owner',
+      () => setRole('owner', docAff, 'owner'))
+    for (const who of ['reception', 'nurse', 'doctor']) {
+      await expectDeny(`${who} cannot edit an affiliation at all`,
+        () => mustChange(who, `with u as (update business_practitioners set consultation_fee = 1
+               where id = $1 returning 1) select count(*)::int from u`, [docAff]))
+    }
+    await expectDeny('reception cannot suspend a doctor through detach',
+      () => probe('reception', `select sehat_detach_practitioner($1,$2)`, [BIZ.id, docPrac]),
+      'not authorised')
+    await expectAllow('a manager still can',
+      () => probe('manager', `select sehat_detach_practitioner($1,$2)`, [BIZ.id, docPrac]))
+  }
+
+  // The guard is skipped inside SECURITY DEFINER functions — deliberately, or
+  // signup could not create the founder's own affiliation. Which is precisely
+  // why the RPCs carry their own check, and why this has to keep working.
+  const unattached = (await raw(`select id from practitioners where auth_uid is null limit 1`))[0]?.id
+  if (unattached) {
+    await expectAllow('a manager can still attach a new doctor',
+      () => attach('manager', unattached, 'doctor'))
+  }
+  await db.query('begin')
+  try {
+    await db.query(`select sehat_register_business_with_doctors(
+      p_name => $1, p_vertical => 'clinic', p_phone => '9000000777',
+      p_email => $2, p_address => '[TEST] addr', p_pin_codes => array['135001'],
+      p_doctors => $3::jsonb)`,
+      [`[TEST] Signup Guard ${STAMP}`, `signupguard${STAMP}@test.invalid`,
+       JSON.stringify([{ full_name: '[TEST] Founder', speciality: 'general_physician' }])])
+    record('a new business can still be registered with its doctors', true)
+  } catch (e) {
+    record('a new business can still be registered with its doctors', false, e.message.split('\n')[0])
+  } finally { await db.query('rollback') }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 sec('modules')
 // Entitlement: a clinic that stopped paying must not be able to admit.
 const PAID = (await raw(`select id from businesses where name='[SEED] Paid Multi-Speciality'`))[0]
