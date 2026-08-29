@@ -142,6 +142,8 @@ export interface DraftPractitioner {
   speciality: string
   qualification?: string
   phone?: string
+  /** Mandatory since 0079 for anyone not already on the platform — it is their sign-in. */
+  email?: string
   reg_number?: string
   smc_id?: number
   consultation_fee?: number

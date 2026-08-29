@@ -6,18 +6,26 @@ import { useLanguage } from '../../i18n/LanguageContext'
 import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
 import SiteFooter from '../../components/SiteFooter'
+import EmailSignIn from '../../components/EmailSignIn'
 
-// Log in with a code sent to the WhatsApp number the business registered with.
+// Sign in with email and password, or a code sent to that email.
 //
-// This replaces an email-and-password form most businesses could never have
-// used. The signup wizard — the one that takes payment — collects email as
-// optional and creates no account at all, so anyone who joined through it had no
-// credentials and no way to reach their dashboard. The phone number is required
-// at signup, and a code is what this audience already expects.
+// 0079 made email mandatory at registration, so this is now the default for
+// everybody — doctor, business, staff — and it is the same EmailSignIn
+// component the admin panel uses, so the password rules, the emailed code and
+// the forgotten-password path have one implementation rather than two that
+// drift apart.
 //
-// The legacy email/password route still works for listings created through the
-// old /doctor form: sehat_caller_listing_ids() honours both. It is kept below as
-// a fallback rather than removed, so nobody who can log in today is locked out.
+// The WhatsApp-number route is KEPT, below, and is not legacy clutter. Twelve
+// practitioners and nine businesses registered before 0079 and have no email
+// address at all; making email the only way in would lock out every account
+// that exists today. It stays until they have one — and it is the reason this
+// page still carries clinic-otp.
+//
+// The order used to be the other way round, and for a good reason at the time:
+// the signup wizard collected email as optional and created no account, so
+// anyone who joined through it had no credentials at all. 0079 fixed the cause,
+// which is what makes email-first possible now.
 
 import { IS_STAGING } from '../../lib/env'
 
@@ -50,9 +58,9 @@ export default function DoctorLogin() {
   const [notice, setNotice] = useState('')
   const [devCode, setDevCode] = useState<string | null>(null)
 
-  const [showLegacy, setShowLegacy] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  // Email first. The phone route is the fallback for accounts that predate
+  // 0079 and have no address on file.
+  const [showLegacy, setShowLegacy] = useState(true)
 
   const callOtp = async (payload: Record<string, unknown>) => {
     const { url, anon } = activeConfig()
@@ -101,14 +109,6 @@ export default function DoctorLogin() {
     } finally { setBusy(false) }
   }
 
-  const legacyLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setBusy(true); setError('')
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-    if (err) { setError(err.message); setBusy(false) }
-    else navigate('/business/dashboard')
-  }
-
   return (
     // Same shell as the business wizard: cream page, dark rail carrying the
     // logo, and no site navbar. This page used to render inside the marketing
@@ -147,33 +147,37 @@ export default function DoctorLogin() {
           <img src="/logo.png" alt="Sehatsandhi" className="h-14 mx-auto mb-4 lg:hidden" />
           <h1 className="text-2xl font-bold text-navy-700">{t('loginPage.title')}</h1>
           <p className="text-gray-400 text-sm mt-1">
-            {step === 'phone'
-              ? 'Enter the WhatsApp number you registered with'
-              : `We sent a 6-digit code to ${phone}`}
+            {showLegacy
+              ? 'Sign in with the email address you registered with'
+              : step === 'phone'
+                ? 'Enter the WhatsApp number you registered with'
+                : `We sent a 6-digit code to ${phone}`}
           </p>
         </div>
 
         {showLegacy ? (
-          <form onSubmit={legacyLogin} className="space-y-4">
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">{t('loginPage.labelEmail')}</label>
-              <input className="input-field" type="email" placeholder="doctor@clinic.com"
-                value={email} onChange={e => setEmail(e.target.value)} required />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">{t('loginPage.labelPassword')}</label>
-              <input className="input-field" type="password" placeholder="••••••••"
-                value={password} onChange={e => setPassword(e.target.value)} required />
-            </div>
-            {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
-            <button type="submit" disabled={busy} className="btn-teal w-full justify-center py-3 text-base disabled:opacity-60">
-              {busy ? <><Spinner size={18} onDark label={t('loginPage.btnSigningIn')} /> {t('loginPage.btnSigningIn')}</> : t('loginPage.btnLogin')}
-            </button>
+          <div className="space-y-4">
+            {/* Nothing here decides who gets in — EmailSignIn proves the
+                address, and this decides what that entitles them to. A valid
+                Supabase user with no listing and no affiliation is somebody
+                else's patient account, not a clinic. */}
+            <EmailSignIn
+              submitLabel={t('loginPage.btnLogin')}
+              onSignedIn={async () => {
+                const { data: ids, error: idsErr } = await supabase.rpc('sehat_caller_business_ids')
+                if (idsErr) return 'We could not check your account just now. Please try again.'
+                if (!ids || (ids as unknown[]).length === 0) {
+                  return 'That account is not attached to a clinic. If you have just registered, we are still reviewing it.'
+                }
+                navigate('/business/dashboard')
+                return null
+              }}
+            />
             <button type="button" onClick={() => { setShowLegacy(false); setError('') }}
               className="w-full text-sm text-teal-600 py-1">
-              Log in with my WhatsApp number instead
+              Registered before we asked for an email? Use your WhatsApp number
             </button>
-          </form>
+          </div>
         ) : step === 'phone' ? (
           <form onSubmit={requestCode} className="space-y-4">
             <div>

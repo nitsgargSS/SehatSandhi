@@ -884,10 +884,132 @@ if (!skip()) {
       p_email => $2, p_address => '[TEST] addr', p_pin_codes => array['135001'],
       p_doctors => $3::jsonb)`,
       [`[TEST] Signup Guard ${STAMP}`, `signupguard${STAMP}@test.invalid`,
-       JSON.stringify([{ full_name: '[TEST] Founder', speciality: 'general_physician' }])])
+       // The key is `name`, not full_name — the RPC reads `name`, so the old
+       // fixture was quietly registering a business with no doctor at all and
+       // still passing. 0079 made the four fields mandatory and turned that
+       // silence into a refusal, which is how it was found.
+       JSON.stringify([{ name: '[TEST] Founder', speciality: 'general_physician',
+                         phone: '9812345004', email: `founder${STAMP}@test.invalid`,
+                         reg_number: `REGF${STAMP}` }])])
     record('a new business can still be registered with its doctors', true)
   } catch (e) {
     record('a new business can still be registered with its doctors', false, e.message.split('\n')[0])
+  } finally { await db.query('rollback') }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+sec('registration')
+// 0079: the four fields identity depends on are mandatory, checked, and an
+// email cannot be used twice.
+//
+// Before this, sehat_register_business_with_doctors validated that the business
+// had a name and nothing else, and never wrote a doctor's email at all — the
+// wizard collected one and the payload dropped it. Which is why no practitioner
+// in either database had an address to sign in with.
+//
+// Rolled back: it registers businesses and doctors, and a half-real clinic is
+// not something to leave in the data.
+if (!skip()) {
+  await db.query('begin')
+  let n = 0
+  const reg = async (over = {}, keep = false) => {
+    const sp = `reg${++n}`
+    await db.query(`savepoint ${sp}`)
+    try {
+      const a = {
+        name: `[TEST] Clinic ${STAMP}${n}`, phone: '9812345001', email: `biz${STAMP}${n}@test.invalid`,
+        doctors: [{ name: '[TEST] Dr A', phone: '9812345002',
+                    email: `doc${STAMP}${n}@test.invalid`, reg_number: `REG${STAMP}${n}` }],
+        ...over,
+      }
+      const r = await db.query(`select sehat_register_business_with_doctors(
+        p_name=>$1, p_vertical=>'clinic', p_address=>'x', p_pin_codes=>array['135001'],
+        p_phone=>$2, p_email=>$3, p_doctors=>$4::jsonb) id`,
+        [a.name, a.phone, a.email, JSON.stringify(a.doctors)])
+      return { id: r.rows[0].id }
+    } catch (e) {
+      await db.query(`rollback to savepoint ${sp}`)
+      return { err: e.message.split('\n')[0] }
+    } finally {
+      if (!keep) await db.query(`rollback to savepoint ${sp}`).catch(() => {})
+    }
+  }
+
+  try {
+    for (const [label, over] of [
+      ['a business with no name', { name: '   ' }],
+      ['a business with no mobile number', { phone: '' }],
+      ['a business with a mobile number that is not one', { phone: '12345' }],
+      ['a business with no email', { email: '' }],
+      ['a business with an email that is not one', { email: 'not-an-address' }],
+    ]) expectTrue(`${label} is refused`, !!(await reg(over)).err, 'it was accepted')
+
+    for (const [label, doc] of [
+      ['no name', { name: '', phone: '9812345002', email: `d${STAMP}@t.invalid`, reg_number: 'R1' }],
+      ['no mobile number', { name: 'D', phone: '', email: `d${STAMP}@t.invalid`, reg_number: 'R1' }],
+      ['no email', { name: 'D', phone: '9812345002', email: '', reg_number: 'R1' }],
+      ['no registration number', { name: 'D', phone: '9812345002', email: `d${STAMP}@t.invalid`, reg_number: '' }],
+    ]) expectTrue(`a doctor with ${label} is refused`, !!(await reg({ doctors: [doc] })).err, 'it was accepted')
+
+    expectTrue('a complete registration succeeds', !!(await reg()).id)
+
+    // Every doctor is checked before anything is written, so a rejected
+    // consultant cannot leave somebody owning a listing they cannot finish.
+    const before = (await raw(`select count(*)::int n from businesses`))[0].n
+    await reg({ doctors: [{ name: 'D', phone: '9812345002', email: '', reg_number: 'R1' }] })
+    const after = (await raw(`select count(*)::int n from businesses`))[0].n
+    expectEq('a rejected doctor leaves no half-registered business', after, before)
+
+    const first = await reg({}, true)
+    expectTrue('the first registration is written', !!first.id, first.err)
+    const dupEmail = `biz${STAMP}${n}@test.invalid`
+    const dup = await reg({ name: '[TEST] Second', phone: '9812345009', email: dupEmail })
+    expectTrue('a second business on the same email is refused', !!dup.err, 'it was accepted')
+    expectTrue('  and says so in words somebody can act on',
+      /already registered/i.test(dup.err ?? ''), dup.err)
+
+    // Stored normalised, so the login lookup and the registration agree about
+    // who is who however the address was typed.
+    const norm = await reg({
+      email: `  MiXeD${STAMP}@Test.INVALID `, phone: '+91 98123-45001',
+      doctors: [{ name: '[TEST] Dr N', phone: '9812345003',
+                  email: `docn${STAMP}@test.invalid`, reg_number: `REGN${STAMP}` }],
+    }, true)
+    if (norm.id) {
+      const row = (await raw(`select email, phone from businesses where id=$1`, [norm.id]))[0]
+      expectEq('an email is stored lower-cased and trimmed', row.email, `mixed${STAMP}@test.invalid`)
+      expectEq('a phone number is stored as ten digits', row.phone, '9812345001')
+    } else record('the normalisation case registered', false, norm.err)
+
+    // The index, not the function — an application rule is a rule until
+    // somebody writes a second application.
+    await db.query('savepoint idx')
+    let idxErr = null
+    try {
+      await db.query(`insert into businesses (name, vertical, pin_codes, phone, email, status)
+        values ('[TEST] direct a', 'clinic', array['135001'], '9812345011', $1, 'pending')`,
+        [`dupe${STAMP}@test.invalid`])
+      await db.query(`insert into businesses (name, vertical, pin_codes, phone, email, status)
+        values ('[TEST] direct b', 'clinic', array['135001'], '9812345012', $1, 'pending')`,
+        [`DUPE${STAMP}@TEST.invalid`])
+    } catch (e) { idxErr = e.message.split('\n')[0] }
+    finally { await db.query('rollback to savepoint idx') }
+    expectTrue('a direct insert cannot duplicate an email whatever the case',
+      idxErr !== null, 'both inserts were accepted')
+
+    // The rows that predate this have no email and must stay editable, or
+    // correcting a legacy doctor's phone fails on a field nobody has.
+    const legacy = (await raw(`select id from practitioners where email is null limit 1`))[0]
+    if (legacy) {
+      await db.query('savepoint leg')
+      let legErr = null
+      try { await db.query(`update practitioners set qualification='[TEST] MD' where id=$1`, [legacy.id]) }
+      catch (e) { legErr = e.message.split('\n')[0] }
+      finally { await db.query('rollback to savepoint leg') }
+      expectTrue('a practitioner with no email can still be edited', legErr === null, legErr)
+    }
+  } catch (e) {
+    record('the registration scenario ran', false, e.message.split('\n')[0])
   } finally { await db.query('rollback') }
 }
 

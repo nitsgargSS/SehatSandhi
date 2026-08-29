@@ -4,6 +4,7 @@ import { BIZ } from './shared'
 import { SPECIALITIES } from '../../types'
 import { searchPractitioners, PractitionerMatch } from '../../lib/identityApi'
 import { DraftPractitioner } from '../../lib/businessApi'
+import { isValidEmail, isValidPhone, isValidRegNumber } from '../../lib/credentials'
 import { searchDoctorsByName } from '../../lib/registryLookup'
 
 // Adding a doctor to a business, either way round.
@@ -49,8 +50,13 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
   // Name and a usable Indian mobile. Ten digits after stripping punctuation is
   // what normalisePhone in clinic-otp accepts, and matching that here means the
   // wizard cannot record a number the login flow would later reject.
+  // The same four the server requires of a new doctor since 0079. Someone
+  // matched from the register arrives with a practitioner_id and is exempt —
+  // they are already registered, and their details are already checked.
   const ready = draft.name.trim().length > 1
-    && (draft.phone ?? '').replace(/\D/g, '').length >= 10
+    && isValidPhone(draft.phone)
+    && isValidEmail(draft.email)
+    && isValidRegNumber(draft.reg_number)
   useEffect(() => {
     const q = query.trim()
     if (q.length < 2) { setMatches([]); setRegistry([]); setSearched(false); return }
@@ -283,10 +289,18 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
             </select>
             <input placeholder="Qualification — e.g. MBBS, MD" value={draft.qualification ?? ''}
               onChange={e => setDraft(d => ({ ...d, qualification: e.target.value }))} style={input} />
-            <input placeholder="Registration number (optional)" value={draft.reg_number ?? ''}
+            <input placeholder="Registration number *" value={draft.reg_number ?? ''}
               onChange={e => setDraft(d => ({ ...d, reg_number: e.target.value }))} style={input} />
             <input placeholder="Mobile number *" inputMode="numeric" value={draft.phone ?? ''}
               onChange={e => setDraft(d => ({ ...d, phone: e.target.value }))} style={input} />
+            <input placeholder="Email *" type="email" inputMode="email" autoComplete="off"
+              value={draft.email ?? ''}
+              onChange={e => setDraft(d => ({ ...d, email: e.target.value }))} style={input} />
+            {/* Their own address, not the clinic's: it is how this doctor signs
+                in, and 0079 refuses an address somebody else already used. */}
+            <p style={{ fontSize: 12, color: '#6b7280', marginTop: -4 }}>
+              Their own email — it is how they sign in, and it cannot be shared with another account.
+            </p>
           </div>
 
           {/* The solo case, which is most clinics: the owner IS the doctor. They
