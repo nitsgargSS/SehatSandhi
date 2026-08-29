@@ -23,6 +23,22 @@ import { applyHeadcount, headcountFor } from './headcount.ts'
 
 export type PricingMode = 'flat_all_pincodes' | 'flat_per_pincode' | 'pincode_tiers'
 
+/**
+ * A term length that carries its own total, rather than being a monthly rate
+ * multiplied out. Introduced by 0082 because the annual launch price (₹10,000
+ * for 12 months) is a discount on ₹1,000/month and monthly × months cannot
+ * express it.
+ */
+export interface PlanTerm {
+  months: number
+  /** Total for the whole term, whole rupees, taxed like the plan says. */
+  price: number
+  label: string | null
+  savings_note: string | null
+  /** Almost always false — see the 0082 header. */
+  multiplies_headcount: boolean
+}
+
 export interface ModuleLine {
   code: string
   label: string
@@ -76,10 +92,24 @@ export interface PriceResult {
   modules: ModuleLine[]
   moduleTotal: number
 
-  // money — always a monthly rate times a number of months
+  // money
+  //
+  // WARNING: total is NOT always monthlyTotal × months. When the plan prices the
+  // chosen term explicitly (plan_terms, 0082) termPrice wins and total is that
+  // figure — ₹10,000 for twelve months of a ₹1,000/month plan. monthlyTotal
+  // remains the headline rate worth advertising ("from ₹1,000 a month"), so the
+  // two deliberately disagree on a discounted term.
+  //
+  // `total` is the authority. Anything deriving a charge, an invoice line or a
+  // Razorpay amount must read total (or grandTotal after tax) and must never
+  // recompute it from monthlyTotal.
   monthlyTotal: number
   months: number
   total: number
+  /** The plan_terms price used, or null when priced the old monthly way. */
+  termPrice: number | null
+  /** Every term on offer, for drawing the choice. Empty on legacy plans. */
+  terms: PlanTerm[]
   defaultMonths: number
   minMonths: number
   maxMonths: number
@@ -239,6 +269,53 @@ export function clampMonths(plan: PricingPlan, requested?: number | null): numbe
   return Math.min(plan.max_months, Math.max(plan.min_months, n))
 }
 
+/** The enabled terms for a plan, cheapest-sequenced first. Empty on legacy plans. */
+export async function resolvePlanTerms(
+  supabase: SupabaseClient,
+  planCode: string | null,
+): Promise<PlanTerm[]> {
+  if (!planCode) return []
+  const { data, error } = await supabase
+    .from('plan_terms')
+    .select('months, price, label, savings_note, multiplies_headcount, sequence')
+    .eq('plan_code', planCode)
+    .eq('is_enabled', true)
+    .order('sequence')
+    .order('months')
+  // A plan priced the old way has no rows, and so does a database where 0082
+  // has not been applied. Both mean "price it monthly", so a failure here must
+  // not take the quote down with it.
+  if (error) return []
+  return (data ?? []).map((t: Record<string, unknown>) => ({
+    months: Number(t.months),
+    price: Number(t.price),
+    label: (t.label as string) ?? null,
+    savings_note: (t.savings_note as string) ?? null,
+    multiplies_headcount: Boolean(t.multiplies_headcount),
+  }))
+}
+
+/**
+ * Snap a requested term to one that is actually on offer.
+ *
+ * clampMonths would happily return 9 for a plan whose bounds are 6..12, and
+ * there is no ₹ figure for nine months — the buyer would be quoted a term that
+ * does not exist. With terms present the answer must be one of them, so an
+ * unrecognised request falls back to the SHORTEST, for the same reason
+ * clampMonths does: never charge for more than was asked for.
+ */
+export function resolveTermMonths(
+  plan: PricingPlan,
+  terms: PlanTerm[],
+  requested?: number | null,
+): number {
+  if (!terms.length) return clampMonths(plan, requested)
+  const asked = Number.isFinite(requested) ? Math.floor(requested as number) : NaN
+  const hit = terms.find((t) => t.months === asked)
+  if (hit) return hit.months
+  return terms.reduce((min, t) => (t.months < min ? t.months : min), terms[0].months)
+}
+
 /**
  * Turn the codes a buyer ticked into priced lines.
  *
@@ -305,7 +382,11 @@ export async function computePrice(
         ? Math.max(0, Math.floor(Number(doctorCountHint) || 0))
         : 0)
 
-  const months = clampMonths(plan, requestedMonths)
+  // Terms depend on which plan resolved, so this cannot join the Promise.all
+  // above. One indexed lookup on a two-row table.
+  const terms = await resolvePlanTerms(supabase, plan.code)
+  const months = resolveTermMonths(plan, terms, requestedMonths)
+  const term = terms.find((t) => t.months === months) ?? null
 
   // Does the monthly fee apply to this vertical at all? Two gates: the plan must
   // cover the vertical, and the vertical must be on monthly billing — unless the
@@ -334,6 +415,8 @@ export async function computePrice(
     planLabel: plan.label,
     mode: plan.mode,
     months,
+    terms,
+    termPrice: term ? term.price : null,
     defaultMonths: plan.default_months,
     minMonths: plan.min_months,
     maxMonths: plan.max_months,
@@ -353,6 +436,10 @@ export async function computePrice(
   if (!pincodes.length) {
     return {
       pincodes: [], count: 0, residents: 0, topTier: null, breakdown: [],
+      // Pre-existing omission, caught when this file was first type-checked:
+      // PriceResult requires both, and leaving them undefined crashes any
+      // caller that maps over priced.modules for a quote with no pincodes yet.
+      modules: [], moduleTotal: 0,
       monthlyTotal: 0, total: 0,
       tax: applyGst(0, taxSettings, recipientState),
       priceIncludesGst: plan.price_includes_gst,
@@ -467,9 +554,30 @@ export async function computePrice(
   const moduleTotal = moduleLines.reduce((sum, m) => sum + m.monthly_price, 0)
   monthlyTotal += moduleTotal
 
+  // What the term actually costs.
+  //
+  // With a plan_terms row the price is the row, not the arithmetic: ₹10,000 for
+  // twelve months, never ₹1,000 × 12. Charged as written and NOT multiplied by
+  // consultant headcount unless the term says so, because an offer sold as
+  // "₹6,000 for 6 months" cannot quietly become ₹54,000 for a nine-consultant
+  // hospital — the same reasoning that keeps the care modules off the multiplier.
+  //
+  // A negotiated customMonthly still wins: that is a struck deal about this one
+  // business, and a list-price term must not override it.
+  //
+  // Modules are added per month on top either way. They are ₹0 since 0082, so
+  // this contributes nothing today, but a term price should not silently swallow
+  // a module that is given a price again later.
+  let termTotal: number
+  if (term && customMonthly === null && monthlyApplies) {
+    const base = term.multiplies_headcount ? applyHeadcount(term.price, hc) : term.price
+    termTotal = base + moduleTotal * months
+  } else {
+    termTotal = monthlyTotal * months
+  }
+
   // Tax applies to the whole term, not one month, since the term is what gets
   // charged and invoiced in a single transaction.
-  const termTotal = monthlyTotal * months
   const tax = plan.price_includes_gst
     ? extractGst(termTotal, taxSettings, recipientState)
     : applyGst(termTotal, taxSettings, recipientState)

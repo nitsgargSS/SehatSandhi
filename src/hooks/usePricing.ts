@@ -34,6 +34,22 @@ export interface ActivePlan {
   doctor_billing: string
 }
 
+/**
+ * A term length with its own total price (migration 0082).
+ *
+ * The client mirror of _shared/pricing.ts's PlanTerm. It exists so the wizard
+ * can DRAW the offer; the server still decides what is charged, and a term the
+ * client invents is snapped back to a real one by resolveTermMonths().
+ */
+export interface PlanTerm {
+  months: number
+  /** Total for the whole term in whole rupees, not a monthly rate. */
+  price: number
+  label: string | null
+  savings_note: string | null
+  multiplies_headcount: boolean
+}
+
 export interface VerticalBillingRow {
   vertical: VerticalKey
   monthly_enabled: boolean
@@ -86,6 +102,12 @@ export interface PricingState {
   plan: ActivePlan
   tiers: PricingTier[]
   verticals: VerticalBillingRow[]
+  /**
+   * Terms on offer for the active plan, cheapest first. Empty means the plan is
+   * priced the old monthly way — the wizard then draws no term picker at all,
+   * which is what every plan did before 0082.
+   */
+  terms: PlanTerm[]
   loading: boolean
   /** True when we are showing the built-in fallback rather than live DB values. */
   isFallback: boolean
@@ -95,6 +117,9 @@ export function usePricing(): PricingState {
   const [plan, setPlan] = useState<ActivePlan>(FALLBACK_PLAN)
   const [tiers, setTiers] = useState<PricingTier[]>(PRICING_TIERS)
   const [verticals, setVerticals] = useState<VerticalBillingRow[]>(FALLBACK_VERTICALS)
+  // No fallback: inventing a term price offline would quote a number nobody
+  // agreed to. An empty list degrades to the pre-0082 monthly quote instead.
+  const [terms, setTerms] = useState<PlanTerm[]>([])
   const [loading, setLoading] = useState(true)
   const [isFallback, setIsFallback] = useState(true)
 
@@ -103,12 +128,18 @@ export function usePricing(): PricingState {
 
     const load = async () => {
       try {
-        const [planRes, tierRes, vbRes] = await Promise.all([
+        const [planRes, tierRes, vbRes, termRes] = await Promise.all([
           supabase.from('active_pricing_plan').select('*').maybeSingle(),
           supabase.from('pricing_tiers')
             .select('tier_number, tier_name, monthly_price, min_population, max_population')
             .eq('is_active', true).order('monthly_price'),
           supabase.from('vertical_billing').select('*').eq('is_active', true),
+          // Every enabled term, filtered to the active plan below. One query on a
+          // table with two rows beats a second round trip that has to wait for
+          // planRes to know which code to ask for.
+          supabase.from('plan_terms')
+            .select('plan_code, months, price, label, savings_note, multiplies_headcount')
+            .eq('is_enabled', true).order('sequence').order('months'),
         ])
         if (cancelled) return
 
@@ -133,6 +164,20 @@ export function usePricing(): PricingState {
             doctor_billing: String(p.doctor_billing ?? 'none'),
           })
           gotLive = true
+
+          // Terms belong to a plan, so this filters by the code that just
+          // resolved. A plan with no rows keeps an empty list and the wizard
+          // falls back to the monthly quote.
+          const allTerms = (termRes.data ?? []) as Record<string, unknown>[]
+          setTerms(allTerms
+            .filter(t => String(t.plan_code) === String(p.code))
+            .map(t => ({
+              months: Number(t.months),
+              price: Number(t.price),
+              label: (t.label as string) ?? null,
+              savings_note: (t.savings_note as string) ?? null,
+              multiplies_headcount: Boolean(t.multiplies_headcount),
+            })))
         }
 
         // Render the tiers the DB actually has, not a local list with DB prices
@@ -179,7 +224,7 @@ export function usePricing(): PricingState {
     return () => { cancelled = true }
   }, [])
 
-  return { plan, tiers, verticals, loading, isFallback }
+  return { plan, tiers, verticals, terms, loading, isFallback }
 }
 
 // ── helpers shared by the landing page and the wizard ──

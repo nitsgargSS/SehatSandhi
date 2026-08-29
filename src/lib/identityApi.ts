@@ -54,6 +54,13 @@ export interface RegisterBusinessInput {
   regNumber?: string | null
   workingHours?: string | null
   placeId?: string | null
+  /**
+   * Whether the auto-renewal box was left ticked. Sent at registration because
+   * signup runs on the anon key: there is no session yet, so the owner-only
+   * sehat_set_auto_renew() cannot record an untick after the fact. Omitted
+   * means true, matching the column default.
+   */
+  autoRenew?: boolean
 }
 
 /** A doctor being registered alongside the business, in the same call. */
@@ -94,6 +101,7 @@ export async function registerBusiness(
     p_working_hours: input.workingHours ?? null,
     p_place_id: input.placeId ?? null,
     p_doctors: doctors,
+    p_auto_renew: input.autoRenew ?? true,
   })
   if (error) throw new Error(error.message)
   return data as string

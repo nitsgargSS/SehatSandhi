@@ -33,10 +33,19 @@ export interface PriceResult {
   modules: CareModuleLine[]
   moduleTotal: number
 
-  /** Money is always a monthly rate times a term. total = monthlyTotal × months. */
+  /**
+   * WARNING: total is NOT always monthlyTotal × months. Since 0082 a plan can
+   * price a term outright — ₹10,000 for twelve months of a ₹1,000/month plan —
+   * and then termPrice wins. monthlyTotal stays the headline rate to advertise.
+   *
+   * Read `total` (or tax.grandTotal) for anything shown as an amount payable.
+   * Recomputing it from monthlyTotal silently overcharges on a discounted term.
+   */
   monthlyTotal: number
   months: number
   total: number
+  /** The plan_terms price behind `total`, or null when priced monthly. */
+  termPrice: number | null
   defaultMonths: number
   minMonths: number
   maxMonths: number
