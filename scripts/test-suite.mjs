@@ -1078,6 +1078,99 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+sec('expiry gate')
+// 0081: an expired password reads nothing, and can still fix itself.
+//
+// 0080 put a screen in front of a stale password and said plainly it was not a
+// lock. This is the lock. The obvious single gate — sehat_caller_role() — backs
+// 29 policies while sehat_caller_business_ids() independently backs 48, so
+// gating only the first would have left patients, appointments, bills and
+// admissions readable and merely LOOKED like a boundary. Both are gated, and so
+// is sehat_is_admin().
+//
+// The way out has to survive the gate or an expired password becomes a lost
+// account, so that is asserted too — it is the part that would actually hurt.
+//
+// NOT wrapped in a transaction, deliberately. probe() runs its own begin and
+// rollback, so an outer BEGIN here is destroyed by the first probe and every
+// write after it commits — which is what the first draft of this section did.
+// The writes below are committed on purpose and undone in the finally.
+if (!skip()) {
+  const had = new Set((await raw(`select auth_uid from auth_password_state
+     where auth_uid = any($1::uuid[])`, [[uid.owner, uid.admin]])).map(r => r.auth_uid))
+  const expire = u => db.query(`insert into auth_password_state (auth_uid, password_changed_at)
+     values ($1, now() - interval '200 days')
+     on conflict (auth_uid) do update set password_changed_at = now() - interval '200 days',
+                                          must_change = false`, [u])
+  const restore = async u => {
+    if (had.has(u)) await db.query(`update auth_password_state set password_changed_at = now(),
+       must_change = false where auth_uid = $1`, [u])
+    else await db.query(`delete from auth_password_state where auth_uid = $1`, [u])
+  }
+  const TABLES = ['patients', 'appointments', 'patient_bills', 'admissions',
+                  'business_patients', 'prescriptions']
+
+  try {
+    const before = {}
+    for (const t of TABLES) before[t] = await probe('owner', `select count(*)::int from ${t}`)
+    expectTrue('the clinic can read its own records to begin with',
+      TABLES.every(t => (before[t] ?? 0) > 0), JSON.stringify(before))
+
+    await expire(uid.owner)
+    expectEq('an expired password resolves no role',
+      await probe('owner', `select sehat_caller_role($1)`, [BIZ.id]), null)
+    expectEq('and belongs to no business',
+      await probe('owner', `select count(*)::int from sehat_caller_business_ids() x`), 0)
+    for (const t of TABLES) {
+      expectEq(`${t} reads zero rows once the password has expired`,
+        await probe('owner', `select count(*)::int from ${t}`), 0, `was ${before[t]}`)
+    }
+
+    // Everything the recovery needs is SECURITY DEFINER and reads
+    // auth_password_state directly, so none of it passes through a gate.
+    expectEq('the expired caller can still read their own password state',
+      await probe('owner', `select expired from sehat_password_state()`), true)
+    await expectAllow('and can still clear it',
+      () => probe('owner', `select sehat_password_changed()`))
+
+    await restore(uid.owner)
+    expectEq('changing the password restores the role',
+      await probe('owner', `select sehat_caller_role($1)`, [BIZ.id]), 'owner')
+    expectEq('and the records come back',
+      await probe('owner', `select count(*)::int from patients`), before.patients)
+
+    // admin_users has one SELECT policy and it is sehat_is_admin(), which is
+    // why App.tsx must ask about the password before asking about the role.
+    expectEq('an unexpired admin is an admin', await probe('admin', `select sehat_is_admin()`), true)
+    await expire(uid.admin)
+    expectEq('an expired admin is not', await probe('admin', `select sehat_is_admin()`), false)
+    expectEq('and reads no row from admin_users',
+      await probe('admin', `select count(*)::int from admin_users`), 0)
+    expectEq('but can still see their own password state',
+      await probe('admin', `select expired from sehat_password_state()`), true)
+    await restore(uid.admin)
+
+    // The bot, the crons and every edge function have no JWT subject. Gating
+    // them would stop bookings and purges because somebody's password aged.
+    await db.query('begin')
+    let sr
+    try {
+      await db.query('set local role service_role')
+      sr = (await db.query(`select sehat_caller_password_expired() e,
+                                   (select count(*)::int from patients) n`)).rows[0]
+    } finally { await db.query('rollback') }
+    expectEq('service_role is never gated', sr.e, false)
+    expectTrue('and still reads everything', sr.n > 0, `saw ${sr.n}`)
+  } catch (e) {
+    record('the expiry gate scenario ran', false, e.message.split('\n')[0])
+  } finally {
+    // Committed writes, so this is the only thing that puts them back.
+    await restore(uid.owner).catch(() => {})
+    await restore(uid.admin).catch(() => {})
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 sec('modules')
 // Entitlement: a clinic that stopped paying must not be able to admit.
 const PAID = (await raw(`select id from businesses where name='[SEED] Paid Multi-Speciality'`))[0]

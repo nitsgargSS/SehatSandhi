@@ -7,6 +7,7 @@ import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
 import SiteFooter from '../../components/SiteFooter'
 import EmailSignIn from '../../components/EmailSignIn'
+import { fetchPasswordState, mustChangeNow } from '../../lib/passwordState'
 
 // Sign in with email and password, or a code sent to that email.
 //
@@ -164,6 +165,14 @@ export default function DoctorLogin() {
             <EmailSignIn
               submitLabel={t('loginPage.btnLogin')}
               onSignedIn={async () => {
+                // Before the clinic check, not after: 0081 empties
+                // sehat_caller_business_ids() for an expired password, so this
+                // would otherwise say "not attached to a clinic" and sign them
+                // out — turning an expired password into a lost account.
+                if (mustChangeNow(await fetchPasswordState())) {
+                  navigate('/business/dashboard')
+                  return null
+                }
                 const { data: ids, error: idsErr } = await supabase.rpc('sehat_caller_business_ids')
                 if (idsErr) return 'We could not check your account just now. Please try again.'
                 if (!ids || (ids as unknown[]).length === 0) {

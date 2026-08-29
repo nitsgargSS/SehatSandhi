@@ -3,6 +3,7 @@ import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
 import EmailSignIn from '../../components/EmailSignIn'
 import { supabase } from '../../lib/supabase'
+import { fetchPasswordState, mustChangeNow } from '../../lib/passwordState'
 
 // Authentication happens in Supabase Auth, against a hashed password, server
 // side. The previous version compared against VITE_ADMIN_EMAIL/VITE_ADMIN_PASS —
@@ -34,6 +35,11 @@ export default function AdminLogin() {
         <EmailSignIn
           submitLabel={t('adminLoginPage.btnLogin')}
           onSignedIn={async (userId) => {
+            // Same ordering as AdminGuard, for the same reason — see 0081.
+            if (mustChangeNow(await fetchPasswordState())) {
+              navigate('/ng-ctrl-2026/dashboard')
+              return null
+            }
             const { data: admin } = await supabase
               .from('admin_users').select('role').eq('auth_uid', userId).maybeSingle()
             // A real user who is not an admin. EmailSignIn drops the session on

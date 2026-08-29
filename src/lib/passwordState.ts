@@ -6,12 +6,15 @@ import { supabase } from './supabase'
 // The figures come from 0080 and live in SQL, not here, so changing the policy
 // is a migration rather than a redeploy of the bundle.
 //
-// Worth knowing what this is: a screen in front of the app, not a lock on the
-// data. An expired session still holds a valid JWT and every RLS policy keys off
-// auth.uid(), so somebody who skipped the UI and called the REST API directly
-// would still be served. 0080 explains why the real gate — returning null from
-// sehat_caller_role() when the password is expired — was left for its own
-// migration: that function backs nearly every policy in the schema.
+// As of 0081 this is no longer only cosmetic: that migration gates
+// sehat_caller_role(), sehat_caller_business_ids() and sehat_is_admin() on
+// password age, so an expired session reads nothing from any table — including
+// through the REST API, with no UI involved. These functions are what let the
+// app say so politely instead of showing an empty clinic.
+//
+// One consequence to hold on to: every guard must ask about the password BEFORE
+// asking what somebody is, or the gate turns an expired password into a lost
+// account. App.tsx, and both login pages, do.
 
 export interface PasswordState {
   passwordChangedAt: string

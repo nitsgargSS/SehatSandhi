@@ -17,6 +17,7 @@ const Browse = lazy(() => import('./pages/Browse'))
 const SpecialityLanding = lazy(() => import('./pages/SpecialityLanding'))
 const DoctorLogin = lazy(() => import('./pages/doctor/Login'))
 import PasswordGate from './components/PasswordGate'
+import { fetchPasswordState, mustChangeNow } from './lib/passwordState'
 const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
@@ -59,6 +60,19 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => {
       const { data: { session } } = await supabase.auth.getSession()
       if (cancelled) return
       if (!session) { setState('out'); return }
+
+      // The password question comes FIRST, and 0081 is why. admin_users has one
+      // SELECT policy and it is sehat_is_admin(), which that migration gates on
+      // password age — so an expired admin reads no row and would be told they
+      // are not an admin and bounced back to the login screen, with the
+      // change-password screen on the other side of a door they can no longer
+      // open. Letting them in here hands them to PasswordGate, which blocks
+      // everything until they fix it. RLS is still refusing them every row
+      // meanwhile, so this admits nobody to anything.
+      const pw = await fetchPasswordState()
+      if (cancelled) return
+      if (mustChangeNow(pw)) { setState('in'); return }
+
       const { data } = await supabase
         .from('admin_users').select('role').eq('auth_uid', session.user.id).maybeSingle()
       if (!cancelled) setState(data ? 'in' : 'out')

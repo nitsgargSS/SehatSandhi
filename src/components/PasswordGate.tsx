@@ -19,11 +19,12 @@ import { Spinner } from './Loading'
 // expires, mid-clinic, with patients waiting, is how people end up choosing
 // Passw0rd2 — so it starts asking ten days out, while there is time to think.
 //
-// What this is not: a lock on the data. The session's JWT is still valid and
-// every RLS policy keys off auth.uid(), so this is a screen, not a boundary.
-// 0080 says the same thing at more length and leaves the real gate — returning
-// null from sehat_caller_role() when a password is expired — for its own
-// migration, because that function backs nearly every policy in the schema.
+// This is the screen, not the lock. 0081 is the lock: it gates
+// sehat_caller_role(), sehat_caller_business_ids() and sehat_is_admin() on
+// password age, so an expired session reads zero rows from every table whether
+// or not it ever loads this component. What that leaves this to do is explain
+// why, and offer the way out — because with 0081 in place, an expired login
+// without this screen would just look like a clinic whose data had vanished.
 
 export default function PasswordGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<PasswordState | null>(null)
@@ -55,8 +56,11 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
       // Supabase Auth will not tell us when a password was set, so if this is
       // missed the clock never restarts and they are asked again next time.
       await markPasswordChanged()
-      setState(await fetchPasswordState())
-      setNext(''); setConfirm('')
+      // A full reload rather than re-rendering: the guards around this — the
+      // admin one especially — were told to let an expired person through, and
+      // they have to run again now the password is good. Re-rendering in place
+      // would show the dashboard without anybody having re-checked who this is.
+      window.location.reload()
     } catch (e) {
       setError((e as Error).message)
     } finally { setBusy(false) }
