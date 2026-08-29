@@ -1014,6 +1014,70 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+sec('password expiry')
+// 0080: how old a password is, and the screen that stands in front of a stale
+// one. Supabase Auth will not tell us when a password was set — auth.users
+// .updated_at moves for a dozen unrelated reasons — so the date is recorded
+// here as it changes.
+//
+// What is asserted is the state machine, not the screen: expired reads as
+// expired, a fresh account is not locked out on the day this ships, and nobody
+// can clear their own forced change or read anybody else's row.
+if (!skip()) {
+  const who = 'owner'
+  const state = () => probe(who, `select to_jsonb(s) from sehat_password_state() s`)
+
+  await db.query('begin')
+  try {
+    // Everything that existed before 0080 has no row. It must read as fresh:
+    // expiring every account in the system on release day is an outage, not a
+    // security improvement.
+    await db.query(`delete from auth_password_state where auth_uid = $1`, [uid[who]])
+    const fresh = await state()
+    expectEq('an account with no recorded change reads as not expired', fresh?.expired, false)
+    expectTrue('and is given a full window', (fresh?.days_left ?? 0) >= 89, JSON.stringify(fresh))
+
+    await perform(who, `select sehat_password_changed()`)
+    const stamped = (await raw(`select must_change from auth_password_state where auth_uid=$1`, [uid[who]]))[0]
+    expectTrue('changing a password records the date', !!stamped, 'no row was written')
+
+    await db.query(`update auth_password_state set password_changed_at = now() - interval '100 days'
+                     where auth_uid = $1`, [uid[who]])
+    const old = await state()
+    expectEq('a 100-day-old password reads as expired', old?.expired, true)
+    expectEq('days left floors at zero rather than going negative', old?.days_left, 0)
+
+    // A forced change is independent of age — a password can be a minute old
+    // and still not be theirs.
+    await db.query(`update auth_password_state
+                       set password_changed_at = now(), must_change = true,
+                           must_change_reason = '[TEST] reset for you'
+                     where auth_uid = $1`, [uid[who]])
+    const forced = await state()
+    expectEq('a forced change shows even on a brand-new password', forced?.must_change, true)
+    expectEq('and carries the reason to put on the screen',
+      forced?.must_change_reason, '[TEST] reset for you')
+
+    // Changing it clears the flag, which is what lets somebody back in.
+    await perform(who, `select sehat_password_changed()`)
+    expectEq('changing it clears the forced flag', (await state())?.must_change, false)
+
+    await expectDeny('a clinic cannot force somebody else to change theirs',
+      () => probe(who, `select sehat_require_password_change($1, '[TEST]')`, [uid.reception]),
+      'only Sehatsandhi')
+    await expectAllow('an admin can',
+      () => probe('admin', `select sehat_require_password_change($1, '[TEST]')`, [uid.reception]))
+
+    // The row says how close somebody is to being locked out, which is nobody
+    // else's business.
+    const visible = await probe('reception', `select count(*)::int from auth_password_state`)
+    expectTrue('a caller sees only their own row', (visible ?? 0) <= 1, `saw ${visible}`)
+  } catch (e) {
+    record('the password expiry scenario ran', false, e.message.split('\n')[0])
+  } finally { await db.query('rollback') }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 sec('modules')
 // Entitlement: a clinic that stopped paying must not be able to admit.
 const PAID = (await raw(`select id from businesses where name='[SEED] Paid Multi-Speciality'`))[0]

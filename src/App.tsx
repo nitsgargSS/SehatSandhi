@@ -16,6 +16,7 @@ import { WA_NUMBER } from './types'
 const Browse = lazy(() => import('./pages/Browse'))
 const SpecialityLanding = lazy(() => import('./pages/SpecialityLanding'))
 const DoctorLogin = lazy(() => import('./pages/doctor/Login'))
+import PasswordGate from './components/PasswordGate'
 const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
@@ -171,7 +172,7 @@ export default function App() {
               establishment and attaching whoever works there. */}
           <Route path="/doctor/register" element={<BusinessRegister mode="doctor" />} />
           <Route path="/business/login" element={<DoctorLogin />} />
-          <Route path="/business/dashboard" element={<DoctorDashboard />} />
+          <Route path="/business/dashboard" element={<PasswordGate><DoctorDashboard /></PasswordGate>} />
 
           {/* Presentation view of the WhatsApp booking journey, for showing
               stakeholders the flow while the AISensy integration is built. All
@@ -230,7 +231,7 @@ export default function App() {
 
           {/* Admin — hidden, never linked publicly */}
           <Route path={`/${ADMIN_PATH}`} element={<AdminLogin />} />
-          <Route path={`/${ADMIN_PATH}/dashboard`} element={<AdminGuard><AdminDashboard /></AdminGuard>} />
+          <Route path={`/${ADMIN_PATH}/dashboard`} element={<AdminGuard><PasswordGate><AdminDashboard /></PasswordGate></AdminGuard>} />
 
           {/* Legacy /admin path — redirect to home, don't reveal new path */}
           <Route path="/admin" element={<Navigate to="/" replace />} />
