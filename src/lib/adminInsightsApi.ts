@@ -295,3 +295,33 @@ export const AREA_ADMIN_COLUMNS: [keyof ServiceAreaRow, string][] = [
 
 export const downloadServiceAreas = (rows: ServiceAreaRow[]) =>
   downloadCsv(`service-areas-${stamp()}.csv`, toCsv(rows, AREA_ADMIN_COLUMNS))
+
+/**
+ * Correct where a business IS.
+ *
+ * One call because a location lives in two places — businesses.own_* and the
+ * primary practice_location — and two writes from a browser is two chances to
+ * land one and lose the other. The reports read the location; the business
+ * record is what it told us. If they disagree, nobody can tell which is
+ * believed. See migration 0099.
+ *
+ * Does NOT touch businesses.pin_codes. That is coverage — where the listing is
+ * sold — and moving a clinic does not change what it bought.
+ *
+ * Returns a sentence to show the admin: a bad pincode comes back as a message
+ * rather than an exception, because it is a typo, not a fault.
+ */
+export async function setBusinessLocation(
+  businessId: string,
+  loc: { pinCode: string; city?: string; district?: string; state?: string },
+): Promise<string> {
+  const { data, error } = await supabase.rpc('sehat_admin_set_business_location', {
+    p_business: businessId,
+    p_pin_code: loc.pinCode,
+    p_city: loc.city ?? null,
+    p_district: loc.district ?? null,
+    p_state: loc.state ?? null,
+  })
+  if (error) throw new Error(error.message)
+  return String(data ?? 'Saved.')
+}
