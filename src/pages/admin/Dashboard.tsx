@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { markPasswordChanged } from '../../lib/passwordState'
 import StatusBadge from '../../components/StatusBadge'
 import { money, num, shortDate, dateTime, isoDate } from '../../lib/format'
-import { Business, Practitioner, SPECIALITIES, PIN_CODES } from '../../types'
+import { Business, Practitioner, SPECIALITIES } from '../../types'
 import { DOCTOR_QUALIFICATIONS } from '../business/shared'
 import { StatTile, ColumnChart, BarList, RangePicker } from '../../components/Charts'
 import { describeHeadcount } from '../../../supabase/functions/_shared/headcount'
@@ -13,6 +13,7 @@ import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
 import SandboxPanel from './SandboxPanel'
 import GstFilingPanel from './GstFilingPanel'
+import InsightsPanel from './InsightsPanel'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 
@@ -151,7 +152,7 @@ export default function AdminDashboard() {
   const [doctors, setDoctors] = useState<BusinessRow[]>([])
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'coupons' | 'billing' | 'reports' | 'gst' | 'account' | 'sandbox'>('pending')
+  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'coupons' | 'billing' | 'reports' | 'insights' | 'gst' | 'account' | 'sandbox'>('pending')
 
   // ── Platform reporting ──
   interface PlatformRow {
@@ -619,6 +620,7 @@ export default function AdminDashboard() {
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
               { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
               { id: 'reports', label: 'Reports', count: 0, badge: false },
+              { id: 'insights', label: 'Insights', count: 0, badge: false },
               { id: 'gst', label: 'GST', count: 0, badge: false },
               { id: 'account', label: 'Account', count: 0, badge: false },
               // Only reachable while pointed at the sandbox backend — the purge
@@ -1767,6 +1769,8 @@ export default function AdminDashboard() {
           {/* Filing gets its own tab rather than a section of Reports: Reports is
               read to decide something, this is read to type a return, and the
               two are done by different people at different times of the month. */}
+          {tab === 'insights' && <InsightsPanel />}
+
           {tab === 'gst' && <GstFilingPanel />}
 
           {tab === 'account' && (

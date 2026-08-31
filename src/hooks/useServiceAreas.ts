@@ -119,3 +119,48 @@ export function useServiceAreas() {
 
   return { areas, loading, error }
 }
+
+// ── The public area list ────────────────────────────────────────────────────
+//
+// Browse and the speciality landing pages used to render PIN_CODES, a
+// twenty-entry Yamuna Nagar array compiled into the bundle. That made the
+// patient side structurally incapable of showing anywhere else: a clinic could
+// register in Jaipur (migration 0094) and no patient page would ever list
+// Jaipur, because the list of places was a constant.
+//
+// This is the same table, minus the pricing columns those pages have no
+// business knowing. Anonymous visitors can read it — service_areas carries a
+// `public_read_areas` policy for exactly this — so it needs no session.
+//
+// It returns [] rather than a fallback constant while loading or on failure.
+// An area picker that is briefly empty is honest; one that silently offers a
+// hardcoded town nobody operates in is not.
+
+export interface PublicArea {
+  pin_code: string
+  area_name: string
+  district: string | null
+  state: string | null
+}
+
+export function usePublicAreas() {
+  const [areas, setAreas] = useState<PublicArea[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('service_areas')
+      .select('pin_code, area_name, district, state')
+      .eq('is_active', true)
+      .order('area_name', { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        setAreas(error ? [] : ((data ?? []) as PublicArea[]))
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  return { areas, loading }
+}

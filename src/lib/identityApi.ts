@@ -55,6 +55,21 @@ export interface RegisterBusinessInput {
   workingHours?: string | null
   placeId?: string | null
   /**
+   * Where the business IS — its own pincode, town, district and state.
+   *
+   * Distinct from `pinCodes`, which is every area the listing is SOLD into.
+   * Conflating them is what filed every business in Yamuna Nagar until 0094:
+   * the trigger took the first coverage pincode as the branch address.
+   *
+   * Optional on purpose. A business that cannot find itself in the Google
+   * search and does not know its pincode should still be able to register;
+   * admin can correct it later. A failed signup is worse than a blank column.
+   */
+  ownPinCode?: string | null
+  ownCity?: string | null
+  ownDistrict?: string | null
+  ownState?: string | null
+  /**
    * Whether the auto-renewal box was left ticked. Sent at registration because
    * signup runs on the anon key: there is no session yet, so the owner-only
    * sehat_set_auto_renew() cannot record an untick after the fact. Omitted
@@ -102,6 +117,10 @@ export async function registerBusiness(
     p_place_id: input.placeId ?? null,
     p_doctors: doctors,
     p_auto_renew: input.autoRenew ?? true,
+    p_pin_code: input.ownPinCode ?? null,
+    p_city: input.ownCity ?? null,
+    p_district: input.ownDistrict ?? null,
+    p_state: input.ownState ?? null,
   })
   if (error) throw new Error(error.message)
   return data as string

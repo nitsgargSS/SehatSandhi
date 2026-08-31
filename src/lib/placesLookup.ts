@@ -40,6 +40,10 @@ export interface PlaceDetails {
   address: string
   phone: string | null
   pincode: string | null
+  /** Town. Where the business IS — not to be confused with its coverage. */
+  city: string | null
+  district: string | null
+  state: string | null
   /** Opening hours as Google phrases them, one line per day. */
   hours: string[] | null
 }
@@ -228,7 +232,14 @@ export async function fetchPlaceDetails(
   } | null
   if (!p?.id) return null
 
-  const pin = p.addressComponents?.find(c => c.types?.includes('postal_code'))?.longText ?? null
+  // Google returns the whole address broken into components; the wizard used to
+  // read the postal code out and throw the rest away, which is why every
+  // business ended up filed in Yamuna Nagar (see migration 0094). The locality
+  // and the two administrative levels are already in this response and cost
+  // nothing more to read.
+  const comp = (t: string) =>
+    p.addressComponents?.find(c => c.types?.includes(t))?.longText ?? null
+  const pin = comp('postal_code')
 
   return {
     placeId: p.id,
@@ -239,6 +250,11 @@ export async function fetchPlaceDetails(
       ? p.internationalPhoneNumber.replace(/\D/g, '').replace(/^91/, '')
       : null,
     pincode: pin,
+    // locality is the town; sublocality covers the big-city cases where Google
+    // puts the neighbourhood in locality and the city one level up.
+    city: comp('locality') ?? comp('administrative_area_level_3') ?? null,
+    district: comp('administrative_area_level_2') ?? null,
+    state: comp('administrative_area_level_1') ?? null,
     hours: p.regularOpeningHours?.weekdayDescriptions ?? null,
   }
 }

@@ -3,7 +3,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER, SPECIALITIES } from '../../types'
-import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, hasPractitioners } from './shared'
+import { BIZ, VERTICALS, VerticalKey, verticalFor, hasPractitioners } from './shared'
 import { RegistrySearch } from './RegistrySearch'
 import { PlacesSearch } from './PlacesSearch'
 import { placesConfigured, guessSpeciality } from '../../lib/placesLookup'
@@ -179,7 +179,12 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         population: a.population,
       }))
     }
-    return FALLBACK_AREAS.map(a => ({ ...a, population: a.pop }))
+    // No hardcoded fallback. It was eight Yamuna Nagar rows at prices we no
+    // longer charge, and the wizard would quietly sell coverage of a district a
+    // clinic in Jaipur has no interest in. Empty is correct: the checkout guard
+    // in razorpay-order refuses a zero total rather than taking money for
+    // nothing, so an unreachable database fails loudly instead of wrongly.
+    return []
   }, [areas])
 
   // Coverage is no longer asked for. Every business is listed across every
@@ -412,6 +417,12 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         // Recorded now, at signup, because there is no session yet to call the
         // owner-only sehat_set_auto_renew() with — see migration 0084.
         autoRenew,
+        // Where the business IS, as opposed to `pinCodes` above, which is
+        // everywhere it is sold. See migration 0094.
+        ownPinCode: form.own_pin_code || null,
+        ownCity: form.own_city || null,
+        ownDistrict: form.own_district || null,
+        ownState: form.own_state || null,
       }, toAttach.map((d, i) => ({
         practitioner_id: d.practitioner_id,
         name: d.name,
@@ -702,6 +713,14 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               upd('business_name', d.name)
                               upd('address', d.address)
                               upd('place_id', d.placeId)
+                              // Where the business IS. Google already returned
+                              // these and the wizard used to drop them, which
+                              // is why every listing was filed at the front of
+                              // its coverage array — see migration 0094.
+                              if (d.pincode) upd('own_pin_code', d.pincode)
+                              if (d.city) upd('own_city', d.city)
+                              if (d.district) upd('own_district', d.district)
+                              if (d.state) upd('own_state', d.state)
                               // Suggested, not assumed: the number Google lists
                               // is often a reception landline, and this field is
                               // the WhatsApp number we send login codes to.
@@ -832,15 +851,46 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             <PlacesSearch
                               mode="address"
                               label="Full address"
-                              placeholder="Start typing — e.g. Model Town, Yamunanagar"
+                              placeholder="Start typing your address — anywhere in India"
                               hint="Pick the nearest street or locality, then add your shop or building number."
                               value={form.address ?? ''}
                               onChange={v => upd('address', v)}
-                              onPick={d => upd('address', d.address)}
+                              onPick={d => {
+                                upd('address', d.address)
+                                // The address search returns the same components
+                                // the business search does; taking them here too
+                                // means a clinic that typed its own name still
+                                // gets filed in the right town.
+                                if (d.pincode) upd('own_pin_code', d.pincode)
+                                if (d.city) upd('own_city', d.city)
+                                if (d.district) upd('own_district', d.district)
+                                if (d.state) upd('own_state', d.state)
+                              }}
                             />
                           ) : (
                             <Field label="Full address" placeholder="Shop / building, area, city" value={form.address} onChange={v => upd('address', v)} />
                           )}
+
+                          {/* Where the business IS. Google fills these in when
+                              they picked themselves from the search; this is
+                              for everyone else, and for correcting it.
+                              NOT required — a signup that fails because
+                              somebody does not know their own pincode costs
+                              more than a blank column, and admin can fix it.
+                              Coverage is unaffected: the plan still sells every
+                              area, this is only the branch's own address. */}
+                          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', marginTop: 12 }}>
+                            <Field label="Your pincode" placeholder="e.g. 411005" inputMode="numeric"
+                              value={form.own_pin_code} onChange={v => upd('own_pin_code', v.replace(/\D/g, '').slice(0, 6))} />
+                            <Field label="Town / city" placeholder="e.g. Pune"
+                              value={form.own_city} onChange={v => upd('own_city', v)} />
+                            <Field label="State" placeholder="e.g. Maharashtra"
+                              value={form.own_state} onChange={v => upd('own_state', v)} />
+                          </div>
+                          <p style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 8, lineHeight: 1.6 }}>
+                            We list businesses across India. This is where you are —
+                            separate from the areas your listing reaches, which the plan covers in full.
+                          </p>
                         </div>
                       </div>
 

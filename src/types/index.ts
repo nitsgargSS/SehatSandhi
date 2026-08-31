@@ -142,29 +142,12 @@ export const SPECIALITIES = [
   { id: 'PHARMACY', en: 'Pharmacy / Medicine',     hi: 'दवाई' },
 ]
 
-export const PIN_CODES = [
-  { code: '135001', area: 'Yamuna Nagar' },
-  { code: '135002', area: 'Radaur' },
-  { code: '135003', area: 'Jagadhri' },
-  { code: '135004', area: 'Bilaspur' },
-  { code: '135021', area: 'Chhachhrauli' },
-  { code: '135051', area: 'Damla' },
-  { code: '135052', area: 'Bhud' },
-  { code: '135053', area: 'Mustafabad' },
-  { code: '135071', area: 'Sadhaura' },
-  { code: '135078', area: 'Budhera' },
-  { code: '135101', area: 'Shahbad' },
-  { code: '135102', area: 'Rupar' },
-  { code: '135103', area: 'Jathlana' },
-  { code: '135106', area: 'Barara' },
-  { code: '135107', area: 'Kalesar' },
-  { code: '135130', area: 'Buria' },
-  { code: '135133', area: 'Saha' },
-  { code: '135134', area: 'Kamnala' },
-  { code: '135201', area: 'Naharpur' },
-  { code: '135202', area: 'Pratapnagar' },
-]
-
+// PIN_CODES lived here: twenty Yamuna Nagar pincodes compiled into the bundle.
+// It is gone because it made the product structurally single-district — a
+// clinic could register in Jaipur (migration 0094) and no page could list
+// Jaipur, because the list of places was a constant. Areas now come from
+// service_areas via usePublicAreas(), so wherever we operate is wherever the
+// table says.
 // Digits only, country code, no '+' or spaces — it goes straight into
 // `https://wa.me/${WA_NUMBER}` at ~20 call sites, and wa.me rejects a '+'.
 export const WA_NUMBER = '917015399355'
