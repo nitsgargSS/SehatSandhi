@@ -1035,6 +1035,21 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                         {money(t.price)}
                                       </strong>
                                     </span>
+                                    {/* These prices are quoted EX-GST, so the figure
+                                        above is not what leaves their account. Saying
+                                        so on the option itself — not only in the review
+                                        rows further down — is the difference between an
+                                        offer and a surprise on the statement. Uses the
+                                        same localTax() the quote and the invoice use, so
+                                        the three cannot disagree. */}
+                                    {(() => {
+                                      const tt = localTax(t.price, tax, form.gstin)
+                                      return tt.applied ? (
+                                        <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3 }}>
+                                          + {tt.rate}% GST · {money(tt.grandTotal)} payable today
+                                        </span>
+                                      ) : null
+                                    })()}
                                     {t.savings_note && (
                                       <span style={{ display: 'block', fontSize: 12.5, color: BIZ.green, fontWeight: 700, marginTop: 3 }}>
                                         {t.savings_note}
