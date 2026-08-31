@@ -5,6 +5,7 @@ import { BIZ, VERTICALS } from './shared'
 import VerticalIcon from './VerticalIcon'
 import WhatsAppBotMock from './WhatsAppBotMock'
 import ReachSnapshot from './ReachSnapshot'
+import CareSystems from './CareSystems'
 import { usePricing, commissionFor, monthlyAppliesTo } from '../../hooks/usePricing'
 import { useTaxSettings } from '../../hooks/useTaxSettings'
 import { money } from '../../lib/format'
@@ -69,6 +70,7 @@ export default function BusinessLanding() {
           someone who followed a business link gets across. */}
       <SiteHeader sticky>
         <HeaderLink href="#how">How it works</HeaderLink>
+        <HeaderLink href="#systems">OPD &amp; IPD</HeaderLink>
         <HeaderLink href="#pricing">Pricing</HeaderLink>
         <HeaderLink href="#partners">Partners</HeaderLink>
         <HeaderLink to="/business/login">Log in</HeaderLink>
@@ -124,6 +126,12 @@ export default function BusinessLanding() {
           ))}
         </div>
       </div>
+
+      {/* The OPD and IPD systems. Placed directly after "how it works" and
+          ahead of the category grid on purpose: reach is what brings a clinic
+          to the page, but the software is the thing that makes it stay, and it
+          should be read before the price rather than after it. */}
+      <CareSystems />
 
       {/* verticals — this is what /partners used to be. That page was a second
           six-card grid of the same categories, one click further from signing
