@@ -167,7 +167,15 @@ for (const [who, wanted] of [['owner', 'owner'], ['doctor', 'doctor'], ['nurse',
   expectEq(`sehat_caller_role is "${wanted}" for ${who}`, got, wanted)
 }
 expectEq('a different clinic gets no role here', await tryProbe('other', 'select sehat_caller_role($1)', [BIZ.id]), null)
-expectEq('anon gets no role', await tryProbe('anon', 'select sehat_caller_role($1)', [BIZ.id]), null)
+// 0088 revoked EXECUTE on sehat_caller_role from anon, so an anonymous caller
+// is now refused outright rather than answered with null. Both satisfy what
+// this check is actually for — anon must not learn a role — and being refused
+// is the stronger of the two, so accept either rather than pinning the weaker.
+{
+  const got = await tryProbe('anon', 'select sehat_caller_role($1)', [BIZ.id])
+  const denied = got && typeof got === 'object' && /permission denied/.test(got.refused ?? '')
+  expectEq('anon gets no role (null or refused)', got === null || denied, true)
+}
 expectEq('sehat_is_admin true for admin', await tryProbe('admin', 'select sehat_is_admin()'), true)
 expectEq('sehat_is_admin false for a doctor', await tryProbe('doctor', 'select sehat_is_admin()'), false)
 
