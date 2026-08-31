@@ -5,6 +5,7 @@ import { BIZ, VERTICALS } from './shared'
 import VerticalIcon from './VerticalIcon'
 import WhatsAppBotMock from './WhatsAppBotMock'
 import ReachSnapshot from './ReachSnapshot'
+import CareSystems from './CareSystems'
 import { usePricing, commissionFor, monthlyAppliesTo } from '../../hooks/usePricing'
 import { useTaxSettings } from '../../hooks/useTaxSettings'
 import { money } from '../../lib/format'
@@ -37,7 +38,7 @@ const VERTICAL_BLURBS: Record<string, string> = {
 }
 
 export default function BusinessLanding() {
-  const { plan, tiers, verticals } = usePricing()
+  const { plan, tiers, verticals, terms } = usePricing()
   const tax = useTaxSettings()
   const flatPlan = plan.mode !== 'pincode_tiers'
   const flatPrice = plan.monthly_price ?? 0
@@ -69,6 +70,7 @@ export default function BusinessLanding() {
           someone who followed a business link gets across. */}
       <SiteHeader sticky>
         <HeaderLink href="#how">How it works</HeaderLink>
+        <HeaderLink href="#systems">OPD &amp; IPD</HeaderLink>
         <HeaderLink href="#pricing">Pricing</HeaderLink>
         <HeaderLink href="#partners">Partners</HeaderLink>
         <HeaderLink to="/business/login">Log in</HeaderLink>
@@ -125,6 +127,12 @@ export default function BusinessLanding() {
         </div>
       </div>
 
+      {/* The OPD and IPD systems. Placed directly after "how it works" and
+          ahead of the category grid on purpose: reach is what brings a clinic
+          to the page, but the software is the thing that makes it stay, and it
+          should be read before the price rather than after it. */}
+      <CareSystems />
+
       {/* verticals — this is what /partners used to be. That page was a second
           six-card grid of the same categories, one click further from signing
           up; these cards were the same six but inert. Merged: the cards carry
@@ -180,9 +188,28 @@ export default function BusinessLanding() {
                     Pick one pincode or twenty — the price is the same. Your fee does not go up as your reach does.
                   </div>
                 )}
-                {/* The term is the business's choice, so advertise the choice —
-                    not a multi-month total they never agreed to. */}
-                {plan.max_months > plan.min_months && (
+                {/* The terms, priced.
+                    ₹1,000 a month is the rate; what a business actually pays is
+                    a term total, and the annual one is a discount on the rate
+                    rather than a multiple of it — ₹10,000, not ₹12,000. Showing
+                    only the monthly figure understated the offer AND misstated
+                    the annual price, so the terms are drawn from plan_terms and
+                    priced. A plan with no terms falls back to the old line. */}
+                {terms.length > 0 ? (
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 20 }}>
+                    {terms.map(t => (
+                      <div key={t.months} style={{ background: 'rgba(255,255,255,.16)', borderRadius: 14, padding: '12px 18px', minWidth: 132 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#d6f2e6' }}>{t.label ?? `${t.months} months`}</div>
+                        <div style={{ fontSize: 'clamp(20px,5vw,25px)', fontWeight: 800, color: '#fff', letterSpacing: '-.02em', lineHeight: 1.2 }}>
+                          {money(t.price)}
+                        </div>
+                        {t.savings_note && (
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#bff0d8', marginTop: 2 }}>{t.savings_note}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : plan.max_months > plan.min_months && (
                   <div style={{ display: 'inline-block', marginTop: 18, background: 'rgba(255,255,255,.16)', color: '#fff', fontSize: 14, fontWeight: 700, padding: '8px 14px', borderRadius: 999 }}>
                     Pay for as few as {plan.min_months} month{plan.min_months === 1 ? '' : 's'} — you choose the term
                   </div>
@@ -191,7 +218,9 @@ export default function BusinessLanding() {
             </div>
             <p style={{ fontSize: 13.5, color: BIZ.mutedWarm, textAlign: 'center', marginTop: 22, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
               Your rate is held for the months you pay for, so it will not change mid-term even when this offer ends.
-              Choose any term from {plan.min_months} to {plan.max_months} months at checkout — you see the total before you pay.
+              {terms.length > 0
+                ? ` Pick ${terms.map(t => t.label ?? `${t.months} months`).join(' or ')} at checkout — you see the total before you pay.`
+                : ` Choose any term from ${plan.min_months} to ${plan.max_months} months at checkout — you see the total before you pay.`}
               {gstNote && !plan.price_includes_gst && ` GST at ${tax.rate}% is added on top and a tax invoice is issued with every payment.`}
               {monthlyVerticals.length === VERTICALS.length && ' This applies to every category — doctors, hospitals, pharmacies, labs, insurance and ambulance services.'}
             </p>

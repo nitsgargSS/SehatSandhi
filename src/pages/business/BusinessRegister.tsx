@@ -109,7 +109,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // The live pricing plan. Everything below asks the plan how to price rather
   // than assuming per-pincode tiers, so switching plans in admin changes the
   // wizard with no deploy.
-  const { plan, tiers, verticals: vbRows } = usePricing()
+  const { plan, tiers, verticals: vbRows, terms } = usePricing()
   const vb = vbRows.find(v => v.vertical === vertical)
 
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -134,15 +134,35 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // paid listings is what shows where signups are being lost.
   useEffect(() => { track('business_lead') }, [])
 
-  // Billing is monthly. There used to be a 1-12 term picker here; 0060 pinned
-  // every plan to one month and this is the constant that replaced it.
+  // The term they are buying.
   //
-  // Kept as a named value rather than inlining 1 everywhere: the term still
-  // flows through compute-price, the payment row, the invoice and the renewal
-  // date, and clampMonths on the server is the thing that actually enforces it.
-  // If a longer term is ever wanted again, it is three numbers in pricing_plans
-  // and this line.
-  const months = 1
+  // 0060 pinned this to a constant 1 and said a longer term would be "three
+  // numbers in pricing_plans and this line". It turned out to need a table too —
+  // ₹10,000 for twelve months is not ₹1,000 × 12 — so terms now carry their own
+  // price and this is a choice again. See migration 0082.
+  //
+  // A plan with no terms keeps the old behaviour exactly: termChoices is empty,
+  // no picker is drawn, and months falls back to the plan's default.
+  const termChoices = terms
+  const [months, setMonths] = useState<number>(plan.default_months || 1)
+
+  // The plan loads after the first render, so the default has to follow it.
+  // Only ever snaps to a term that exists — never leaves a stale 1 selected on
+  // a plan whose shortest term is 6, which would ask the server to price a term
+  // it does not sell.
+  useEffect(() => {
+    if (!termChoices.length) { setMonths(plan.default_months || 1); return }
+    setMonths(prev => termChoices.some(t => t.months === prev)
+      ? prev
+      : (termChoices.find(t => t.months === plan.default_months) ?? termChoices[0]).months)
+  }, [termChoices, plan.default_months])
+
+  const selectedTerm = termChoices.find(t => t.months === months) ?? null
+
+  // Auto-renewal, ticked by default as asked. Unticking it here means no mandate
+  // is ever taken and the business is reminded to pay instead — 15 days out, by
+  // email and on WhatsApp (migration 0083).
+  const [autoRenew, setAutoRenew] = useState(true)
 
   // The clinical systems on offer, and which ones they have ticked. Priced by
   // the server from care_modules — this list is for drawing the choice, never
@@ -199,7 +219,12 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       topTier: top ? { tier_number: top.tier_number, tier_name: top.tier_name } : null,
       breakdown: [],
       planCode: plan.code, planLabel: plan.label, mode: plan.mode,
-      monthlyTotal, months, total: monthlyTotal * months,
+      // A priced term is charged as written; only a plan without one falls back
+      // to the monthly arithmetic. Mirrors computePrice on the server, which
+      // remains the authority for what is actually taken.
+      monthlyTotal, months,
+      total: selectedTerm ? selectedTerm.price : monthlyTotal * months,
+      termPrice: selectedTerm ? selectedTerm.price : null,
       modules: [], moduleTotal: 0,
       defaultMonths: plan.default_months, minMonths: plan.min_months, maxMonths: plan.max_months,
       doctorCount: hc.doctorCount,
@@ -212,10 +237,10 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       commissionPercent: commission.percent,
       commissionBasis: commission.basis,
       commissionSuspended: commission.suspended,
-      tax: localTax(monthlyTotal * months, tax, form.gstin),
+      tax: localTax(selectedTerm ? selectedTerm.price : monthlyTotal * months, tax, form.gstin),
       priceIncludesGst: plan.price_includes_gst ?? false,
     }
-  }, [coverage, zips, plan, tiers, months, monthlyApplies, commission, tax, form.gstin, vertical, practitioners])
+  }, [coverage, zips, plan, tiers, months, selectedTerm, monthlyApplies, commission, tax, form.gstin, vertical, practitioners])
 
   const [serverPrice, setServerPrice] = useState<PriceResult | null>(null)
   const [pricing, setPricing] = useState(false)
@@ -384,6 +409,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         regNumber: soloDoctor ? null : (form.reg_number || null),
         workingHours: form.working_hours || null,
         placeId: form.place_id || null,
+        // Recorded now, at signup, because there is no session yet to call the
+        // owner-only sehat_set_auto_renew() with — see migration 0084.
+        autoRenew,
       }, toAttach.map((d, i) => ({
         practitioner_id: d.practitioner_id,
         name: d.name,
@@ -903,7 +931,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                         )}
                         {!onCommission && price.tax?.applied && (
                           <>
-                            <ReviewRow label="Taxable value" value={`${money((price.monthlyTotal * months))}`} />
+                            <ReviewRow label="Taxable value" value={`${money(price.total)}`} />
                             {price.tax.interState
                               ? <ReviewRow label={`IGST @ ${price.tax.rate}%`} value={`${money(price.tax.igst)}`} />
                               : <>
@@ -915,7 +943,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 22px', background: '#f7f3ea' }}>
                           <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>Due today</span>
                           <span style={{ fontSize: 26, fontWeight: 800, color: BIZ.green }}>
-                            {money((onCommission ? 0 : (price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal * months)))}
+                            {money((onCommission ? 0 : (price.tax?.applied ? price.tax.grandTotal : price.total)))}
                           </span>
                         </div>
                         {!onCommission && price.tax?.applied && (
@@ -970,6 +998,71 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                         </div>
                       )}
 
+                      {/* The term. Drawn only when the plan actually prices terms
+                          (migration 0082); a monthly plan shows nothing here and
+                          behaves exactly as it did before. Prices come from
+                          plan_terms and are totals for the whole term, never a
+                          monthly rate to be multiplied. */}
+                      {!onCommission && termChoices.length > 0 && (
+                        <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
+                            How long would you like to pay for?
+                          </div>
+                          <p style={{ fontSize: 13, color: BIZ.muted, margin: '0 0 14px', lineHeight: 1.6 }}>
+                            Introductory pricing. Paid once, upfront, for the whole term.
+                          </p>
+                          <div style={{ display: 'grid', gap: 10 }}>
+                            {termChoices.map(t => {
+                              const on = t.months === months
+                              return (
+                                <label key={t.months} style={{
+                                  display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer',
+                                  padding: '13px 15px', borderRadius: 13,
+                                  border: `2px solid ${on ? BIZ.green : '#e9e2d5'}`,
+                                  background: on ? '#f3faf6' : '#fff',
+                                }}>
+                                  <input
+                                    type="radio"
+                                    name="plan-term"
+                                    checked={on}
+                                    onChange={() => setMonths(t.months)}
+                                    style={{ width: 18, height: 18, marginTop: 2, accentColor: BIZ.green, cursor: 'pointer' }}
+                                  />
+                                  <span style={{ flex: 1 }}>
+                                    <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                                      <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{t.label ?? `${t.months} months`}</strong>
+                                      <strong style={{ fontSize: 14.5, color: on ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
+                                        {money(t.price)}
+                                      </strong>
+                                    </span>
+                                    {/* These prices are quoted EX-GST, so the figure
+                                        above is not what leaves their account. Saying
+                                        so on the option itself — not only in the review
+                                        rows further down — is the difference between an
+                                        offer and a surprise on the statement. Uses the
+                                        same localTax() the quote and the invoice use, so
+                                        the three cannot disagree. */}
+                                    {(() => {
+                                      const tt = localTax(t.price, tax, form.gstin)
+                                      return tt.applied ? (
+                                        <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3 }}>
+                                          + {tt.rate}% GST · {money(tt.grandTotal)} payable today
+                                        </span>
+                                      ) : null
+                                    })()}
+                                    {t.savings_note && (
+                                      <span style={{ display: 'block', fontSize: 12.5, color: BIZ.green, fontWeight: 700, marginTop: 3 }}>
+                                        {t.savings_note}
+                                      </span>
+                                    )}
+                                  </span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Clinical systems. Bought per month per business and
                           switched on the moment the payment clears — 0060.
                           NOT multiplied by consultant headcount: a ward system
@@ -977,11 +1070,11 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                       {!onCommission && careModules.length > 0 && (
                         <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
                           <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
-                            Which systems do you want?
+                            Which systems do you want? <span style={{ color: BIZ.green }}>Free</span>
                           </div>
                           <p style={{ fontSize: 13, color: BIZ.muted, margin: '0 0 14px', lineHeight: 1.6 }}>
-                            Optional, and each is billed separately on top of your listing.
-                            Whatever you pick is switched on in your dashboard as soon as this payment clears.
+                            Included free with your plan. Tick what you want and it is switched on
+                            in your dashboard as soon as this payment clears — you can change your mind later.
                           </p>
                           <div style={{ display: 'grid', gap: 10 }}>
                             {careModules.map(m => {
@@ -1004,7 +1097,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                     <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                                       <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{m.label}</strong>
                                       <strong style={{ fontSize: 14.5, color: on ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
-                                        {money(m.monthly_price)}/mo
+                                        {m.monthly_price > 0 ? `${money(m.monthly_price)}/mo` : 'Free'}
                                       </strong>
                                     </span>
                                     {m.description && (
@@ -1032,6 +1125,35 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               {money((price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal))}
                             </strong> payable today, then monthly
                           </div>
+                        </div>
+                      )}
+
+                      {/* Auto-renewal. Ticked by default, as asked — which is only
+                          defensible because unticking it is one click here and a
+                          toggle in the dashboard afterwards. Unticked means no
+                          mandate is taken at all and we remind them instead, by
+                          email and on WhatsApp, 15 days before the term ends
+                          (migration 0083). */}
+                      {!onCommission && (
+                        <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
+                          <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={autoRenew}
+                              onChange={e => setAutoRenew(e.target.checked)}
+                              style={{ width: 18, height: 18, marginTop: 2, accentColor: BIZ.green, cursor: 'pointer' }}
+                            />
+                            <span style={{ flex: 1 }}>
+                              <strong style={{ fontSize: 14.5, color: BIZ.ink, display: 'block' }}>
+                                Renew automatically
+                              </strong>
+                              <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 4, lineHeight: 1.6 }}>
+                                {autoRenew
+                                  ? `We will renew for another ${months} months at ${money(price.total)} plus GST when this term ends, and tell you before we charge. You can turn this off at any time from your dashboard.`
+                                  : 'We will not charge you again. We will email and WhatsApp you 15 days before your plan ends so you can renew yourself.'}
+                              </span>
+                            </span>
+                          </label>
                         </div>
                       )}
 
