@@ -208,3 +208,90 @@ export const downloadRenewals = (rows: RenewalRow[]) =>
   downloadCsv(`renewals-${stamp()}.csv`, toCsv(rows, RENEWAL_COLUMNS))
 export const downloadGeo = (rows: VisitorGeoRow[]) =>
   downloadCsv(`visitor-locations-${stamp()}.csv`, toCsv(rows, GEO_COLUMNS))
+
+// ── Managing the areas we have launched ─────────────────────────────────────
+//
+// service_areas decides what the public picker offers, what a signup is sold
+// coverage of, and what the per-pincode tiers charge. Until 0098 the only way
+// to add the twenty-first row was to write SQL, which is what made the platform
+// feel Yamuna Nagar-shaped long after the code stopped being.
+//
+// Deactivate, never delete. Businesses carry pincodes in a plain text array
+// with no foreign key, so removing a row would leave listings selling coverage
+// of somewhere that no longer exists — silently, in the rows that decide what a
+// clinic is paying for. is_active = false takes the area off the public page
+// and out of new signups, and is reversible. The policy in 0098 permits INSERT
+// and UPDATE only.
+
+export interface ServiceAreaRow {
+  id: string
+  pin_code: string
+  area_name: string
+  district: string | null
+  state: string | null
+  tier_number: number
+  population: number | null
+  is_active: boolean
+}
+
+export interface TierRow {
+  tier_number: number
+  tier_name: string
+  monthly_price: number
+  min_population: number | null
+  max_population: number | null
+}
+
+/** Every area, active or not — admins have their own read policy for this. */
+export async function listAllServiceAreas(): Promise<ServiceAreaRow[]> {
+  const { data, error } = await supabase
+    .from('service_areas')
+    .select('id, pin_code, area_name, district, state, tier_number, population, is_active')
+    .order('state').order('district').order('area_name')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as ServiceAreaRow[]
+}
+
+export async function listTiers(): Promise<TierRow[]> {
+  const { data, error } = await supabase
+    .from('pricing_tiers')
+    .select('tier_number, tier_name, monthly_price, min_population, max_population')
+    .order('tier_number')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as TierRow[]
+}
+
+export interface ServiceAreaInput {
+  pin_code: string
+  area_name: string
+  district: string
+  state: string
+  tier_number: number
+  population: number
+}
+
+export async function addServiceArea(a: ServiceAreaInput): Promise<void> {
+  const { error } = await supabase.from('service_areas').insert({ ...a, is_active: true })
+  if (error) throw new Error(error.message)
+}
+
+export async function updateServiceArea(id: string, patch: Partial<ServiceAreaInput & { is_active: boolean }>): Promise<void> {
+  const { error } = await supabase.from('service_areas').update(patch).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** The tier whose population band contains n. Mirrors sehat_tier_for_population. */
+export function tierForPopulation(tiers: TierRow[], n: number): number | null {
+  const hit = tiers.find(t =>
+    n >= (t.min_population ?? 0) && n <= (t.max_population ?? Number.MAX_SAFE_INTEGER))
+  return hit?.tier_number ?? null
+}
+
+export const AREA_ADMIN_COLUMNS: [keyof ServiceAreaRow, string][] = [
+  ['pin_code', 'Pincode'], ['area_name', 'Area'], ['district', 'District'],
+  ['state', 'State'], ['tier_number', 'Tier'], ['population', 'Population'],
+  ['is_active', 'Live'],
+]
+
+export const downloadServiceAreas = (rows: ServiceAreaRow[]) =>
+  downloadCsv(`service-areas-${stamp()}.csv`, toCsv(rows, AREA_ADMIN_COLUMNS))

@@ -6,7 +6,9 @@ import { money, num, shortDate } from '../../lib/format'
 import {
   getAreaReport, getVerticalMatrix, getRenewals, getVisitorGeo, queueReminder,
   pivotMatrix, downloadAreas, downloadRenewals, downloadGeo,
-  AreaScope, AreaRow, MatrixRow, RenewalRow, VisitorGeoRow,
+  listAllServiceAreas, listTiers, addServiceArea, updateServiceArea,
+  tierForPopulation, downloadServiceAreas,
+  AreaScope, AreaRow, MatrixRow, RenewalRow, VisitorGeoRow, ServiceAreaRow, TierRow,
 } from '../../lib/adminInsightsApi'
 
 // Where the listings are, where they are not, what kind they are, who is due,
@@ -26,7 +28,7 @@ import {
 // button that claims to have sent a message it did not send is worse than no
 // button, because the clinic is then not chased by anyone.
 
-type Section = 'areas' | 'matrix' | 'renewals' | 'geo'
+type Section = 'areas' | 'matrix' | 'renewals' | 'geo' | 'manage'
 
 export default function InsightsPanel() {
   const [section, setSection] = useState<Section>('areas')
@@ -47,7 +49,7 @@ export default function InsightsPanel() {
 
       <div className="flex gap-2 flex-wrap">
         {([['areas', 'By area'], ['matrix', 'Type × region'], ['renewals', 'Renewals'],
-           ['geo', 'Where we are noticed']] as [Section, string][]).map(([s, label]) => (
+           ['geo', 'Where we are noticed'], ['manage', 'Service areas']] as [Section, string][]).map(([s, label]) => (
           <button key={s} onClick={() => setSection(s)} className={chip(section === s)}>{label}</button>
         ))}
       </div>
@@ -56,6 +58,7 @@ export default function InsightsPanel() {
       {section === 'matrix' && <MatrixSection chip={chip} />}
       {section === 'renewals' && <RenewalsSection chip={chip} />}
       {section === 'geo' && <GeoSection chip={chip} />}
+      {section === 'manage' && <ManageAreasSection chip={chip} />}
     </div>
   )
 }
@@ -462,5 +465,217 @@ function GeoSection({ chip }: { chip: ChipFn }) {
         </div>
       </Msg>
     </div>
+  )
+}
+
+// ── Managing the areas we have launched ─────────────────────────────────────
+//
+// This is the screen that stops "which places exist" being a code question.
+// Adding Jaipur used to mean writing a migration; now it is a form, and the
+// public picker, the signup wizard's coverage and the tier pricing all follow
+// from the same rows.
+//
+// Deactivate, never delete — see 0098. A business's coverage is a plain text
+// array of pincodes with no foreign key, so removing a row would leave listings
+// selling somewhere that no longer exists, in the rows that decide what they
+// are paying for. Switching an area off takes it out of the public picker and
+// out of new signups and is reversible, which is what this offers.
+
+function ManageAreasSection({ chip }: { chip: ChipFn }) {
+  const [reload, setReload] = useState(0)
+  const { data: areas, loading, error } = useAsync<ServiceAreaRow[]>(
+    () => listAllServiceAreas(), [reload], [])
+  const { data: tiers } = useAsync<TierRow[]>(() => listTiers(), [], [])
+  const [showAdd, setShowAdd] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
+  const [q, setQ] = useState('')
+
+  const blank = { pin_code: '', area_name: '', district: '', state: '', population: '', tier_number: '' }
+  const [form, setForm] = useState<Record<string, string>>(blank)
+  const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  // Population decides the tier, so filling one fills the other. Advisory: the
+  // admin can override, because a district headquarters with a modest resident
+  // count can still be worth a city tier.
+  const onPopulation = (v: string) => {
+    const n = Number(v.replace(/\D/g, ''))
+    setForm(f => {
+      const suggested = Number.isFinite(n) && n > 0 ? tierForPopulation(tiers, n) : null
+      return { ...f, population: v.replace(/\D/g, ''), tier_number: suggested ? String(suggested) : f.tier_number }
+    })
+  }
+
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    if (!s) return areas
+    return areas.filter(a => [a.pin_code, a.area_name, a.district, a.state]
+      .some(v => (v ?? '').toLowerCase().includes(s)))
+  }, [areas, q])
+
+  const onAdd = async () => {
+    setBusy('add')
+    try {
+      await addServiceArea({
+        pin_code: form.pin_code.trim(),
+        area_name: form.area_name.trim(),
+        district: form.district.trim(),
+        state: form.state.trim(),
+        tier_number: Number(form.tier_number),
+        population: Number(form.population || 0),
+      })
+      setNotice(`${form.area_name.trim()} is live.`)
+      setForm(blank); setShowAdd(false); setReload(r => r + 1)
+    } catch (e) { setNotice((e as Error).message) } finally { setBusy(null) }
+  }
+
+  const onToggle = async (a: ServiceAreaRow) => {
+    setBusy(a.id)
+    try {
+      await updateServiceArea(a.id, { is_active: !a.is_active })
+      setNotice(`${a.area_name} is now ${a.is_active ? 'switched off' : 'live'}.`)
+      setReload(r => r + 1)
+    } catch (e) { setNotice((e as Error).message) } finally { setBusy(null) }
+  }
+
+  const canAdd = form.pin_code.length === 6 && form.area_name.trim()
+    && form.state.trim() && form.tier_number
+
+  const live = areas.filter(a => a.is_active).length
+
+  return (
+    <div className="space-y-4">
+      <div className="card shadow-sm space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="font-bold text-navy-700">Areas we have launched</h3>
+            <p className="text-sm text-gray-500">
+              These decide what patients can pick, what a signup is sold, and what a pincode costs.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => downloadServiceAreas(areas)} disabled={!areas.length}
+              className="btn-teal text-xs disabled:opacity-50">
+              <Download className="w-3.5 h-3.5 inline mr-1.5" /> Download
+            </button>
+            <button onClick={() => setShowAdd(v => !v)} className={chip(showAdd)}>
+              {showAdd ? 'Cancel' : '+ Add an area'}
+            </button>
+          </div>
+        </div>
+
+        {showAdd && (
+          <div className="border-t border-gray-100 pt-3 space-y-3">
+            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
+              <AreaField label="Pincode" value={form.pin_code}
+                onChange={v => upd('pin_code', v.replace(/\D/g, '').slice(0, 6))} placeholder="302001" />
+              <AreaField label="Area name" value={form.area_name}
+                onChange={v => upd('area_name', v)} placeholder="MI Road" />
+              <AreaField label="District" value={form.district}
+                onChange={v => upd('district', v)} placeholder="Jaipur" />
+              <AreaField label="State" value={form.state}
+                onChange={v => upd('state', v)} placeholder="Rajasthan" />
+              <AreaField label="Population" value={form.population}
+                onChange={onPopulation} placeholder="3000000" />
+              <label className="block">
+                <span className="text-xs font-semibold text-gray-600 block mb-1.5">
+                  Tier {form.population && <span className="font-normal text-gray-400">· suggested</span>}
+                </span>
+                <select value={form.tier_number} onChange={e => upd('tier_number', e.target.value)}
+                  className="input-field text-sm py-2 w-full">
+                  <option value="">Choose…</option>
+                  {tiers.map(t => (
+                    <option key={t.tier_number} value={t.tier_number}>
+                      {t.tier_number} · {t.tier_name} · {money(t.monthly_price)}/mo
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={onAdd} disabled={!canAdd || busy === 'add'}
+                className="btn-teal text-sm disabled:opacity-50">
+                {busy === 'add' ? 'Adding…' : 'Add area'}
+              </button>
+              <span className="text-xs text-gray-500">
+                Live immediately — patients can pick it and new signups are sold coverage of it.
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {notice && <div className="card shadow-sm text-sm text-navy-700">{notice}</div>}
+
+      <Msg loading={loading} error={error} empty={!areas.length}>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile label="Areas live" value={num(live)} />
+          <StatTile label="Switched off" value={num(areas.length - live)} />
+          <StatTile label="Districts" value={num(new Set(areas.map(a => a.district)).size)} />
+          <StatTile label="States" value={num(new Set(areas.map(a => a.state)).size)} />
+        </div>
+
+        <div className="card shadow-sm">
+          <input value={q} onChange={e => setQ(e.target.value)}
+            placeholder="Filter by pincode, area, district or state…"
+            className="input-field text-sm py-2 mb-3 w-full" aria-label="Filter areas" />
+          <ScrollableTable>
+            <table className="w-full text-sm" style={{ minWidth: 760 }}>
+              <thead>
+                <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                  {['Pincode', 'Area', 'District', 'State', 'Tier', 'Population', 'Live', ''].map(h => (
+                    <th key={h} className="px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(a => (
+                  <tr key={a.id} className={`border-b border-gray-50 last:border-0 ${
+                    a.is_active ? '' : 'text-gray-400'}`}>
+                    <td className="px-3 py-2.5 font-semibold text-navy-700">{a.pin_code}</td>
+                    <td className="px-3 py-2.5">{a.area_name}</td>
+                    <td className="px-3 py-2.5">{a.district ?? '—'}</td>
+                    <td className="px-3 py-2.5">{a.state ?? '—'}</td>
+                    <td className="px-3 py-2.5">
+                      {tiers.find(t => t.tier_number === a.tier_number)?.tier_name ?? a.tier_number}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">{a.population ? num(a.population) : '—'}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        a.is_active ? 'bg-teal-50 text-teal-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {a.is_active ? 'Live' : 'Off'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => onToggle(a)} disabled={busy === a.id}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:border-teal-400 hover:text-teal-700 disabled:opacity-40 whitespace-nowrap">
+                        {busy === a.id ? '…' : a.is_active ? 'Switch off' : 'Switch on'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollableTable>
+          <p className="text-xs text-gray-500 mt-3 leading-relaxed">
+            Switching an area off removes it from the patient picker and from new signups. Listings
+            already selling coverage of it keep it — their pincodes are stored as plain text, so
+            deleting an area would leave them pointing at nothing. There is deliberately no delete.
+          </p>
+        </div>
+      </Msg>
+    </div>
+  )
+}
+
+function AreaField({ label, value, onChange, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder: string
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold text-gray-600 block mb-1.5">{label}</span>
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        className="input-field text-sm py-2 w-full" />
+    </label>
   )
 }
