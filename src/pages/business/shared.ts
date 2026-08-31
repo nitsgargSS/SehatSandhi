@@ -140,21 +140,11 @@ export interface FallbackArea {
   pop: number
 }
 
-export const FALLBACK_AREAS: FallbackArea[] = [
-  { pin_code: '135001', area_name: 'Yamunanagar City',   tier_number: 1, tier_name: 'City',       monthly_price: 3000, pop: 210000 },
-  { pin_code: '135101', area_name: 'Jagadhri',           tier_number: 1, tier_name: 'City',       monthly_price: 3000, pop: 125000 },
-  { pin_code: '135002', area_name: 'Model Town',         tier_number: 2, tier_name: 'Large town', monthly_price: 2000, pop: 85000 },
-  { pin_code: '135003', area_name: 'Camp Area',          tier_number: 3, tier_name: 'Town',       monthly_price: 1000, pop: 42000 },
-  { pin_code: '135102', area_name: 'Jagadhri Workshop',  tier_number: 3, tier_name: 'Town',       monthly_price: 1000, pop: 38000 },
-  { pin_code: '135004', area_name: 'Professor Colony',   tier_number: 3, tier_name: 'Town',       monthly_price: 1000, pop: 28000 },
-  { pin_code: '135103', area_name: 'Radaur',             tier_number: 3, tier_name: 'Town',       monthly_price: 1000, pop: 22000 },
-  { pin_code: '135106', area_name: 'Saraswati Nagar',    tier_number: 3, tier_name: 'Town',       monthly_price: 1000, pop: 18000 },
-  { pin_code: '133201', area_name: 'Bilaspur',           tier_number: 3, tier_name: 'Town',       monthly_price: 1000, pop: 16000 },
-  { pin_code: '133204', area_name: 'Mustafabad',         tier_number: 4, tier_name: 'Village',    monthly_price: 400,  pop: 14000 },
-  { pin_code: '133203', area_name: 'Sadhaura',           tier_number: 4, tier_name: 'Village',    monthly_price: 400,  pop: 12000 },
-  { pin_code: '135133', area_name: 'Chhachhrauli',       tier_number: 4, tier_name: 'Village',    monthly_price: 400,  pop: 13000 },
-]
-
+// FALLBACK_AREAS lived here: eight Yamuna Nagar rows priced at ₹3,000/₹2,000,
+// a plan that has not been sold for months. It was only ever reached when the
+// database was unreachable, and on that one occasion it showed a visitor a
+// district we may not operate in at a price we do not charge. Areas come from
+// service_areas now, and an empty list is the honest answer while they load.
 // Approximate residents-per-pincode by tier — fallback only, for real Supabase
 // areas whose population column hasn't been backfilled yet.
 export const TIER_POP: Record<number, number> = { 1: 150000, 2: 70000, 3: 25000, 4: 12000 }

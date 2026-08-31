@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
@@ -11,7 +11,8 @@ import Wards from './Wards'
 import Queue from './Queue'
 import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess, AffiliationRole } from '../../lib/identityApi'
 import RevenuePanel from './RevenuePanel'
-import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
+import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
+import { usePublicAreas } from '../../hooks/useServiceAreas'
 
 // What a person does at this clinic. The affiliation carries it, not the login,
 // because the same doctor can be a consultant here and the owner elsewhere —
@@ -175,6 +176,15 @@ export default function DoctorDashboard() {
     day: string; times_listed: number; profile_views: number; whatsapp_clicks: number
     unique_visitors: number; bookings: number; completed: number; cancelled: number; no_show: number
   }
+  // Pincode → area name, from the database. This was PIN_CODES, a compiled-in
+  // Yamuna Nagar list, so a clinic in Jaipur saw bare digits where a Yamuna
+  // Nagar one saw a name. Both call sites already fell back to the code, so an
+  // empty map degrades to exactly what it always showed for an unknown pincode.
+  const { areas: publicAreas } = usePublicAreas()
+  const areaName = useMemo(
+    () => new Map(publicAreas.map(a => [a.pin_code, a.area_name])),
+    [publicAreas])
+
   const [reportDays, setReportDays] = useState(30)
   const [report, setReport] = useState<ReportRow[]>([])
   const [reportLoading, setReportLoading] = useState(false)
@@ -1288,11 +1298,11 @@ export default function DoctorDashboard() {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {(doctor.pin_codes || []).map(code => {
-                  const pin = PIN_CODES.find(p => p.code === code)
+                  const pin = areaName.get(code)
                   return (
                     <div key={code} className="border-2 border-teal-200 bg-teal-50 rounded-xl p-3">
                       <p className="font-bold text-navy-700">{code}</p>
-                      <p className="text-sm text-gray-500">{pin?.area || code}</p>
+                      <p className="text-sm text-gray-500">{pin || code}</p>
                     </div>
                   )
                 })}
@@ -1974,11 +1984,11 @@ export default function DoctorDashboard() {
                     <label className="text-sm font-medium text-gray-600 mb-2 block">{t('dashboardPage.campAreasLabel')}</label>
                     <div className="flex flex-wrap gap-2">
                       {(doctor?.pin_codes || []).map(code => {
-                        const pin = PIN_CODES.find(p => p.code === code)
+                        const pin = areaName.get(code)
                         return (
                           <button key={code} type="button" onClick={() => toggleCampArea(code)}
                             className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${campForm.pin_codes.includes(code) ? 'bg-teal-600 text-white border-teal-600' : 'border-gray-300 text-gray-500 hover:border-teal-400'}`}>
-                            {pin?.area || code}
+                            {pin || code}
                           </button>
                         )
                       })}

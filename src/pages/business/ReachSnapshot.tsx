@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useServiceAreas, ServiceArea } from '../../hooks/useServiceAreas'
-import { BIZ, FALLBACK_AREAS } from './shared'
+import { BIZ } from './shared'
 import { money, num } from '../../lib/format'
 import CountUp from '../../components/CountUp'
 import { Skeleton } from '../../components/Loading'
@@ -45,16 +45,12 @@ export default function ReachSnapshot() {
   // especially this one: it is the reach a business is being asked to pay for.
   // `loading` below holds the figure until it is true.
   const pins = useMemo(() => {
-    const source: ServiceArea[] = areas.length
-      ? areas
-      : FALLBACK_AREAS.map(a => ({
-          // No district on the fallback rows: it is only reached when the DB is
-          // unavailable, and naming a town there is exactly the hardcode this
-          // page is meant not to carry. `inDistrict` below words around it.
-          pin_code: a.pin_code, area_name: a.area_name, district: '', state: 'Haryana',
-          population: a.pop, tier_number: a.tier_number, tier_name: a.tier_name, monthly_price: a.monthly_price,
-          premium_slot_1_weekly: 0, premium_slot_2_weekly: 0, premium_slot_3_weekly: 0,
-        }))
+    // The database is the only source. The fallback here used to be eight
+    // Yamuna Nagar rows carrying prices — ₹3,000, ₹2,000 — from a plan that has
+    // not been sold for months, so the one time it was ever reached it showed a
+    // visitor a town we might not operate in at a price we do not charge.
+    // Showing nothing while the areas load is the honest version.
+    const source: ServiceArea[] = areas
     // one district (the pilot); sort by population desc, keep the top 12
     return [...source].sort((a, b) => b.population - a.population).slice(0, MAX_TILES)
   }, [areas])

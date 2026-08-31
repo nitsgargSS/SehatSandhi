@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { SPECIALITIES, PIN_CODES } from '../types'
+import { SPECIALITIES } from '../types'
+import { usePublicAreas } from '../hooks/useServiceAreas'
 import { useLanguage } from '../i18n/LanguageContext'
 import { specialityUrl } from '../lib/links'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell, HEADER } from '../components/SiteHeader'
@@ -20,7 +21,14 @@ import SiteFooter from '../components/SiteFooter'
 
 export default function Browse() {
   const { t, lang } = useLanguage()
-  const [area, setArea] = useState(PIN_CODES[0])
+  // The areas come from the database now, not a compiled-in Yamuna Nagar list.
+  // `area` starts null because on first paint there is nothing to select yet.
+  const { areas, loading: areasLoading } = usePublicAreas()
+  const [areaCode, setAreaCode] = useState<string | null>(null)
+  const area = areas.find(a => a.pin_code === areaCode) ?? areas[0] ?? null
+  useEffect(() => {
+    if (!areaCode && areas.length) setAreaCode(areas[0].pin_code)
+  }, [areas, areaCode])
 
   return (
     <div style={{ minHeight: '100vh', background: HEADER.cream }}>
@@ -44,10 +52,18 @@ export default function Browse() {
             {t('browsePage.areaLabel')}
           </div>
           <div className="flex flex-wrap" style={{ gap: 8, marginBottom: 30 }}>
-            {PIN_CODES.map(p => {
-              const on = p.code === area.code
+            {areasLoading && (
+              <span style={{ fontSize: 14, color: HEADER.muted }}>Loading areas…</span>
+            )}
+            {!areasLoading && !areas.length && (
+              <span style={{ fontSize: 14, color: HEADER.muted }}>
+                No service areas are live yet.
+              </span>
+            )}
+            {areas.map(p => {
+              const on = p.pin_code === area?.pin_code
               return (
-                <button key={p.code} onClick={() => setArea(p)}
+                <button key={p.pin_code} onClick={() => setAreaCode(p.pin_code)}
                   style={{
                     fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer',
                     padding: '8px 14px', borderRadius: 999,
@@ -55,7 +71,7 @@ export default function Browse() {
                     color: on ? '#fff' : HEADER.muted,
                     border: `1px solid ${on ? HEADER.green : HEADER.border}`,
                   }}>
-                  {p.area}
+                  {p.area_name}
                 </button>
               )
             })}
@@ -66,7 +82,7 @@ export default function Browse() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" style={{ gap: 10 }}>
             {SPECIALITIES.map(s => (
-              <Link key={s.id} to={specialityUrl(s.id, area.area)}
+              <Link key={s.id} to={specialityUrl(s.id, area?.area_name ?? '')}
                 style={{
                   background: '#fff', border: `1px solid ${HEADER.border}`, borderRadius: 14,
                   padding: '14px 16px', display: 'block',

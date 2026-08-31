@@ -3,7 +3,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER, SPECIALITIES } from '../../types'
-import { BIZ, VERTICALS, VerticalKey, FALLBACK_AREAS, verticalFor, hasPractitioners } from './shared'
+import { BIZ, VERTICALS, VerticalKey, verticalFor, hasPractitioners } from './shared'
 import { RegistrySearch } from './RegistrySearch'
 import { PlacesSearch } from './PlacesSearch'
 import { placesConfigured, guessSpeciality } from '../../lib/placesLookup'
@@ -179,7 +179,12 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         population: a.population,
       }))
     }
-    return FALLBACK_AREAS.map(a => ({ ...a, population: a.pop }))
+    // No hardcoded fallback. It was eight Yamuna Nagar rows at prices we no
+    // longer charge, and the wizard would quietly sell coverage of a district a
+    // clinic in Jaipur has no interest in. Empty is correct: the checkout guard
+    // in razorpay-order refuses a zero total rather than taking money for
+    // nothing, so an unreachable database fails loudly instead of wrongly.
+    return []
   }, [areas])
 
   // Coverage is no longer asked for. Every business is listed across every
@@ -846,7 +851,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             <PlacesSearch
                               mode="address"
                               label="Full address"
-                              placeholder="Start typing — e.g. Model Town, Yamunanagar"
+                              placeholder="Start typing your address — anywhere in India"
                               hint="Pick the nearest street or locality, then add your shop or building number."
                               value={form.address ?? ''}
                               onChange={v => upd('address', v)}

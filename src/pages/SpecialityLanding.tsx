@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { MapPin, ArrowLeft, Star } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { SPECIALITIES, PIN_CODES, WA_NUMBER } from '../types'
+import { SPECIALITIES, WA_NUMBER } from '../types'
+import { usePublicAreas } from '../hooks/useServiceAreas'
 import { useLanguage } from '../i18n/LanguageContext'
 import { track, trackImpressions } from '../lib/analytics'
 import { doctorUrl, slugify } from '../lib/links'
@@ -40,11 +41,16 @@ export default function SpecialityLanding() {
   const [loading, setLoading] = useState(true)
 
   const speciality = SPECIALITIES.find(s => s.id.toLowerCase() === (specId || '').toLowerCase())
-  const area = PIN_CODES.find(p => slugify(p.area) === (areaSlug || '').toLowerCase())
+  // Resolved from the database rather than a compiled-in list, so a speciality
+  // page exists for wherever we actually operate — see migration 0094 and the
+  // note on usePublicAreas. `area` is null until the areas load, and the render
+  // below already handles a missing area (an unknown slug did the same).
+  const { areas: publicAreas } = usePublicAreas()
+  const area = publicAreas.find(p => slugify(p.area_name) === (areaSlug || '').toLowerCase()) ?? null
 
   useEffect(() => {
     document.title = speciality && area
-      ? `${lang === 'hi' ? speciality.hi : speciality.en} — ${area.area} | Sehatsandhi`
+      ? `${lang === 'hi' ? speciality.hi : speciality.en} — ${area.area_name} | Sehatsandhi`
       : 'Sehatsandhi'
   }, [speciality, area, lang])
 
@@ -60,19 +66,19 @@ export default function SpecialityLanding() {
         .from('public_practitioner_businesses')
         .select('*')
         .eq('speciality', speciality.id)
-        .contains('pin_codes', [area.code])
+        .contains('pin_codes', [area.pin_code])
 
       const docs = (data ?? []) as DoctorResult[]
       // Every search, whether or not it found anyone. The zero-result ones are
       // the most valuable: they are demand_by_area's unserved markets.
-      track('search', { speciality: speciality.id, pinCode: area.code })
+      track('search', { speciality: speciality.id, pinCode: area.pin_code })
       // One impression per listing shown — the denominator that turns "12 profile
       // views" into "12 out of 240", which is what tells a business the problem
       // is their photo rather than their pricing.
       if (docs.length) {
         // The business is what an impression is FOR: it is what was listed, and
         // what the "12 views out of 240" number on their dashboard counts.
-        trackImpressions(docs.map(d => d.business_id), { speciality: speciality.id, pinCode: area.code })
+        trackImpressions(docs.map(d => d.business_id), { speciality: speciality.id, pinCode: area.pin_code })
       }
       if (docs.length > 0) {
         const { data: ratings } = await supabase
@@ -98,7 +104,7 @@ export default function SpecialityLanding() {
         // never click "Notify Me"
         supabase.from('unmet_demand_log').insert({
           source: 'website',
-          pin_code: area.code,
+          pin_code: area.pin_code,
           speciality: speciality.id,
           patient_wants_notification: false,
         })
@@ -115,7 +121,7 @@ export default function SpecialityLanding() {
     // real patient intent
     supabase.from('unmet_demand_log').insert({
       source: 'website',
-      pin_code: area.code,
+      pin_code: area.pin_code,
       speciality: speciality.id,
       patient_wants_notification: true,
     })
@@ -139,8 +145,8 @@ export default function SpecialityLanding() {
   const schema = {
     '@context': 'https://schema.org',
     '@type': 'MedicalBusiness',
-    name: `Sehatsandhi — ${specName} in ${area.area}`,
-    areaServed: area.area,
+    name: `Sehatsandhi — ${specName} in ${area.area_name}`,
+    areaServed: area.area_name,
     medicalSpecialty: speciality.en,
   }
 
@@ -161,10 +167,10 @@ export default function SpecialityLanding() {
         {/* Hero */}
         <div className="text-center mb-10">
           <span className="inline-flex items-center gap-2 bg-teal-50 text-teal-700 text-xs font-semibold px-4 py-1.5 rounded-full mb-4 border border-teal-100">
-            <MapPin className="w-3.5 h-3.5" /> {area.area}
+            <MapPin className="w-3.5 h-3.5" /> {area.area_name}
           </span>
           <h1 className="text-3xl sm:text-4xl font-bold text-navy-700 mb-2">{specName}</h1>
-          <p className="text-gray-400 text-sm">{specNameOther} · {area.area}</p>
+          <p className="text-gray-400 text-sm">{specNameOther} · {area.area_name}</p>
         </div>
 
         {loading ? (
@@ -231,7 +237,7 @@ export default function SpecialityLanding() {
             <div className="text-5xl mb-4">🏥</div>
             <h2 className="font-bold text-navy-700 mb-2">{t('specialityLandingPage.noDoctorsYetTitle')}</h2>
             <p className="text-gray-500 text-sm max-w-md mx-auto mb-6">{t('specialityLandingPage.noDoctorsYetDesc')}</p>
-            <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Namaste! Mujhe ${area.area} mein ${speciality.en} chahiye — koi available hone par batayein.`)}`}
+            <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Namaste! Mujhe ${area.area_name} mein ${speciality.en} chahiye — koi available hone par batayein.`)}`}
                target="_blank" rel="noreferrer" onClick={logNotifyMeClick} className="btn-teal inline-flex mb-8">
               {t('specialityLandingPage.notifyMeButton')}
             </a>
