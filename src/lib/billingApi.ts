@@ -382,3 +382,130 @@ export async function fetchPublicBill(token: string): Promise<PublicBill> {
   if (!res.ok) throw new Error('That bill could not be found.')
   return body.bill as PublicBill
 }
+
+// ── What the clinic earned ──────────────────────────────────────────────────
+//
+// Two numbers that are never the same and must not be confused:
+//
+//   billed     what was charged, by the day it was charged
+//   collected  what was received, by the day it arrived
+//
+// A bill raised in March and paid in April is March's earnings and April's
+// cash. The report returns both; only `billed` is split by stream, because a
+// payment settles a bill rather than a line and nothing records which part of
+// it the money was for. See migration 0091.
+
+export type RevenueGrain = 'day' | 'week' | 'month' | 'quarter' | 'half' | 'year'
+
+export const REVENUE_GRAINS: [RevenueGrain, string][] = [
+  ['day', 'Daily'], ['week', 'Weekly'], ['month', 'Monthly'],
+  ['quarter', 'Quarterly'], ['half', 'Half-yearly'], ['year', 'Yearly'],
+]
+
+export interface RevenueRow {
+  period_start: string
+  period_end: string
+  /** OPD fees. */
+  consultation: number
+  /** Admission and bed charges. */
+  bed: number
+  medicine: number
+  /** `procedure_` — the SQL column is suffixed because PROCEDURE is reserved. */
+  procedure_: number
+  lab: number
+  consumable: number
+  other: number
+  billed_total: number
+  /** Cash received in the period. Deliberately not split by stream. */
+  collected: number
+  bills_issued: number
+  patients_seen: number
+}
+
+export async function getRevenueReport(
+  businessId: string,
+  grain: RevenueGrain = 'month',
+  range: { from?: string | null; to?: string | null } = {},
+): Promise<RevenueRow[]> {
+  const { data, error } = await supabase.rpc('sehat_revenue_report', {
+    p_business: businessId,
+    p_grain: grain,
+    p_from: range.from ?? null,
+    p_to: range.to ?? null,
+  })
+  if (error) throw new Error(error.message)
+  // Postgres numerics arrive as strings; every consumer here does arithmetic on
+  // them, so coerce once at the boundary rather than in each caller.
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    period_start: String(r.period_start),
+    period_end: String(r.period_end),
+    consultation: Number(r.consultation ?? 0),
+    bed: Number(r.bed ?? 0),
+    medicine: Number(r.medicine ?? 0),
+    procedure_: Number(r.procedure_ ?? 0),
+    lab: Number(r.lab ?? 0),
+    consumable: Number(r.consumable ?? 0),
+    other: Number(r.other ?? 0),
+    billed_total: Number(r.billed_total ?? 0),
+    collected: Number(r.collected ?? 0),
+    bills_issued: Number(r.bills_issued ?? 0),
+    patients_seen: Number(r.patients_seen ?? 0),
+  }))
+}
+
+/** The columns, in the order they are shown and exported. One list so the table
+ *  on screen and the downloaded sheet can never drift apart. */
+export const REVENUE_COLUMNS: [keyof RevenueRow, string][] = [
+  ['period_start', 'From'],
+  ['period_end', 'To'],
+  ['consultation', 'OPD fees'],
+  ['bed', 'Admission & bed'],
+  ['medicine', 'Medicines'],
+  ['procedure_', 'Procedures'],
+  ['lab', 'Lab'],
+  ['consumable', 'Consumables'],
+  ['other', 'Other'],
+  ['billed_total', 'Total billed'],
+  ['collected', 'Collected'],
+  ['bills_issued', 'Bills issued'],
+  ['patients_seen', 'Patients'],
+]
+
+/**
+ * The report as a CSV, for Excel.
+ *
+ * Fields are quoted and internal quotes doubled — a clinic name or a period
+ * label with a comma in it would otherwise shift every later column, which is
+ * the kind of error nobody notices until a total is wrong.
+ *
+ * Prefixed with a UTF-8 BOM because Excel on Windows reads a plain UTF-8 CSV as
+ * the system codepage and turns ₹ into mojibake. The BOM costs three bytes and
+ * removes the single most common complaint about exported sheets.
+ */
+export function revenueCsv(rows: RevenueRow[], grain: RevenueGrain): string {
+  const q = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const head = REVENUE_COLUMNS.map(([, label]) => q(label)).join(',')
+  const body = rows.map(r => REVENUE_COLUMNS.map(([k]) => q(r[k])).join(',')).join('\r\n')
+  const label = REVENUE_GRAINS.find(([g]) => g === grain)?.[1] ?? grain
+  // A total row, because the first thing anyone does with this sheet is sum it.
+  const totals = REVENUE_COLUMNS.map(([k], i) => {
+    if (i === 0) return q(`${label} total`)
+    if (i === 1) return q('')
+    return q(rows.reduce((s, r) => s + Number(r[k] ?? 0), 0).toFixed(2))
+  }).join(',')
+  return '﻿' + [head, body, totals].filter(Boolean).join('\r\n') + '\r\n'
+}
+
+/** Hand the browser a file. Kept here so the page does not grow DOM plumbing. */
+export function downloadCsv(filename: string, csv: string): void {
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  // Revoked on the next tick: revoking synchronously can cancel the download in
+  // Safari before it has read the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
