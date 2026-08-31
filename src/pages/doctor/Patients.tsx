@@ -3,7 +3,7 @@ import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileTe
 import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
 import {
-  searchPatients, getPatientSummary, getVisits, getVitals, getAllergies,
+  searchPatients, searchByDiagnosis, getPatientSummary, getVisits, getVitals, getAllergies,
   getConditions, getMedications, addVisit, addVital, addAllergy, addCondition,
   addMedication, stopMedication, registerPatient, grantRecordingConsent, withdrawRecordingConsent,
   getSpecialityFields, getFindings, saveFindings, getPractitionerSpeciality,
@@ -12,7 +12,7 @@ import {
   requestTranscription, requestMedicineSuggestions, discardConsultationAudio,
   startRecording, stopRecording, confirmTranscript, getRecording,
   LiveRecording, Recording,
-  PatientSearchResult, PatientSummary, Visit, Vital, Allergy, Condition, Medication,
+  PatientSearchResult, DiagnosisSearchResult, PatientSummary, Visit, Vital, Allergy, Condition, Medication,
 } from '../../lib/patientsApi'
 import {
   getAdmissions, admitPatient, dischargePatient, getOccupancy,
@@ -38,7 +38,7 @@ import {
   Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod, Bill,
 } from '../../lib/billingApi'
 import { getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
-import { moneyExact } from '../../lib/format'
+import { moneyExact, shortDate } from '../../lib/format'
 
 // The clinic's patient records — search, history, and the clinical detail a
 // doctor needs on screen before they prescribe anything.
@@ -86,6 +86,17 @@ const age = (p: { age_years: number | null; date_of_birth: string | null }) => {
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
+// Where a diagnosis was written down. Worth naming in the result row: "problem
+// list" and "discharge summary" mean different things to a doctor deciding
+// whether a hit is worth opening.
+const SOURCE_LABEL: Record<string, string> = {
+  visit: 'OPD visit',
+  condition: 'Problem list',
+  admission: 'Admission',
+  discharge: 'Discharge summary',
+  prescription: 'Prescription',
+}
+
 export default function Patients({ businessId, practitionerId }: {
   businessId: string
   practitionerId?: string | null
@@ -96,6 +107,25 @@ export default function Patients({ businessId, practitionerId }: {
   const [registering, setRegistering] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [error, setError] = useState('')
+
+  // Two ways to find somebody: by who they are, or by what they were treated
+  // for. The second answers "who did I operate on that needs seeing again?",
+  // which the name search cannot.
+  const [mode, setMode] = useState<'name' | 'diagnosis'>('name')
+  const [dxResults, setDxResults] = useState<DiagnosisSearchResult[]>([])
+  const [followUpOnly, setFollowUpOnly] = useState(false)
+
+  // Diagnosis search is clinical staff only. The RPC enforces that and returns
+  // an empty list to reception either way; this only decides whether to draw
+  // the tab, so reception is not offered a search that can never find anything.
+  const [clinical, setClinical] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    getMyRole(businessId)
+      .then(r => { if (!cancelled) setClinical(isClinicalRole(r)) })
+      .catch(() => { /* stays false — the RPC refuses either way */ })
+    return () => { cancelled = true }
+  }, [businessId])
 
   // Debounced so a doctor typing a ten-digit phone number does not fire ten
   // queries, each returning a wider result set than the last.
@@ -116,27 +146,89 @@ export default function Patients({ businessId, practitionerId }: {
       }
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [query, businessId])
+  }, [query, businessId, mode])
+
+  // The diagnosis search, debounced the same way. Kept separate from the name
+  // search rather than branching inside it: they take different arguments,
+  // return different shapes and are gated differently.
+  useEffect(() => {
+    if (mode !== 'diagnosis') { setDxResults([]); return }
+    const q = query.trim()
+    if (q.length < 2) { setDxResults([]); return }
+    let cancelled = false
+    setSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const rows = await searchByDiagnosis(q, businessId, { followUpOnly })
+        if (!cancelled) { setDxResults(rows); setError('') }
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message)
+      } finally {
+        if (!cancelled) setSearching(false)
+      }
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, businessId, mode, followUpOnly])
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <div style={card}>
+        {/* Only offered to clinical staff. Reception searching by disease would
+            be a list of every HIV or psychiatric patient in the clinic, so the
+            RPC refuses it and the tab is not drawn. */}
+        {clinical && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            {([['name', 'By name'], ['diagnosis', 'By diagnosis']] as [typeof mode, string][]).map(([m, label]) => (
+              <button
+                key={m}
+                onClick={() => { setMode(m); setQuery(''); setResults([]); setDxResults([]) }}
+                style={{
+                  fontFamily: 'inherit', cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+                  padding: '6px 13px', borderRadius: 999,
+                  border: `1px solid ${mode === m ? BIZ.green : BIZ.border}`,
+                  background: mode === m ? '#f3faf6' : '#fff',
+                  color: mode === m ? BIZ.green : BIZ.muted,
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Search className="w-4 h-4" style={{ color: BIZ.muted, flex: '0 0 auto' }} />
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search by name, phone number or file number…"
-            aria-label="Search patients"
+            placeholder={mode === 'diagnosis'
+              ? 'Search diagnosis, condition, ICD-10 code or procedure…'
+              : 'Search by name, phone number or file number…'}
+            aria-label={mode === 'diagnosis' ? 'Search by diagnosis' : 'Search patients'}
             style={{ ...input, border: 'none', padding: '4px 0', fontSize: 15 }}
           />
           {searching && <Spinner />}
-          <button style={{ ...btn(true), fontSize: 12.5, flex: '0 0 auto' }}
-            onClick={() => { setRegistering(true); setSelected(null) }}>
-            <Plus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />
-            New patient
-          </button>
+          {mode === 'name' && (
+            <button style={{ ...btn(true), fontSize: 12.5, flex: '0 0 auto' }}
+              onClick={() => { setRegistering(true); setSelected(null) }}>
+              <Plus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />
+              New patient
+            </button>
+          )}
         </div>
+        {/* Following someone up is the whole reason this search exists, so the
+            filter for it sits with the box rather than behind a menu. */}
+        {mode === 'diagnosis' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 11, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={followUpOnly}
+              onChange={e => setFollowUpOnly(e.target.checked)}
+              style={{ width: 15, height: 15, accentColor: BIZ.green, cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: 12.5, color: BIZ.muted }}>
+              Only those with a follow-up date
+            </span>
+          </label>
+        )}
       </div>
 
       {registering && (
@@ -158,7 +250,7 @@ export default function Patients({ businessId, practitionerId }: {
         </div>
       )}
 
-      {!selected && results.length > 0 && (
+      {!selected && mode === 'name' && results.length > 0 && (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
           {results.map((r, i) => (
             <button
@@ -190,7 +282,60 @@ export default function Patients({ businessId, practitionerId }: {
         </div>
       )}
 
-      {!selected && query.trim().length >= 2 && !searching && results.length === 0 && (
+      {!selected && mode === 'diagnosis' && dxResults.length > 0 && (
+        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+          {dxResults.map((r, i) => (
+            <button
+              key={`${r.source}-${r.source_id}`}
+              onClick={() => { setSelected(r.patient_member_id); logAccess(businessId, r.patient_member_id, 'view') }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+                fontFamily: 'inherit', background: '#fff', border: 'none',
+                borderTop: i === 0 ? 'none' : `1px solid ${BIZ.border}`, padding: '12px 16px',
+              }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>{r.full_name}</span>
+                {/* The date they are being followed up on, if there is one —
+                    the single most actionable thing in the row. */}
+                {r.follow_up_date && (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: BIZ.green, whiteSpace: 'nowrap' }}>
+                    follow-up {shortDate(r.follow_up_date)}
+                  </span>
+                )}
+              </div>
+              {/* What actually matched, and where it was written down. */}
+              <div style={{ fontSize: 13, color: BIZ.ink, marginTop: 3 }}>
+                {r.matched_text || '—'}
+                {r.icd10_code && (
+                  <span style={{ color: BIZ.mutedWarm, fontWeight: 700 }}> · {r.icd10_code}</span>
+                )}
+              </div>
+              <div style={{ fontSize: 12, color: BIZ.muted, marginTop: 2 }}>
+                {SOURCE_LABEL[r.source] ?? r.source}
+                {r.matched_field ? ` · ${r.matched_field}` : ''}
+                {r.event_date ? ` · ${shortDate(r.event_date)}` : ''}
+                {r.age_years != null ? ` · ${r.age_years}y` : ''}
+                {r.mrn ? ` · file ${r.mrn}` : ''}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* A diagnosis search that finds nothing is not an invitation to register
+          somebody — that is only sensible when looking for a person by name. */}
+      {!selected && mode === 'diagnosis' && query.trim().length >= 2 && !searching && dxResults.length === 0 && (
+        <div style={{ ...card, textAlign: 'center', color: BIZ.muted, fontSize: 13.5 }}>
+          No record mentions “{query.trim()}”.
+          {followUpOnly && (
+            <div style={{ marginTop: 6, fontSize: 12.5 }}>
+              Only records with a follow-up date are being shown — untick that to widen the search.
+            </div>
+          )}
+        </div>
+      )}
+
+      {!selected && mode === 'name' && query.trim().length >= 2 && !searching && results.length === 0 && (
         <div style={{ ...card, textAlign: 'center', color: BIZ.muted, fontSize: 13.5 }}>
           Nobody on your list matches that.
           <div style={{ marginTop: 9 }}>

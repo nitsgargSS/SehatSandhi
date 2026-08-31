@@ -120,6 +120,31 @@ export interface Medication {
   started_on: string | null
 }
 
+/**
+ * One clinical record that matched a diagnosis search.
+ *
+ * A row per RECORD, not per patient: the caller is chasing follow-ups, so the
+ * event and its date are the point. `source` says which clinical act it came
+ * from and `matched_field` which column matched, so the UI can say "procedure"
+ * rather than implying everything found was a diagnosis.
+ */
+export interface DiagnosisSearchResult {
+  patient_member_id: string
+  business_id: string
+  full_name: string
+  phone: string | null
+  age_years: number | null
+  gender: string | null
+  mrn: string | null
+  source: 'visit' | 'condition' | 'admission' | 'discharge' | 'prescription'
+  source_id: string
+  matched_field: string
+  matched_text: string | null
+  icd10_code: string | null
+  event_date: string | null
+  follow_up_date: string | null
+}
+
 const oops = (e: { message: string } | null) => { if (e) throw new Error(e.message) }
 
 // ── Finding somebody ────────────────────────────────────────────────────────
@@ -134,6 +159,39 @@ export async function searchPatients(query: string, businessId?: string): Promis
   })
   oops(error)
   return (data ?? []) as PatientSearchResult[]
+}
+
+/**
+ * Find patients by what they were treated for — diagnosis, condition, ICD-10
+ * code or procedure — across visits, the problem list, admissions, discharge
+ * summaries and prescriptions.
+ *
+ * Answers "who did I operate on that needs seeing again?", which the name
+ * search cannot. Clinical staff only: the RPC is gated on
+ * sehat_caller_is_clinical, so reception gets an empty list rather than an
+ * error, and the caller does not need to pre-check the role.
+ */
+export async function searchByDiagnosis(
+  query: string,
+  businessId: string,
+  opts: { from?: string | null; to?: string | null; followUpOnly?: boolean } = {},
+): Promise<DiagnosisSearchResult[]> {
+  const q = query.trim()
+  if (q.length < 2) return []          // same floor as the name search
+  const { data, error } = await supabase.rpc('sehat_search_by_diagnosis', {
+    p_query: q,
+    p_business: businessId,
+    p_from: opts.from ?? null,
+    p_to: opts.to ?? null,
+    p_follow_up_only: opts.followUpOnly ?? false,
+  })
+  oops(error)
+  // Logged server-side rather than here: a bulk query for everyone with a given
+  // disease is the one that gets asked about later, and a log the client can
+  // forget to write is not a log.
+  void supabase.rpc('sehat_log_diagnosis_search', { p_business: businessId, p_query: q })
+    .then(() => undefined, () => undefined)
+  return (data ?? []) as DiagnosisSearchResult[]
 }
 
 export async function getPatientSummary(memberId: string, businessId: string): Promise<PatientSummary | null> {
