@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Download, Send, MapPin, AlertTriangle } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Download, Send, MapPin, AlertTriangle, Pencil } from 'lucide-react'
 import { StatTile } from '../../components/Charts'
 import ScrollableTable from '../../components/ScrollableTable'
 import { money, num, shortDate } from '../../lib/format'
@@ -7,7 +7,7 @@ import {
   getAreaReport, getVerticalMatrix, getRenewals, getVisitorGeo, queueReminder,
   pivotMatrix, downloadAreas, downloadRenewals, downloadGeo,
   listAllServiceAreas, listTiers, addServiceArea, updateServiceArea,
-  tierForPopulation, downloadServiceAreas,
+  tierForPopulation, downloadServiceAreas, setBusinessLocation,
   AreaScope, AreaRow, MatrixRow, RenewalRow, VisitorGeoRow, ServiceAreaRow, TierRow,
 } from '../../lib/adminInsightsApi'
 
@@ -283,10 +283,32 @@ function MatrixSection({ chip }: { chip: ChipFn }) {
 
 function RenewalsSection({ chip }: { chip: ChipFn }) {
   const [window, setWindow] = useState<number | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const { data: rows, loading, error } = useAsync<RenewalRow[]>(
-    () => getRenewals(window), [window], [])
+    () => getRenewals(window), [window, reloadKey], [])
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
+  // Editing a location expands the row rather than opening a dialog: the admin
+  // is comparing it against the district column two cells to the left, and a
+  // modal would cover exactly that.
+  const [editing, setEditing] = useState<string | null>(null)
+  const [loc, setLoc] = useState({ pinCode: '', city: '', district: '', state: '' })
+
+  const startEdit = (r: RenewalRow) => {
+    setEditing(r.business_id)
+    setLoc({ pinCode: r.pin_code ?? '', city: '', district: r.district ?? '', state: r.state ?? '' })
+    setNotice('')
+  }
+
+  const saveLoc = useCallback(async (r: RenewalRow) => {
+    setBusy(r.business_id)
+    try {
+      setNotice(await setBusinessLocation(r.business_id, loc))
+      setEditing(null)
+      setReloadKey(k => k + 1)
+    } catch (e) { setNotice(`${r.name}: ${(e as Error).message}`) }
+    finally { setBusy(null) }
+  }, [loc])
 
   const onRemind = useCallback(async (r: RenewalRow) => {
     setBusy(r.business_id)
@@ -342,17 +364,21 @@ function RenewalsSection({ chip }: { chip: ChipFn }) {
               <thead>
                 <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
                   {['Business', 'Type', 'District', 'Months', 'Term start', 'Term end',
-                    'Days left', 'Auto', 'Renewal', 'Last reminded', ''].map(h => (
-                    <th key={h} className="px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>
+                    'Days left', 'Auto', 'Renewal', 'Last reminded', '', ''].map((h, i) => (
+                    <th key={`${h}-${i}`} className="px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map(r => (
-                  <tr key={r.business_id} className="border-b border-gray-50 last:border-0">
+                  <Fragment key={r.business_id}>
+                  <tr className="border-b border-gray-50 last:border-0">
                     <td className="px-3 py-2.5 font-semibold text-navy-700 whitespace-nowrap">{r.name}</td>
                     <td className="px-3 py-2.5 text-gray-600 capitalize">{r.vertical}</td>
-                    <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{r.district ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">
+                      {r.district ?? <span className="text-amber-600">not set</span>}
+                      {r.pin_code && <span className="text-gray-400"> · {r.pin_code}</span>}
+                    </td>
                     <td className="px-3 py-2.5 text-right">{r.months_paid ?? '—'}</td>
                     <td className="px-3 py-2.5 whitespace-nowrap text-gray-600">
                       {r.term_start ? shortDate(r.term_start) : '—'}</td>
@@ -382,7 +408,42 @@ function RenewalsSection({ chip }: { chip: ChipFn }) {
                         {busy === r.business_id ? 'Queueing…' : 'Remind'}
                       </button>
                     </td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => editing === r.business_id ? setEditing(null) : startEdit(r)}
+                        title="Correct where this business is"
+                        className="text-xs font-semibold px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:border-teal-400 hover:text-teal-700 whitespace-nowrap">
+                        <Pencil className="w-3 h-3 inline mr-1" />
+                        {editing === r.business_id ? 'Close' : 'Location'}
+                      </button>
+                    </td>
                   </tr>
+                  {editing === r.business_id && (
+                    <tr className="border-b border-gray-50 bg-gray-50/60">
+                      <td colSpan={12} className="px-3 py-3">
+                        <div className="flex items-end gap-3 flex-wrap">
+                          <LocField label="Pincode" value={loc.pinCode} width={110}
+                            onChange={v => setLoc(l => ({ ...l, pinCode: v.replace(/\D/g, '').slice(0, 6) }))} />
+                          <LocField label="Town" value={loc.city} width={150}
+                            onChange={v => setLoc(l => ({ ...l, city: v }))} />
+                          <LocField label="District" value={loc.district} width={150}
+                            onChange={v => setLoc(l => ({ ...l, district: v }))} />
+                          <LocField label="State" value={loc.state} width={150}
+                            onChange={v => setLoc(l => ({ ...l, state: v }))} />
+                          <button onClick={() => saveLoc(r)}
+                            disabled={loc.pinCode.length !== 6 || busy === r.business_id}
+                            className="btn-teal text-xs disabled:opacity-50">
+                            {busy === r.business_id ? 'Saving…' : 'Save location'}
+                          </button>
+                          <span className="text-xs text-gray-500 max-w-md leading-relaxed">
+                            Where the business <strong>is</strong>. Leave town, district or state blank
+                            and they are filled from the service area if we have launched that pincode.
+                            This does not change the areas its listing is sold into.
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -676,6 +737,18 @@ function AreaField({ label, value, onChange, placeholder }: {
       <span className="text-xs font-semibold text-gray-600 block mb-1.5">{label}</span>
       <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         className="input-field text-sm py-2 w-full" />
+    </label>
+  )
+}
+
+function LocField({ label, value, onChange, width }: {
+  label: string; value: string; onChange: (v: string) => void; width: number
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold text-gray-600 block mb-1">{label}</span>
+      <input value={value} onChange={e => onChange(e.target.value)} style={{ width }}
+        className="input-field text-sm py-1.5" />
     </label>
   )
 }
