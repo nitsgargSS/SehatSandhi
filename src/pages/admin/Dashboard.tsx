@@ -12,6 +12,7 @@ import ScrollableTable from '../../components/ScrollableTable'
 import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
 import SandboxPanel from './SandboxPanel'
+import GstFilingPanel from './GstFilingPanel'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 
@@ -150,7 +151,7 @@ export default function AdminDashboard() {
   const [doctors, setDoctors] = useState<BusinessRow[]>([])
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'coupons' | 'billing' | 'reports' | 'account' | 'sandbox'>('pending')
+  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'coupons' | 'billing' | 'reports' | 'gst' | 'account' | 'sandbox'>('pending')
 
   // ── Platform reporting ──
   interface PlatformRow {
@@ -618,6 +619,7 @@ export default function AdminDashboard() {
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
               { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
               { id: 'reports', label: 'Reports', count: 0, badge: false },
+              { id: 'gst', label: 'GST', count: 0, badge: false },
               { id: 'account', label: 'Account', count: 0, badge: false },
               // Only reachable while pointed at the sandbox backend — the purge
               // it exposes must never be one click away from production data.
@@ -1761,6 +1763,11 @@ export default function AdminDashboard() {
               )}
             </div>
           )}
+
+          {/* Filing gets its own tab rather than a section of Reports: Reports is
+              read to decide something, this is read to type a return, and the
+              two are done by different people at different times of the month. */}
+          {tab === 'gst' && <GstFilingPanel />}
 
           {tab === 'account' && (
             <div className="space-y-6 max-w-xl">
