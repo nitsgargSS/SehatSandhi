@@ -10,6 +10,7 @@ import Patients from './Patients'
 import Wards from './Wards'
 import Queue from './Queue'
 import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess, AffiliationRole } from '../../lib/identityApi'
+import RevenuePanel from './RevenuePanel'
 import { Business, Appointment, PracticeLocation, PIN_CODES, SPECIALITIES } from '../../types'
 
 // What a person does at this clinic. The affiliation carries it, not the login,
@@ -1664,6 +1665,18 @@ export default function DoctorDashboard() {
                   )}
                 </div>
               </>
+            )}
+
+            {/* The clinic's own money, under the listing report.
+                Both answer "how is this doing", but they are different money:
+                above is what Sehatsandhi brought, below is what the clinic
+                billed its own patients. Only shown where there is billing to
+                report — a listing-only business has no charges. The RPC gates
+                on owner/manager/doctor regardless of what is drawn here. */}
+            {emr && (access.opd || access.ipd) && doctor && (
+              <div className="pt-2 border-t border-gray-100">
+                <RevenuePanel businessId={doctor.id} />
+              </div>
             )}
           </div>
         )}
