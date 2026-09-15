@@ -1403,6 +1403,173 @@ if (admissionId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0102 — the rating request, and the reply that had never been capturable.
+//
+// The send path is exercised inside a transaction that is ALWAYS rolled back.
+// That is not tidiness: sehat_send_rating_requests calls net.http_post, and if
+// this database's Vault holds the real aisensy_api_key a committed run would
+// send a real WhatsApp message to whatever number the test row carries. Rolling
+// back discards pg_net's queue row before the background worker reads it, so no
+// request is ever made and no [TEST] row has to be parked afterwards.
+sec('ratings')
+
+/** Run fn inside a transaction that is rolled back whatever happens. */
+async function inRollback(fn) {
+  await db.query('begin')
+  try { return await fn() } finally { await db.query('rollback') }
+}
+
+// ── the shape, which needs no rows ──────────────────────────────────────────
+const ratingJob = await raw(`select schedule, active from cron.job where jobname='rating-requests'`)
+expectTrue('the rating job is scheduled', ratingJob.length === 1,
+  '0102 schedules rating-requests; without it nothing is ever asked')
+expectTrue('the rating job is active', ratingJob[0]?.active === true)
+
+const ms = (await raw(`select rating_campaign, rating_sending_enabled, rating_delay_hours,
+   rating_send_batch from messaging_settings`))[0]
+expectTrue('messaging_settings has its singleton row', !!ms)
+expectTrue('a campaign name is set', (ms?.rating_campaign ?? '') !== '',
+  'an empty campaign name fails every send')
+
+const obStatus = (await raw(`select pg_get_constraintdef(oid) d from pg_constraint
+   where conname='notification_outbox_status_check'`))[0]?.d ?? ''
+for (const st of ['pending_wa', 'awaiting_provider']) {
+  expectTrue(`outbox status check admits ${st}`, obStatus.includes(st),
+    'the SQL sender cannot claim a row into a status the check rejects')
+}
+
+// The whole reason rating requests use their own statuses: the DEPLOYED
+// appointment-notify has no branch for the event and would send "Update on your
+// appointment…" instead of a question. A rating row at 'pending' is a bug.
+const atPending = (await raw(`select count(*)::int n from notification_outbox
+   where event='rating_request' and status='pending'`))[0].n
+expectEq('no rating request sits in the edge drain\'s queue', atPending, 0,
+  "'pending' is drained by appointment-notify, which sends the wrong text for this event")
+
+// ── the hole 0102 closed ────────────────────────────────────────────────────
+const insPol = (await raw(`select count(*)::int n from pg_policy
+   where polrelid='public.ratings'::regclass and polname='allow_insert_ratings'`))[0].n
+expectEq('the anon review-insert policy is gone', insPol, 0,
+  'WITH CHECK (true) let anyone with the published key post a visible review')
+const insGrant = (await raw(`select count(*)::int n from information_schema.role_table_grants
+   where table_name='ratings' and privilege_type='INSERT'
+     and grantee in ('anon','authenticated','PUBLIC')`))[0].n
+expectEq('no anon or authenticated INSERT grant on ratings', insGrant, 0)
+await expectDeny('anon cannot insert a review directly',
+  () => probe('anon', `insert into ratings (business_id, overall_rating)
+     select id, 5 from businesses limit 1`))
+
+// The capture RPC is the only writer, and it is service-role only — an
+// anon-callable version would re-open what the policy drop just closed.
+for (const who of ['anon', 'reception']) {
+  await expectDeny(`${who} cannot call sehat_record_rating`,
+    () => probe(who, `select sehat_record_rating('919812399999', 5)`), 'permission denied')
+}
+await expectDeny('anon cannot trigger a send',
+  () => probe('anon', `select sehat_send_rating_requests()`), 'permission denied')
+
+// ── the gate ────────────────────────────────────────────────────────────────
+if (ms && ms.rating_sending_enabled === false) {
+  const off = (await raw(`select sehat_queue_rating_requests() q, sehat_send_rating_requests() s`))[0]
+  expectEq('nothing is queued while sending is off', Number(off.q), 0,
+    'gating the queue too is what stops a backlog releasing at once on the day it is enabled')
+  expectEq('nothing is sent while sending is off', Number(off.s), 0)
+}
+
+// ── the full path, rolled back ──────────────────────────────────────────────
+await inRollback(async () => {
+  await db.query(`update messaging_settings set rating_sending_enabled = true where id`)
+  const biz = (await db.query(`insert into businesses (name, vertical, status)
+     values ('[TEST] rating clinic','clinic','active') returning id`)).rows[0]
+  const appt = (await db.query(`insert into appointments
+     (patient_phone, patient_name, business_id, slot_datetime, status)
+     values ('9812399999','[TEST] Asha Devi',$1, now() - interval '4 hours','completed')
+     returning id`, [biz.id])).rows[0]
+
+  // Other kept [TEST] appointments may also be due, so the count is >= 1 and the
+  // assertion that matters is that THIS visit got a row.
+  const qn = Number((await db.query(`select sehat_queue_rating_requests() n`)).rows[0].n)
+  expectTrue('a visit 4 hours past is queued', qn >= 1, `queued ${qn}`)
+  const queued = (await db.query(`select status from notification_outbox
+     where appointment_id=$1 and event='rating_request'`, [appt.id])).rows[0]
+  expectTrue('this visit got a rating request', !!queued)
+  expectEq('queued at pending_wa', queued?.status, 'pending_wa')
+  expectEq('asking twice does not queue twice', Number((await db.query(
+    `select sehat_queue_rating_requests() n`)).rows[0].n), 0)
+
+  // A database that already holds the real key cannot have the no-key path
+  // tested without removing it, and this suite does not remove secrets even
+  // inside a transaction it is going to roll back. Skip that assertion there and
+  // use the key that exists.
+  const realKey = Number((await db.query(`select count(*)::int n from vault.decrypted_secrets
+     where name='aisensy_api_key'`)).rows[0].n) > 0
+  if (!realKey) {
+    expectEq('no key in Vault sends nothing', Number((await db.query(
+      `select sehat_send_rating_requests() n`)).rows[0].n), 0)
+    expectEq('and the row is still queued, not failed', (await db.query(
+      `select status from notification_outbox where appointment_id=$1
+        and event='rating_request'`, [appt.id])).rows[0].status, 'pending_wa')
+    await db.query(`select vault.create_secret('not-a-real-key','aisensy_api_key','[TEST] rolled back')`)
+  }
+  const sn = Number((await db.query(`select sehat_send_rating_requests() n`)).rows[0].n)
+  expectTrue('with a key, the request is posted', sn >= 1, `posted ${sn}`)
+  const posted = (await db.query(`select status, provider_request_id, attempts, claimed_at
+     from notification_outbox where appointment_id=$1 and event='rating_request'`, [appt.id])).rows[0]
+  expectEq('claimed as awaiting_provider', posted.status, 'awaiting_provider')
+  expectTrue('the pg_net request id is kept', posted.provider_request_id !== null,
+    'without it the outcome is unknowable and every failure is silent')
+  expectTrue('claimed_at is stamped', posted.claimed_at !== null)
+
+  expectEq('an in-flight request is left alone', Number((await db.query(
+    `select sehat_reconcile_rating_requests() n`)).rows[0].n), 0)
+  await db.query(`update notification_outbox set claimed_at = now() - interval '20 minutes'
+     where event='rating_request' and status='awaiting_provider'`)
+  const rn = Number((await db.query(`select sehat_reconcile_rating_requests() n`)).rows[0].n)
+  expectTrue('a request with no response is settled', rn >= 1, `settled ${rn}`)
+  const settled = (await db.query(`select status, last_error from notification_outbox
+     where appointment_id=$1 and event='rating_request'`, [appt.id])).rows[0]
+  expectEq('retried into pending_wa, never pending', settled.status, 'pending_wa',
+    "'pending' would hand the row to the edge drain")
+  expectTrue('the failure is prefixed rating:', (settled.last_error ?? '').startsWith('rating:'),
+    "0075's requeue matches last_error='AISENSY env not set' exactly; the prefix keeps us clear of it")
+  expectTrue('a message_log row is written', Number((await db.query(
+    `select count(*)::int n from message_log
+      where phone='9812399999' and provider='aisensy'`)).rows[0].n) >= 1)
+
+  // The reply. Stored as 9812399999, answered from 919812399999 — matching is on
+  // the normalised number precisely because those two hash differently.
+  const r1 = (await db.query(`select sehat_record_rating('919812399999', 5, 'Good doctor') id`)).rows[0].id
+  expectTrue('the reply is recorded', r1 !== null)
+  const stored = (await db.query(`select overall_rating, business_id, patient_phone_hash
+     from ratings where id=$1`, [r1])).rows[0]
+  expectEq('the score is stored', Number(stored.overall_rating), 5)
+  expectEq('the business is carried from the appointment', stored.business_id, biz.id)
+  expectTrue('the number is hashed, not stored', (stored.patient_phone_hash ?? '').length === 64)
+  const r2 = (await db.query(`select sehat_record_rating('919812399999', 3) id`)).rows[0].id
+  expectEq('a second reply returns the first rating, not an error', r2, r1,
+    'a patient who answers twice must not break the AiSensy flow')
+  expectEq('and there is still one rating for the visit', Number((await db.query(
+    `select count(*)::int n from ratings where appointment_id=$1`, [appt.id])).rows[0].n), 1)
+})
+
+// Refusals, each in its own savepoint — a raised exception aborts the
+// transaction it was raised in.
+for (const [name, sql, code] of [
+  ['a landline is refused', `select sehat_record_rating('0132-2255667', 4)`, '22023'],
+  ['a score of 0 is refused', `select sehat_record_rating('919812399999', 0)`, '22023'],
+  ['a score of 9 is refused', `select sehat_record_rating('919812399999', 9)`, '22023'],
+  ['a number nobody asked is refused', `select sehat_record_rating('919800000001', 5)`, 'P0002'],
+]) {
+  await inRollback(async () => {
+    try { await db.query(sql); record(name, false, 'expected to be refused, but it succeeded') }
+    catch (e) {
+      e.code === code ? record(name, true)
+                      : record(name, 'warn', `refused with ${e.code}, wanted ${code}: ${e.message.split('\n')[0]}`)
+    }
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 sec('integrity')
 const orphanStays = (await raw(`select count(*)::int n from admission_bed_stays s
   left join admissions a on a.id=s.admission_id where a.id is null`))[0].n
