@@ -392,6 +392,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone }: {
     age: '',
     bloodGroup: '',
     mrn: '',
+    pinCode: '',
   })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -407,6 +408,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone }: {
         ageYears: form.age ? Number(form.age) : null,
         bloodGroup: form.bloodGroup || undefined,
         mrn: form.mrn.trim() || undefined,
+        pinCode: form.pinCode.trim() || undefined,
       })
       onDone(id)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
@@ -457,6 +459,10 @@ function RegisterPatient({ businessId, initial, onCancel, onDone }: {
           <div style={{ flex: '1 1 140px' }}><div style={label}>File number (optional)</div>
             <input style={input} value={form.mrn} placeholder="your own numbering"
               onChange={e => setForm({ ...form, mrn: e.target.value })} /></div>
+          <div style={{ flex: '0 1 130px' }}><div style={label}>PIN code (optional)</div>
+            <input style={input} inputMode="numeric" maxLength={6} value={form.pinCode}
+              placeholder="where they live"
+              onChange={e => setForm({ ...form, pinCode: e.target.value.replace(/\D/g, '') })} /></div>
         </div>
 
         {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
