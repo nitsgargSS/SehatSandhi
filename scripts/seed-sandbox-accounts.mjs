@@ -75,7 +75,13 @@ const ACCOUNTS = [
       // coverage the listing is invisible to every search — patient page, area
       // page and bot alike — so the seed could be used to test a login and
       // nothing beyond it.
-      pin_codes: ['135001'],
+      //
+      // 100000: a pincode India Post does not issue, so it belongs to no
+      // district. Since 0110 a search covers the patient's whole district, and
+      // any real Yamuna Nagar pincode would put '[SEED]' names in the middle
+      // of the plainly named listings seed-sandbox-bot writes for WhatsApp
+      // testing. Searching 100000 itself still finds these accounts.
+      pin_codes: ['100000'],
       phone: '9000000001',
       working_hours: 'Mon,Tue,Wed,Thu,Fri,Sat 10:00-18:00',
       // Active, so it appears in public listings and the dashboard has data.
@@ -135,7 +141,7 @@ const ACCOUNTS = [
       name: '[SEED] Paid Multi-Speciality',
       vertical: 'hospital',
       address: '44, Civil Lines, Yamunanagar, Haryana',
-      pin_codes: ['135001'],
+      pin_codes: ['100000'],   // see the clinic above
       phone: '9000000005',
       working_hours: 'Mon,Tue,Wed,Thu,Fri,Sat 09:00-20:00',
       status: 'active',

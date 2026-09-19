@@ -506,6 +506,13 @@ tables:
     class: never_purge
     # Public register data (NMC Act 2019 s.31), rebuilt by the import job.
 
+  # India Post pincode → district (0110). Public reference data loaded into
+  # BOTH environments from supabase/reference/pincode_directory.csv by
+  # scripts/load-pincode-directory.mjs — not synced from prod, and not purged:
+  # an empty table silently shrinks every search back to one pincode.
+  pincode_directory:
+    class: never_purge
+
   imr_sync_state:
     class: never_purge
     # Import progress. Purging it would strand a half-finished run.

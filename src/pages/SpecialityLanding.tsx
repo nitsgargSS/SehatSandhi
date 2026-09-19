@@ -29,6 +29,8 @@ interface DoctorResult {
   address: string | null
   consultation_fee: number
   is_primary: boolean
+  /** Serves the area's district but not its own pincode (0110). */
+  nearby: boolean
   avg_rating?: number
   total_reviews?: number
   is_top_rated?: boolean
@@ -62,11 +64,14 @@ export default function SpecialityLanding() {
       // if the one person who signed it up happened to practise what the patient
       // searched for. Now the speciality is the doctor's own and the business is
       // where they sit.
-      const { data } = await supabase
-        .from('public_practitioner_businesses')
-        .select('*')
-        .eq('speciality', speciality.id)
-        .contains('pin_codes', [area.pin_code])
+      //
+      // The whole district, not just this pincode (0110) — the same rule the
+      // WhatsApp bot applies, from the same database function, so the two can
+      // never disagree about who serves an area.
+      const { data } = await supabase.rpc('sehat_find_doctors', {
+        p_speciality: speciality.id,
+        p_pin_code: area.pin_code,
+      })
 
       const docs = (data ?? []) as DoctorResult[]
       // Every search, whether or not it found anyone. The zero-result ones are
@@ -90,8 +95,9 @@ export default function SpecialityLanding() {
           const r = ratings?.find(rr => rr.business_id === d.business_id)
           return { ...d, avg_rating: r?.avg_rating, total_reviews: r?.total_reviews, is_top_rated: r?.is_top_rated }
         })
-        // Top Rated doctors first, then by rating, then newest
+        // This pincode before the rest of the district, then Top Rated, then by rating
         merged.sort((a, b) => {
+          if (a.nearby !== b.nearby) return a.nearby ? 1 : -1
           if (a.is_top_rated && !b.is_top_rated) return -1
           if (!a.is_top_rated && b.is_top_rated) return 1
           return (b.avg_rating || 0) - (a.avg_rating || 0)
