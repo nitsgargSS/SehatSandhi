@@ -345,6 +345,11 @@ tables:
     class: isolated
     purgeOrder: 150
 
+  # Every WhatsApp bot search (0111). Test searches are test data.
+  bot_search_log:
+    class: isolated
+    purgeOrder: 151
+
   # ── The clinical record (0047) ──────────────────────────────────────────
   # Children first. Everything here hangs off patient_members, which hangs off
   # patients, so these must all precede it.

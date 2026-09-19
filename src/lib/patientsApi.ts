@@ -642,6 +642,8 @@ export interface NewPatient {
   bloodGroup?: string | null
   /** The clinic's own file number, if they keep one. */
   mrn?: string
+  /** Where they live, 6 digits. Optional; feeds "patients by area" (0111). */
+  pinCode?: string
 }
 
 /**
@@ -663,6 +665,7 @@ export async function registerPatient(businessId: string, p: NewPatient): Promis
     p_blood_group: p.bloodGroup || null,
     p_mrn: p.mrn || null,
     p_source: 'walk_in',
+    p_pin_code: p.pinCode || null,
   })
   if (error) throw new Error(error.message)
   return data as string

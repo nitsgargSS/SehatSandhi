@@ -8,8 +8,11 @@ import {
   pivotMatrix, downloadAreas, downloadRenewals, downloadGeo,
   listAllServiceAreas, listTiers, addServiceArea, updateServiceArea,
   tierForPopulation, downloadServiceAreas, setBusinessLocation,
-  AreaScope, AreaRow, MatrixRow, RenewalRow, VisitorGeoRow, ServiceAreaRow, TierRow,
+  AreaScope, AreaRow, MatrixRow, RenewalRow, VisitorGeoRow, ServiceAreaRow, TierRow, toCsv,
 } from '../../lib/adminInsightsApi'
+import { downloadCsv } from '../../lib/billingApi'
+import { getAreaGaps, AreaGapRow, GapScope } from '../../lib/areaReportsApi'
+import { SPECIALITIES } from '../../types'
 
 // Where the listings are, where they are not, what kind they are, who is due,
 // and which towns notice us.
@@ -28,10 +31,10 @@ import {
 // button that claims to have sent a message it did not send is worse than no
 // button, because the clinic is then not chased by anyone.
 
-type Section = 'areas' | 'matrix' | 'renewals' | 'geo' | 'manage'
+type Section = 'gaps' | 'areas' | 'matrix' | 'renewals' | 'geo' | 'manage'
 
 export default function InsightsPanel() {
-  const [section, setSection] = useState<Section>('areas')
+  const [section, setSection] = useState<Section>('gaps')
 
   const chip = (active: boolean) =>
     `text-xs font-semibold px-3 py-1.5 rounded-full border ${
@@ -48,12 +51,13 @@ export default function InsightsPanel() {
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {([['areas', 'By area'], ['matrix', 'Type × region'], ['renewals', 'Renewals'],
+        {([['gaps', 'Gaps to market'], ['areas', 'By area'], ['matrix', 'Type × region'], ['renewals', 'Renewals'],
            ['geo', 'Where we are noticed'], ['manage', 'Service areas']] as [Section, string][]).map(([s, label]) => (
           <button key={s} onClick={() => setSection(s)} className={chip(section === s)}>{label}</button>
         ))}
       </div>
 
+      {section === 'gaps' && <GapsSection chip={chip} />}
       {section === 'areas' && <AreasSection chip={chip} />}
       {section === 'matrix' && <MatrixSection chip={chip} />}
       {section === 'renewals' && <RenewalsSection chip={chip} />}
@@ -88,6 +92,214 @@ function Msg({ loading, error, empty, children }: {
   if (loading) return <div className="card shadow-sm text-sm text-gray-400 py-10 text-center">Loading…</div>
   if (empty) return <div className="card shadow-sm text-sm text-gray-500 py-10 text-center">Nothing to show yet.</div>
   return <>{children}</>
+}
+
+// ── Gaps to market ──────────────────────────────────────────────────────────
+//
+// Two questions for two kinds of marketing, from one table (0112):
+//
+//   Recruit businesses — where people search and nothing is based there.
+//   Find patients      — where businesses are, and patients are not coming.
+//
+// With a state or district filter every pincode in it is listed, the silent
+// ones included, because a pincode with nothing at all is the gap.
+
+const VERTICALS = ['clinic', 'hospital', 'lab', 'pharmacy', 'ambulance', 'insurance']
+
+const GAP_COLUMNS: [keyof AreaGapRow, string][] = [
+  ['state', 'State'], ['district', 'District'], ['pin_code', 'PIN code'], ['area_name', 'Area'],
+  ['pincodes', 'PIN codes'], ['population', 'Population'],
+  ['located', 'Businesses based here'], ['businesses', 'Businesses serving'],
+  ['clinics', 'Clinics'], ['hospitals', 'Hospitals'], ['labs', 'Labs'], ['pharmacies', 'Pharmacies'],
+  ['ambulances', 'Ambulances'], ['insurance', 'Insurance'], ['doctors', 'Doctors'],
+  ['patients', 'Patients living here'], ['bookings', 'Bookings'],
+  ['searches', 'Searches'], ['unmet', 'Found nobody'], ['gap', 'Gap'],
+]
+
+type GapView = 'recruit' | 'patients' | 'all'
+
+function GapsSection({ chip }: { chip: ChipFn }) {
+  const [days, setDays] = useState(30)
+  const [scope, setScope] = useState<GapScope>('district')
+  const [view, setView] = useState<GapView>('recruit')
+  const [speciality, setSpeciality] = useState('')
+  const [vertical, setVertical] = useState('')
+  // Typed filters apply on Search, not on every keystroke.
+  const [draft, setDraft] = useState({ state: '', district: '', query: '' })
+  const [applied, setApplied] = useState(draft)
+
+  const { data: rows, loading, error } = useAsync<AreaGapRow[]>(
+    () => getAreaGaps({ days, scope, speciality, vertical, ...applied }),
+    [days, scope, speciality, vertical, applied], [])
+
+  const shown = useMemo(() => {
+    if (view === 'recruit') {
+      // Demand with little supply based there: most unmet, then most searched,
+      // then the biggest population.
+      return rows.filter(r => r.located === 0 || r.unmet > 0 || (speciality && r.doctors === 0))
+        .sort((a, b) => b.unmet - a.unmet || b.searches - a.searches || (b.population ?? 0) - (a.population ?? 0))
+    }
+    if (view === 'patients') {
+      // Supply that patients are not reaching: fewest patients per business first.
+      return rows.filter(r => r.located > 0)
+        .sort((a, b) => a.patients / a.located - b.patients / b.located || (b.population ?? 0) - (a.population ?? 0))
+    }
+    return rows
+  }, [rows, view, speciality])
+
+  const t = {
+    searches: rows.reduce((s, r) => s + r.searches, 0),
+    unmet: rows.reduce((s, r) => s + r.unmet, 0),
+    noBiz: rows.filter(r => r.located === 0).length,
+    noPatients: rows.filter(r => r.located > 0 && r.patients === 0).length,
+  }
+  const place = scope === 'district' ? 'district' : 'PIN code'
+  const label = (r: AreaGapRow) => scope === 'district'
+    ? r.district : r.area_name ? `${r.area_name} · ${r.pin_code}` : r.pin_code ?? '—'
+
+  const onDownload = () => {
+    const stamp = new Date().toISOString().slice(0, 10)
+    downloadCsv(`area-gaps-${scope}-${view}-${days}d-${stamp}.csv`, toCsv(shown, GAP_COLUMNS))
+  }
+
+  const select = 'text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white'
+
+  return (
+    <div className="space-y-4">
+      <div className="card shadow-sm space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-gray-500 w-16">Show</span>
+          {([['recruit', 'Where to recruit businesses'], ['patients', 'Where patients are missing'],
+             ['all', 'Everything']] as [GapView, string][]).map(([v, l]) => (
+            <button key={v} onClick={() => setView(v)} className={chip(view === v)}>{l}</button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-gray-500 w-16">Group by</span>
+          {(['district', 'pincode'] as GapScope[]).map(s => (
+            <button key={s} onClick={() => setScope(s)} className={chip(scope === s)}>
+              {s === 'district' ? 'District' : 'PIN code'}
+            </button>
+          ))}
+          <span className="text-xs font-semibold text-gray-500 ml-3">Period</span>
+          {[7, 30, 90, 365].map(d => (
+            <button key={d} onClick={() => setDays(d)} className={chip(days === d)}>
+              {d === 365 ? '1 year' : `${d} days`}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-gray-500 w-16">Filter</span>
+          <select className={select} value={speciality} onChange={e => setSpeciality(e.target.value)}>
+            <option value="">Any speciality</option>
+            {SPECIALITIES.map(s => <option key={s.id} value={s.id}>{s.en}</option>)}
+          </select>
+          <select className={select} value={vertical} onChange={e => setVertical(e.target.value)}>
+            <option value="">Any business type</option>
+            {VERTICALS.map(v => <option key={v} value={v}>{v[0].toUpperCase() + v.slice(1)}</option>)}
+          </select>
+        </div>
+        <form className="flex items-center gap-2 flex-wrap"
+          onSubmit={e => { e.preventDefault(); setApplied(draft) }}>
+          <span className="text-xs font-semibold text-gray-500 w-16">Place</span>
+          <input className={select} placeholder="State, e.g. Haryana" value={draft.state}
+            onChange={e => setDraft({ ...draft, state: e.target.value })} />
+          <input className={select} placeholder="District, e.g. Yamunanagar" value={draft.district}
+            onChange={e => setDraft({ ...draft, district: e.target.value })} />
+          <input className={select} placeholder="Search PIN, area, district…" value={draft.query}
+            onChange={e => setDraft({ ...draft, query: e.target.value })} />
+          <button type="submit" className="btn-teal text-xs">Search</button>
+          {(applied.state || applied.district || applied.query) && (
+            <button type="button" className="text-xs font-semibold text-gray-500"
+              onClick={() => { const blank = { state: '', district: '', query: '' }; setDraft(blank); setApplied(blank) }}>
+              Clear
+            </button>
+          )}
+        </form>
+        <div className="flex justify-end pt-1 border-t border-gray-100">
+          <button onClick={onDownload} disabled={!shown.length} className="btn-teal text-xs disabled:opacity-50">
+            <Download className="w-3.5 h-3.5 inline mr-1.5" /> Download sheet
+          </button>
+        </div>
+      </div>
+
+      <Msg loading={loading} error={error} empty={!rows.length}>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile label="Searches" value={num(t.searches)} sub={`website + WhatsApp, ${days} days`} />
+          <StatTile label="Found nobody" value={num(t.unmet)} tone={t.unmet ? 'alert' : 'normal'}
+            sub="searches with no result" />
+          <StatTile label={`${place[0].toUpperCase() + place.slice(1)}s with no business based there`}
+            value={num(t.noBiz)} tone={t.noBiz ? 'alert' : 'normal'} sub="recruit businesses" />
+          <StatTile label={`${place[0].toUpperCase() + place.slice(1)}s with businesses, no patients`}
+            value={num(t.noPatients)} sub="market to patients" />
+        </div>
+
+        <div className="card shadow-sm">
+          <p className="text-xs text-gray-500 mb-3">
+            <strong>Based here</strong> is where a business actually is. <strong>Serving</strong> also counts
+            every business that sells into the area, which is most of them on the flat plan — use "based here"
+            to judge supply. <strong>Patients</strong> are counted by where they live, recorded from
+            19 September 2026. <strong>Searches</strong> are anonymous, from the website and the WhatsApp bot.
+          </p>
+          <ScrollableTable>
+            <table className="w-full text-sm" style={{ minWidth: 980 }}>
+              <thead>
+                <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                  <th className="px-3 py-2.5 font-semibold">State</th>
+                  <th className="px-3 py-2.5 font-semibold">{scope === 'district' ? 'District' : 'PIN code'}</th>
+                  <th className="px-3 py-2.5 font-semibold text-right">Population</th>
+                  <th className="px-3 py-2.5 font-semibold text-right">Based here</th>
+                  <th className="px-3 py-2.5 font-semibold text-right">Serving</th>
+                  <th className="px-3 py-2.5 font-semibold text-right">Doctors</th>
+                  <th className="px-3 py-2.5 font-semibold text-right">Patients</th>
+                  <th className="px-3 py-2.5 font-semibold text-right">Bookings</th>
+                  <th className="px-3 py-2.5 font-semibold text-right">Searches</th>
+                  <th className="px-3 py-2.5 font-semibold text-right">Found nobody</th>
+                  <th className="px-3 py-2.5 font-semibold">Gap</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((r, i) => (
+                  <tr key={i} className={`border-b border-gray-50 last:border-0 ${r.gap ? 'bg-amber-50/40' : ''}`}>
+                    <td className="px-3 py-2.5 text-gray-500 whitespace-nowrap">{r.state}</td>
+                    <td className="px-3 py-2.5 font-semibold text-navy-700 whitespace-nowrap">
+                      {label(r)}
+                      {scope === 'pincode' && <span className="font-normal text-xs text-gray-400"> · {r.district}</span>}
+                      {scope === 'district' && <span className="font-normal text-xs text-gray-400"> · {r.pincodes} PINs</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">{r.population ? num(r.population) : '—'}</td>
+                    <td className="px-3 py-2.5 text-right font-bold">
+                      {r.located === 0 ? <span className="text-amber-700">none</span> : num(r.located)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-gray-500"
+                      title={`Clinics ${r.clinics}, hospitals ${r.hospitals}, labs ${r.labs}, pharmacies ${r.pharmacies}, ambulances ${r.ambulances}, insurance ${r.insurance}`}>
+                      {num(r.businesses)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">{num(r.doctors)}</td>
+                    <td className="px-3 py-2.5 text-right">{num(r.patients)}</td>
+                    <td className="px-3 py-2.5 text-right">{num(r.bookings)}</td>
+                    <td className="px-3 py-2.5 text-right">{num(r.searches)}</td>
+                    <td className="px-3 py-2.5 text-right">
+                      {r.unmet > 0 ? <span className="font-semibold text-amber-700">{num(r.unmet)}</span> : 0}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-amber-800 whitespace-nowrap">{r.gap ?? ''}</td>
+                  </tr>
+                ))}
+                {!shown.length && (
+                  <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">
+                    No {place}s match this view.
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </ScrollableTable>
+          {rows.length >= 2000 && (
+            <p className="text-xs text-gray-500 mt-3">Showing the first 2,000 — narrow by state or district to see the rest.</p>
+          )}
+        </div>
+      </Msg>
+    </div>
+  )
 }
 
 // ── By area ─────────────────────────────────────────────────────────────────

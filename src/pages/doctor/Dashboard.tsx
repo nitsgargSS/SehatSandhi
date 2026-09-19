@@ -11,6 +11,7 @@ import Wards from './Wards'
 import Queue from './Queue'
 import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess, AffiliationRole } from '../../lib/identityApi'
 import RevenuePanel from './RevenuePanel'
+import PatientAreasPanel from './PatientAreasPanel'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
 
@@ -1675,6 +1676,15 @@ export default function DoctorDashboard() {
                   )}
                 </div>
               </>
+            )}
+
+            {/* Where patients come from, and where people search for this
+                business but few come (0112). Same gate as the listing report:
+                the RPC refuses anyone who cannot read that. */}
+            {doctor && (
+              <div className="pt-2 border-t border-gray-100">
+                <PatientAreasPanel businessId={doctor.id} days={reportDays} />
+              </div>
             )}
 
             {/* The clinic's own money, under the listing report.
