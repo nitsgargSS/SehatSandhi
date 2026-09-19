@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Download, FileSpreadsheet, AlertTriangle } from 'lucide-react'
+import { Download, FileSpreadsheet, AlertTriangle, FileArchive } from 'lucide-react'
 import { StatTile } from '../../components/Charts'
 import ScrollableTable from '../../components/ScrollableTable'
 import { moneyExact } from '../../lib/format'
 import {
-  getGstRegister, getGstSummary, downloadGstRegister, downloadGstSummary,
+  getGstRegister, getGstSummary, downloadGstRegister, downloadGstSummary, gstRegisterCsv, gstRegisterFileName,
   resolvePeriod, recentFinancialYears, financialYear,
   GstPeriodKind, GstPeriod, GstRegisterRow, GstSummaryRow,
   REGISTER_COLUMNS, SUMMARY_COLUMNS,
 } from '../../lib/gstApi'
+import { fetchInvoicesForPeriod, buildInvoiceZip, downloadBlob } from '../../lib/invoicePdf'
 
 // Our own invoices, in the shape a GST return is filed from.
 //
@@ -79,6 +80,31 @@ export default function GstFilingPanel() {
   const onRegister = useCallback(() => downloadGstRegister(register, period), [register, period])
   const onSummary = useCallback(() => downloadGstSummary(summary, period), [summary, period])
 
+  // Every invoice of the period as its own PDF, plus the register, in one ZIP.
+  const [zipping, setZipping] = useState('')
+  const [zipNote, setZipNote] = useState('')
+  const onInvoices = useCallback(async () => {
+    setZipNote(''); setZipping('Fetching invoices…')
+    try {
+      const invoices = await fetchInvoicesForPeriod(period.from, period.to)
+      if (!invoices.length) { setZipNote(`No invoices in ${period.label}.`); return }
+      const bundle = await buildInvoiceZip(invoices,
+        [{ name: gstRegisterFileName(period), content: gstRegisterCsv(register, period) }],
+        (done, total) => setZipping(`Preparing invoice ${done} of ${total}…`))
+      downloadBlob(`invoices-${period.label.replace(/\s+/g, '-')}.zip`, bundle.blob)
+      setZipNote(`${bundle.count} invoice${bundle.count === 1 ? '' : 's'} downloaded`
+        + (bundle.cancelled ? `, ${bundle.cancelled} of them cancelled (marked on the PDF)` : '')
+        + (bundle.replacedText.length
+          ? `. ${bundle.replacedText.join(', ')} had characters the PDF font cannot show (e.g. Hindi) — `
+            + 'open those from the invoice page to save an exact copy.'
+          : '.'))
+    } catch (e) {
+      setZipNote(`Could not build the ZIP: ${(e as Error).message}`)
+    } finally {
+      setZipping('')
+    }
+  }, [period, register])
+
   return (
     <div className="space-y-4">
       <div>
@@ -144,7 +170,13 @@ export default function GstFilingPanel() {
             <strong className="text-navy-700">{period.label}</strong>
             <span className="text-gray-400"> · {period.from} to {period.to}</span>
           </span>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={onInvoices} disabled={!register.length || !!zipping}
+              className="btn-teal text-xs disabled:opacity-50"
+              title="Every invoice in this period as a PDF, with the register, in one ZIP">
+              <FileArchive className="w-3.5 h-3.5 inline mr-1.5" />
+              {zipping || 'All invoices (PDF, ZIP)'}
+            </button>
             <button onClick={onSummary} disabled={!summary.length}
               className="btn-teal text-xs disabled:opacity-50">
               <FileSpreadsheet className="w-3.5 h-3.5 inline mr-1.5" />
@@ -161,6 +193,9 @@ export default function GstFilingPanel() {
 
       {error && (
         <div className="card shadow-sm text-sm text-amber-700 bg-amber-50 border-amber-200">{error}</div>
+      )}
+      {zipNote && (
+        <div className="card shadow-sm text-sm text-gray-600">{zipNote}</div>
       )}
 
       {loading ? (

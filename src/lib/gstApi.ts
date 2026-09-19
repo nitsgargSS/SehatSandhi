@@ -205,10 +205,16 @@ function toCsv<T>(rows: T[], cols: [keyof T, string][], totalLabel: string, mone
   return '﻿' + [head, body, totals].filter(Boolean).join('\r\n') + '\r\n'
 }
 
-export function downloadGstRegister(rows: GstRegisterRow[], p: GstPeriod): void {
-  const csv = toCsv(rows, REGISTER_COLUMNS, `${p.label} total`,
+/** The register as CSV text — the download below, and the copy inside the invoice ZIP. */
+export function gstRegisterCsv(rows: GstRegisterRow[], p: GstPeriod): string {
+  return toCsv(rows, REGISTER_COLUMNS, `${p.label} total`,
     ['taxable_value', 'cgst_amount', 'sgst_amount', 'igst_amount', 'tax_total', 'total_amount'])
-  downloadCsv(`gst-register-${p.label.replace(/\s+/g, '-')}.csv`, csv)
+}
+
+export const gstRegisterFileName = (p: GstPeriod) => `gst-register-${p.label.replace(/\s+/g, '-')}.csv`
+
+export function downloadGstRegister(rows: GstRegisterRow[], p: GstPeriod): void {
+  downloadCsv(gstRegisterFileName(p), gstRegisterCsv(rows, p))
 }
 
 export function downloadGstSummary(rows: GstSummaryRow[], p: GstPeriod): void {
