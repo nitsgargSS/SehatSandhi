@@ -237,26 +237,36 @@ revoke all on function sehat_set_renewal_preference(uuid, integer, boolean, bool
 grant execute on function sehat_set_renewal_preference(uuid, integer, boolean, boolean) to authenticated;
 
 -- ── Renewal reminders quote the type's list ─────────────────────────────────
+-- plpgsql, not sql: production never got 0082, so plan_terms may not exist, and
+-- a SQL function naming a missing table cannot even be created. The type list
+-- decides first; plan_terms is only consulted where it exists.
 create or replace function sehat_business_renewal_price(p_business uuid)
 returns integer
-language sql stable security definer set search_path = public as $$
-  select coalesce(
-    b.renewal_price,
-    (select p.subscription_price
-            + case when b.renewal_whatsapp then p.whatsapp_price else 0 end
-       from vertical_term_prices p
-      where p.vertical = b.vertical
-        and p.months = coalesce(b.renewal_term_months, b.months_paid, 1)
-        and p.is_enabled),
-    (select t.price from plan_terms t
-      where t.plan_code = b.pricing_plan_code
-        and t.months = coalesce(b.renewal_term_months, b.months_paid, 1)
-        and t.is_enabled),
-    b.locked_monthly_price * coalesce(b.renewal_term_months, b.months_paid, 1)
-  )
-    from businesses b
-   where b.id = p_business;
-$$;
+language plpgsql stable security definer set search_path = public as $$
+declare
+  b businesses;
+  v_months integer;
+  v_price integer;
+begin
+  select * into b from businesses where id = p_business;
+  if b.id is null then return null; end if;
+  if b.renewal_price is not null then return b.renewal_price; end if;
+  v_months := coalesce(b.renewal_term_months, b.months_paid, 1);
+
+  select p.subscription_price + case when b.renewal_whatsapp then p.whatsapp_price else 0 end
+    into v_price
+    from vertical_term_prices p
+   where p.vertical = b.vertical and p.months = v_months and p.is_enabled;
+  if v_price is not null then return v_price; end if;
+
+  if to_regclass('public.plan_terms') is not null then
+    execute 'select price from plan_terms where plan_code = $1 and months = $2 and is_enabled'
+      into v_price using b.pricing_plan_code, v_months;
+    if v_price is not null then return v_price; end if;
+  end if;
+
+  return b.locked_monthly_price * v_months;
+end $$;
 
 -- ── WhatsApp broadcasts follow the add-on ───────────────────────────────────
 -- 0116 checked a subscription_status an admin set by hand. It is now set by
