@@ -39,6 +39,7 @@ import {
 } from '../../lib/billingApi'
 import { getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
 import { moneyExact, shortDate } from '../../lib/format'
+import { RECORDING_ENABLED } from '../../lib/env'
 
 // The clinic's patient records — search, history, and the clinical detail a
 // doctor needs on screen before they prescribe anything.
@@ -636,7 +637,8 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
       {/* The consent toggle is clinical too. It is the gate on recording a
           consultation, and it is not reception's to give on a doctor's behalf —
           0057 refuses the write regardless. */}
-      {clinical && (
+      {/* Hidden unless RECORDING_ENABLED — see env.ts for why. */}
+      {RECORDING_ENABLED && clinical && (
         <RecordingConsent
           summary={summary}
           businessId={businessId}
@@ -644,7 +646,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         />
       )}
 
-      {clinical && summary.recording_consent && (
+      {RECORDING_ENABLED && clinical && summary.recording_consent && (
         <ConsultationRecorder
           memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} visits={visits} onChange={reload}
