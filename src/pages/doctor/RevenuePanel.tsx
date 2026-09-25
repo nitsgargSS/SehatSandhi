@@ -26,7 +26,13 @@ import {
 // the CSV, so the sheet a clinic downloads cannot disagree with the screen it
 // was looking at when it clicked.
 
-export default function RevenuePanel({ businessId }: { businessId: string }) {
+export default function RevenuePanel({ businessId, practitionerId = null, title, subtitle }: {
+  businessId: string
+  /** 0121: one doctor's earnings. A doctor is always shown their own. */
+  practitionerId?: string | null
+  title?: string
+  subtitle?: string
+}) {
   const [grain, setGrain] = useState<RevenueGrain>('month')
   const [rows, setRows] = useState<RevenueRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,12 +41,12 @@ export default function RevenuePanel({ businessId }: { businessId: string }) {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    getRevenueReport(businessId, grain)
+    getRevenueReport(businessId, grain, {}, practitionerId)
       .then(r => { if (!cancelled) { setRows(r); setError('') } })
       .catch(e => { if (!cancelled) { setRows([]); setError((e as Error).message) } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [businessId, grain])
+  }, [businessId, grain, practitionerId])
 
   const total = (k: keyof RevenueRow) => rows.reduce((s, r) => s + Number(r[k] ?? 0), 0)
 
@@ -54,9 +60,9 @@ export default function RevenuePanel({ businessId }: { businessId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-xl font-bold text-navy-700">What you earned</h2>
+          <h2 className="text-xl font-bold text-navy-700">{title ?? 'What you earned'}</h2>
           <p className="text-sm text-gray-500">
-            Your own billing — consultations, beds, medicines and the rest.
+            {subtitle ?? 'Your own billing — consultations, beds, medicines and the rest.'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

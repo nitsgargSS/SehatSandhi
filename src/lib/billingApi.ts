@@ -96,6 +96,8 @@ export interface NewCharge {
   visitId?: string | null
   admissionId?: string | null
   notes?: string
+  /** 0121: the doctor this charge is credited to. Blank = the visit's or the admission's doctor. */
+  practitionerId?: string | null
 }
 
 export async function addCharge(
@@ -117,6 +119,7 @@ export async function addCharge(
     amount: c.amount ?? Math.round(qty * unit * 100) / 100,
     notes: c.notes || null,
     recorded_by: recordedBy ?? null,
+    practitioner_id: c.practitionerId ?? null,
   })
   oops(error)
 }
@@ -426,12 +429,15 @@ export async function getRevenueReport(
   businessId: string,
   grain: RevenueGrain = 'month',
   range: { from?: string | null; to?: string | null } = {},
+  /** 0121: one doctor's figures. A doctor always gets their own regardless. */
+  practitionerId: string | null = null,
 ): Promise<RevenueRow[]> {
   const { data, error } = await supabase.rpc('sehat_revenue_report', {
     p_business: businessId,
     p_grain: grain,
     p_from: range.from ?? null,
     p_to: range.to ?? null,
+    p_practitioner: practitionerId,
   })
   if (error) throw new Error(error.message)
   // Postgres numerics arrive as strings; every consumer here does arithmetic on

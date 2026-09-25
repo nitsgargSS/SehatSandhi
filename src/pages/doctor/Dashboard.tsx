@@ -14,6 +14,7 @@ import RevenuePanel from './RevenuePanel'
 import PatientAreasPanel from './PatientAreasPanel'
 import WhatsAppPanel from './WhatsAppPanel'
 import PayListingPanel from './PayListingPanel'
+import { MyPractice, DoctorsOverview } from './DoctorWorkspace'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
@@ -84,7 +85,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'doctors'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -151,6 +152,8 @@ export default function DoctorDashboard() {
   })
   const [apptStatus, setApptStatus] = useState<string>('all')
   const [apptSearch, setApptSearch] = useState('')
+  // 0121: one doctor's bookings, or everyone's.
+  const [apptDoctor, setApptDoctor] = useState<string>('all')
 
   const loadAllAppointments = async (doctorId: string) => {
     setApptLoading(true)
@@ -163,6 +166,7 @@ export default function DoctorDashboard() {
       .order('slot_datetime', { ascending: false })
       .limit(500)
     if (apptStatus !== 'all') q = q.eq('status', apptStatus)
+    if (apptDoctor !== 'all') q = apptDoctor === 'none' ? q.is('practitioner_id', null) : q.eq('practitioner_id', apptDoctor)
     const { data } = await q
     setAllAppts((data as Appointment[]) || [])
     setApptLoading(false)
@@ -198,7 +202,7 @@ export default function DoctorDashboard() {
   useEffect(() => {
     if (tab !== 'appointments' || !doctor) return
     loadAllAppointments(doctor.id)
-  }, [tab, doctor, apptFrom, apptTo, apptStatus])
+  }, [tab, doctor, apptFrom, apptTo, apptStatus, apptDoctor])
 
   useEffect(() => {
     if (tab !== 'reports' || !doctor) return
@@ -241,6 +245,9 @@ export default function DoctorDashboard() {
   // or a receptionist is nobody on the roster, so this stays null and a visit
   // they record simply carries no practitioner rather than inventing one.
   const [myPractitionerId, setMyPractitionerId] = useState<string | null>(null)
+  // A patient another tab asked to open (My practice, Doctors → Patients).
+  const [openMember, setOpenMember] = useState<string | null>(null)
+  const openPatient = (memberId: string) => { setOpenMember(memberId); setTab('patients') }
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
   const [showAddDoc, setShowAddDoc] = useState(false)
@@ -252,6 +259,11 @@ export default function DoctorDashboard() {
     extra_doctor_price: number
   }
   const [plan, setPlan] = useState<PlanTerms | null>(null)
+
+  // The doctor a booking is for, by name (0121). Only places with doctors.
+  const doctorNameOf = (id?: string | null) =>
+    id ? roster.find(r => r.practitioner_id === id)?.practitioners?.full_name ?? null : null
+  const rosterDoctors = roster.filter(r => (r.role === 'doctor' || r.role === 'owner') && r.status !== 'suspended' && r.practitioners)
 
   const loadRoster = async (businessId: string) => {
     const { data } = await supabase.from('business_practitioners')
@@ -812,6 +824,10 @@ export default function DoctorDashboard() {
   const prescriber = mayPrescribe(role)
 
   const tabs = [
+    // 0121: a doctor's own page, first for anyone who is a doctor here.
+    ...(myPractitionerId && emr ? [
+      { id: 'mypractice', label: 'My practice', icon: <User className="w-4 h-4" /> },
+    ] : []),
     ...(booksAppointments ? [
       { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
       // Above Appointments on purpose: the line is what reception works all
@@ -843,6 +859,10 @@ export default function DoctorDashboard() {
     ...(businessRole ? [
       { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
       { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
+      // 0121: every doctor side by side, for places that have doctors.
+      ...(doctor && hasPractitioners(doctor.vertical as VerticalKey) && emr ? [
+        { id: 'doctors', label: 'Doctors', icon: <Users className="w-4 h-4" /> },
+      ] : []),
       // Plan & billing (0117): pay, renew, change term, WhatsApp, autopay.
       { id: 'plan', label: 'Plan', icon: <Star className="w-4 h-4" /> },
       // WhatsApp marketing (0116): the wallet and broadcasts are the business's
@@ -1200,7 +1220,8 @@ export default function DoctorDashboard() {
                       <div key={a.id} className="p-3 bg-gray-50 rounded-xl">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div>
-                            <p className="font-medium text-gray-800 text-sm">{a.patient_name}</p>
+                            <p className="font-medium text-gray-800 text-sm">{a.patient_name}
+                              {doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id) && <span className="text-xs text-teal-700 font-semibold"> · {doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id)}</span>}</p>
                             <p className="text-sm text-gray-400">
                               {t('dashboardPage.ageLabel')} {a.patient_age} · {new Date(a.slot_datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
                             </p>
@@ -1294,6 +1315,17 @@ export default function DoctorDashboard() {
                     <option value="no_show">Did not turn up</option>
                   </select>
                 </div>
+                {rosterDoctors.length > 1 && (
+                  <div>
+                    <label className="text-[11px] text-gray-500 block mb-1">Doctor</label>
+                    <select className="input-field text-sm" value={apptDoctor}
+                      onChange={e => setApptDoctor(e.target.value)}>
+                      <option value="all">All doctors</option>
+                      {rosterDoctors.map(r => <option key={r.practitioner_id} value={r.practitioner_id}>{r.practitioners?.full_name}</option>)}
+                      <option value="none">Not assigned</option>
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="text-[11px] text-gray-500 block mb-1">Search</label>
                   <input className="input-field text-sm" placeholder="Name or number"
@@ -1327,7 +1359,8 @@ export default function DoctorDashboard() {
                         <div className="flex items-start justify-between gap-2 flex-wrap">
                           <div className="min-w-0">
                             <p className="font-medium text-navy-700">{a.patient_name || 'Patient'}</p>
-                            <p className="text-xs text-gray-500">{a.patient_phone}</p>
+                            <p className="text-xs text-gray-500">{a.patient_phone}
+                              {doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id) && <> · <b>{doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id)}</b></>}</p>
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-sm font-semibold text-navy-700">
@@ -1586,7 +1619,15 @@ export default function DoctorDashboard() {
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
         {tab === 'patients' && emr && (access.opd || access.ipd) && doctor && (
-          <Patients businessId={doctor.id} practitionerId={myPractitionerId} />
+          <Patients businessId={doctor.id} practitionerId={myPractitionerId} openMemberId={openMember} />
+        )}
+
+        {tab === 'mypractice' && doctor && myPractitionerId && (
+          <MyPractice businessId={doctor.id} practitionerId={myPractitionerId} onOpenPatient={openPatient} />
+        )}
+
+        {tab === 'doctors' && doctor && (
+          <DoctorsOverview businessId={doctor.id} onOpenPatient={openPatient} />
         )}
 
         {/* ══════════ CLINIC — doctors on the roster + camps & offers ══════════ */}

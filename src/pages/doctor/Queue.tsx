@@ -8,6 +8,8 @@ import {
   QueueEntry,
 } from '../../lib/queueApi'
 import { searchPatients, PatientSearchResult } from '../../lib/patientsApi'
+import { listBusinessDoctors, BusinessDoctor } from '../../lib/doctorsApi'
+import DoctorSelect from '../../components/DoctorSelect'
 
 // Today's OPD line — the screen reception has open all day.
 //
@@ -49,6 +51,11 @@ export default function Queue({ businessId, practitionerId }: {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [adding, setAdding] = useState(false)
+  // One line per doctor (0121). A doctor opens on their own line; reception
+  // and the owner on everyone's, and either can switch.
+  const [doctors, setDoctors] = useState<BusinessDoctor[]>([])
+  const [view, setView] = useState<string | null>(practitionerId ?? null)
+  useEffect(() => { listBusinessDoctors(businessId).then(setDoctors).catch(() => setDoctors([])) }, [businessId])
 
   const reload = useCallback(async () => {
     try { setBoard(await getBoard(businessId)); setErr('') }
@@ -67,9 +74,12 @@ export default function Queue({ businessId, practitionerId }: {
 
   if (loading) return <div style={{ ...card, textAlign: 'center' }}><Spinner /></div>
 
-  const waiting = stillWaiting(board)
-  const active = inProgress(board)
-  const done = finished(board)
+  // Filtered to the chosen doctor's line; tokens with no doctor show in every
+  // line, so none are missed while reception still gives some without one.
+  const shown = view ? board.filter(e => e.practitioner_id === view || !e.practitioner_id) : board
+  const waiting = stillWaiting(shown)
+  const active = inProgress(shown)
+  const done = finished(shown)
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true); setErr('')
@@ -80,6 +90,13 @@ export default function Queue({ businessId, practitionerId }: {
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
+      {doctors.length > 1 && (
+        <div style={{ ...card, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={label}>Line</span>
+          <DoctorSelect doctors={doctors} value={view} onChange={setView} allLabel="All doctors" style={{ ...input, width: 'auto' }} />
+        </div>
+      )}
+
       <div style={{ ...card, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
           <div>
@@ -108,7 +125,7 @@ export default function Queue({ businessId, practitionerId }: {
         <div style={{ display: 'flex', gap: 7 }}>
           <button style={btn()} disabled={busy || waiting.length === 0}
             onClick={() => act(async () => {
-              const next = await callNext(businessId, practitionerId ?? null)
+              const next = await callNext(businessId, view ?? practitionerId ?? null)
               if (!next) setErr('Nobody is waiting.')
             })}>
             <BellRing className="w-4 h-4" style={{ display: 'inline', marginRight: 5 }} />
@@ -125,7 +142,7 @@ export default function Queue({ businessId, practitionerId }: {
 
       {adding && (
         <IssueToken
-          businessId={businessId} practitionerId={practitionerId}
+          businessId={businessId} practitionerId={practitionerId} doctors={doctors} defaultDoctor={view}
           onIssued={() => { setAdding(false); reload() }}
           onError={setErr}
         />
@@ -254,9 +271,11 @@ function Row({ e, busy, act, emphasis }: {
 
 // ── Giving a token ──────────────────────────────────────────────────────────
 
-function IssueToken({ businessId, practitionerId, onIssued, onError }: {
+function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssued, onError }: {
   businessId: string
   practitionerId?: string | null
+  doctors: BusinessDoctor[]
+  defaultDoctor: string | null
   onIssued: () => void
   onError: (m: string) => void
 }) {
@@ -267,6 +286,10 @@ function IssueToken({ businessId, practitionerId, onIssued, onError }: {
   const [priority, setPriority] = useState(false)
   const [why, setWhy] = useState('')
   const [busy, setBusy] = useState(false)
+  // Which doctor's line. Reception picks; a doctor defaults to themselves; a
+  // single-doctor clinic has nothing to pick.
+  const [forDoctor, setForDoctor] = useState<string | null>(
+    defaultDoctor ?? practitionerId ?? (doctors.length === 1 ? doctors[0].practitioner_id : null))
 
   useEffect(() => {
     const q = query.trim()
@@ -284,12 +307,13 @@ function IssueToken({ businessId, practitionerId, onIssued, onError }: {
   const give = async () => {
     if (!picked) return
     if (priority && !why.trim()) { onError('Say why this token goes out of turn.'); return }
+    if (doctors.length > 1 && !forDoctor) { onError('Choose which doctor this token is for.'); return }
     setBusy(true)
     try {
       await issueToken({
         patientMemberId: picked.patient_member_id,
         businessId,
-        practitionerId: practitionerId ?? null,
+        practitionerId: forDoctor ?? practitionerId ?? null,
         reason,
         priority: priority ? 10 : 0,
         priorityReason: priority ? why.trim() : undefined,
@@ -351,6 +375,9 @@ function IssueToken({ businessId, practitionerId, onIssued, onError }: {
 
       {picked && (
         <div style={{ display: 'grid', gap: 9 }}>
+          {doctors.length > 1 && (
+            <DoctorSelect doctors={doctors} value={forDoctor} onChange={setForDoctor} allLabel="Which doctor?" style={input} />
+          )}
           <input style={input} value={reason} onChange={e => setReason(e.target.value)}
             placeholder="What have they come for? (optional)" />
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: BIZ.ink }}>
