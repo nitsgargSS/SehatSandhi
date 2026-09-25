@@ -59,6 +59,14 @@ const CONFIG: BackendConfig = {
  */
 export const IS_STAGING = import.meta.env.VITE_IS_STAGING === 'true'
 
+/**
+ * Consultation recording (consent toggle + recorder on the patient record).
+ * Off unless VITE_RECORDING_ENABLED=true: transcription is billed per audio
+ * second by Sarvam and doctors are not charged for it, so the cost would sit
+ * with us. The code stays; set the variable in Vercel to bring it back.
+ */
+export const RECORDING_ENABLED = import.meta.env.VITE_RECORDING_ENABLED === 'true'
+
 /** Token for the sandbox-purge function. Only meaningful on staging. */
 export const SANDBOX_PURGE_TOKEN = (import.meta.env.VITE_SANDBOX_PURGE_TOKEN as string) || ''
 
