@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -12,6 +12,7 @@ import Queue from './Queue'
 import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess, AffiliationRole } from '../../lib/identityApi'
 import RevenuePanel from './RevenuePanel'
 import PatientAreasPanel from './PatientAreasPanel'
+import WhatsAppPanel from './WhatsAppPanel'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
 
@@ -81,7 +82,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'whatsapp' | 'reports'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -824,6 +825,9 @@ export default function DoctorDashboard() {
     ...(businessRole ? [
       { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
       { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
+      // WhatsApp marketing (0116): the wallet and broadcasts are the business's
+      // money, so owner and manager only — the RPCs refuse anyone else.
+      { id: 'whatsapp', label: 'WhatsApp', icon: <MessageCircle className="w-4 h-4" /> },
     ] : []),
     // Reports sits with the clinicians, not the business cluster. How the
     // practice is actually doing — reach, bookings, conversion — is for the
@@ -1516,6 +1520,11 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ CLINIC — doctors on the roster + camps & offers ══════════ */}
+        {tab === 'whatsapp' && doctor && (
+          <WhatsAppPanel businessId={doctor.id} businessName={doctor.name}
+            prefill={{ name: doctor.name, email: doctor.email ?? undefined, contact: doctor.phone ?? undefined }} />
+        )}
+
         {tab === 'bills' && (
           <div className="space-y-4">
             <div className="card shadow-sm">

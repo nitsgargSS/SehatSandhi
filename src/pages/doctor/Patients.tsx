@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble } from 'lucide-react'
+import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
 import {
@@ -40,6 +40,7 @@ import {
 import { getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
 import { moneyExact, shortDate } from '../../lib/format'
 import { RECORDING_ENABLED } from '../../lib/env'
+import { getMarketingConsent, setMarketingConsent } from '../../lib/marketingApi'
 
 // The clinic's patient records — search, history, and the clinical detail a
 // doctor needs on screen before they prescribe anything.
@@ -637,6 +638,10 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
       {/* The consent toggle is clinical too. It is the gate on recording a
           consultation, and it is not reception's to give on a doctor's behalf —
           0057 refuses the write regardless. */}
+      {/* Anyone at the clinic, reception included: it is usually asked at the
+          desk. It decides whether this clinic's WhatsApp broadcasts reach them. */}
+      <MarketingConsent memberId={summary.patient_member_id} businessId={businessId} />
+
       {/* Hidden unless RECORDING_ENABLED — see env.ts for why. */}
       {RECORDING_ENABLED && clinical && (
         <RecordingConsent
@@ -1056,6 +1061,65 @@ function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }:
 }
 
 // ── Consent, and the toggle that depends on it ──────────────────────────────
+
+// WhatsApp updates from THIS clinic (0116). Per clinic, not per phone: a
+// patient who agreed to hear from one clinic has not agreed to hear from all.
+function MarketingConsent({ memberId, businessId }: { memberId: string; businessId: string }) {
+  const [state, setState] = useState<{ granted: boolean; at: string | null } | null>(null)
+  const [asking, setAsking] = useState(false)
+  const [basis, setBasis] = useState('Asked at the front desk and agreed')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = () => getMarketingConsent(memberId, businessId).then(setState).catch(e => setErr((e as Error).message))
+  useEffect(() => { load() }, [memberId, businessId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const save = async (granted: boolean) => {
+    if (granted && !basis.trim()) { setErr('Say how the patient agreed — it is the evidence.'); return }
+    setBusy(true); setErr('')
+    try {
+      await setMarketingConsent(memberId, businessId, granted, granted ? basis.trim() : 'withdrawn by patient')
+      setAsking(false); await load()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  if (!state) return null
+  const on = state.granted
+  return (
+    <div style={{ ...card, background: on ? '#f3faf6' : '#fff', borderColor: on ? '#bfe3d0' : BIZ.border }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
+          <MessageCircle className="w-4 h-4" style={{ color: on ? BIZ.green : BIZ.mutedWarm }} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: BIZ.ink }}>
+              WhatsApp updates from this clinic {on ? 'allowed' : 'not allowed'}
+            </div>
+            <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 2, maxWidth: 560 }}>
+              {on
+                ? `Agreed ${state.at ? shortDate(state.at) : ''}. They can receive your camp, notice and health-tip broadcasts.`
+                : 'Ask before adding them: only patients who agreed receive your broadcasts.'}
+            </div>
+          </div>
+        </div>
+        {on
+          ? <button onClick={() => save(false)} disabled={busy} style={btn()}>Withdraw</button>
+          : <button onClick={() => setAsking(a => !a)} style={btn(true)}>Patient agreed…</button>}
+      </div>
+      {asking && !on && (
+        <div style={{ marginTop: 13, display: 'grid', gap: 8 }}>
+          <div style={label}>How did they agree?</div>
+          <input value={basis} onChange={e => setBasis(e.target.value)} style={input}
+            placeholder="e.g. asked at the desk and agreed, or signed form no. 412" />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => save(true)} disabled={busy} style={btn(true)}>Save consent</button>
+            <button onClick={() => setAsking(false)} style={btn()}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {err && <div style={{ marginTop: 8, fontSize: 12.5, color: '#b42318' }}>{err}</div>}
+    </div>
+  )
+}
 
 function RecordingConsent({ summary, businessId, onChange }: {
   summary: PatientSummary

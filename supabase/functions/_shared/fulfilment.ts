@@ -21,6 +21,8 @@ export interface FulfilResult {
   invoiceNumber: string | null
   invoiceToken: string | null
   invoiceError: string | null
+  /** Set for a wallet top-up (0116): the balance after crediting it. */
+  walletBalancePaise?: number | null
   error?: string
 }
 
@@ -39,7 +41,7 @@ export async function fulfilPayment(
 
   const { data: existing } = await supabase
     .from('payments')
-    .select('id, status, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules')
+    .select('id, type, status, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules')
     .eq(paymentRowId ? 'id' : 'razorpay_order_id', paymentRowId ?? orderId)
     .maybeSingle()
 
@@ -52,7 +54,7 @@ export async function fulfilPayment(
   }
 
   const pay = existing as {
-    id: string; status: string; business_id: string | null
+    id: string; type: string; status: string; business_id: string | null
     pricing_plan_code: string | null; pricing_mode: string | null
     monthly_price: number | null; period_months: number | null
     term_start: string | null; term_end: string | null; modules: string[] | null
@@ -66,6 +68,19 @@ export async function fulfilPayment(
     return {
       ok: false, alreadyPaid, businessId: pay.business_id,
       invoiceNumber: null, invoiceToken: null, invoiceError: null, error: uErr.message,
+    }
+  }
+
+  // A wallet top-up buys credit, not a listing: no plan lock, no listing
+  // invoice. Credit it — once, however many times this runs — and stop.
+  if (pay.type === 'wallet_topup') {
+    const { data: credit, error: cErr } = await supabase
+      .rpc('sehat_wallet_credit_topup', { p_payment_id: pay.id })
+    return {
+      ok: !cErr, alreadyPaid, businessId: pay.business_id,
+      invoiceNumber: null, invoiceToken: null, invoiceError: null,
+      walletBalancePaise: (credit as { balance_paise?: number } | null)?.balance_paise ?? null,
+      ...(cErr ? { error: `wallet credit: ${cErr.message}` } : {}),
     }
   }
 

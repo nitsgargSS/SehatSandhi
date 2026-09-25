@@ -83,5 +83,6 @@ Deno.serve(async (req) => {
     invoiceNumber: invoice?.invoice_number ?? null,
     invoiceToken: invoice?.public_token ?? null,
     invoiceError,
+    walletBalancePaise: result.walletBalancePaise ?? null,
   })
 })
