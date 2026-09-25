@@ -1,34 +1,22 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { SPECIALITIES } from '../types'
-import { usePublicAreas } from '../hooks/useServiceAreas'
+import { SPECIALITIES, WA_LINK } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
-import { specialityUrl } from '../lib/links'
+import { track } from '../lib/analytics'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell, HEADER } from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 
-// Pick a speciality and an area, and go to the listings.
+// Pick a speciality, and carry on in WhatsApp.
 //
-// This page exists because the two that do the actual work — the search results
-// and a clinic's profile — had no way in. They were reachable only by typing a
-// URL containing an internal speciality code (/speciality/PAED/jagadhri), so in
-// practice a patient never saw a single doctor's name anywhere on this site: the
-// homepage offered WhatsApp and nothing else. The listing pages, their ratings
-// and their schema.org markup were finished work nobody could get to.
+// This page used to ask for an area first, from a row of chips filled from
+// service_areas — which in practice was twenty Yamuna Nagar towns, the wrong
+// thing to show a country. Each card then opened a listing page for that one
+// area, and for most specialities that page said "no doctors yet".
 //
-// Area first, then speciality: "who is near me" is the question a patient
-// actually arrives with, and it is the one that rules out most of the grid.
+// The bot already does this better: it asks for any PIN code or town in India,
+// searches the whole district, and books. So every card opens the bot with its
+// trigger word, and the tap is recorded here so demand by speciality is kept.
 
 export default function Browse() {
   const { t, lang } = useLanguage()
-  // The areas come from the database now, not a compiled-in Yamuna Nagar list.
-  // `area` starts null because on first paint there is nothing to select yet.
-  const { areas, loading: areasLoading } = usePublicAreas()
-  const [areaCode, setAreaCode] = useState<string | null>(null)
-  const area = areas.find(a => a.pin_code === areaCode) ?? areas[0] ?? null
-  useEffect(() => {
-    if (!areaCode && areas.length) setAreaCode(areas[0].pin_code)
-  }, [areas, areaCode])
 
   return (
     <div style={{ minHeight: '100vh', background: HEADER.cream }}>
@@ -46,43 +34,13 @@ export default function Browse() {
             {t('browsePage.subtitle')}
           </p>
 
-          {/* Area — a row of chips rather than a <select>, so the choice and the
-              options are both visible without a tap. */}
-          <div style={{ fontSize: 13, fontWeight: 800, color: HEADER.ink, letterSpacing: '.06em', marginBottom: 10 }}>
-            {t('browsePage.areaLabel')}
-          </div>
-          <div className="flex flex-wrap" style={{ gap: 8, marginBottom: 30 }}>
-            {areasLoading && (
-              <span style={{ fontSize: 14, color: HEADER.muted }}>Loading areas…</span>
-            )}
-            {!areasLoading && !areas.length && (
-              <span style={{ fontSize: 14, color: HEADER.muted }}>
-                No service areas are live yet.
-              </span>
-            )}
-            {areas.map(p => {
-              const on = p.pin_code === area?.pin_code
-              return (
-                <button key={p.pin_code} onClick={() => setAreaCode(p.pin_code)}
-                  style={{
-                    fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                    padding: '8px 14px', borderRadius: 999,
-                    background: on ? HEADER.green : '#fff',
-                    color: on ? '#fff' : HEADER.muted,
-                    border: `1px solid ${on ? HEADER.green : HEADER.border}`,
-                  }}>
-                  {p.area_name}
-                </button>
-              )
-            })}
-          </div>
-
           <div style={{ fontSize: 13, fontWeight: 800, color: HEADER.ink, letterSpacing: '.06em', marginBottom: 10 }}>
             {t('browsePage.specialityLabel')}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" style={{ gap: 10 }}>
             {SPECIALITIES.map(s => (
-              <Link key={s.id} to={specialityUrl(s.id, area?.area_name ?? '')}
+              <a key={s.id} href={WA_LINK} target="_blank" rel="noreferrer"
+                onClick={() => track('whatsapp_click', { path: '/browse', speciality: s.id })}
                 style={{
                   background: '#fff', border: `1px solid ${HEADER.border}`, borderRadius: 14,
                   padding: '14px 16px', display: 'block',
@@ -93,7 +51,7 @@ export default function Browse() {
                 <div style={{ fontSize: 12.5, color: HEADER.muted, marginTop: 2 }}>
                   {lang === 'hi' ? s.en : s.hi}
                 </div>
-              </Link>
+              </a>
             ))}
           </div>
         </div>
