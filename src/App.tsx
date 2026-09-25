@@ -7,7 +7,7 @@ import { gaPageView } from './lib/ga'
 import { startLocationTracking } from './lib/location'
 import PatientHome from './pages/PatientHome'
 import StagingBanner from './components/StagingBanner'
-import { WA_NUMBER } from './types'
+import { WA_LINK } from './types'
 
 // Loaded on demand. Everything used to ship in one 865 kB chunk, so a patient
 // opening the homepage from a WhatsApp link downloaded the admin dashboard, the
@@ -142,7 +142,7 @@ const WhatsAppFloat = () => {
   const { pathname } = useLocation()
   if (FLOAT_HIDDEN_PATHS.includes(pathname)) return null
   return (
-    <a href={`https://wa.me/${WA_NUMBER}?text=Namaste!`}
+    <a href={WA_LINK}
        target="_blank" rel="noreferrer"
        onClick={() => track('whatsapp_click', { path: pathname })}
        className="fixed bottom-6 right-6 w-14 h-14 bg-[#25D366] rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-50"

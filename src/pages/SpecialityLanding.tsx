@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { MapPin, ArrowLeft, Star } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { SPECIALITIES, WA_NUMBER } from '../types'
+import { SPECIALITIES, WA_LINK } from '../types'
 import { usePublicAreas } from '../hooks/useServiceAreas'
 import { useLanguage } from '../i18n/LanguageContext'
 import { track, trackImpressions } from '../lib/analytics'
@@ -230,7 +230,7 @@ export default function SpecialityLanding() {
                       {t('specialityLandingPage.viewProfile')}
                     </Link>
                   </div>
-                  <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Namaste! Main ${d.full_name} (${d.business_name}) se appointment book karna chahta hoon.`)}`}
+                  <a href={WA_LINK}
                      target="_blank" rel="noreferrer" className="btn-teal text-sm">
                     {t('specialityLandingPage.bookOnWhatsapp')}
                   </a>
@@ -243,7 +243,7 @@ export default function SpecialityLanding() {
             <div className="text-5xl mb-4">🏥</div>
             <h2 className="font-bold text-navy-700 mb-2">{t('specialityLandingPage.noDoctorsYetTitle')}</h2>
             <p className="text-gray-500 text-sm max-w-md mx-auto mb-6">{t('specialityLandingPage.noDoctorsYetDesc')}</p>
-            <a href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Namaste! Mujhe ${area.area_name} mein ${speciality.en} chahiye — koi available hone par batayein.`)}`}
+            <a href={WA_LINK}
                target="_blank" rel="noreferrer" onClick={logNotifyMeClick} className="btn-teal inline-flex mb-8">
               {t('specialityLandingPage.notifyMeButton')}
             </a>

@@ -151,6 +151,13 @@ export const SPECIALITIES = [
 // Digits only, country code, no '+' or spaces — it goes straight into
 // `https://wa.me/${WA_NUMBER}` at ~20 call sites, and wa.me rejects a '+'.
 export const WA_NUMBER = '917015399355'
+// The AiSensy flow starts on a greeting keyword. Any other opening text (e.g.
+// "EMERGENCY: I need an ambulance") matches no trigger, so the patient gets
+// silence instead of the menu. Every patient-facing link sends exactly this.
+export const WA_START = 'Hi'
+export const WA_LINK = `https://wa.me/${WA_NUMBER}?text=${WA_START}`
+// National emergency ambulance: free, 24x7, works from any phone without data.
+export const AMBULANCE_NUMBER = '108'
 // No listing price lives in code. It is pricing_plans.monthly_price (flat plans)
 // or pricing_tiers.monthly_price (per-pincode), read at runtime by usePricing —
 // a constant here would be one more place to forget when the rate changes.

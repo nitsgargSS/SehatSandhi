@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
-import { WA_NUMBER } from '../types'
+import { WA_LINK, AMBULANCE_NUMBER } from '../types'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PAGE } from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 
@@ -21,7 +21,7 @@ const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 
 interface Strings {
   brand: string; tagline: string; subtag: string; book: string
-  emergency_title: string; emergency_sub: string; emergency_btn: string; need: string
+  emergency_title: string; emergency_sub: string; emergency_btn: string; emergency_wa: string; need: string
   doctors: string; hospitals: string; pharmacy: string; labs: string; insurance: string; ambulance: string
   doc_teaser_title: string; doc_teaser_sub: string; how: string; step1: string; step2: string; step3: string
   trust_verified: string; trust_free: string; trust_wa: string
@@ -35,8 +35,8 @@ const DICT: Record<'en' | 'hi', Strings> = {
     tagline: 'Family health help, on WhatsApp',
     subtag: 'Doctors, medicines, lab tests, ambulance & more — near you, free to use.',
     book: 'Book on WhatsApp',
-    emergency_title: 'Need an ambulance?', emergency_sub: 'One tap — help reaches you fast',
-    emergency_btn: 'Ambulance now',
+    emergency_title: 'Need an ambulance?', emergency_sub: 'Free government ambulance, 24×7',
+    emergency_btn: 'Call 108', emergency_wa: 'Or find a private ambulance on WhatsApp',
     need: 'What do you need?',
     doctors: 'Doctors', hospitals: 'Hospitals', pharmacy: 'Medicines',
     labs: 'Lab Tests', insurance: 'Insurance', ambulance: 'Ambulance',
@@ -59,7 +59,7 @@ const DICT: Record<'en' | 'hi', Strings> = {
       { q: 'Are the doctors verified?',
         a: 'Yes. Our team checks every doctor\'s MCI or NMC registration number, and a pharmacy\'s or lab\'s licence, before their listing goes live. Nothing appears until it has been checked.' },
       { q: 'What if I need an ambulance right now?',
-        a: 'Use the ambulance button at the top of this page. It opens WhatsApp with an emergency message ready to send, so help can be arranged without you typing anything.' },
+        a: 'Call 108 — the button at the top of this page dials it for you. It is the free government ambulance, available 24×7 from any phone. If you would rather book a private ambulance near you, use the WhatsApp link under that button.' },
       { q: 'Which areas do you cover?',
         a: 'We are live in a growing list of pincodes and adding more steadily. Send us your pincode on WhatsApp — we will tell you straight away whether we cover your area, and show you who is available near you.' },
     ],
@@ -69,8 +69,8 @@ const DICT: Record<'en' | 'hi', Strings> = {
     tagline: 'परिवार की सेहत, अब व्हाट्सएप पर',
     subtag: 'डॉक्टर, दवाई, लैब टेस्ट, एम्बुलेंस और भी बहुत कुछ — आपके पास, बिल्कुल मुफ़्त।',
     book: 'व्हाट्सएप पर बुक करें',
-    emergency_title: 'एम्बुलेंस चाहिए?', emergency_sub: 'एक टैप — मदद जल्दी पहुँचेगी',
-    emergency_btn: 'एम्बुलेंस अभी',
+    emergency_title: 'एम्बुलेंस चाहिए?', emergency_sub: 'मुफ़्त सरकारी एम्बुलेंस, 24×7',
+    emergency_btn: '108 पर कॉल करें', emergency_wa: 'या व्हाट्सएप पर प्राइवेट एम्बुलेंस खोजें',
     need: 'आपको क्या चाहिए?',
     doctors: 'डॉक्टर', hospitals: 'अस्पताल', pharmacy: 'दवाई',
     labs: 'लैब टेस्ट', insurance: 'बीमा', ambulance: 'एम्बुलेंस',
@@ -93,7 +93,7 @@ const DICT: Record<'en' | 'hi', Strings> = {
       { q: 'क्या डॉक्टर वेरिफाई किए जाते हैं?',
         a: 'जी हाँ। हमारी टीम हर डॉक्टर का MCI या NMC रजिस्ट्रेशन नंबर, और दवाई की दुकान या लैब का लाइसेंस जाँचती है। जाँच पूरी होने के बाद ही लिस्टिंग दिखती है।' },
       { q: 'अगर अभी एम्बुलेंस चाहिए तो?',
-        a: 'ऊपर दिए एम्बुलेंस बटन का इस्तेमाल करें। यह व्हाट्सएप में इमरजेंसी मैसेज तैयार करके खोल देता है, ताकि बिना कुछ लिखे मदद भेजी जा सके।' },
+        a: '108 पर कॉल करें — इस पेज के ऊपर दिया बटन सीधे कॉल लगा देता है। यह मुफ़्त सरकारी एम्बुलेंस है, 24×7, किसी भी फ़ोन से। अपने पास की प्राइवेट एम्बुलेंस बुक करनी हो तो उस बटन के नीचे दिए व्हाट्सएप लिंक का इस्तेमाल करें।' },
       { q: 'आप किन इलाकों में हैं?',
         a: 'हम लगातार बढ़ते हुए पिनकोड्स में उपलब्ध हैं और नए इलाके जोड़ते रहते हैं। व्हाट्सएप पर अपना पिनकोड भेजिए — हम तुरंत बता देंगे कि आपका इलाका कवर होता है या नहीं, और आपके पास उपलब्ध प्रोवाइडर दिखा देंगे।' },
     ],
@@ -197,15 +197,21 @@ function Faqs({ t, row }: { t: Strings; row?: boolean }) {
   )
 }
 
+// An emergency is a phone call, not a chat: 108 answers in seconds from any
+// phone, with or without data, while the bot needs a PIN code and a menu pick
+// first. WhatsApp stays as the second option, for a private ambulance.
 function AmbulanceCard({ t, link }: { t: Strings; link: string }) {
   return (
-    <div style={{ background: '#fff2f0', border: '1px solid #ffd9d3', borderRadius: 16, padding: '13px 15px', display: 'flex', alignItems: 'center', gap: 12 }}>
-      <div style={{ width: 42, height: 42, borderRadius: 12, background: '#DC2626', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>{Icons.ambulance(23)}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: '#991b1b' }}>{t.emergency_title}</div>
-        <div style={{ fontSize: 12, color: '#b45c52' }}>{t.emergency_sub}</div>
+    <div style={{ background: '#fff2f0', border: '1px solid #ffd9d3', borderRadius: 16, padding: '13px 15px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 42, height: 42, borderRadius: 12, background: '#DC2626', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>{Icons.ambulance(23)}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#991b1b' }}>{t.emergency_title}</div>
+          <div style={{ fontSize: 12, color: '#b45c52' }}>{t.emergency_sub}</div>
+        </div>
+        <a href={`tel:${AMBULANCE_NUMBER}`} style={{ background: '#DC2626', color: '#fff', fontWeight: 800, fontSize: 13, padding: '9px 12px', borderRadius: 11, whiteSpace: 'nowrap' }}>{t.emergency_btn}</a>
       </div>
-      <a href={link} target="_blank" rel="noreferrer" style={{ background: '#DC2626', color: '#fff', fontWeight: 800, fontSize: 13, padding: '9px 12px', borderRadius: 11, whiteSpace: 'nowrap' }}>{t.emergency_btn}</a>
+      <a href={link} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 9, paddingLeft: 54, fontSize: 12, fontWeight: 700, color: '#991b1b', textDecoration: 'underline' }}>{t.emergency_wa}</a>
     </div>
   )
 }
@@ -213,7 +219,7 @@ function AmbulanceCard({ t, link }: { t: Strings; link: string }) {
 function CategoryTile({ c, big }: { c: Cat; big?: boolean }) {
   const box = big ? 56 : 48
   return (
-    <a href={c.link} target="_blank" rel="noreferrer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: big ? '18px 8px' : '14px 6px', background: '#fff', border: '1px solid #eee6d8', borderRadius: 16 }}>
+    <a href={c.link} {...(c.link.startsWith('tel:') ? {} : { target: '_blank', rel: 'noreferrer' })} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: big ? '18px 8px' : '14px 6px', background: '#fff', border: '1px solid #eee6d8', borderRadius: 16 }}>
       <span style={{ width: box, height: box, borderRadius: 14, background: c.tint, color: c.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Icons[c.key](big ? 28 : 24)}</span>
       <span style={{ fontSize: 12.5, fontWeight: 700, color: '#14201c', textAlign: 'center' }}>{c.label}</span>
     </a>
@@ -273,26 +279,20 @@ export default function PatientHome() {
   const { lang, setLang } = useLanguage()
   const t = DICT[lang]
 
-  const num = WA_NUMBER.replace(/[^0-9]/g, '') || '919999999999'
-  // No area in the message: the header no longer asks for one, and appending a
-  // default would tell the bot a location the patient never chose.
-  const mk = (msg: string) => `https://wa.me/${num}?text=${encodeURIComponent(msg)}`
-  const waLink = mk('Hi Sehatsandhi, I need help')
-  const ambLink = mk('EMERGENCY: I need an ambulance')
+  const waLink = WA_LINK
   const langBtn = lang === 'en' ? 'हिंदी' : 'ENGLISH'
   const toggleLang = () => setLang(lang === 'en' ? 'hi' : 'en')
 
-  // One message per category. All six used to send the identical string —
-  // "Hi Sehatsandhi, I need help" — so the bot could not tell someone who
-  // tapped Medicines from someone who tapped Insurance, and the tap the patient
-  // made was thrown away before it reached anyone.
+  // Every tile opens the bot with its trigger word, so the patient lands on the
+  // main menu. A tile-specific sentence ("I need a lab test") matched no AiSensy
+  // trigger and got no reply. The ambulance tile calls 108, like the card.
   const CATS: Cat[] = [
-    { key: 'doctors', label: t.doctors, tint: 'rgba(14,159,110,.12)', color: '#0E9F6E', link: mk('Hi Sehatsandhi, I need to see a doctor') },
-    { key: 'hospitals', label: t.hospitals, tint: 'rgba(37,99,235,.12)', color: '#2563EB', link: mk('Hi Sehatsandhi, I need a hospital') },
-    { key: 'pharmacy', label: t.pharmacy, tint: 'rgba(219,39,119,.12)', color: '#DB2777', link: mk('Hi Sehatsandhi, I need medicines') },
-    { key: 'labs', label: t.labs, tint: 'rgba(124,58,237,.12)', color: '#7C3AED', link: mk('Hi Sehatsandhi, I need a lab test') },
-    { key: 'insurance', label: t.insurance, tint: 'rgba(8,145,178,.12)', color: '#0891B2', link: mk('Hi Sehatsandhi, I want help with health insurance') },
-    { key: 'ambulance', label: t.ambulance, tint: 'rgba(220,38,38,.12)', color: '#DC2626', link: ambLink },
+    { key: 'doctors', label: t.doctors, tint: 'rgba(14,159,110,.12)', color: '#0E9F6E', link: waLink },
+    { key: 'hospitals', label: t.hospitals, tint: 'rgba(37,99,235,.12)', color: '#2563EB', link: waLink },
+    { key: 'pharmacy', label: t.pharmacy, tint: 'rgba(219,39,119,.12)', color: '#DB2777', link: waLink },
+    { key: 'labs', label: t.labs, tint: 'rgba(124,58,237,.12)', color: '#7C3AED', link: waLink },
+    { key: 'insurance', label: t.insurance, tint: 'rgba(8,145,178,.12)', color: '#0891B2', link: waLink },
+    { key: 'ambulance', label: t.ambulance, tint: 'rgba(220,38,38,.12)', color: '#DC2626', link: `tel:${AMBULANCE_NUMBER}` },
   ]
 
   return (
@@ -310,7 +310,7 @@ export default function PatientHome() {
             <p style={{ fontSize: 14, color: '#5f6b64', margin: '0 0 14px', lineHeight: 1.5 }}>{t.subtag}</p>
             <BookCta t={t} link={waLink} fullWidth />
           </div>
-          <div style={{ padding: '14px 20px 4px' }}><AmbulanceCard t={t} link={ambLink} /></div>
+          <div style={{ padding: '14px 20px 4px' }}><AmbulanceCard t={t} link={waLink} /></div>
           <div style={{ padding: '18px 20px 4px' }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#14201c', marginBottom: 12 }}>{t.need}</div>
             {/* mobile 2-col, tablet 3-col */}
@@ -354,7 +354,7 @@ export default function PatientHome() {
             <div style={{ marginTop: 28 }}><TrustRow t={t} row /></div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <AmbulanceCard t={t} link={ambLink} />
+            <AmbulanceCard t={t} link={waLink} />
             <HowItWorksCard t={t} dark />
           </div>
         </div>
