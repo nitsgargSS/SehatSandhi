@@ -6,8 +6,9 @@ import { Spinner } from './Loading'
 
 // One sign-in, used by every surface: business owner, doctor, staff and admin.
 //
-// Email and password is the default. A code by email is the alternative, and it
-// is also the whole of the forgotten-password path — verify the address, then
+// A code by email is the default (decided 25 Sep 2026: OTP login everywhere);
+// email and password is the alternative. The code is also the whole of the
+// forgotten-password path — verify the address, then
 // set a new password on the session that verification produced. There is no
 // second mechanism to keep working.
 //
@@ -42,7 +43,7 @@ export interface EmailSignInProps {
 }
 
 export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in' }: EmailSignInProps) {
-  const [mode, setMode] = useState<Mode>('password')
+  const [mode, setMode] = useState<Mode>('code')
   const [step, setStep] = useState<Step>('enter')
 
   const [email, setEmail] = useState('')
@@ -152,10 +153,10 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
     <div className="space-y-4">
       {intro && <p className="text-sm text-gray-500">{intro}</p>}
 
-      {/* Password first, because it is the everyday route. */}
+      {/* Code first: it is the everyday route. Password stays as the other option. */}
       {step === 'enter' && (
         <div className="flex gap-2">
-          {([['password', 'Password'], ['code', 'Email me a code']] as [Mode, string][]).map(([m, label]) => (
+          {([['code', 'Email me a code'], ['password', 'Password']] as [Mode, string][]).map(([m, label]) => (
             <button key={m} type="button" onClick={() => reset(m)}
               className={`text-sm font-semibold px-4 py-2 rounded-xl transition ${
                 mode === m ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
