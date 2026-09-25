@@ -53,7 +53,7 @@ export default function WhatsAppMarketingPanel({ businesses }: { businesses: { i
         <StatTile label="Toward ₹18L AiSensy refund" value={`${milestone.toFixed(1)}%`} sub={`about ${rupees(metaBill)} billed`} />
       </div>
       <p className="text-xs text-gray-400 -mt-2">
-        Subscription and onboarding-fee revenue will appear once those are billed (phase 2). Meta's rate is taken as {rupees(META_RATE_PAISE)} a message.
+        The WhatsApp add-on is billed with each business's plan (see GST and Billing). Meta's rate is taken as {rupees(META_RATE_PAISE)} a message.
       </p>
 
       {settings && <SettingsCard settings={settings} onSaved={setSettings} />}
@@ -88,10 +88,10 @@ export default function WhatsAppMarketingPanel({ businesses }: { businesses: { i
 
 function SettingsCard({ settings, onSaved }: { settings: MarketingSettings; onSaved: (s: MarketingSettings) => void }) {
   const toRs = (p: number) => (p / 100).toFixed(2)
+  // The WhatsApp fee itself is priced per business type and term in
+  // Billing → Prices by business type (0117). Only the message rate and the
+  // grace period live here.
   const [form, setForm] = useState({
-    monthly: toRs(settings.monthly_subscription_paise),
-    onboarding: toRs(settings.onboarding_fee_paise),
-    label: settings.onboarding_fee_label,
     perMessage: toRs(settings.per_message_paise),
     grace: String(settings.grace_days),
   })
@@ -103,17 +103,13 @@ function SettingsCard({ settings, onSaved }: { settings: MarketingSettings; onSa
   const paise = (v: string) => Math.round(Number(v) * 100)
   const save = async () => {
     setErr(''); setMsg('')
-    const p = { m: paise(form.monthly), o: paise(form.onboarding), pm: paise(form.perMessage), g: Number(form.grace) }
-    if ([p.m, p.o].some(x => !Number.isFinite(x) || x < 0) || !Number.isFinite(p.pm) || p.pm <= 0) { setErr('Enter prices in rupees, e.g. 1.59.'); return }
+    const p = { pm: paise(form.perMessage), g: Number(form.grace) }
+    if (!Number.isFinite(p.pm) || p.pm <= 0) { setErr('Enter the message price in rupees, e.g. 1.59.'); return }
     if (!Number.isInteger(p.g) || p.g < 0 || p.g > 60) { setErr('Grace period is 0–60 days.'); return }
-    if (!form.label.trim()) { setErr('The onboarding fee needs a label.'); return }
     setBusy(true)
     try {
-      onSaved(await updateMarketingSettings({
-        monthly_subscription_paise: p.m, onboarding_fee_paise: p.o, onboarding_fee_label: form.label.trim(),
-        per_message_paise: p.pm, grace_days: p.g, sending_enabled: sending,
-      }))
-      setMsg('Saved. Every clinic sees the new prices now; they apply from each clinic’s next bill or next message.')
+      onSaved(await updateMarketingSettings({ per_message_paise: p.pm, grace_days: p.g, sending_enabled: sending }))
+      setMsg('Saved. The new message price applies from each clinic\u2019s next broadcast.')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -128,16 +124,14 @@ function SettingsCard({ settings, onSaved }: { settings: MarketingSettings; onSa
 
   return (
     <div className="card shadow-sm space-y-3">
-      <h3 className="font-bold text-navy-700">Prices clinics pay</h3>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {field('monthly', 'Monthly subscription (₹)')}
-        {field('onboarding', 'Onboarding fee (₹)')}
+      <h3 className="font-bold text-navy-700">Message price</h3>
+      <p className="text-sm text-gray-500 -mt-1">
+        The WhatsApp fee (₹500 a month to start) is set per business type and term in <b>Billing → Prices by business type</b>.
+      </p>
+      <div className="grid sm:grid-cols-2 gap-3">
         {field('perMessage', 'Per broadcast message (₹)')}
-        {field('grace', 'Grace after a missed fee', 'days')}
+        {field('grace', 'Grace after the add-on ends', 'days')}
       </div>
-      <label className="block text-xs font-semibold text-gray-500">Onboarding fee label, shown to clinics
-        <input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} className="input-field mt-1 text-sm" />
-      </label>
       <label className="flex items-start gap-2 text-sm bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
         <input type="checkbox" checked={sending} onChange={e => setSending(e.target.checked)} className="mt-1" />
         <span><b>Sending switched on.</b> Leave off until AiSensy is connected: while on, clinics can create broadcasts and are charged for them.</span>
@@ -189,7 +183,7 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
         </div>
       </div>
       <p className="text-xs text-gray-500">
-        Until the in-site WhatsApp signup is built (phase 2), set a clinic's number and mark it live here once AiSensy has connected it.
+        A clinic appears here when it pays for the WhatsApp add-on (or when you add it). Until the in-site WhatsApp signup is built (phase 2), set its number live here once AiSensy has connected it.
       </p>
       {!rows.length ? <p className="text-sm text-gray-400">No clinic has WhatsApp marketing yet.</p> : (
         <div className="overflow-x-auto">

@@ -84,7 +84,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'whatsapp' | 'reports'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -517,10 +517,24 @@ export default function DoctorDashboard() {
           hasPractitioners(doc.vertical as VerticalKey)
             ? Promise.all([
                 loadRoster(doc.id),
-                supabase.from('active_pricing_plan')
-                  .select('doctor_billing, monthly_price, included_doctors, extra_doctor_price')
-                  .maybeSingle()
-                  .then(({ data: p }) => { if (p) setPlan(p as PlanTerms) }),
+                // The type's own doctor terms (0117) — included doctors, then a
+                // flat extra each — which is what the server charges. The old
+                // single plan only for a type that has none set.
+                supabase.from('vertical_billing')
+                  .select('included_doctors, extra_doctor_price')
+                  .eq('vertical', doc.vertical).maybeSingle()
+                  .then(async ({ data: vbRow }) => {
+                    const v = vbRow as { included_doctors?: number; extra_doctor_price?: number } | null
+                    if (v && ((v.extra_doctor_price ?? 0) > 0 || (v.included_doctors ?? 0) > 0)) {
+                      setPlan({ doctor_billing: (v.extra_doctor_price ?? 0) > 0 ? 'base_plus_extra' : 'none',
+                                monthly_price: null, included_doctors: v.included_doctors ?? 0,
+                                extra_doctor_price: v.extra_doctor_price ?? 0 })
+                      return
+                    }
+                    const { data: p } = await supabase.from('active_pricing_plan')
+                      .select('doctor_billing, monthly_price, included_doctors, extra_doctor_price').maybeSingle()
+                    if (p) setPlan(p as PlanTerms)
+                  }),
               ])
             : null,
         ])
@@ -829,6 +843,8 @@ export default function DoctorDashboard() {
     ...(businessRole ? [
       { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
       { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
+      // Plan & billing (0117): pay, renew, change term, WhatsApp, autopay.
+      { id: 'plan', label: 'Plan', icon: <Star className="w-4 h-4" /> },
       // WhatsApp marketing (0116): the wallet and broadcasts are the business's
       // money, so owner and manager only — the RPCs refuse anyone else.
       { id: 'whatsapp', label: 'WhatsApp', icon: <MessageCircle className="w-4 h-4" /> },
@@ -1574,6 +1590,10 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ CLINIC — doctors on the roster + camps & offers ══════════ */}
+        {tab === 'plan' && doctor && (
+          <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />
+        )}
+
         {tab === 'whatsapp' && doctor && (
           <WhatsAppPanel businessId={doctor.id} businessName={doctor.name}
             prefill={{ name: doctor.name, email: doctor.email ?? undefined, contact: doctor.phone ?? undefined }} />

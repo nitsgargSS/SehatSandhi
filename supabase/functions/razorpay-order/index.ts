@@ -85,6 +85,7 @@ Deno.serve(async (req) => {
   let body: {
     pincodes?: unknown; businessId?: unknown; periodMonths?: unknown; modules?: unknown
     gstin?: unknown; gstLegalName?: unknown; billingAddress?: unknown
+    whatsapp?: unknown; couponCode?: unknown; autoRenew?: unknown
   }
   try {
     body = await req.json()
@@ -177,14 +178,22 @@ Deno.serve(async (req) => {
   // computePrice clamps the requested months to the plan's min/max.
   let priced
   try {
-    priced = await computePrice(supabase, pincodes, businessId, null, requestedMonths, null, requestedModules)
+    priced = await computePrice(supabase, pincodes, businessId, null, requestedMonths, null, requestedModules, {
+      whatsapp: body.whatsapp === true,
+      couponCode: typeof body.couponCode === 'string' ? body.couponCode.slice(0, 40) : null,
+    })
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)
   }
 
-  // Nothing to charge: a commission-only vertical with no flat plan covering it.
-  // Refuse before writing a payments row so no half-finished order can exist.
-  if (!priced.monthlyApplies) {
+  // A coupon that was asked for and does not apply is an error, not a silent
+  // full-price charge.
+  if (priced.couponError) return json({ error: priced.couponError }, 400)
+
+  // Nothing to charge: a commission-only vertical with no flat plan covering it
+  // (and, by type, no WhatsApp add-on chosen). Refuse before writing a payments
+  // row so no half-finished order can exist.
+  if (!priced.monthlyApplies && !(priced.pricingSource === 'type' && priced.total > 0)) {
     return json({
       error: 'commission_vertical',
       message: priced.commissionPercent > 0
@@ -194,8 +203,10 @@ Deno.serve(async (req) => {
     }, 400)
   }
 
-  if (priced.monthlyTotal <= 0) {
-    return json({ error: 'selected pincodes have no billable price' }, 400)
+  if (priced.pricingSource === 'plan' ? priced.monthlyTotal <= 0 : priced.tax.grandTotal <= 0) {
+    return json({ error: priced.pricingSource === 'type'
+      ? 'Nothing to pay for this choice — a 100% coupon with no add-on needs no payment.'
+      : 'selected pincodes have no billable price' }, 400)
   }
 
   const months = priced.months
@@ -251,6 +262,14 @@ Deno.serve(async (req) => {
       igst_amount: priced.tax.igst,
       tax_total: priced.tax.taxTotal,
       place_of_supply: priced.tax.placeOfSupply,
+      // 0117: what exactly was bought, for the invoice lines and fulfilment.
+      subscription_amount: priced.subscriptionTotal,
+      whatsapp_addon: priced.whatsappSelected,
+      whatsapp_amount: priced.whatsappTotal,
+      coupon_code: priced.coupon?.code ?? null,
+      coupon_discount: priced.coupon?.discount ?? 0,
+      auto_renew: body.autoRenew === false ? false : true,
+      line_items: priced.lineItems,
     })
     .select('id')
     .single()
@@ -281,6 +300,14 @@ Deno.serve(async (req) => {
   }
 
   await supabase.from('payments').update({ razorpay_order_id: order.id }).eq('id', pay.id)
+
+  // The choice made here is also what renews next time, unless changed on the
+  // dashboard. Autopay is ticked unless they unticked it.
+  await supabase.from('businesses').update({
+    renewal_term_months: months,
+    renewal_whatsapp: priced.whatsappSelected,
+    auto_renew: body.autoRenew === false ? false : true,
+  }).eq('id', businessId)
 
   return json({
     orderId: order.id,

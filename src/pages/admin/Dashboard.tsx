@@ -16,6 +16,7 @@ import GstFilingPanel from './GstFilingPanel'
 import InsightsPanel from './InsightsPanel'
 import LeadsPanel from './LeadsPanel'
 import WhatsAppMarketingPanel from './WhatsAppMarketingPanel'
+import TypePricingCard from './TypePricingCard'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 
@@ -1110,6 +1111,9 @@ export default function AdminDashboard() {
 
           {tab === 'billing' && (
             <div className="space-y-6">
+              {/* 0117: what each business type pays. Wins over the plan below
+                  for every type that has prices here — all six, as seeded. */}
+              <TypePricingCard />
               {/* Which plan new registrations are being quoted right now */}
               <div className="card shadow-sm">
                 <h2 className="font-bold text-navy-700 text-lg mb-1">{t('adminDashboardPage.billingHeading')}</h2>

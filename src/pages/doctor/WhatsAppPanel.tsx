@@ -70,13 +70,14 @@ export default function WhatsAppPanel({ businessId, businessName, prefill }: {
           </div>
           <div className="text-xs text-gray-500 text-right">
             <div>Number: <b>{account?.whatsapp_number || 'not connected'}</b> · {STATUS_TEXT[account?.status ?? 'pending']}</div>
-            <div>Subscription: <b>{STATUS_TEXT[account?.subscription_status ?? 'inactive']}</b></div>
+            <div>WhatsApp add-on: <b>{account && account.subscription_status !== 'inactive'
+              ? `${STATUS_TEXT[account.subscription_status]}${account.next_billing_date ? ` until ${shortDate(account.next_billing_date)}` : ''}`
+              : 'not added'}</b></div>
           </div>
         </div>
         {settings && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 text-sm">
-            <Price label="Monthly subscription" value={rupees(settings.monthly_subscription_paise)} />
-            <Price label={settings.onboarding_fee_label} value={`${rupees(settings.onboarding_fee_paise)} one-time`} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 text-sm">
+            <Price label="WhatsApp Business Verification & Activation Fee" value="Part of your plan — see the Plan tab" />
             <Price label="Each broadcast message" value={rupees(settings.per_message_paise)} />
             <Price label="Replying to a patient within 24 hours" value="Free" />
           </div>

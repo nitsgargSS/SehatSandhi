@@ -561,6 +561,11 @@ tables:
   wa_message_templates:
     class: never_purge
 
+  # What each business type pays per term, subscription and WhatsApp (0117).
+  # Configuration set by admin; each database keeps its own.
+  vertical_term_prices:
+    class: never_purge
+
   # Who may open the admin panel. NOT synced: auth_uid points at a row in
   # auth.users, and production's user ids do not exist in sandbox — copying
   # them down produces admins who can never sign in. NOT purged either: the
