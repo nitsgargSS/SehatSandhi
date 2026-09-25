@@ -547,9 +547,13 @@ export async function uploadConsultationAudio(
 const callTranscriber = async (body: Record<string, unknown>) => {
   const { url, anon } = activeConfig()
   if (!url || !anon) throw new Error('Not configured for transcription.')
+  // The session token, not the anon key: the function reads the recording as
+  // this user, so it only ever transcribes the clinic's own.
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Please sign in again to transcribe this.')
   const res = await fetch(`${url}/functions/v1/transcribe-consultation`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${anon}`, apikey: anon },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, apikey: anon },
     body: JSON.stringify(body),
   })
   const out = await res.json().catch(() => ({}))

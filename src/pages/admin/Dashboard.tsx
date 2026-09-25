@@ -151,6 +151,10 @@ interface PlanEvent {
 export default function AdminDashboard() {
   const { t } = useLanguage()
   const [doctors, setDoctors] = useState<BusinessRow[]>([])
+  // The people who practise at each listing, keyed by business id. A speciality
+  // belongs to a doctor, not to the business — a hospital has many — so the
+  // Speciality column edits these rather than showing the business's vertical.
+  const [staffByBiz, setStaffByBiz] = useState<Record<string, Practitioner[]>>({})
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'pending' | 'all' | 'leads' | 'camps' | 'coupons' | 'billing' | 'reports' | 'insights' | 'gst' | 'account' | 'sandbox'>('pending')
@@ -334,8 +338,9 @@ export default function AdminDashboard() {
     // vertical_billing is read-only here: the rates are the authority the edge
     // functions price against, so they change in the SQL editor, not behind an
     // admin password.
-    const [bizRes, campsRes, couponsRes, billingRes, planRes] = await Promise.all([
+    const [bizRes, staffRes, campsRes, couponsRes, billingRes, planRes] = await Promise.all([
       supabase.from('businesses').select('*').order('created_at', { ascending: false }),
+      supabase.from('business_practitioners').select('business_id, role, practitioners(*)'),
       supabase.from('camps_offers').select('*, businesses(name)').order('created_at', { ascending: false }),
       supabase.from('discount_codes').select('*').order('created_at', { ascending: false }),
       supabase.from('vertical_billing').select('*'),
@@ -344,6 +349,15 @@ export default function AdminDashboard() {
 
     warn('businesses', bizRes.error)
     setDoctors((bizRes.data as BusinessRow[]) || [])
+    warn('business_practitioners', staffRes.error)
+    const byBiz: Record<string, Practitioner[]> = {}
+    for (const row of (staffRes.data ?? []) as unknown as { business_id: string; role: string; practitioners: Practitioner | null }[]) {
+      const p = row.practitioners
+      // Doctors only: reception, nurses and managers have no speciality to set.
+      if (!p || !(p.speciality || row.role === 'doctor')) continue
+      ;(byBiz[row.business_id] ??= []).push(p)
+    }
+    setStaffByBiz(byBiz)
     warn('camps_offers', campsRes.error)
     setCamps((campsRes.data as any) || [])
     warn('discount_codes', couponsRes.error)
@@ -377,7 +391,15 @@ export default function AdminDashboard() {
   const confirmReject = async () => {
     if (!rejectModal || !rejectReasonInput.trim()) return
     if (rejectModal.type === 'doctor') {
-      await supabase.from('businesses').update({ status: 'suspended' }).eq('id', rejectModal.id)
+      // The reason used to be typed and thrown away. businesses has no reason
+      // column, so it goes on top of the verification notes, dated — the box
+      // an admin reads when the business is opened again. Earlier notes stay.
+      const prev = doctors.find(d => d.id === rejectModal.id)?.verification_notes?.trim()
+      const line = `Suspended ${shortDate(new Date())}: ${rejectReasonInput.trim()}`
+      const { error } = await supabase.from('businesses').update({
+        status: 'suspended', verification_notes: prev ? `${line}\n\n${prev}` : line,
+      }).eq('id', rejectModal.id)
+      if (error) { setActionMsg(`Could not reject ${rejectModal.name}: ${error.message}`); return }
       setActionMsg(`✗ ${rejectModal.name} ${t('adminDashboardPage.rejectedMsgSuffix')}`)
     } else {
       await supabase.from('camps_offers').update({
@@ -566,6 +588,23 @@ export default function AdminDashboard() {
     </select>
   )
 
+  // Pharmacies, labs and the rest have no doctors: their type is what patients
+  // search by, so it is shown as text.
+  const SpecialityCell = ({ d }: { d: BusinessRow }) => {
+    const docs = staffByBiz[d.id] ?? []
+    if (!docs.length) return <span className="text-xs text-gray-600 capitalize">{d.vertical}</span>
+    return (
+      <div className="space-y-1.5">
+        {docs.map(p => (
+          <div key={p.id}>
+            {docs.length > 1 && <p className="text-[11px] text-gray-400 truncate">{p.full_name}</p>}
+            <SpecialitySelect d={p} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   const DoctorActions = ({ d }: { d: BusinessRow }) => (
     <div className="flex gap-1 flex-wrap md:justify-center">
       <button onClick={() => toggleVerify(d)}
@@ -736,6 +775,8 @@ export default function AdminDashboard() {
                     </div>
 
 
+                    <div className="mb-2"><SpecialityCell d={d} /></div>
+
                     <div className="text-xs text-gray-500 space-y-0.5 mb-3">
                       {d.reg_number && (
                         <div>Reg <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">{d.reg_number}</span></div>
@@ -793,9 +834,7 @@ export default function AdminDashboard() {
                         <p className="font-medium text-gray-800">{d.name} {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}</p>
                         <p className="text-xs text-gray-400 capitalize">{d.vertical} · {d.phone}</p>
                       </td>
-                      <td className="py-3 px-2">
-                        <span className="text-xs text-gray-600 capitalize">{d.vertical}</span>
-                      </td>
+                      <td className="py-3 px-2"><SpecialityCell d={d} /></td>
                       <td className="py-3 px-2">
                         <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{d.reg_number}</span>
                       </td>

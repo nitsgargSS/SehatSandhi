@@ -51,7 +51,9 @@
 // Request:  { action: "transcribe", recordingId }
 //           { action: "suggest",    recordingId }
 //           { action: "purge" }
-//   service-role auth required for all three
+//   transcribe / suggest: a signed-in clinic user (the recording is read
+//   through their token, so RLS decides it is theirs) or service-role.
+//   purge: service-role only — it is the cron's sweep across every clinic.
 //
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 //      SARVAM_API_KEY            (or swap transcribeAudio below)
@@ -60,6 +62,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'npm:@anthropic-ai/sdk'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { caller } from '../_shared/caller.ts'
 
 const BUCKET = 'consultation-audio'
 
@@ -200,9 +203,11 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const auth = req.headers.get('Authorization') ?? ''
-  if (!auth.includes(serviceKey)) return json({ error: 'unauthorised' }, 401)
+  // Was service-role only, but the doctor's browser calls this and holds only
+  // the anon key — so every recording failed with "unauthorised". Same fix as
+  // the document senders: the caller's own session, and RLS as the permission.
+  const who = caller(req)
+  if (!who) return json({ error: 'unauthorised' }, 401)
 
   let action = ''
   let recordingId = ''
@@ -214,10 +219,13 @@ Deno.serve(async (req) => {
     return json({ error: 'invalid JSON' }, 400)
   }
 
-  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey)
+  // Service client for storage and the status writes; ownership is settled
+  // below by reading the recording as the caller.
+  const supabase = who.asService
 
   // ── purge ────────────────────────────────────────────────────────────────
   if (action === 'purge') {
+    if (!who.isServiceRole) return json({ error: 'unauthorised' }, 401)
     const { data: rows, error } = await supabase
       .from('consultation_audio_to_purge').select('*').limit(200)
     if (error) return json({ error: error.message }, 500)
@@ -232,7 +240,9 @@ Deno.serve(async (req) => {
 
   if (!recordingId) return json({ error: 'recordingId required' }, 400)
 
-  const { data: rec, error: recErr } = await supabase
+  // Read as the caller: another clinic's recording is simply not visible, so
+  // it 404s and nothing is transcribed.
+  const { data: rec, error: recErr } = await who.asCaller
     .from('consultation_recordings')
     .select('id, business_id, status, audio_path, transcript_confirmed, transcript_language')
     .eq('id', recordingId).maybeSingle()
