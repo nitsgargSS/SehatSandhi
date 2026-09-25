@@ -3,7 +3,7 @@ import { track } from '../../lib/analytics'
 import { useParams, Link } from 'react-router-dom'
 import { MapPin, Clock, CheckCircle2, ArrowLeft, Share2, Copy, Star } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { Practitioner, SPECIALITIES, WA_NUMBER } from '../../types'
+import { Practitioner, SPECIALITIES, WA_LINK } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../../components/SiteHeader'
 import SiteFooter from '../../components/SiteFooter'
@@ -133,10 +133,6 @@ export default function DoctorProfile() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-
-  const waMsg = encodeURIComponent(
-    `Namaste! Main ${doctor?.full_name || 'aapke doctor'} se appointment book karna chahta hoon. Sehatsandhi se aa raha hoon.`
-  )
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -303,7 +299,7 @@ export default function DoctorProfile() {
             </div>
 
             {/* Book button */}
-            <a href={`https://wa.me/${WA_NUMBER}?text=${waMsg}`}
+            <a href={WA_LINK}
                target="_blank" rel="noreferrer"
                onClick={() => track('whatsapp_click', { practitionerId: doctor.id, businessId: posts[0]?.business_id ?? null, speciality: doctor.speciality })}
                className="btn-teal w-full justify-center py-4 text-base shadow-lg shadow-teal-100">
