@@ -157,6 +157,28 @@ tables:
     class: isolated
     purgeOrder: 30
 
+  # WhatsApp marketing (0116). Before payments: a wallet transaction cites the
+  # top-up payment it credited, and a broadcast cites its wallet transaction.
+  wa_broadcast_recipients:
+    class: isolated
+    purgeOrder: 31
+
+  wa_broadcasts:
+    class: isolated
+    purgeOrder: 32
+
+  business_wallet_transactions:
+    class: isolated
+    purgeOrder: 33
+
+  business_wallets:
+    class: isolated
+    purgeOrder: 34
+
+  business_wa_accounts:
+    class: isolated
+    purgeOrder: 37
+
   payments:
     class: isolated
     purgeOrder: 40
@@ -530,6 +552,19 @@ tables:
   imr_sync_state:
     class: never_purge
     # Import progress. Purging it would strand a half-finished run.
+
+  # WhatsApp marketing prices and the approved template library (0116):
+  # configuration, not test data.
+  whatsapp_marketing_settings:
+    class: never_purge
+
+  wa_message_templates:
+    class: never_purge
+
+  # What each business type pays per term, subscription and WhatsApp (0117).
+  # Configuration set by admin; each database keeps its own.
+  vertical_term_prices:
+    class: never_purge
 
   # Who may open the admin panel. NOT synced: auth_uid points at a row in
   # auth.users, and production's user ids do not exist in sandbox — copying

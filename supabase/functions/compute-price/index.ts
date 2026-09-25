@@ -27,6 +27,7 @@ Deno.serve(async (req) => {
   let body: {
     pincodes?: unknown; businessId?: unknown; vertical?: unknown
     months?: unknown; doctorCount?: unknown; modules?: unknown
+    whatsapp?: unknown; couponCode?: unknown
   }
   try {
     body = await req.json()
@@ -56,7 +57,10 @@ Deno.serve(async (req) => {
     const modules = Array.isArray(body.modules)
       ? (body.modules as unknown[]).filter((m): m is string => typeof m === 'string')
       : null
-    const result = await computePrice(supabase, pincodes, businessId, vertical, months, doctorCount, modules)
+    const result = await computePrice(supabase, pincodes, businessId, vertical, months, doctorCount, modules, {
+      whatsapp: body.whatsapp === true,
+      couponCode: typeof body.couponCode === 'string' ? body.couponCode.slice(0, 40) : null,
+    })
     return json(result)
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)

@@ -5,6 +5,8 @@ import { activeConfig } from './env'
 // valid token — the same reason the /invoice/:token page needs no login.
 
 export interface Invoice {
+  /** 0117: [{label, amount}] pre-GST — subscription, WhatsApp, coupon. Null on older invoices. */
+  line_items?: { label: string; amount: number }[] | null
   invoice_number: string
   invoice_date: string
   fy: string

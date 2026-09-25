@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble } from 'lucide-react'
+import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
 import {
@@ -40,6 +40,17 @@ import {
 import { getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
 import { moneyExact, shortDate } from '../../lib/format'
 import { RECORDING_ENABLED } from '../../lib/env'
+import { getMarketingConsent, setMarketingConsent } from '../../lib/marketingApi'
+import { listBusinessDoctors, BusinessDoctor, setPatientDoctor, getPatientDoctor, setAttending } from '../../lib/doctorsApi'
+import DoctorSelect from '../../components/DoctorSelect'
+
+// A hospital's doctors, for the "which doctor" pickers below (0121). Empty on
+// a failure, which simply hides the pickers.
+function useDoctors(businessId: string) {
+  const [doctors, setDoctors] = useState<BusinessDoctor[]>([])
+  useEffect(() => { listBusinessDoctors(businessId).then(setDoctors).catch(() => setDoctors([])) }, [businessId])
+  return doctors
+}
 
 // The clinic's patient records — search, history, and the clinical detail a
 // doctor needs on screen before they prescribe anything.
@@ -98,15 +109,18 @@ const SOURCE_LABEL: Record<string, string> = {
   prescription: 'Prescription',
 }
 
-export default function Patients({ businessId, practitionerId }: {
+export default function Patients({ businessId, practitionerId, openMemberId }: {
   businessId: string
   practitionerId?: string | null
+  openMemberId?: string | null
 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PatientSearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [registering, setRegistering] = useState(false)
-  const [selected, setSelected] = useState<string | null>(null)
+  // openMemberId: another tab (My practice, Doctors) asked to open this patient.
+  const [selected, setSelected] = useState<string | null>(openMemberId ?? null)
+  useEffect(() => { if (openMemberId) setSelected(openMemberId) }, [openMemberId])
   const [error, setError] = useState('')
 
   // Two ways to find somebody: by who they are, or by what they were treated
@@ -234,6 +248,7 @@ export default function Patients({ businessId, practitionerId }: {
 
       {registering && (
         <RegisterPatient
+          practitionerId={practitionerId}
           businessId={businessId}
           // Prefill from whatever they were searching for: reception usually
           // types the name or number, finds nothing, and then registers exactly
@@ -376,9 +391,10 @@ const RELATIONS: [string, string][] = [
   ['sibling', 'Sibling'], ['other', 'Someone else'],
 ]
 
-function RegisterPatient({ businessId, initial, onCancel, onDone }: {
+function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId }: {
   businessId: string
   initial: string
+  practitionerId?: string | null
   onCancel: () => void
   onDone: (memberId: string) => void
 }) {
@@ -397,6 +413,9 @@ function RegisterPatient({ businessId, initial, onCancel, onDone }: {
   })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const doctors = useDoctors(businessId)
+  // "Registered under" (0121): a doctor registering defaults to themselves.
+  const [underDoctor, setUnderDoctor] = useState<string | null>(practitionerId ?? null)
 
   const save = async () => {
     setBusy(true); setErr('')
@@ -411,6 +430,8 @@ function RegisterPatient({ businessId, initial, onCancel, onDone }: {
         mrn: form.mrn.trim() || undefined,
         pinCode: form.pinCode.trim() || undefined,
       })
+      const doc = underDoctor ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)
+      if (doc) await setPatientDoctor(businessId, id, doc)
       onDone(id)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -464,6 +485,10 @@ function RegisterPatient({ businessId, initial, onCancel, onDone }: {
             <input style={input} inputMode="numeric" maxLength={6} value={form.pinCode}
               placeholder="where they live"
               onChange={e => setForm({ ...form, pinCode: e.target.value.replace(/\D/g, '') })} /></div>
+          {doctors.length > 1 && (
+            <div style={{ flex: '1 1 200px' }}><div style={label}>Registered under</div>
+              <DoctorSelect doctors={doctors} value={underDoctor} onChange={setUnderDoctor} allLabel="No particular doctor" style={input} /></div>
+          )}
         </div>
 
         {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
@@ -592,6 +617,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
               {summary.last_seen_at && ` · last seen ${when(summary.last_seen_at)}`}
               {' · added via '}{summary.source.replace('_', ' ')}
             </div>
+            <RegisteredUnder businessId={businessId} memberId={memberId} />
           </div>
           <button onClick={onClose} aria-label="Close record" style={{ ...btn(), padding: 7 }}>
             <X className="w-4 h-4" />
@@ -637,6 +663,10 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
       {/* The consent toggle is clinical too. It is the gate on recording a
           consultation, and it is not reception's to give on a doctor's behalf —
           0057 refuses the write regardless. */}
+      {/* Anyone at the clinic, reception included: it is usually asked at the
+          desk. It decides whether this clinic's WhatsApp broadcasts reach them. */}
+      <MarketingConsent memberId={summary.patient_member_id} businessId={businessId} />
+
       {/* Hidden unless RECORDING_ENABLED — see env.ts for why. */}
       {RECORDING_ENABLED && clinical && (
         <RecordingConsent
@@ -1055,7 +1085,89 @@ function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }:
   )
 }
 
+// ── Registered under (0121) ─────────────────────────────────────────────────
+// Which doctor this patient belongs to at this hospital. Shown on the record's
+// header; changing it moves the patient onto that doctor's list.
+function RegisteredUnder({ businessId, memberId }: { businessId: string; memberId: string }) {
+  const doctors = useDoctors(businessId)
+  const [doc, setDoc] = useState<string | null>(null)
+  const [err, setErr] = useState('')
+  useEffect(() => { getPatientDoctor(businessId, memberId).then(setDoc).catch(() => setDoc(null)) }, [businessId, memberId])
+  if (doctors.length < 2) return null
+  return (
+    <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center', fontSize: 12.5, color: BIZ.muted, flexWrap: 'wrap' }}>
+      Registered under
+      <DoctorSelect doctors={doctors} value={doc} allLabel="No particular doctor"
+        style={{ ...input, width: 'auto', padding: '4px 8px', fontSize: 12.5 }}
+        onChange={async d => {
+          setErr('')
+          try { await setPatientDoctor(businessId, memberId, d); setDoc(d) } catch (e) { setErr((e as Error).message) }
+        }} />
+      {err && <span style={{ color: '#8a2b2b' }}>{err}</span>}
+    </div>
+  )
+}
+
 // ── Consent, and the toggle that depends on it ──────────────────────────────
+
+// WhatsApp updates from THIS clinic (0116). Per clinic, not per phone: a
+// patient who agreed to hear from one clinic has not agreed to hear from all.
+function MarketingConsent({ memberId, businessId }: { memberId: string; businessId: string }) {
+  const [state, setState] = useState<{ granted: boolean; at: string | null } | null>(null)
+  const [asking, setAsking] = useState(false)
+  const [basis, setBasis] = useState('Asked at the front desk and agreed')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = () => getMarketingConsent(memberId, businessId).then(setState).catch(e => setErr((e as Error).message))
+  useEffect(() => { load() }, [memberId, businessId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const save = async (granted: boolean) => {
+    if (granted && !basis.trim()) { setErr('Say how the patient agreed — it is the evidence.'); return }
+    setBusy(true); setErr('')
+    try {
+      await setMarketingConsent(memberId, businessId, granted, granted ? basis.trim() : 'withdrawn by patient')
+      setAsking(false); await load()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  if (!state) return null
+  const on = state.granted
+  return (
+    <div style={{ ...card, background: on ? '#f3faf6' : '#fff', borderColor: on ? '#bfe3d0' : BIZ.border }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
+          <MessageCircle className="w-4 h-4" style={{ color: on ? BIZ.green : BIZ.mutedWarm }} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: BIZ.ink }}>
+              WhatsApp updates from this clinic {on ? 'allowed' : 'not allowed'}
+            </div>
+            <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 2, maxWidth: 560 }}>
+              {on
+                ? `Agreed ${state.at ? shortDate(state.at) : ''}. They can receive your camp, notice and health-tip broadcasts.`
+                : 'Ask before adding them: only patients who agreed receive your broadcasts.'}
+            </div>
+          </div>
+        </div>
+        {on
+          ? <button onClick={() => save(false)} disabled={busy} style={btn()}>Withdraw</button>
+          : <button onClick={() => setAsking(a => !a)} style={btn(true)}>Patient agreed…</button>}
+      </div>
+      {asking && !on && (
+        <div style={{ marginTop: 13, display: 'grid', gap: 8 }}>
+          <div style={label}>How did they agree?</div>
+          <input value={basis} onChange={e => setBasis(e.target.value)} style={input}
+            placeholder="e.g. asked at the desk and agreed, or signed form no. 412" />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => save(true)} disabled={busy} style={btn(true)}>Save consent</button>
+            <button onClick={() => setAsking(false)} style={btn()}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {err && <div style={{ marginTop: 8, fontSize: 12.5, color: '#b42318' }}>{err}</div>}
+    </div>
+  )
+}
 
 function RecordingConsent({ summary, businessId, onChange }: {
   summary: PatientSummary
@@ -1658,6 +1770,10 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange,
   const [openNotes, setOpenNotes] = useState<string | null>(null)
   const [openBeds, setOpenBeds] = useState<string | null>(null)
   const [openDrugs, setOpenDrugs] = useState<string | null>(null)
+  const doctors = useDoctors(businessId)
+  // Whose patient this admission is (0121). A doctor admitting defaults to
+  // themselves; reception picks. Charges during the stay are credited to them.
+  const [attending, setAttendingDoc] = useState<string | null>(practitionerId ?? null)
 
   const current = stays.find(s => s.status === 'admitted')
 
@@ -1669,12 +1785,14 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange,
   }, [admitting, businessId])
 
   const admit = async () => {
+    const doc = attending ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)
+    if (doctors.length > 1 && !doc) { setErr('Choose the attending doctor.'); return }
     setBusy(true); setErr('')
     try {
       await admitPatient({
         patientMemberId: memberId, businessId,
         bedId: form.bedId || null,
-        attendingPractitionerId: practitionerId ?? null,
+        attendingPractitionerId: doc ?? practitionerId ?? null,
         reason: form.reason, admittingDiagnosis: form.diagnosis,
         expectedDischarge: form.expected || null,
       })
@@ -1707,6 +1825,10 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange,
                 </div>
               )}
             </div>
+            {doctors.length > 1 && (
+              <div><div style={label}>Attending doctor</div>
+                <DoctorSelect doctors={doctors} value={attending} onChange={setAttendingDoc} allLabel="Choose a doctor…" style={input} /></div>
+            )}
             <div><div style={label}>Reason for admission</div>
               <input style={input} value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} /></div>
             <div><div style={label}>Admitting diagnosis</div>
@@ -1755,6 +1877,18 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange,
                 {a.ward_name && ` · ${a.ward_name} / ${a.bed_label}`}
                 {a.attending_name && ` · ${a.attending_name}`}
               </div>
+              {/* Move a current admission to another doctor (0121). */}
+              {a.status === 'admitted' && doctors.length > 1 && (
+                <div style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: BIZ.muted }}>
+                  Attending
+                  <DoctorSelect doctors={doctors} value={a.attending_practitioner_id} allLabel="Not assigned"
+                    style={{ ...input, width: 'auto', padding: '4px 8px', fontSize: 12.5 }}
+                    onChange={async doc => {
+                      setErr('')
+                      try { await setAttending(a.id, doc); onChange() } catch (e) { setErr((e as Error).message) }
+                    }} />
+                </div>
+              )}
             </div>
             {/* Clinical only since 0071. Discharging writes a discharge
                 diagnosis and a condition on discharge, which are findings, not
@@ -2623,6 +2757,10 @@ function BillingPane({
   onChange: () => void
 }) {
   const [c, setC] = useState({ category: 'consultation' as ChargeCategory, description: '', quantity: '1', unitPrice: '' })
+  const doctors = useDoctors(businessId)
+  // Which doctor this charge is credited to (0121). Blank = automatic: the
+  // admission's attending doctor, else nobody.
+  const [creditTo, setCreditTo] = useState<string | null>(null)
   const [p, setP] = useState({ amount: '', method: 'cash' as PaymentMethod, reference: '' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -2704,6 +2842,11 @@ function BillingPane({
             value={c.quantity} onChange={e => setC({ ...c, quantity: e.target.value })} />
           <input style={{ ...input, flex: '0 1 110px' }} inputMode="decimal" placeholder="Rate ₹"
             value={c.unitPrice} onChange={e => setC({ ...c, unitPrice: e.target.value })} />
+          {doctors.length > 1 && (
+            <DoctorSelect doctors={doctors} value={creditTo} onChange={setCreditTo}
+              allLabel={openStay ? 'Credit: attending doctor' : 'Credit: me / no doctor'}
+              style={{ ...input, flex: '1 1 170px' }} />
+          )}
           <button style={btn(true)} disabled={busy || !c.description.trim() || !c.unitPrice.trim()}
             onClick={() => guard(async () => {
               await addCharge(memberId, businessId, {
@@ -2712,6 +2855,7 @@ function BillingPane({
                 quantity: Number(c.quantity) || 1,
                 unitPrice: Number(c.unitPrice) || 0,
                 admissionId: openStay?.id ?? null,
+                practitionerId: creditTo ?? (openStay ? null : practitionerId ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)),
               }, practitionerId)
               setC({ category: 'consultation', description: '', quantity: '1', unitPrice: '' })
             })}>Add</button>

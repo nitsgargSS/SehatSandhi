@@ -121,7 +121,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   const monthlyApplies = monthlyAppliesTo(plan, vb)
   const commission = commissionFor(plan, vb)
   // "Commission only" — no monthly fee at all, so there is nothing to pay today.
-  const onCommission = !monthlyApplies && commission.percent > 0
+  const onCommissionPlan = !monthlyApplies && commission.percent > 0
   const commissionPct = commission.percent || verticalObj.commissionPercent || 10
   const commissionBasis = commission.basis ?? verticalObj.commissionBasis ?? 'billing'
   const flatPlan = plan.mode !== 'pincode_tiers'
@@ -163,6 +163,14 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // is ever taken and the business is reminded to pay instead — 15 days out, by
   // email and on WhatsApp (migration 0083).
   const [autoRenew, setAutoRenew] = useState(true)
+
+  // 0117: the WhatsApp add-on (ticked by default since 0119, like autopay;
+  // charged every term while kept) and a coupon code.
+  // Both are priced and checked by the server; the coupon is only sent once
+  // "Apply" is pressed, so typing does not re-price on every keystroke.
+  const [whatsapp, setWhatsapp] = useState(true)
+  const [couponInput, setCouponInput] = useState('')
+  const [couponCode, setCouponCode] = useState('')
 
   // The clinical systems on offer, and which ones they have ticked. Priced by
   // the server from care_modules — this list is for drawing the choice, never
@@ -263,7 +271,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         // yet — and its answer overrides the local one that does count them. A
         // hospital saw one doctor's price and would have been charged for all of
         // them at checkout, where the real doctorId is finally passed.
-        const res = await computePrice(zips, null, vertical, months, namedHospitalDoctors, modules)
+        const res = await computePrice(zips, null, vertical, months, namedHospitalDoctors, modules, { whatsapp, couponCode: couponCode || undefined })
         if (id === priceReq.current) setServerPrice(res)
       } catch {
         if (id === priceReq.current) setServerPrice(null) // fall back to localPrice
@@ -272,10 +280,18 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [zips, vertical, months, namedHospitalDoctors, modules])
+  }, [zips, vertical, months, namedHospitalDoctors, modules, whatsapp, couponCode])
 
   // What the summary shows: server total when we have one, else the local sum.
   const price = serverPrice ?? localPrice
+
+  // Priced by business type (0117)? Then the server's own list and lines are
+  // what is shown, and "commission only" means this type's subscription is ₹0.
+  const typePriced = serverPrice?.pricingSource === 'type'
+  const onCommission = typePriced ? (serverPrice?.subscriptionTotal ?? 0) === 0 : onCommissionPlan
+  // Even a commission-only business pays today if it chose WhatsApp.
+  const payableToday = typePriced ? (serverPrice?.tax.grandTotal ?? 0) : (onCommission ? 0 : price.tax?.grandTotal ?? price.total)
+  const shownTerms = typePriced && serverPrice?.terms?.length ? serverPrice.terms : termChoices
 
   // ── Step validation ──
   const stepValid = (s: number): boolean => {
@@ -463,6 +479,10 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
     const id = await saveRegistration()
     setSubmitting(false)
     if (!id) return
+    // Remember the term and WhatsApp choice, so paying later from the
+    // dashboard starts from what was picked here (0118). Best effort.
+    await supabase.rpc('sehat_signup_set_plan_choice', { p_business: id, p_months: months, p_whatsapp: whatsapp })
+      .then(() => undefined, () => undefined)
     setDone(true)
     window.open(waLink, '_blank', 'noopener')
   }
@@ -481,10 +501,18 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         setSubmitting(false)
         return
       }
+      if (couponCode && price.couponError) {
+        setError(`${price.couponError} Remove the coupon to continue without it.`)
+        setSubmitting(false)
+        return
+      }
       const order = await createRazorpayOrder(zips, id, months, modules, {
         gstin: gstinState === 'ok' ? form.gstin : undefined,
         gstLegalName: form.gst_legal_name || undefined,
         billingAddress: form.address || undefined,
+        whatsapp,
+        couponCode: couponCode || undefined,
+        autoRenew,
       })
       await loadRazorpayCheckout()
       const Razorpay = (window as unknown as { Razorpay: new (o: unknown) => { open: () => void } }).Razorpay
@@ -968,7 +996,10 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                         {onCommission
                           ? <ReviewRow label="Plan" value={`${commissionPct}% of ${commissionBasis}`} />
                           : <ReviewRow label="Plan" value={flatPlan ? plan.label : (price.topTier?.tier_name ?? '—')} />}
-                        {!onCommission && (
+                        {typePriced && (price.lineItems ?? []).map(li => (
+                          <ReviewRow key={li.label} label={li.label} value={li.amount < 0 ? `− ${money(-li.amount)}` : money(li.amount)} />
+                        ))}
+                        {!typePriced && !onCommission && (
                           <>
                             <ReviewRow label="Monthly price" value={`${money(price.monthlyTotal)}/mo`} />
                             {(price.moduleTotal ?? 0) > 0 && (
@@ -979,7 +1010,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             )}
                           </>
                         )}
-                        {!onCommission && price.tax?.applied && (
+                        {payableToday > 0 && price.tax?.applied && (
                           <>
                             <ReviewRow label="Taxable value" value={`${money(price.total)}`} />
                             {price.tax.interState
@@ -993,7 +1024,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 22px', background: '#f7f3ea' }}>
                           <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>Due today</span>
                           <span style={{ fontSize: 26, fontWeight: 800, color: BIZ.green }}>
-                            {money((onCommission ? 0 : (price.tax?.applied ? price.tax.grandTotal : price.total)))}
+                            {money(payableToday)}
                           </span>
                         </div>
                         {!onCommission && price.tax?.applied && (
@@ -1053,7 +1084,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                           behaves exactly as it did before. Prices come from
                           plan_terms and are totals for the whole term, never a
                           monthly rate to be multiplied. */}
-                      {!onCommission && termChoices.length > 0 && (
+                      {(!onCommission || whatsapp) && shownTerms.length > 0 && (
                         <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
                           <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
                             How long would you like to pay for?
@@ -1062,7 +1093,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             Introductory pricing. Paid once, upfront, for the whole term.
                           </p>
                           <div style={{ display: 'grid', gap: 10 }}>
-                            {termChoices.map(t => {
+                            {shownTerms.map(t => {
                               const on = t.months === months
                               return (
                                 <label key={t.months} style={{
@@ -1093,13 +1124,18 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                         same localTax() the quote and the invoice use, so
                                         the three cannot disagree. */}
                                     {(() => {
-                                      const tt = localTax(t.price, tax, form.gstin)
+                                      const tt = localTax(t.price + (whatsapp ? ('whatsapp_price' in t ? t.whatsapp_price ?? 0 : 0) : 0), tax, form.gstin)
                                       return tt.applied ? (
                                         <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3 }}>
                                           + {tt.rate}% GST · {money(tt.grandTotal)} payable today
                                         </span>
                                       ) : null
                                     })()}
+                                    {whatsapp && 'whatsapp_price' in t && (t.whatsapp_price ?? 0) > 0 && (
+                                      <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3 }}>
+                                        + WhatsApp {money(t.whatsapp_price ?? 0)}
+                                      </span>
+                                    )}
                                     {t.savings_note && (
                                       <span style={{ display: 'block', fontSize: 12.5, color: BIZ.green, fontWeight: 700, marginTop: 3 }}>
                                         {t.savings_note}
@@ -1110,6 +1146,55 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               )
                             })}
                           </div>
+                        </div>
+                      )}
+
+                      {/* WhatsApp add-on (0117). Ticked by default (0119); charged every
+                          term while ticked. Messages are extra, from a wallet. */}
+                      {typePriced && (
+                        <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
+                          <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
+                            <input type="checkbox" checked={whatsapp} onChange={e => setWhatsapp(e.target.checked)}
+                              style={{ width: 18, height: 18, marginTop: 2, accentColor: BIZ.green, cursor: 'pointer' }} />
+                            <span style={{ flex: 1 }}>
+                              <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                                <strong style={{ fontSize: 14.5, color: BIZ.ink }}>Add WhatsApp messaging</strong>
+                                <strong style={{ fontSize: 14.5, color: whatsapp ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
+                                  {money((shownTerms.find(t => t.months === months) as { whatsapp_price?: number } | undefined)?.whatsapp_price ?? 0)}
+                                  {' '}for {months === 1 ? '1 month' : `${months} months`}
+                                </strong>
+                              </span>
+                              <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 4, lineHeight: 1.6 }}>
+                                WhatsApp Business Verification &amp; Activation Fee, charged every term while you keep it.
+                                Send camp, notice and health-tip messages to patients who agreed to hear from you;
+                                each message is paid separately from a wallet you top up. Untick it if you do not want it.
+                              </span>
+                            </span>
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Coupon (0117). Checked by the server; takes money off the
+                          Sehatsandhi subscription only. */}
+                      {typePriced && (price.subscriptionTotal ?? 0) > 0 && (
+                        <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 8 }}>Have a coupon code?</div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <input value={couponInput} onChange={e => setCouponInput(e.target.value.toUpperCase())}
+                              placeholder="e.g. DIWALI30" maxLength={40}
+                              style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BIZ.inputBorder}`, fontFamily: 'inherit', fontSize: 14 }} />
+                            {couponCode
+                              ? <button onClick={() => { setCouponCode(''); setCouponInput('') }} style={btnBack}>Remove</button>
+                              : <button onClick={() => setCouponCode(couponInput.trim())} disabled={!couponInput.trim()} style={btnBack}>Apply</button>}
+                          </div>
+                          {couponCode && price.coupon && (
+                            <p style={{ fontSize: 13, color: BIZ.green, fontWeight: 700, margin: '8px 0 0' }}>
+                              {price.coupon.label}: − {money(price.coupon.discount)}
+                            </p>
+                          )}
+                          {couponCode && price.couponError && (
+                            <p style={{ fontSize: 13, color: '#b42318', margin: '8px 0 0' }}>{price.couponError}</p>
+                          )}
                         </div>
                       )}
 
@@ -1165,6 +1250,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               monthly total is the taxable value and not the
                               amount charged — one "=" across both would be
                               wrong by the tax. */}
+                          {!typePriced && (
                           <div style={{ fontSize: 13, color: BIZ.mutedWarm, marginTop: 13, lineHeight: 1.7, borderTop: `1px solid ${BIZ.border}`, paddingTop: 11 }}>
                             Listing {money(price.monthlyTotal - (price.moduleTotal ?? 0))}
                             {(price.moduleTotal ?? 0) > 0 && <> + systems {money(price.moduleTotal ?? 0)}</>}
@@ -1175,6 +1261,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               {money((price.tax?.applied ? price.tax.grandTotal : price.monthlyTotal))}
                             </strong> payable today, then monthly
                           </div>
+                          )}
                         </div>
                       )}
 
@@ -1184,7 +1271,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                           mandate is taken at all and we remind them instead, by
                           email and on WhatsApp, 15 days before the term ends
                           (migration 0083). */}
-                      {!onCommission && (
+                      {payableToday > 0 && (
                         <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
                           <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
                             <input
@@ -1229,10 +1316,19 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             </label>
                           </div>
                           <div style={{ marginTop: 20 }}>
-                            <button onClick={activateOnWhatsApp} disabled={submitting || !acceptedTerms}
-                              style={{ ...btnWhatsApp, opacity: submitting || !acceptedTerms ? 0.6 : 1, cursor: submitting || !acceptedTerms ? 'not-allowed' : 'pointer' }}>
-                              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <WaGlyph />} Activate on WhatsApp
-                            </button>
+                            {/* Chose the WhatsApp add-on: that is paid for today. */}
+                            {whatsapp && payableToday > 0 ? (
+                              <button onClick={() => { if (!acceptedTerms) { setError(`Please accept the ${commissionPct}% commission terms to continue.`); return } payWithRazorpay() }}
+                                disabled={submitting || !acceptedTerms || !backendReady}
+                                style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: submitting || !acceptedTerms ? 0.6 : 1 }}>
+                                {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Pay {money(payableToday)} with Razorpay
+                              </button>
+                            ) : (
+                              <button onClick={activateOnWhatsApp} disabled={submitting || !acceptedTerms}
+                                style={{ ...btnWhatsApp, opacity: submitting || !acceptedTerms ? 0.6 : 1, cursor: submitting || !acceptedTerms ? 'not-allowed' : 'pointer' }}>
+                                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <WaGlyph />} Activate on WhatsApp
+                              </button>
+                            )}
                           </div>
                         </>
                       ) : (

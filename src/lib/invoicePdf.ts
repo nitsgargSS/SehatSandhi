@@ -178,15 +178,20 @@ function drawInvoice(doc: Doc, inv: Invoice): boolean {
   doc.text('TAXABLE VALUE', RIGHT, y, { align: 'right' })
   y += 2.5; rule(y); y += 5.5
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); gray(40)
-  const desc = (inv.description || 'Business listing services')
-    + (inv.months ? ` - ${inv.months} month${inv.months === 1 ? '' : 's'}` : '')
-  const dl = lines(desc, 100)
-  doc.text(dl, M, y)
-  doc.setFont('courier', 'normal'); doc.setFontSize(8.5); gray(90)
-  doc.text(t(inv.sac_code || '-'), 128, y)
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); gray(40)
-  doc.text(money(inv.taxable_value), RIGHT, y, { align: 'right' })
-  y += dl.length * 4.5
+  // Itemised since 0117 (subscription, WhatsApp, coupon); one line before that.
+  const items = inv.line_items?.length
+    ? inv.line_items.map(li => ({ desc: li.label, amount: li.amount }))
+    : [{ desc: (inv.description || 'Business listing services')
+        + (inv.months ? ` - ${inv.months} month${inv.months === 1 ? '' : 's'}` : ''), amount: Number(inv.taxable_value) }]
+  for (const it of items) {
+    const dl = lines(it.desc, 100)
+    doc.text(dl, M, y)
+    doc.setFont('courier', 'normal'); doc.setFontSize(8.5); gray(90)
+    doc.text(t(inv.sac_code || '-'), 128, y)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); gray(40)
+    doc.text(it.amount < 0 ? `- ${money(-it.amount)}` : money(it.amount), RIGHT, y, { align: 'right' })
+    y += dl.length * 4.5 + 1
+  }
   if (inv.pin_codes?.length) {
     doc.setFontSize(7.5); gray(150)
     const pl = lines(`Pincodes: ${inv.pin_codes.join(', ')}`, 100)

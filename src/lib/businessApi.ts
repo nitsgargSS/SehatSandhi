@@ -65,6 +65,17 @@ export interface PriceResult {
   /** GST on the term. `total` is pre-tax; tax.grandTotal is what gets charged. */
   tax: TaxBreakdown
   priceIncludesGst: boolean
+
+  // 0117: prices by business type
+  pricingSource?: 'type' | 'plan'
+  subscriptionTotal?: number
+  whatsappAvailable?: boolean
+  whatsappSelected?: boolean
+  whatsappTotal?: number
+  coupon?: { code: string; label: string; discount: number } | null
+  couponError?: string | null
+  lineItems?: { label: string; amount: number }[]
+  terms?: { months: number; price: number; label: string | null; savings_note: string | null; whatsapp_price?: number }[]
 }
 
 export interface TaxBreakdown {
@@ -127,7 +138,9 @@ export const computePrice = (
   doctorCount?: number | null,
   /** care_modules codes ticked in the wizard. Priced server-side, never here. */
   modules?: string[] | null,
-) => callFn<PriceResult>('compute-price', { pincodes, businessId, vertical, months, doctorCount, modules })
+  /** 0117: the WhatsApp add-on and a coupon code, both checked server-side. */
+  choices: { whatsapp?: boolean; couponCode?: string } = {},
+) => callFn<PriceResult>('compute-price', { pincodes, businessId, vertical, months, doctorCount, modules, ...choices })
 
 export interface RazorpayOrder {
   orderId: string
@@ -194,13 +207,19 @@ export interface BuyerGstDetails {
   gstin?: string
   gstLegalName?: string
   billingAddress?: string
+  /** 0117: checkout choices, re-priced and checked by razorpay-order. */
+  whatsapp?: boolean
+  couponCode?: string
+  autoRenew?: boolean
 }
 
+// Signup calls this anonymously (no login exists yet); the dashboard passes the
+// owner's session token, which razorpay-order checks against the business.
 export const createRazorpayOrder = (
   pincodes: string[], businessId: string, periodMonths = 1,
-  modules: string[] = [], gst: BuyerGstDetails = {},
+  modules: string[] = [], gst: BuyerGstDetails = {}, authToken?: string,
 ) =>
-  callFn<RazorpayOrder>('razorpay-order', { pincodes, businessId, periodMonths, modules, ...gst })
+  callFn<RazorpayOrder>('razorpay-order', { pincodes, businessId, periodMonths, modules, ...gst }, authToken)
 
 export const verifyRazorpayPayment = (args: {
   orderId: string

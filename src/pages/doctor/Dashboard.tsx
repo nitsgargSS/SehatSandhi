@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -12,6 +12,10 @@ import Queue from './Queue'
 import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess, AffiliationRole } from '../../lib/identityApi'
 import RevenuePanel from './RevenuePanel'
 import PatientAreasPanel from './PatientAreasPanel'
+import WhatsAppPanel from './WhatsAppPanel'
+import PayListingPanel from './PayListingPanel'
+import { MyPractice, DoctorsOverview } from './DoctorWorkspace'
+import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
 
@@ -81,7 +85,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'reports'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'doctors'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -148,6 +152,8 @@ export default function DoctorDashboard() {
   })
   const [apptStatus, setApptStatus] = useState<string>('all')
   const [apptSearch, setApptSearch] = useState('')
+  // 0121: one doctor's bookings, or everyone's.
+  const [apptDoctor, setApptDoctor] = useState<string>('all')
 
   const loadAllAppointments = async (doctorId: string) => {
     setApptLoading(true)
@@ -160,6 +166,7 @@ export default function DoctorDashboard() {
       .order('slot_datetime', { ascending: false })
       .limit(500)
     if (apptStatus !== 'all') q = q.eq('status', apptStatus)
+    if (apptDoctor !== 'all') q = apptDoctor === 'none' ? q.is('practitioner_id', null) : q.eq('practitioner_id', apptDoctor)
     const { data } = await q
     setAllAppts((data as Appointment[]) || [])
     setApptLoading(false)
@@ -182,6 +189,8 @@ export default function DoctorDashboard() {
   // Nagar one saw a name. Both call sites already fell back to the code, so an
   // empty map degrades to exactly what it always showed for an unknown pincode.
   const { areas: publicAreas } = usePublicAreas()
+  const { plan: pricingPlan, verticals: pricingVerticals } = usePricing()
+  const [showPay, setShowPay] = useState(false)
   const areaName = useMemo(
     () => new Map(publicAreas.map(a => [a.pin_code, a.area_name])),
     [publicAreas])
@@ -193,7 +202,7 @@ export default function DoctorDashboard() {
   useEffect(() => {
     if (tab !== 'appointments' || !doctor) return
     loadAllAppointments(doctor.id)
-  }, [tab, doctor, apptFrom, apptTo, apptStatus])
+  }, [tab, doctor, apptFrom, apptTo, apptStatus, apptDoctor])
 
   useEffect(() => {
     if (tab !== 'reports' || !doctor) return
@@ -236,6 +245,9 @@ export default function DoctorDashboard() {
   // or a receptionist is nobody on the roster, so this stays null and a visit
   // they record simply carries no practitioner rather than inventing one.
   const [myPractitionerId, setMyPractitionerId] = useState<string | null>(null)
+  // A patient another tab asked to open (My practice, Doctors → Patients).
+  const [openMember, setOpenMember] = useState<string | null>(null)
+  const openPatient = (memberId: string) => { setOpenMember(memberId); setTab('patients') }
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
   const [showAddDoc, setShowAddDoc] = useState(false)
@@ -247,6 +259,11 @@ export default function DoctorDashboard() {
     extra_doctor_price: number
   }
   const [plan, setPlan] = useState<PlanTerms | null>(null)
+
+  // The doctor a booking is for, by name (0121). Only places with doctors.
+  const doctorNameOf = (id?: string | null) =>
+    id ? roster.find(r => r.practitioner_id === id)?.practitioners?.full_name ?? null : null
+  const rosterDoctors = roster.filter(r => (r.role === 'doctor' || r.role === 'owner') && r.status !== 'suspended' && r.practitioners)
 
   const loadRoster = async (businessId: string) => {
     const { data } = await supabase.from('business_practitioners')
@@ -512,10 +529,24 @@ export default function DoctorDashboard() {
           hasPractitioners(doc.vertical as VerticalKey)
             ? Promise.all([
                 loadRoster(doc.id),
-                supabase.from('active_pricing_plan')
-                  .select('doctor_billing, monthly_price, included_doctors, extra_doctor_price')
-                  .maybeSingle()
-                  .then(({ data: p }) => { if (p) setPlan(p as PlanTerms) }),
+                // The type's own doctor terms (0117) — included doctors, then a
+                // flat extra each — which is what the server charges. The old
+                // single plan only for a type that has none set.
+                supabase.from('vertical_billing')
+                  .select('included_doctors, extra_doctor_price')
+                  .eq('vertical', doc.vertical).maybeSingle()
+                  .then(async ({ data: vbRow }) => {
+                    const v = vbRow as { included_doctors?: number; extra_doctor_price?: number } | null
+                    if (v && ((v.extra_doctor_price ?? 0) > 0 || (v.included_doctors ?? 0) > 0)) {
+                      setPlan({ doctor_billing: (v.extra_doctor_price ?? 0) > 0 ? 'base_plus_extra' : 'none',
+                                monthly_price: null, included_doctors: v.included_doctors ?? 0,
+                                extra_doctor_price: v.extra_doctor_price ?? 0 })
+                      return
+                    }
+                    const { data: p } = await supabase.from('active_pricing_plan')
+                      .select('doctor_billing, monthly_price, included_doctors, extra_doctor_price').maybeSingle()
+                    if (p) setPlan(p as PlanTerms)
+                  }),
               ])
             : null,
         ])
@@ -793,6 +824,10 @@ export default function DoctorDashboard() {
   const prescriber = mayPrescribe(role)
 
   const tabs = [
+    // 0121: a doctor's own page, first for anyone who is a doctor here.
+    ...(myPractitionerId && emr ? [
+      { id: 'mypractice', label: 'My practice', icon: <User className="w-4 h-4" /> },
+    ] : []),
     ...(booksAppointments ? [
       { id: 'today', label: t('dashboardPage.tabToday'), icon: <Star className="w-4 h-4" /> },
       // Above Appointments on purpose: the line is what reception works all
@@ -824,6 +859,15 @@ export default function DoctorDashboard() {
     ...(businessRole ? [
       { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
       { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
+      // 0121: every doctor side by side, for places that have doctors.
+      ...(doctor && hasPractitioners(doctor.vertical as VerticalKey) && emr ? [
+        { id: 'doctors', label: 'Doctors', icon: <Users className="w-4 h-4" /> },
+      ] : []),
+      // Plan & billing (0117): pay, renew, change term, WhatsApp, autopay.
+      { id: 'plan', label: 'Plan', icon: <Star className="w-4 h-4" /> },
+      // WhatsApp marketing (0116): the wallet and broadcasts are the business's
+      // money, so owner and manager only — the RPCs refuse anyone else.
+      { id: 'whatsapp', label: 'WhatsApp', icon: <MessageCircle className="w-4 h-4" /> },
     ] : []),
     // Reports sits with the clinicians, not the business cluster. How the
     // practice is actually doing — reach, bookings, conversion — is for the
@@ -855,6 +899,24 @@ export default function DoctorDashboard() {
     // otherwise re-run this forever.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, tab, tabIds])
+
+  // ── Unpaid listings ──────────────────────────────────────────────────────
+  // A business that owes a monthly fee and has not paid gets PAY_WINDOW_DAYS
+  // from registering to use the dashboard; after that everything except
+  // paying is shut until it pays (decided 25 Sep 2026). "Not paid" is status
+  // 'pending': payment (or an admin's approval) is what makes a listing
+  // active. Commission-only businesses never owe an upfront fee, so never lock.
+  // razorpay-order uses the same 7 days for paying at signup without a login.
+  //
+  // This is the screen, not the database: the listing is not public while
+  // pending anyway, and the API still answers a determined caller.
+  const PAY_WINDOW_DAYS = 7
+  const owesFee = !!doctor && doctor.status === 'pending'
+    && monthlyAppliesTo(pricingPlan, pricingVerticals.find(v => v.vertical === doctor.vertical))
+  const payDaysLeft = doctor
+    ? Math.ceil(PAY_WINDOW_DAYS - (Date.now() - new Date(doctor.created_at).getTime()) / 86_400_000)
+    : 0
+  const payLocked = owesFee && payDaysLeft <= 0
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -908,6 +970,24 @@ export default function DoctorDashboard() {
     </div>
   )
 
+
+  if (payLocked) return (
+    <div style={{ background: BIZ.cream, minHeight: '100vh' }} className="px-4 py-8">
+      <div className="max-w-xl mx-auto space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <img src="/logo-tight.png" alt="Sehatsandhi" style={{ height: 48, width: 'auto' }} />
+          <button onClick={logout} className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1.5">
+            <LogOut className="w-4 h-4" /> Log out
+          </button>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-3 text-sm">
+          <b>{doctor.name}</b> has not been paid for. The {PAY_WINDOW_DAYS}-day window after registering has ended,
+          so the dashboard is paused until the listing is paid. Everything you entered is kept.
+        </div>
+        <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />
+      </div>
+    </div>
+  )
 
   // Same shell as the /business/register wizard: dark ink rail down the left
   // holding the nav, cream content pane beside it. The rail replaces what used
@@ -1087,6 +1167,20 @@ export default function DoctorDashboard() {
           ))}
         </div>
 
+        {/* Still inside the pay window: say how long is left before the lock. */}
+        {owesFee && !payLocked && (
+          <div className="mb-5 space-y-3">
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3 flex-wrap">
+              <span>
+                Your listing is not paid yet. Pay within <b>{payDaysLeft} day{payDaysLeft === 1 ? '' : 's'}</b> to
+                keep using the dashboard; after that only payment will be available.
+              </span>
+              <button onClick={() => setShowPay(v => !v)} className="btn-teal text-sm">{showPay ? 'Hide' : 'Pay now'}</button>
+            </div>
+            {showPay && <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />}
+          </div>
+        )}
+
         {/* ══════════ TODAY (default) — today's slot grid + recent appointments ══════════ */}
         {tab === 'today' && (
           <div className="space-y-4">
@@ -1126,7 +1220,8 @@ export default function DoctorDashboard() {
                       <div key={a.id} className="p-3 bg-gray-50 rounded-xl">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div>
-                            <p className="font-medium text-gray-800 text-sm">{a.patient_name}</p>
+                            <p className="font-medium text-gray-800 text-sm">{a.patient_name}
+                              {doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id) && <span className="text-xs text-teal-700 font-semibold"> · {doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id)}</span>}</p>
                             <p className="text-sm text-gray-400">
                               {t('dashboardPage.ageLabel')} {a.patient_age} · {new Date(a.slot_datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
                             </p>
@@ -1220,6 +1315,17 @@ export default function DoctorDashboard() {
                     <option value="no_show">Did not turn up</option>
                   </select>
                 </div>
+                {rosterDoctors.length > 1 && (
+                  <div>
+                    <label className="text-[11px] text-gray-500 block mb-1">Doctor</label>
+                    <select className="input-field text-sm" value={apptDoctor}
+                      onChange={e => setApptDoctor(e.target.value)}>
+                      <option value="all">All doctors</option>
+                      {rosterDoctors.map(r => <option key={r.practitioner_id} value={r.practitioner_id}>{r.practitioners?.full_name}</option>)}
+                      <option value="none">Not assigned</option>
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="text-[11px] text-gray-500 block mb-1">Search</label>
                   <input className="input-field text-sm" placeholder="Name or number"
@@ -1253,7 +1359,8 @@ export default function DoctorDashboard() {
                         <div className="flex items-start justify-between gap-2 flex-wrap">
                           <div className="min-w-0">
                             <p className="font-medium text-navy-700">{a.patient_name || 'Patient'}</p>
-                            <p className="text-xs text-gray-500">{a.patient_phone}</p>
+                            <p className="text-xs text-gray-500">{a.patient_phone}
+                              {doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id) && <> · <b>{doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id)}</b></>}</p>
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-sm font-semibold text-navy-700">
@@ -1512,10 +1619,27 @@ export default function DoctorDashboard() {
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
         {tab === 'patients' && emr && (access.opd || access.ipd) && doctor && (
-          <Patients businessId={doctor.id} practitionerId={myPractitionerId} />
+          <Patients businessId={doctor.id} practitionerId={myPractitionerId} openMemberId={openMember} />
+        )}
+
+        {tab === 'mypractice' && doctor && myPractitionerId && (
+          <MyPractice businessId={doctor.id} practitionerId={myPractitionerId} onOpenPatient={openPatient} />
+        )}
+
+        {tab === 'doctors' && doctor && (
+          <DoctorsOverview businessId={doctor.id} onOpenPatient={openPatient} />
         )}
 
         {/* ══════════ CLINIC — doctors on the roster + camps & offers ══════════ */}
+        {tab === 'plan' && doctor && (
+          <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />
+        )}
+
+        {tab === 'whatsapp' && doctor && (
+          <WhatsAppPanel businessId={doctor.id} businessName={doctor.name}
+            prefill={{ name: doctor.name, email: doctor.email ?? undefined, contact: doctor.phone ?? undefined }} />
+        )}
+
         {tab === 'bills' && (
           <div className="space-y-4">
             <div className="card shadow-sm">

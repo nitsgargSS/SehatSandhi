@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
       recipient_name, recipient_gstin, recipient_state_code, recipient_address, recipient_phone,
       sac_code, description, period_start, period_end, months, pin_codes,
       taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, tax_total, total_amount,
-      place_of_supply, reverse_charge, currency
+      place_of_supply, reverse_charge, currency, line_items
     `)
     .eq('public_token', token)
     .maybeSingle()

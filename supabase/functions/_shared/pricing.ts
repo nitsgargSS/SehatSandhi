@@ -37,6 +37,14 @@ export interface PlanTerm {
   savings_note: string | null
   /** Almost always false — see the 0082 header. */
   multiplies_headcount: boolean
+  /** WhatsApp add-on for this term (0117), whole rupees. Absent on plan_terms. */
+  whatsapp_price?: number
+}
+
+/** One priced line of what is being bought, pre-GST. Copied onto the invoice. */
+export interface LineItem {
+  label: string
+  amount: number
 }
 
 export interface ModuleLine {
@@ -133,6 +141,18 @@ export interface PriceResult {
   // what the customer actually pays.
   tax: TaxBreakdown
   priceIncludesGst: boolean
+
+  // ── 0117: prices by business type ──
+  /** 'type' when vertical_term_prices priced this; 'plan' for the old single plan. */
+  pricingSource: 'type' | 'plan'
+  /** The Sehatsandhi subscription for the term, before any coupon. */
+  subscriptionTotal: number
+  whatsappAvailable: boolean
+  whatsappSelected: boolean
+  whatsappTotal: number
+  coupon: { code: string; label: string; discount: number } | null
+  couponError: string | null
+  lineItems: LineItem[]
 }
 
 export interface VerticalBilling {
@@ -141,6 +161,9 @@ export interface VerticalBilling {
   commissionEnabled: boolean
   commissionPercent: number
   commissionBasis: string | null
+  /** 0117: doctors covered by the subscription, then extraDoctorPrice/month each. */
+  includedDoctors?: number
+  extraDoctorPrice?: number
 }
 
 // Used only when the DB has not been set up yet, so a fresh project still
@@ -232,7 +255,7 @@ export async function resolveVerticalBilling(
 
   const { data: row } = await supabase
     .from('vertical_billing')
-    .select('vertical, monthly_enabled, commission_enabled, commission_percent, commission_basis')
+    .select('vertical, monthly_enabled, commission_enabled, commission_percent, commission_basis, included_doctors, extra_doctor_price')
     .eq('vertical', vertical)
     .eq('is_active', true)
     .maybeSingle()
@@ -244,6 +267,8 @@ export async function resolveVerticalBilling(
       commission_enabled: boolean | null
       commission_percent: number | string | null
       commission_basis: string | null
+      included_doctors?: number | null
+      extra_doctor_price?: number | null
     }
     return {
       vertical: r.vertical,
@@ -251,6 +276,8 @@ export async function resolveVerticalBilling(
       commissionEnabled: Boolean(r.commission_enabled),
       commissionPercent: Number(r.commission_percent ?? 0),
       commissionBasis: r.commission_basis,
+      includedDoctors: Number(r.included_doctors ?? 0),
+      extraDoctorPrice: Number(r.extra_doctor_price ?? 0),
     }
   }
   return FALLBACK_VERTICALS[vertical] ?? FALLBACK_VERTICALS.clinic
@@ -348,6 +375,109 @@ export async function resolveModules(
   }))
 }
 
+/** A type's own price list (0117). Empty = price it the old way, off the plan. */
+export async function resolveTypeTerms(supabase: SupabaseClient, vertical: string): Promise<PlanTerm[]> {
+  const { data, error } = await supabase
+    .from('vertical_term_prices')
+    .select('months, subscription_price, whatsapp_price, label')
+    .eq('vertical', vertical)
+    .eq('is_enabled', true)
+    .order('months')
+  // Missing table (0117 not applied) means the old way, not an outage.
+  if (error) return []
+  const rows = (data ?? []) as { months: number; subscription_price: number; whatsapp_price: number; label: string | null }[]
+  const monthly = rows.find(r => r.months === 1)?.subscription_price ?? 0
+  return rows.map(r => {
+    const saving = monthly * r.months - r.subscription_price
+    return {
+      months: r.months,
+      price: Number(r.subscription_price),
+      label: r.label,
+      savings_note: r.months > 1 && saving > 0 ? `Save ₹${saving.toLocaleString('en-IN')}` : null,
+      multiplies_headcount: false,
+      whatsapp_price: Number(r.whatsapp_price),
+    }
+  })
+}
+
+/**
+ * Check a coupon and work out what it takes off the SUBSCRIPTION (decided
+ * 25 Sep 2026: never the WhatsApp fee, the doctor extra or GST).
+ *
+ *   percentage   — that percent of the subscription; with duration_months, only
+ *                  for that many of the term's months
+ *   fixed_amount — that many rupees, at most the subscription
+ *   free_months  — that many months of the term free, pro rata
+ *
+ *   applies_to first_payment  — only a business's first paid listing payment
+ *              first_n_months — only within duration_months of registering
+ *              ongoing        — any payment
+ *
+ * One redemption per business per code. The use is counted by fulfilment once
+ * the money arrives, not here — a quote costs nothing.
+ */
+export async function resolveCoupon(
+  supabase: SupabaseClient,
+  rawCode: string | null | undefined,
+  ctx: { businessId: string | null; subscription: number; months: number },
+): Promise<{ coupon: { code: string; label: string; discount: number } | null; error: string | null }> {
+  const code = (rawCode ?? '').trim().toUpperCase()
+  if (!code) return { coupon: null, error: null }
+  const { data: c } = await supabase.from('discount_codes').select('*').ilike('code', code).maybeSingle()
+  const row = c as Record<string, unknown> | null
+  if (!row || !row.is_active) return { coupon: null, error: 'That coupon code is not valid.' }
+  const today = new Date().toISOString().slice(0, 10)
+  if (row.valid_from && String(row.valid_from) > today) return { coupon: null, error: 'That coupon is not active yet.' }
+  if (row.valid_until && String(row.valid_until) < today) return { coupon: null, error: 'That coupon has expired.' }
+  if (row.max_uses != null && Number(row.current_uses ?? 0) >= Number(row.max_uses)) {
+    return { coupon: null, error: 'That coupon has been fully used.' }
+  }
+
+  const appliesTo = String(row.applies_to ?? 'first_payment')
+  const duration = row.duration_months == null ? null : Number(row.duration_months)
+  if (ctx.businessId) {
+    const { count: usedByMe } = await supabase.from('payments')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', ctx.businessId).eq('status', 'paid').ilike('coupon_code', code)
+    if ((usedByMe ?? 0) > 0) return { coupon: null, error: 'You have already used this coupon.' }
+    if (appliesTo === 'first_payment') {
+      const { count: paid } = await supabase.from('payments')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', ctx.businessId).eq('status', 'paid').eq('type', 'listing')
+      if ((paid ?? 0) > 0) return { coupon: null, error: 'This coupon is only for a first payment.' }
+    }
+    if (appliesTo === 'first_n_months' && duration) {
+      const { data: b } = await supabase.from('businesses').select('created_at').eq('id', ctx.businessId).maybeSingle()
+      const since = b ? new Date(String((b as { created_at: string }).created_at)) : new Date()
+      const limit = new Date(since); limit.setMonth(limit.getMonth() + duration)
+      if (limit < new Date()) return { coupon: null, error: `This coupon was for the first ${duration} months only.` }
+    }
+  }
+
+  const value = Number(row.discount_value ?? 0)
+  const type = String(row.discount_type)
+  const sub = ctx.subscription
+  let discount = 0
+  let label = code
+  if (type === 'percentage') {
+    const pct = Math.min(100, Math.max(0, value))
+    const share = duration && appliesTo !== 'first_n_months' ? Math.min(duration, ctx.months) / ctx.months : 1
+    discount = sub * (pct / 100) * share
+    label = `${code} — ${pct}% off${share < 1 ? ` for ${duration} month${duration === 1 ? '' : 's'}` : ''}`
+  } else if (type === 'fixed_amount') {
+    discount = Math.min(Math.max(0, value), sub)
+    label = `${code} — ₹${Math.round(value).toLocaleString('en-IN')} off`
+  } else if (type === 'free_months') {
+    const free = Math.min(Math.max(0, Math.floor(value)), ctx.months)
+    discount = sub * free / ctx.months
+    label = `${code} — ${free} month${free === 1 ? '' : 's'} free`
+  }
+  // Whole rupees: an invoice line of ₹3,333.33 off reads like an error.
+  discount = Math.round(Math.min(discount, sub))
+  if (discount <= 0) return { coupon: null, error: 'That coupon does not apply to this plan.' }
+  return { coupon: { code, label, discount }, error: null }
+}
+
 export async function computePrice(
   supabase: SupabaseClient,
   rawPincodes: string[],
@@ -357,6 +487,8 @@ export async function computePrice(
   doctorCountHint?: number | null,
   /** care_modules codes the buyer ticked. Unknown or disabled codes are ignored. */
   requestedModules?: string[] | null,
+  /** 0117: the WhatsApp add-on and a coupon code. */
+  extra: { whatsapp?: boolean | null; couponCode?: string | null } = {},
 ): Promise<PriceResult> {
   const [plan, vb, taxSettings, recipientState, resolvedCount, moduleLines] = await Promise.all([
     resolveActivePlan(supabase),
@@ -384,7 +516,10 @@ export async function computePrice(
 
   // Terms depend on which plan resolved, so this cannot join the Promise.all
   // above. One indexed lookup on a two-row table.
-  const terms = await resolvePlanTerms(supabase, plan.code)
+  // A type's own price list wins over the single plan (0117).
+  const typeTerms = await resolveTypeTerms(supabase, vb.vertical)
+  const byType = typeTerms.length > 0
+  const terms = byType ? typeTerms : await resolvePlanTerms(supabase, plan.code)
   const months = resolveTermMonths(plan, terms, requestedMonths)
   const term = terms.find((t) => t.months === months) ?? null
 
@@ -395,10 +530,12 @@ export async function computePrice(
   const planCoversVertical = !plan.applies_to_verticals
     || plan.applies_to_verticals.includes(vb.vertical)
   const flatPlan = plan.mode !== 'pincode_tiers'
-  const monthlyApplies = planCoversVertical
-    && (vb.monthlyEnabled || (flatPlan && plan.suspend_commission))
+  const monthlyApplies = byType
+    ? (term?.price ?? 0) > 0
+    : planCoversVertical && (vb.monthlyEnabled || (flatPlan && plan.suspend_commission))
 
-  const commissionSuspended = plan.suspend_commission && planCoversVertical
+  // By type, commission is exactly what admin set for the type.
+  const commissionSuspended = !byType && plan.suspend_commission && planCoversVertical
   const commissionPercent = vb.commissionEnabled && !commissionSuspended ? vb.commissionPercent : 0
   const commissionBasis = commissionPercent > 0 ? vb.commissionBasis : null
 
@@ -406,9 +543,12 @@ export async function computePrice(
   // clinic dashboard also use — the three used to compute this separately, and
   // one of them went on quoting the superseded model.
   const hc = headcountFor(plan, doctorCount)
-  const doctorMultiplier = hc.multiplier
-  const extraDoctors = hc.extraDoctors
-  const extraDoctorCost = hc.extraCost
+  // By type: included doctors free, then a flat extra per doctor per month.
+  const typeExtraDoctors = byType ? Math.max(0, doctorCount - (vb.includedDoctors ?? 0)) : 0
+  const typeExtraCost = byType ? typeExtraDoctors * (vb.extraDoctorPrice ?? 0) : 0
+  const doctorMultiplier = byType ? 1 : hc.multiplier
+  const extraDoctors = byType ? typeExtraDoctors : hc.extraDoctors
+  const extraDoctorCost = byType ? typeExtraCost : hc.extraCost
 
   const planFields = {
     planCode: plan.code,
@@ -425,10 +565,10 @@ export async function computePrice(
     commissionBasis,
     commissionSuspended,
     doctorCount,
-    includedDoctors: plan.included_doctors,
+    includedDoctors: byType ? (vb.includedDoctors ?? 0) : plan.included_doctors,
     extraDoctors,
     extraDoctorCost,
-    doctorBilling: plan.doctor_billing,
+    doctorBilling: byType ? ((vb.extraDoctorPrice ?? 0) > 0 ? 'base_plus_extra' : 'none') : plan.doctor_billing,
     doctorMultiplier,
   }
 
@@ -443,6 +583,9 @@ export async function computePrice(
       monthlyTotal: 0, total: 0,
       tax: applyGst(0, taxSettings, recipientState),
       priceIncludesGst: plan.price_includes_gst,
+      pricingSource: byType ? 'type' : 'plan',
+      subscriptionTotal: 0, whatsappAvailable: byType, whatsappSelected: false, whatsappTotal: 0,
+      coupon: null, couponError: null, lineItems: [],
       ...planFields,
     }
   }
@@ -569,11 +712,43 @@ export async function computePrice(
   // this contributes nothing today, but a term price should not silently swallow
   // a module that is given a price again later.
   let termTotal: number
-  if (term && customMonthly === null && monthlyApplies) {
+  let subscriptionTotal = 0
+  let whatsappTotal = 0
+  let couponRes: { coupon: { code: string; label: string; discount: number } | null; error: string | null } =
+    { coupon: null, error: null }
+  const lineItems: LineItem[] = []
+  const whatsappSelected = byType && Boolean(extra.whatsapp)
+
+  if (byType) {
+    // Subscription for the term (a negotiated price still wins), the doctor
+    // extra, any modules, the WhatsApp add-on if chosen, less the coupon — which
+    // only ever touches the subscription.
+    subscriptionTotal = customMonthly !== null ? customMonthly * months : (term?.price ?? 0)
+    const doctorTotal = typeExtraCost * months
+    const moduleTermTotal = moduleTotal * months
+    whatsappTotal = whatsappSelected ? (term?.whatsapp_price ?? 0) : 0
+    couponRes = await resolveCoupon(supabase, extra.couponCode, { businessId: businessId ?? null, subscription: subscriptionTotal, months })
+    const discount = couponRes.coupon?.discount ?? 0
+
+    const termName = months === 1 ? '1 month' : `${months} months`
+    if (subscriptionTotal > 0) lineItems.push({ label: `Sehatsandhi subscription — ${termName}`, amount: subscriptionTotal })
+    if (doctorTotal > 0) lineItems.push({ label: `Additional doctors — ${typeExtraDoctors} × ₹${vb.extraDoctorPrice}/month × ${months}`, amount: doctorTotal })
+    if (moduleTermTotal > 0) lineItems.push({ label: `Clinical systems — ${termName}`, amount: moduleTermTotal })
+    if (whatsappTotal > 0) lineItems.push({ label: `WhatsApp Business Verification & Activation Fee — ${termName}`, amount: whatsappTotal })
+    if (discount > 0 && couponRes.coupon) lineItems.push({ label: `Coupon ${couponRes.coupon.label}`, amount: -discount })
+
+    termTotal = Math.max(0, subscriptionTotal + doctorTotal + moduleTermTotal + whatsappTotal - discount)
+  } else if (term && customMonthly === null && monthlyApplies) {
     const base = term.multiplies_headcount ? applyHeadcount(term.price, hc) : term.price
     termTotal = base + moduleTotal * months
   } else {
     termTotal = monthlyTotal * months
+  }
+  // The headline monthly rate: by type, the type's 1-month subscription.
+  if (byType) monthlyTotal = typeTerms.find(t => t.months === 1)?.price ?? Math.round(subscriptionTotal / months)
+  if (!byType) {
+    subscriptionTotal = termTotal
+    if (termTotal > 0) lineItems.push({ label: `Business listing services — ${months} month${months === 1 ? '' : 's'}`, amount: termTotal })
   }
 
   // Tax applies to the whole term, not one month, since the term is what gets
@@ -594,6 +769,14 @@ export async function computePrice(
     total: termTotal,
     tax,
     priceIncludesGst: plan.price_includes_gst,
+    pricingSource: byType ? 'type' : 'plan',
+    subscriptionTotal,
+    whatsappAvailable: byType,
+    whatsappSelected,
+    whatsappTotal,
+    coupon: couponRes.coupon,
+    couponError: couponRes.error,
+    lineItems,
     ...planFields,
   }
 }

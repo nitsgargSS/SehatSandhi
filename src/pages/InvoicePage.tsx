@@ -123,6 +123,14 @@ export default function InvoicePage() {
             </tr>
           </thead>
           <tbody>
+            {/* Itemised since 0117: subscription, WhatsApp add-on, coupon. */}
+            {invoice.line_items?.length ? invoice.line_items.map(li => (
+              <tr key={li.label} className="border-b border-gray-100">
+                <td className="py-2.5 text-gray-800">{li.label}</td>
+                <td className="py-2.5 font-mono text-xs text-gray-600">{invoice.sac_code || '—'}</td>
+                <td className="py-2.5 text-right text-gray-800">{li.amount < 0 ? `− ${money(-li.amount)}` : money(li.amount)}</td>
+              </tr>
+            )) : (
             <tr className="border-b border-gray-100">
               <td className="py-3 text-gray-800">
                 {invoice.description || 'Business listing services'}
@@ -136,6 +144,7 @@ export default function InvoicePage() {
               <td className="py-3 font-mono text-xs text-gray-600">{invoice.sac_code || '—'}</td>
               <td className="py-3 text-right text-gray-800">{money(invoice.taxable_value)}</td>
             </tr>
+            )}
           </tbody>
         </table>
 

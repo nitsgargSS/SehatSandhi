@@ -22,11 +22,30 @@
 // Response: { orderId, amount, currency, keyId, paymentRowId, monthlyTotal,
 //             periodMonths, total, tax, planCode, termStart, termEnd }
 //
-// Env: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+// ── WHO MAY ORDER FOR A BUSINESS ────────────────────────────────────────────
+// This used to trust businessId from the body. Anyone holding a business's id
+// could overwrite its GSTIN, legal name and billing address (written below,
+// before pricing) and pay to switch a suspended listing back on, because
+// fulfilment sets status 'active'. Now, before anything is written:
+//
+//   • signed in       → must be the business's owner or manager
+//   • anonymous       → only a brand-new signup: status 'pending', created in
+//                       the last SIGNUP_WINDOW_DAYS, never paid. Signup has no
+//                       login yet — registration sets no password — so this is
+//                       the one case an anonymous caller is legitimate.
+//   • service role    → allowed (scripts, server-side renewals)
+//   • suspended       → refused for everyone: an admin decision is not undone
+//                       by paying.
+//
+// Env: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+//      SUPABASE_ANON_KEY
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { computePrice } from '../_shared/pricing.ts'
+import { caller } from '../_shared/caller.ts'
+
+const SIGNUP_WINDOW_DAYS = 7
 
 /**
  * The GSTIN's own check digit, over the first 14 characters.
@@ -66,6 +85,7 @@ Deno.serve(async (req) => {
   let body: {
     pincodes?: unknown; businessId?: unknown; periodMonths?: unknown; modules?: unknown
     gstin?: unknown; gstLegalName?: unknown; billingAddress?: unknown
+    whatsapp?: unknown; couponCode?: unknown; autoRenew?: unknown
   }
   try {
     body = await req.json()
@@ -83,11 +103,40 @@ Deno.serve(async (req) => {
     : []
 
   if (!pincodes.length) return json({ error: 'no pincodes selected' }, 400)
+  if (!businessId) return json({ error: 'businessId required' }, 400)
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
+
+  // ── May this caller order for this business? (see the header) ───────────
+  const { data: biz, error: bizErr } = await supabase
+    .from('businesses').select('id, status, created_at').eq('id', businessId).maybeSingle()
+  if (bizErr) return json({ error: bizErr.message }, 500)
+  if (!biz) return json({ error: 'no such business' }, 404)
+  if (biz.status === 'suspended') {
+    return json({ error: 'This listing is suspended — please contact us.' }, 403)
+  }
+
+  const who = caller(req)
+  if (who && !who.isServiceRole) {
+    const { data: role, error: roleErr } = await who.asCaller
+      .rpc('sehat_caller_role', { p_business: businessId })
+    if (roleErr) return json({ error: roleErr.message }, 500)
+    if (role !== 'owner' && role !== 'manager') {
+      return json({ error: 'Only the business\u2019s owner or manager can pay for this listing.' }, 403)
+    }
+  } else if (!who) {
+    const ageDays = (Date.now() - new Date(biz.created_at).getTime()) / 86_400_000
+    const { count: paidCount, error: paidErr } = await supabase
+      .from('payments').select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId).eq('status', 'paid')
+    if (paidErr) return json({ error: paidErr.message }, 500)
+    if (biz.status !== 'pending' || ageDays > SIGNUP_WINDOW_DAYS || (paidCount ?? 0) > 0) {
+      return json({ error: 'Please log in to pay for this listing.' }, 401)
+    }
+  }
 
   // ── The buyer's own GST details, optional ────────────────────────────────
   // Written BEFORE the price is computed, because computePrice resolves the
@@ -99,7 +148,7 @@ Deno.serve(async (req) => {
   // invoice, and a business that cannot claim the input credit because of a
   // typo has paid 18% for nothing.
   const rawGstin = typeof body.gstin === 'string' ? body.gstin.trim().toUpperCase() : ''
-  if (rawGstin && businessId) {
+  if (rawGstin) {
     if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(rawGstin)) {
       return json({ error: 'That GSTIN is not 15 characters in the expected format.' }, 400)
     }
@@ -129,14 +178,22 @@ Deno.serve(async (req) => {
   // computePrice clamps the requested months to the plan's min/max.
   let priced
   try {
-    priced = await computePrice(supabase, pincodes, businessId, null, requestedMonths, null, requestedModules)
+    priced = await computePrice(supabase, pincodes, businessId, null, requestedMonths, null, requestedModules, {
+      whatsapp: body.whatsapp === true,
+      couponCode: typeof body.couponCode === 'string' ? body.couponCode.slice(0, 40) : null,
+    })
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500)
   }
 
-  // Nothing to charge: a commission-only vertical with no flat plan covering it.
-  // Refuse before writing a payments row so no half-finished order can exist.
-  if (!priced.monthlyApplies) {
+  // A coupon that was asked for and does not apply is an error, not a silent
+  // full-price charge.
+  if (priced.couponError) return json({ error: priced.couponError }, 400)
+
+  // Nothing to charge: a commission-only vertical with no flat plan covering it
+  // (and, by type, no WhatsApp add-on chosen). Refuse before writing a payments
+  // row so no half-finished order can exist.
+  if (!priced.monthlyApplies && !(priced.pricingSource === 'type' && priced.total > 0)) {
     return json({
       error: 'commission_vertical',
       message: priced.commissionPercent > 0
@@ -146,8 +203,10 @@ Deno.serve(async (req) => {
     }, 400)
   }
 
-  if (priced.monthlyTotal <= 0) {
-    return json({ error: 'selected pincodes have no billable price' }, 400)
+  if (priced.pricingSource === 'plan' ? priced.monthlyTotal <= 0 : priced.tax.grandTotal <= 0) {
+    return json({ error: priced.pricingSource === 'type'
+      ? 'Nothing to pay for this choice — a 100% coupon with no add-on needs no payment.'
+      : 'selected pincodes have no billable price' }, 400)
   }
 
   const months = priced.months
@@ -203,6 +262,14 @@ Deno.serve(async (req) => {
       igst_amount: priced.tax.igst,
       tax_total: priced.tax.taxTotal,
       place_of_supply: priced.tax.placeOfSupply,
+      // 0117: what exactly was bought, for the invoice lines and fulfilment.
+      subscription_amount: priced.subscriptionTotal,
+      whatsapp_addon: priced.whatsappSelected,
+      whatsapp_amount: priced.whatsappTotal,
+      coupon_code: priced.coupon?.code ?? null,
+      coupon_discount: priced.coupon?.discount ?? 0,
+      auto_renew: body.autoRenew === false ? false : true,
+      line_items: priced.lineItems,
     })
     .select('id')
     .single()
@@ -233,6 +300,14 @@ Deno.serve(async (req) => {
   }
 
   await supabase.from('payments').update({ razorpay_order_id: order.id }).eq('id', pay.id)
+
+  // The choice made here is also what renews next time, unless changed on the
+  // dashboard. Autopay is ticked unless they unticked it.
+  await supabase.from('businesses').update({
+    renewal_term_months: months,
+    renewal_whatsapp: priced.whatsappSelected,
+    auto_renew: body.autoRenew === false ? false : true,
+  }).eq('id', businessId)
 
   return json({
     orderId: order.id,

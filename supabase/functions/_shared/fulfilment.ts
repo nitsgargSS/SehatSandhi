@@ -21,6 +21,8 @@ export interface FulfilResult {
   invoiceNumber: string | null
   invoiceToken: string | null
   invoiceError: string | null
+  /** Set for a wallet top-up (0116): the balance after crediting it. */
+  walletBalancePaise?: number | null
   error?: string
 }
 
@@ -39,7 +41,7 @@ export async function fulfilPayment(
 
   const { data: existing } = await supabase
     .from('payments')
-    .select('id, status, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules')
+    .select('id, type, status, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon')
     .eq(paymentRowId ? 'id' : 'razorpay_order_id', paymentRowId ?? orderId)
     .maybeSingle()
 
@@ -52,10 +54,11 @@ export async function fulfilPayment(
   }
 
   const pay = existing as {
-    id: string; status: string; business_id: string | null
+    id: string; type: string; status: string; business_id: string | null
     pricing_plan_code: string | null; pricing_mode: string | null
     monthly_price: number | null; period_months: number | null
     term_start: string | null; term_end: string | null; modules: string[] | null
+    subscription_amount: number | string | null; whatsapp_addon: boolean | null
   }
   const alreadyPaid = pay.status === 'paid'
 
@@ -69,11 +72,28 @@ export async function fulfilPayment(
     }
   }
 
+  // A wallet top-up buys credit, not a listing: no plan lock, no listing
+  // invoice. Credit it — once, however many times this runs — and stop.
+  if (pay.type === 'wallet_topup') {
+    const { data: credit, error: cErr } = await supabase
+      .rpc('sehat_wallet_credit_topup', { p_payment_id: pay.id })
+    return {
+      ok: !cErr, alreadyPaid, businessId: pay.business_id,
+      invoiceNumber: null, invoiceToken: null, invoiceError: null,
+      walletBalancePaise: (credit as { balance_paise?: number } | null)?.balance_paise ?? null,
+      ...(cErr ? { error: `wallet credit: ${cErr.message}` } : {}),
+    }
+  }
+
   // Lock in what was sold. This is why a later plan toggle is safe: the plan,
   // price, mode and term are copied onto the listing, so re-pricing the platform
   // never re-prices a business mid-term. At term_end they are quoted whatever is
   // active then — see subscription_renewals_due.
-  if (pay.business_id) {
+  // A payment that bought only the WhatsApp add-on (0117: a commission-only
+  // pharmacy, say) must not switch the listing on past admin review, nor
+  // overwrite its plan. Legacy payments carry no subscription_amount: listing.
+  const boughtListing = pay.subscription_amount == null || Number(pay.subscription_amount) > 0
+  if (pay.business_id && boughtListing) {
     const bought = pay.modules ?? []
 
     // deno-lint-ignore no-explicit-any
@@ -111,6 +131,23 @@ export async function fulfilPayment(
     else invoice = inv as { invoice_number?: string; public_token?: string }
   } catch (e) {
     invoiceError = String((e as Error).message ?? e)
+  }
+
+  // 0117: count the coupon once, and switch the WhatsApp add-on on for the term.
+  // Both idempotent, so the second of verify/webhook changes nothing.
+  await supabase.rpc('sehat_redeem_coupon', { p_payment_id: pay.id })
+  if (pay.whatsapp_addon && pay.business_id) {
+    const { data: acct } = await supabase.from('business_wa_accounts')
+      .select('subscription_started_at, onboarding_fee_paid_at').eq('business_id', pay.business_id).maybeSingle()
+    const now = new Date().toISOString()
+    await supabase.from('business_wa_accounts').upsert({
+      business_id: pay.business_id,
+      subscription_status: 'active',
+      past_due_since: null,
+      next_billing_date: pay.term_end,
+      subscription_started_at: (acct as { subscription_started_at?: string } | null)?.subscription_started_at ?? now,
+      onboarding_fee_paid_at: (acct as { onboarding_fee_paid_at?: string } | null)?.onboarding_fee_paid_at ?? now,
+    }, { onConflict: 'business_id' })
   }
 
   // Best-effort delivery. A WhatsApp or email failure must never fail the
