@@ -14,6 +14,7 @@ import LanguageSwitcher from '../../components/LanguageSwitcher'
 import SandboxPanel from './SandboxPanel'
 import GstFilingPanel from './GstFilingPanel'
 import InsightsPanel from './InsightsPanel'
+import LeadsPanel from './LeadsPanel'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 
@@ -152,7 +153,7 @@ export default function AdminDashboard() {
   const [doctors, setDoctors] = useState<BusinessRow[]>([])
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'pending' | 'all' | 'camps' | 'coupons' | 'billing' | 'reports' | 'insights' | 'gst' | 'account' | 'sandbox'>('pending')
+  const [tab, setTab] = useState<'pending' | 'all' | 'leads' | 'camps' | 'coupons' | 'billing' | 'reports' | 'insights' | 'gst' | 'account' | 'sandbox'>('pending')
 
   // ── Platform reporting ──
   interface PlatformRow {
@@ -617,6 +618,7 @@ export default function AdminDashboard() {
               { id: 'pending', label: t('adminDashboardPage.navPendingPrefix'), count: pending.length, badge: pending.length > 0 },
               { id: 'all', label: t('adminDashboardPage.navAllDoctors'), count: 0, badge: false },
               { id: 'camps', label: t('adminDashboardPage.navCamps'), count: pendingCamps.length, badge: pendingCamps.length > 0 },
+              { id: 'leads', label: 'Leads', count: 0, badge: false },
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
               { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
               { id: 'reports', label: 'Reports', count: 0, badge: false },
@@ -1769,6 +1771,8 @@ export default function AdminDashboard() {
           {/* Filing gets its own tab rather than a section of Reports: Reports is
               read to decide something, this is read to type a return, and the
               two are done by different people at different times of the month. */}
+          {tab === 'leads' && <LeadsPanel />}
+
           {tab === 'insights' && <InsightsPanel />}
 
           {tab === 'gst' && <GstFilingPanel />}
