@@ -312,8 +312,7 @@ export const translations: Tree = {
 
   browsePage: {
     title: { en: 'Find a doctor near you', hi: 'अपने पास डॉक्टर ढूँढें' },
-    subtitle: { en: 'Pick your area, then what you need. Every listing is verified before it appears.', hi: 'अपना इलाका चुनें, फिर जो चाहिए वह चुनें। हर लिस्टिंग जाँच के बाद ही दिखती है।' },
-    areaLabel: { en: 'YOUR AREA', hi: 'आपका इलाका' },
+    subtitle: { en: 'Pick what you need and we will continue on WhatsApp — send your PIN code there and we show verified doctors near you.', hi: 'जो चाहिए वह चुनें, बाकी व्हाट्सएप पर — वहाँ अपना पिन कोड भेजें और हम आपके पास के जाँचे हुए डॉक्टर दिखा देंगे।' },
     specialityLabel: { en: 'WHAT DO YOU NEED?', hi: 'आपको क्या चाहिए?' },
   },
   specialityLandingPage: {

@@ -47,7 +47,7 @@ export default function SpecialityLanding() {
   // page exists for wherever we actually operate — see migration 0094 and the
   // note on usePublicAreas. `area` is null until the areas load, and the render
   // below already handles a missing area (an unknown slug did the same).
-  const { areas: publicAreas } = usePublicAreas()
+  const { areas: publicAreas, loading: areasLoading } = usePublicAreas()
   const area = publicAreas.find(p => slugify(p.area_name) === (areaSlug || '').toLowerCase()) ?? null
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function SpecialityLanding() {
 
   useEffect(() => {
     const load = async () => {
-      if (!speciality || !area) { setLoading(false); return }
+      if (!speciality || !area) { if (!areasLoading) setLoading(false); return }
       // Doctors, not listings. The old query filtered `doctors` — which was
       // really a table of businesses — by speciality, so a clinic matched only
       // if the one person who signed it up happened to practise what the patient
@@ -118,7 +118,10 @@ export default function SpecialityLanding() {
       setLoading(false)
     }
     load()
-  }, [specId, areaSlug]) // eslint-disable-line react-hooks/exhaustive-deps
+    // area?.pin_code, not just the slug: the areas arrive after first render, so
+    // keyed on the URL alone this ran once with area = null, gave up, and every
+    // page said "no doctors yet" whoever was listed.
+  }, [specId, areaSlug, area?.pin_code, areasLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const logNotifyMeClick = () => {
     if (!area || !speciality) return
@@ -131,6 +134,11 @@ export default function SpecialityLanding() {
       speciality: speciality.id,
       patient_wants_notification: true,
     })
+  }
+
+  // Still fetching the areas: not "not found" yet.
+  if (speciality && !area && areasLoading) {
+    return <div className="min-h-screen bg-gray-50"><PageShell style={{ paddingTop: 40 }}><DoctorListSkeleton rows={3} /></PageShell></div>
   }
 
   if (!speciality || !area) {
