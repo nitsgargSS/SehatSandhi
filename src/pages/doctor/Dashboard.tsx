@@ -1636,7 +1636,7 @@ export default function DoctorDashboard() {
         )}
 
         {tab === 'whatsapp' && doctor && (
-          <WhatsAppPanel businessId={doctor.id} businessName={doctor.name}
+          <WhatsAppPanel businessId={doctor.id} businessName={doctor.name} business={doctor}
             prefill={{ name: doctor.name, email: doctor.email ?? undefined, contact: doctor.phone ?? undefined }} />
         )}
 

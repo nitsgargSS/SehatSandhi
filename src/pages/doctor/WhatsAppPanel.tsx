@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { MessageCircle, Wallet, Send, CheckSquare, Square } from 'lucide-react'
 import { shortDate, dateTime } from '../../lib/format'
+import PayListingPanel from './PayListingPanel'
+import { Business } from '../../types'
 import {
+  WaAccess, getWaAccess,
   MarketingSettings, WaAccount, WalletTx, WaTemplate, AudienceMember, Broadcast,
   rupees, renderTemplate, getMarketingSettings, getWaAccount, getWallet, getBroadcastBlocker,
   getAudiencePins, getAudience, listTemplates, listBroadcasts, createBroadcast, topUpWallet,
@@ -25,10 +28,54 @@ const STATUS_TEXT: Record<string, string> = {
   inactive: 'Not active', active: 'Active', past_due: 'Payment due', paused: 'Paused',
 }
 
-export default function WhatsAppPanel({ businessId, businessName, prefill }: {
+export default function WhatsAppPanel({ businessId, businessName, prefill, business }: {
   businessId: string
   businessName: string
   prefill: { name?: string; email?: string; contact?: string }
+  /** For the renewal screen, which pays through the Plan tab's own panel. */
+  business: Business
+}) {
+  // 0122: add-on status first. Locked (7 days past the end of the paid term) or
+  // never bought → only the renewal screen. Nothing behind it is deleted.
+  const [access, setAccess] = useState<WaAccess | null>(null)
+  const [renewOpen, setRenewOpen] = useState(false)
+  useEffect(() => { getWaAccess(businessId).then(setAccess).catch(() => setAccess(null)) }, [businessId])
+
+  if (access && (access.state === 'locked' || access.state === 'none')) {
+    return (
+      <div className="space-y-4">
+        <div className={`rounded-xl px-4 py-3 text-sm border ${access.state === 'locked' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-teal-50 border-teal-200 text-teal-900'}`}>
+          {access.state === 'locked' ? (
+            <><b>WhatsApp marketing is paused.</b> Your WhatsApp plan ended on {access.expires_on ? shortDate(access.expires_on) : '—'} and
+            was not renewed. Renew below to pick up where you left off — your wallet balance, patients and past broadcasts are all kept.</>
+          ) : (
+            <><b>Add WhatsApp to your plan</b> to send camp, notice and health-tip messages to patients who agreed to hear from you.
+            It is charged with your plan every term; each message is paid separately from a wallet.</>
+          )}
+        </div>
+        <PayListingPanel business={business} canPay onPaid={() => window.location.reload()} />
+      </div>
+    )
+  }
+
+  return <WhatsAppWorkspace businessId={businessId} businessName={businessName} prefill={prefill}
+    banner={access?.state === 'grace' ? (
+      <div className="space-y-3">
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3 flex-wrap">
+          <span>Your WhatsApp plan ended on <b>{access.expires_on ? shortDate(access.expires_on) : '—'}</b>. It will be
+            deactivated on <b>{access.locks_on ? shortDate(access.locks_on) : '—'}</b> if not paid. Renew now to avoid interruption.</span>
+          <button onClick={() => setRenewOpen(v => !v)} className="btn-teal text-sm">{renewOpen ? 'Hide' : 'Renew now'}</button>
+        </div>
+        {renewOpen && <PayListingPanel business={business} canPay onPaid={() => window.location.reload()} />}
+      </div>
+    ) : null} />
+}
+
+function WhatsAppWorkspace({ businessId, businessName, prefill, banner }: {
+  businessId: string
+  businessName: string
+  prefill: { name?: string; email?: string; contact?: string }
+  banner: React.ReactNode
 }) {
   const [settings, setSettings] = useState<MarketingSettings | null>(null)
   const [account, setAccount] = useState<WaAccount | null>(null)
@@ -57,6 +104,7 @@ export default function WhatsAppPanel({ businessId, businessName, prefill }: {
 
   return (
     <div className="space-y-4">
+      {banner}
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>}
 
       {/* Status and prices */}
