@@ -196,11 +196,13 @@ export interface BuyerGstDetails {
   billingAddress?: string
 }
 
+// Signup calls this anonymously (no login exists yet); the dashboard passes the
+// owner's session token, which razorpay-order checks against the business.
 export const createRazorpayOrder = (
   pincodes: string[], businessId: string, periodMonths = 1,
-  modules: string[] = [], gst: BuyerGstDetails = {},
+  modules: string[] = [], gst: BuyerGstDetails = {}, authToken?: string,
 ) =>
-  callFn<RazorpayOrder>('razorpay-order', { pincodes, businessId, periodMonths, modules, ...gst })
+  callFn<RazorpayOrder>('razorpay-order', { pincodes, businessId, periodMonths, modules, ...gst }, authToken)
 
 export const verifyRazorpayPayment = (args: {
   orderId: string

@@ -13,6 +13,8 @@ import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientReco
 import RevenuePanel from './RevenuePanel'
 import PatientAreasPanel from './PatientAreasPanel'
 import WhatsAppPanel from './WhatsAppPanel'
+import PayListingPanel from './PayListingPanel'
+import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
 
@@ -183,6 +185,8 @@ export default function DoctorDashboard() {
   // Nagar one saw a name. Both call sites already fell back to the code, so an
   // empty map degrades to exactly what it always showed for an unknown pincode.
   const { areas: publicAreas } = usePublicAreas()
+  const { plan: pricingPlan, verticals: pricingVerticals } = usePricing()
+  const [showPay, setShowPay] = useState(false)
   const areaName = useMemo(
     () => new Map(publicAreas.map(a => [a.pin_code, a.area_name])),
     [publicAreas])
@@ -860,6 +864,24 @@ export default function DoctorDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, tab, tabIds])
 
+  // ── Unpaid listings ──────────────────────────────────────────────────────
+  // A business that owes a monthly fee and has not paid gets PAY_WINDOW_DAYS
+  // from registering to use the dashboard; after that everything except
+  // paying is shut until it pays (decided 25 Sep 2026). "Not paid" is status
+  // 'pending': payment (or an admin's approval) is what makes a listing
+  // active. Commission-only businesses never owe an upfront fee, so never lock.
+  // razorpay-order uses the same 7 days for paying at signup without a login.
+  //
+  // This is the screen, not the database: the listing is not public while
+  // pending anyway, and the API still answers a determined caller.
+  const PAY_WINDOW_DAYS = 7
+  const owesFee = !!doctor && doctor.status === 'pending'
+    && monthlyAppliesTo(pricingPlan, pricingVerticals.find(v => v.vertical === doctor.vertical))
+  const payDaysLeft = doctor
+    ? Math.ceil(PAY_WINDOW_DAYS - (Date.now() - new Date(doctor.created_at).getTime()) / 86_400_000)
+    : 0
+  const payLocked = owesFee && payDaysLeft <= 0
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
@@ -912,6 +934,24 @@ export default function DoctorDashboard() {
     </div>
   )
 
+
+  if (payLocked) return (
+    <div style={{ background: BIZ.cream, minHeight: '100vh' }} className="px-4 py-8">
+      <div className="max-w-xl mx-auto space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <img src="/logo-tight.png" alt="Sehatsandhi" style={{ height: 48, width: 'auto' }} />
+          <button onClick={logout} className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1.5">
+            <LogOut className="w-4 h-4" /> Log out
+          </button>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-3 text-sm">
+          <b>{doctor.name}</b> has not been paid for. The {PAY_WINDOW_DAYS}-day window after registering has ended,
+          so the dashboard is paused until the listing is paid. Everything you entered is kept.
+        </div>
+        <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />
+      </div>
+    </div>
+  )
 
   // Same shell as the /business/register wizard: dark ink rail down the left
   // holding the nav, cream content pane beside it. The rail replaces what used
@@ -1090,6 +1130,20 @@ export default function DoctorDashboard() {
             </div>
           ))}
         </div>
+
+        {/* Still inside the pay window: say how long is left before the lock. */}
+        {owesFee && !payLocked && (
+          <div className="mb-5 space-y-3">
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3 flex-wrap">
+              <span>
+                Your listing is not paid yet. Pay within <b>{payDaysLeft} day{payDaysLeft === 1 ? '' : 's'}</b> to
+                keep using the dashboard; after that only payment will be available.
+              </span>
+              <button onClick={() => setShowPay(v => !v)} className="btn-teal text-sm">{showPay ? 'Hide' : 'Pay now'}</button>
+            </div>
+            {showPay && <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />}
+          </div>
+        )}
 
         {/* ══════════ TODAY (default) — today's slot grid + recent appointments ══════════ */}
         {tab === 'today' && (
