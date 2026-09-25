@@ -345,6 +345,15 @@ tables:
     class: isolated
     purgeOrder: 150
 
+  # Doctor leads, the admin CRM (0115). Notes before their lead.
+  doctor_lead_notes:
+    class: isolated
+    purgeOrder: 158
+
+  doctor_leads:
+    class: isolated
+    purgeOrder: 159
+
   # Every WhatsApp bot search (0111). Test searches are test data.
   bot_search_log:
     class: isolated
