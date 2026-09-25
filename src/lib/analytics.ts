@@ -72,7 +72,20 @@ function referrerHost(): string | null {
 }
 
 /** Honour Do Not Track. These numbers are not worth overriding someone's choice. */
+// Crawlers, link previewers and automated browsers. Google's crawler runs the
+// page's JavaScript, so without this it is counted as a visitor from a US data
+// centre. The server also refuses data-centre networks (record-visitor-location).
+const BOT_UA = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|preview|facebookexternalhit|whatsapp\/|googleother|embedly|vercel|uptime|monitor|curl|wget|python|axios|node-fetch/i
+
+export function isBot(): boolean {
+  try {
+    if ((navigator as unknown as { webdriver?: boolean }).webdriver) return true
+    return BOT_UA.test(navigator.userAgent || '')
+  } catch { return false }
+}
+
 export function optedOut(): boolean {
+  if (isBot()) return true
   const dnt = (navigator as unknown as { doNotTrack?: string }).doNotTrack
     ?? (window as unknown as { doNotTrack?: string }).doNotTrack
   return dnt === '1' || dnt === 'yes'
