@@ -18,6 +18,9 @@ interface Post {
   pin_codes: string[]
   consultation_fee: number
   is_primary: boolean
+  /** 0136 */
+  discounted_fee?: number | null
+  reg_verified?: boolean
 }
 
 interface RatingAgg {
@@ -218,7 +221,12 @@ export default function DoctorProfile() {
             <div className="flex items-start justify-between flex-wrap gap-2 mb-1">
               <div>
                 <h1 className="text-2xl font-bold text-navy-700">{doctor.full_name}</h1>
-                <p className="text-gray-500 text-sm">{doctor.qualification}</p>
+                <p className="text-gray-500 text-sm">
+                  {doctor.qualification}
+                  {posts.some(x => x.reg_verified) && (
+                    <span className="text-teal-600 ml-2" title="Registration number checked">✓ Registered doctor</span>
+                  )}
+                </p>
               </div>
               <div className="flex flex-col items-end gap-1.5">
                 <span className="flex items-center gap-1.5 bg-teal-50 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-full text-xs font-medium">
@@ -278,7 +286,11 @@ export default function DoctorProfile() {
                         </p>
                         {b.address && <p className="text-xs text-gray-500">{b.address}</p>}
                         {b.consultation_fee > 0 && (
-                          <p className="text-xs text-gray-500">₹{b.consultation_fee} consultation</p>
+                          <p className="text-xs text-gray-500">
+                            {b.discounted_fee != null && b.discounted_fee < b.consultation_fee
+                              ? <><s className="text-gray-400">₹{b.consultation_fee}</s> <b className="text-teal-700">₹{b.discounted_fee}</b> consultation</>
+                              : <>₹{b.consultation_fee} consultation</>}
+                          </p>
                         )}
                       </div>
                     ))

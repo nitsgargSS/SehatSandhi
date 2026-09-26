@@ -662,6 +662,40 @@ export default function AdminDashboard() {
     </select>
   )
 
+  // 0136: the doctor's registration number, checked by hand against the NMC
+  // register. Confirmed or matched shows ✓ in the bot; no match takes the doctor
+  // off the bot and the website until corrected.
+  const setImr = async (doc: Practitioner, status: 'confirmed' | 'no_match' | 'unchecked') => {
+    setSpecBusy(doc.id)
+    const { error } = await supabase.from('practitioners')
+      .update({ imr_status: status, imr_checked_at: new Date().toISOString() }).eq('id', doc.id)
+    setSpecBusy(null)
+    if (error) { setActionMsg(`Could not update ${doc.full_name}: ${error.message}`); return }
+    setActionMsg(`✓ ${doc.full_name}: registration ${status === 'confirmed' ? 'confirmed' : status === 'no_match' ? 'marked wrong — hidden from the bot and website' : 'reset'}`)
+    load(); setTimeout(() => setActionMsg(''), 3000)
+  }
+  const RegCheck = ({ p }: { p: Practitioner }) => {
+    const st = p.imr_status ?? 'unchecked'
+    const label = st === 'confirmed' ? '✓ reg. confirmed' : st === 'matched' ? '✓ from register' : st === 'no_match' ? '✗ reg. wrong — hidden' : 'reg. not checked'
+    const color = st === 'confirmed' || st === 'matched' ? 'text-teal-600' : st === 'no_match' ? 'text-red-600' : 'text-amber-700'
+    return (
+      <div className="text-[11px] mt-1 flex flex-wrap gap-x-2 items-center">
+        <span className="text-gray-500">{p.reg_number ? `Reg ${p.reg_number}` : 'no reg. number'}</span>
+        <span className={color}>{label}</span>
+        {st !== 'confirmed' && (
+          <button disabled={specBusy === p.id} onClick={() => setImr(p, 'confirmed')} className="underline text-teal-700">Confirm</button>
+        )}
+        {st !== 'no_match' && (
+          <button disabled={specBusy === p.id} onClick={() => setImr(p, 'no_match')} className="underline text-red-600">No match</button>
+        )}
+        {st === 'no_match' && (
+          <button disabled={specBusy === p.id} onClick={() => setImr(p, 'unchecked')} className="underline text-gray-600">Undo</button>
+        )}
+        <a href="https://www.nmc.org.in/information-desk/indian-medical-register/" target="_blank" rel="noreferrer" className="underline text-gray-500">Check on NMC</a>
+      </div>
+    )
+  }
+
   // Pharmacies, labs and the rest have no doctors: their type is what patients
   // search by, so it is shown as text.
   const SpecialityCell = ({ d }: { d: BusinessRow }) => {
@@ -673,6 +707,7 @@ export default function AdminDashboard() {
           <div key={p.id}>
             {docs.length > 1 && <p className="text-[11px] text-gray-400 truncate">{p.full_name}</p>}
             <SpecialitySelect d={p} />
+            <RegCheck p={p} />
           </div>
         ))}
       </div>

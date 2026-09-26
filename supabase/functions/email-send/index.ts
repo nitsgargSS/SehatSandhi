@@ -7,6 +7,7 @@
 //
 //   business_welcome     → the business's own address
 //   admin_new_business   → ADMIN_EMAIL (admin@sehatsandhi.com)
+//   clinic_new_booking   → the business's address, and the doctor's if different (0136)
 //
 // Until ZEPTOMAIL_TOKEN is set nothing is sent and rows wait. A welcome still
 // waiting after two days is skipped rather than sent late; the admin alert is
@@ -18,7 +19,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
-import { ADMIN_EMAIL, type Email, emailConfigured, esc, layout, sendEmail } from '../_shared/email.ts'
+import { ADMIN_EMAIL, type Email, emailConfigured, esc, layout, sendEmail, type SendResult } from '../_shared/email.ts'
 
 const BATCH = 20
 const MAX_ATTEMPTS = 5
@@ -55,7 +56,7 @@ Deno.serve(async (req) => {
 
   const cutoff = new Date(Date.now() - 60_000).toISOString()
   const { data: rows, error } = await db.from('email_outbox')
-    .select('id, kind, business_id, attempts, created_at')
+    .select('id, kind, business_id, appointment_id, attempts, created_at')
     .eq('status', 'pending').lte('created_at', cutoff)
     .order('created_at').limit(BATCH)
   if (error) return json({ error: error.message }, 500)
@@ -77,6 +78,17 @@ Deno.serve(async (req) => {
 
     if (r.kind === 'business_welcome' && Date.now() - Date.parse(r.created_at) > WELCOME_STALE_MS) {
       await finish({ status: 'skipped', last_error: 'welcome older than two days' })
+      continue
+    }
+
+    if (r.kind === 'clinic_new_booking') {
+      const res = await sendBooking(db, r.appointment_id, site)
+      if (res === 'skip') { await finish({ status: 'skipped', last_error: 'appointment gone or no address' }); continue }
+      if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
+      else {
+        const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
+        await finish({ status: giveUp ? 'failed' : 'pending', last_error: res.error }); failed++
+      }
       continue
     }
 
@@ -169,4 +181,48 @@ ${rows.map(([k, v]) => `<tr><td style="padding:6px 10px 6px 0;color:#5b6b63;vert
 <p style="margin:16px 0 0;color:#5b6b63;font-size:13px">Review it in the admin panel → Pending.</p>`)
   const text = [`New registration: ${b.name}`, '', ...rows.map(([k, v]) => `${k}: ${v}`), '', 'Review it in the admin panel → Pending.'].join('\n')
   return { to: ADMIN_EMAIL, toName: 'Sehatsandhi Admin', subject: `New ${typeLabel(b.vertical).toLowerCase()} registered: ${b.name}${b.own_city ? `, ${b.own_city}` : ''}`, html, text }
+}
+
+// A new booking (0136): to the clinic, and to the doctor when they have their
+// own address. Until WhatsApp works this is how a clinic hears about a bot
+// booking without keeping the dashboard open.
+// deno-lint-ignore no-explicit-any
+async function sendBooking(db: any, appointmentId: string | null, site: string): Promise<SendResult | 'skip'> {
+  if (!appointmentId) return 'skip'
+  const { data: a } = await db.from('appointments')
+    .select('id, business_id, practitioner_id, slot_datetime, patient_name, patient_phone, patient_age, booked_via, status')
+    .eq('id', appointmentId).maybeSingle()
+  if (!a || !['booked', 'confirmed'].includes(a.status)) return 'skip'
+  const { data: b } = await db.from('businesses').select('name, email').eq('id', a.business_id).maybeSingle()
+  const { data: p } = a.practitioner_id
+    ? await db.from('practitioners').select('full_name, email').eq('id', a.practitioner_id).maybeSingle()
+    : { data: null }
+  const to = [b?.email, p?.email].map(e => (e ?? '').trim().toLowerCase()).filter(e => e.includes('@'))
+  const recipients = Array.from(new Set(to))
+  if (!recipients.length) return 'skip'
+
+  const when = new Date(a.slot_datetime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
+  const via = a.booked_via === 'whatsapp_bot' ? 'WhatsApp' : a.booked_via === 'website' ? 'the website' : (a.booked_via ?? 'Sehatsandhi')
+  const rows: [string, string][] = [
+    ['When', when],
+    ['Patient', `${a.patient_name ?? '—'}${a.patient_age ? `, ${a.patient_age}y` : ''}`],
+    ['Mobile', a.patient_phone ?? '—'],
+    ['Doctor', p?.full_name ?? 'Any doctor'],
+    ['Booked via', via],
+  ]
+  const dash = `${site}/business/dashboard`
+  const html = layout(`New appointment: ${when}`, `
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:14px;border-collapse:collapse">
+${rows.map(([k, v]) => `<tr><td style="padding:6px 10px 6px 0;color:#5b6b63;white-space:nowrap">${esc(k)}</td><td style="padding:6px 0;border-bottom:1px solid #eef2ef">${esc(v)}</td></tr>`).join('')}
+</table>
+<p style="margin:16px 0 0"><a href="${dash}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:bold">Open your dashboard</a></p>
+<p style="margin:12px 0 0;color:#5b6b63;font-size:13px">Please call the patient if the time does not work. WhatsApp confirmations to patients are not switched on yet.</p>`)
+  const text = [`New appointment at ${b?.name ?? 'your clinic'}`, '', ...rows.map(([k, v]) => `${k}: ${v}`), '', `Dashboard: ${dash}`].join('\n')
+
+  let last: SendResult = { ok: true }
+  for (const addr of recipients) {
+    last = await sendEmail({ to: addr, toName: b?.name ?? undefined, subject: `New appointment — ${a.patient_name ?? 'patient'}, ${when}`, html, text })
+    if (!last.ok) return last
+  }
+  return last
 }
