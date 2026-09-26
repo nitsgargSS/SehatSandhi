@@ -16,6 +16,7 @@ import WhatsAppPanel from './WhatsAppPanel'
 import PayListingPanel from './PayListingPanel'
 import { MyPractice, DoctorsOverview, OpdFee } from './DoctorWorkspace'
 import LetterheadSettings from './LetterheadSettings'
+import ClinicQrCard from './ClinicQrCard'
 import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
 import PublicProfileEditor from './PublicProfileEditor'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
@@ -1905,6 +1906,10 @@ export default function DoctorDashboard() {
 
         {tab === 'clinic' && (
           <div className="space-y-4">
+            {doctor && (
+              <ClinicQrCard businessId={doctor.id} name={doctor.name}
+                code={(doctor as typeof doctor & { qr_code?: string | null }).qr_code ?? null} />
+            )}
             {doctor && (
               <LetterheadSettings businessId={doctor.id}
                 current={(doctor as typeof doctor & { letterhead_url?: string | null }).letterhead_url ?? null}

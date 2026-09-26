@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { clinicWaLink, qrDataUrl } from '../../lib/qr'
 
 // The OPD slip (0135), printed at the desk or by the nurse before the patient
 // goes in: the hospital's banner, the token, the doctor, what was charged, and
@@ -11,7 +12,8 @@ import { supabase } from '../../lib/supabase'
 
 interface Slip {
   clinic: { name: string; address: string | null; phone: string | null; email: string | null
-            reg_number: string | null; gstin: string | null; letterhead_url: string | null }
+            reg_number: string | null; gstin: string | null; letterhead_url: string | null
+            qr_code?: string | null; wa_number?: string | null }
   token: { number: number; date: string; issued_at: string; reason: string | null; priority: number; priority_reason: string | null }
   doctor: { name: string; speciality: string | null; qualification: string | null; reg_number: string | null } | null
   patient: { name: string; age: number | null; gender: string | null; blood_group: string | null
@@ -45,6 +47,12 @@ export default function OpdSlipPage() {
   const { id } = useParams()
   const [slip, setSlip] = useState<Slip | null>(null)
   const [err, setErr] = useState('')
+  // 0142: the clinic's QR code at the foot — follow-ups and reports on WhatsApp.
+  const [qr, setQr] = useState<string | null>(null)
+  useEffect(() => {
+    const c = slip?.clinic
+    if (c?.qr_code) qrDataUrl(clinicWaLink(c.wa_number ?? '917015399355', c.qr_code, c.name), 240).then(setQr)
+  }, [slip])
 
   useEffect(() => {
     if (!id) return
@@ -155,8 +163,14 @@ export default function OpdSlipPage() {
           <div style={{ fontSize: 13, fontWeight: 800 }}>Clinical notes / Rx</div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28, fontSize: 12.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 28, fontSize: 12.5, gap: 12 }}>
           <span>Next visit: ____________</span>
+          {qr && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+              <img src={qr} alt="" style={{ width: 64, height: 64 }} />
+              <span>Book your next visit<br />on WhatsApp</span>
+            </span>
+          )}
           <span>Doctor's signature: ____________________</span>
         </div>
       </div>
