@@ -41,7 +41,7 @@ export async function fulfilPayment(
 
   const { data: existing } = await supabase
     .from('payments')
-    .select('id, type, status, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon')
+    .select('id, type, status, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon, addon_practitioner_id')
     .eq(paymentRowId ? 'id' : 'razorpay_order_id', paymentRowId ?? orderId)
     .maybeSingle()
 
@@ -59,6 +59,7 @@ export async function fulfilPayment(
     monthly_price: number | null; period_months: number | null
     term_start: string | null; term_end: string | null; modules: string[] | null
     subscription_amount: number | string | null; whatsapp_addon: boolean | null
+    addon_practitioner_id?: string | null
   }
   const alreadyPaid = pay.status === 'paid'
 
@@ -131,6 +132,11 @@ export async function fulfilPayment(
     else invoice = inv as { invoice_number?: string; public_token?: string }
   } catch (e) {
     invoiceError = String((e as Error).message ?? e)
+  }
+
+  // 0140: a doctor added mid-term goes live once their pro-rata fee is paid.
+  if (pay.addon_practitioner_id && pay.business_id) {
+    await supabase.rpc('sehat_release_paid_doctor', { p_business: pay.business_id, p_practitioner: pay.addon_practitioner_id })
   }
 
   // 0117: count the coupon once, and switch the WhatsApp add-on on for the term.

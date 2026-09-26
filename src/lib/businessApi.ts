@@ -328,3 +328,17 @@ export const phoneVerify = async (action: 'status' | 'send' | 'verify', phone?: 
   return callFn<{ enabled?: boolean; ok?: boolean; verified?: boolean }>(
     'phone-verify', { action, phone, code }, session?.access_token)
 }
+
+export interface DoctorAddonQuote {
+  ok: true; doctor: string; perMonth: number; termMonths: number; termLabel: string; termEnd: string
+  daysLeft: number; daysInTerm: number; fullTerm: number; amount: number
+  tax: { taxableValue: number; taxTotal: number; grandTotal: number; rate: number; applied: boolean }
+  orderId?: string; amountPaise?: number; currency?: string; keyId?: string; paymentRowId?: string
+}
+
+/** A doctor added mid-term (0140): their extra fee pro rata to the plan's end. */
+export const doctorAddon = async (businessId: string, practitionerId: string, action: 'quote' | 'order') => {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Please sign in again.')
+  return callFn<DoctorAddonQuote>('doctor-addon-order', { businessId, practitionerId, action }, session.access_token)
+}

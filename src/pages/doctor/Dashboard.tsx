@@ -16,6 +16,7 @@ import WhatsAppPanel from './WhatsAppPanel'
 import PayListingPanel from './PayListingPanel'
 import { MyPractice, DoctorsOverview, OpdFee } from './DoctorWorkspace'
 import LetterheadSettings from './LetterheadSettings'
+import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
 import PublicProfileEditor from './PublicProfileEditor'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
@@ -234,6 +235,8 @@ export default function DoctorDashboard() {
     is_primary: boolean
     consultation_fee: number
     status: string
+    /** 0140: added mid-term past the included doctors; live once paid. */
+    awaiting_payment?: boolean
     practitioners: {
       id: string; full_name: string; speciality: string | null
       qualification: string | null; reg_number: string | null; status: string
@@ -260,6 +263,42 @@ export default function DoctorDashboard() {
   // 0139: invite a doctor to log in and set up their profile.
   const [emailFor, setEmailFor] = useState<string | null>(null)
   const [emailDraft, setEmailDraft] = useState('')
+  // 0140: pay for a doctor added mid-term, pro rata to the plan's end.
+  const [addonQuote, setAddonQuote] = useState<Record<string, DoctorAddonQuote>>({})
+  const quoteAddon = async (practitionerId: string) => {
+    if (!doctor) return
+    try {
+      const q = await doctorAddon(doctor.id, practitionerId, 'quote')
+      setAddonQuote(m => ({ ...m, [practitionerId]: q }))
+    } catch (e) {
+      const msg = (e as Error).message
+      if (/released|no extra fee/i.test(msg)) { await loadRoster(doctor.id); setRosterErr('✓ No extra fee is due — the doctor is live.') }
+      else setRosterErr(msg)
+    }
+  }
+  const payAddon = async (practitionerId: string) => {
+    if (!doctor) return
+    setRosterBusy(true); setRosterErr('')
+    try {
+      const order = await doctorAddon(doctor.id, practitionerId, 'order')
+      await loadRazorpayCheckout()
+      const Razorpay = (window as unknown as { Razorpay: new (o: unknown) => { open: () => void } }).Razorpay
+      new Razorpay({
+        key: order.keyId, amount: order.amountPaise, currency: order.currency, order_id: order.orderId,
+        name: 'Sehatsandhi Business', description: `${doctor.name} · ${order.doctor} until ${shortDate(order.termEnd)}`,
+        prefill: { name: doctor.name, email: doctor.email || undefined },
+        remember_customer: false,
+        modal: { ondismiss: () => setRosterBusy(false) },
+        handler: async (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          const v = await verifyRazorpayPayment({ orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id, signature: r.razorpay_signature, paymentRowId: order.paymentRowId })
+          setRosterBusy(false)
+          if (v.ok) { setRosterErr(`✓ Paid. ${order.doctor} is live.`); await loadRoster(doctor.id) }
+          else setRosterErr('Payment could not be verified. If money was deducted, our team will reconcile it.')
+        },
+      }).open()
+    } catch (e) { setRosterErr((e as Error).message); setRosterBusy(false) }
+  }
+
   const inviteDoctor = async (practitionerId: string, name: string) => {
     if (!doctor) return
     setRosterErr('')
@@ -365,7 +404,15 @@ export default function DoctorDashboard() {
   // the signup wizard also use. Computing it here separately is what let this
   // panel go on quoting a superseded model.
   const hc = plan ? headcountFor(plan, billableDoctors) : null
-  const marginalCost = plan ? marginalDoctorCost(plan, billableDoctors) : 0
+  // The business type's own extra-doctor price (0140) — what is actually
+  // charged — with the pricing plan's rule as a fallback on an older database.
+  const [typeMarginal, setTypeMarginal] = useState<number | null>(null)
+  useEffect(() => {
+    if (!showAddDoc || !doctor) return
+    supabase.rpc('sehat_extra_doctor_monthly', { p_business: doctor.id, p_practitioner: '00000000-0000-0000-0000-000000000000' })
+      .then(({ data, error }) => setTypeMarginal(error ? null : Number(data ?? 0)))
+  }, [showAddDoc, doctor, roster.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const marginalCost = typeMarginal ?? (plan ? marginalDoctorCost(plan, billableDoctors) : 0)
   const headcountSentence = plan ? describeHeadcount(plan, billableDoctors) : null
 
   const [gstinDraft, setGstinDraft] = useState('')
@@ -1954,7 +2001,8 @@ export default function DoctorDashboard() {
                     {marginalCost > 0 && docForm.role === 'doctor' && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
                         Adding this doctor takes you to {billableDoctors + 1}, which adds
-                        {money(marginalCost)}/month from your next renewal.
+                        {money(marginalCost)}/month. If your plan is running, you pay that for the days left in
+                        this term before they go live; from your next renewal it is part of your plan.
                       </p>
                     )}
                     <div className="flex gap-2">
@@ -2001,6 +2049,19 @@ export default function DoctorDashboard() {
                               : (ROSTER_ROLES.find(r => r[0] === d.role)?.[1] ?? d.role)}
                             {d.role === 'doctor' && person?.qualification ? ` · ${person.qualification}` : ''}
                             {d.role === 'doctor' && d.consultation_fee > 0 ? ` · ₹${d.consultation_fee} here` : ''}
+                            {d.awaiting_payment && !suspended && (
+                              <span className="block mt-1 text-amber-800">
+                                <span className="font-bold">Payment pending</span> — not live until paid.{' '}
+                                {addonQuote[d.practitioner_id] ? (
+                                  <button disabled={rosterBusy} onClick={() => payAddon(d.practitioner_id)} className="underline font-medium text-teal-700">
+                                    Pay {money(addonQuote[d.practitioner_id].tax.grandTotal)} to activate
+                                    {' '}({money(addonQuote[d.practitioner_id].perMonth)}/month × {addonQuote[d.practitioner_id].daysLeft} of {addonQuote[d.practitioner_id].daysInTerm} days, incl. GST)
+                                  </button>
+                                ) : (
+                                  <button onClick={() => quoteAddon(d.practitioner_id)} className="underline font-medium text-teal-700">See amount</button>
+                                )}
+                              </span>
+                            )}
                             {d.role === 'doctor' && !suspended && (
                               <button onClick={() => setFeeFor(feeFor === d.practitioner_id ? null : d.practitioner_id)}
                                 className="ml-2 text-teal-700 underline font-medium">
