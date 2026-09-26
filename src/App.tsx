@@ -20,6 +20,7 @@ import PasswordGate from './components/PasswordGate'
 import { fetchPasswordState, mustChangeNow } from './lib/passwordState'
 const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
 const OpdSlipPage = lazy(() => import('./pages/doctor/OpdSlipPage'))
+const QrPosterPage = lazy(() => import('./pages/doctor/QrPosterPage'))
 const PharmacyBillPage = lazy(() => import('./pages/doctor/PharmacyBillPage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
@@ -190,6 +191,7 @@ export default function App() {
           <Route path="/business/login" element={<DoctorLogin />} />
           <Route path="/business/dashboard" element={<PasswordGate><DoctorDashboard /></PasswordGate>} />
           <Route path="/business/print/opd/:id" element={<PasswordGate><OpdSlipPage /></PasswordGate>} />
+          <Route path="/business/print/qr/:id" element={<PasswordGate><QrPosterPage /></PasswordGate>} />
           <Route path="/business/print/pharmacy/:id" element={<PasswordGate><PharmacyBillPage /></PasswordGate>} />
 
           {/* Presentation view of the WhatsApp booking journey, for showing
