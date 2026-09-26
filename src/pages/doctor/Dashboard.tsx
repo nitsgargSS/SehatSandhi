@@ -16,6 +16,7 @@ import WhatsAppPanel from './WhatsAppPanel'
 import PayListingPanel from './PayListingPanel'
 import { MyPractice, DoctorsOverview, OpdFee } from './DoctorWorkspace'
 import LetterheadSettings from './LetterheadSettings'
+import PublicProfileEditor from './PublicProfileEditor'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
@@ -1978,7 +1979,7 @@ export default function DoctorDashboard() {
                             {d.role === 'doctor' && !suspended && (
                               <button onClick={() => setFeeFor(feeFor === d.practitioner_id ? null : d.practitioner_id)}
                                 className="ml-2 text-teal-700 underline font-medium">
-                                {feeFor === d.practitioner_id ? 'Close' : 'OPD fee & discount'}
+                                {feeFor === d.practitioner_id ? 'Close' : 'Fee & public profile'}
                               </button>
                             )}
                             {suspended ? ' · not on your bill' : ''}
@@ -1988,7 +1989,10 @@ export default function DoctorDashboard() {
                             {!person?.phone && ' · no number — cannot sign in'}
                           </div>
                           {feeFor === d.practitioner_id && doctor && (
-                            <div className="mt-2"><OpdFee businessId={doctor.id} practitionerId={d.practitioner_id} /></div>
+                            <div className="mt-2 space-y-3">
+                              <OpdFee businessId={doctor.id} practitionerId={d.practitioner_id} />
+                              <PublicProfileEditor practitionerId={d.practitioner_id} />
+                            </div>
                           )}
                         </div>
                         {!suspended && (

@@ -6,6 +6,7 @@ import {
   getDoctorPerformance, getDoctorPatients, DoctorPerformanceRow, DoctorPatientRow, getDiscounts, DiscountRow,
 } from '../../lib/doctorsApi'
 import RevenuePanel from './RevenuePanel'
+import PublicProfileEditor from './PublicProfileEditor'
 
 // One hospital, many doctors (0121). All patients live in the business; every
 // visit, admission, prescription, token and charge says which doctor it is for.
@@ -297,6 +298,7 @@ export function MyPractice({ businessId, practitionerId, doctorName, onOpenPatie
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Tiles r={row} />
       <OpdFee businessId={businessId} practitionerId={practitionerId} />
+      <PublicProfileEditor practitionerId={practitionerId} />
       <TodayAppointments businessId={businessId} practitionerId={practitionerId} />
       <PatientList businessId={businessId} practitionerId={practitionerId} onOpenPatient={onOpenPatient} />
       <RevenuePanel businessId={businessId} practitionerId={practitionerId}
