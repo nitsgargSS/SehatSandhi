@@ -130,3 +130,42 @@ export const inProgress = (board: QueueEntry[]): QueueEntry[] =>
 /** Done, skipped or gone. What the day looked like. */
 export const finished = (board: QueueEntry[]): QueueEntry[] =>
   board.filter(e => ['completed', 'skipped', 'left'].includes(e.status))
+
+// ── 0135: an OPD visit in one step, the patient's history, the slip ────────
+
+export interface OpdVisitInput {
+  businessId: string
+  patientMemberId: string
+  practitionerId: string | null
+  /** null = the doctor's fee from the system; 0 = free. */
+  fee?: number | null
+  discountReason?: string | null
+  reason?: string | null
+  priority?: number
+  priorityReason?: string | null
+}
+
+export async function opdVisit(i: OpdVisitInput): Promise<{ queue_id: string; token_number: number; fee: number; list_price: number | null }> {
+  const { data, error } = await supabase.rpc('sehat_opd_visit', {
+    p_business: i.businessId, p_member: i.patientMemberId, p_practitioner: i.practitionerId,
+    p_fee: i.fee ?? null, p_discount_reason: i.discountReason || null, p_reason: i.reason || null,
+    p_priority: i.priority ?? 0, p_priority_reason: i.priorityReason || null,
+  })
+  if (error) {
+    throw new Error(error.message.includes('already has a live token')
+      ? 'That patient already has a token in this line today.'
+      : error.message)
+  }
+  return data as { queue_id: string; token_number: number; fee: number; list_price: number | null }
+}
+
+export interface HistoryRow { seen_on: string; kind: string; doctor_id: string | null; doctor_name: string | null; detail: string }
+
+export async function patientHistory(businessId: string, memberId: string): Promise<HistoryRow[]> {
+  const { data, error } = await supabase.rpc('sehat_patient_history', { p_business: businessId, p_member: memberId })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as HistoryRow[]
+}
+
+/** The printable OPD slip for a token. Opens in a new tab. */
+export const opdSlipUrl = (queueId: string) => `/business/print/opd/${queueId}`

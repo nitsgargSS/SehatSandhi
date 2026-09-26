@@ -77,9 +77,16 @@ export default function PrescriptionPage() {
         {/* Prescriber. A prescription is issued by a person with a registration
             number, and that is what makes it one — so it leads. */}
         <header style={{ borderBottom: '2px solid #14201c', paddingBottom: 14 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#14201c' }}>
-            {rx.clinic_name ?? rx.prescriber_name}
-          </div>
+          {/* 0135: the clinic's own banner, when it has uploaded one. */}
+          {rx.letterhead_url && (
+            <img src={rx.letterhead_url} alt={rx.clinic_name ?? ''}
+              style={{ width: '100%', maxHeight: 160, objectFit: 'contain', display: 'block', marginBottom: 8 }} />
+          )}
+          {!rx.letterhead_url && (
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#14201c' }}>
+              {rx.clinic_name ?? rx.prescriber_name}
+            </div>
+          )}
           <div style={{ fontSize: 14, color: '#14201c', marginTop: 4 }}>
             {rx.prescriber_name}
             {rx.prescriber_qualification && `, ${rx.prescriber_qualification}`}
@@ -89,10 +96,10 @@ export default function PrescriptionPage() {
               Reg. No. {rx.prescriber_reg_number}
             </div>
           )}
-          {rx.clinic_address && (
+          {!rx.letterhead_url && rx.clinic_address && (
             <div style={{ fontSize: 13, color: '#5f6b64', marginTop: 3 }}>{rx.clinic_address}</div>
           )}
-          {rx.clinic_phone && (
+          {!rx.letterhead_url && rx.clinic_phone && (
             <div style={{ fontSize: 13, color: '#5f6b64' }}>{rx.clinic_phone}</div>
           )}
         </header>

@@ -102,13 +102,20 @@ export default function DischargeSummaryPage() {
         )}
 
         <header style={{ borderBottom: '2px solid #14201c', paddingBottom: 14 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#14201c' }}>
-            {ds.clinic_name ?? 'Discharge summary'}
-          </div>
-          {ds.clinic_address && (
+          {/* 0135: the clinic's own banner, when it has uploaded one. */}
+          {ds.letterhead_url && (
+            <img src={ds.letterhead_url} alt={ds.clinic_name ?? ''}
+              style={{ width: '100%', maxHeight: 160, objectFit: 'contain', display: 'block', marginBottom: 8 }} />
+          )}
+          {!ds.letterhead_url && (
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#14201c' }}>
+              {ds.clinic_name ?? 'Discharge summary'}
+            </div>
+          )}
+          {!ds.letterhead_url && ds.clinic_address && (
             <div style={{ fontSize: 13, color: '#5f6b64', marginTop: 3 }}>{ds.clinic_address}</div>
           )}
-          {ds.clinic_phone && <div style={{ fontSize: 13, color: '#5f6b64' }}>{ds.clinic_phone}</div>}
+          {!ds.letterhead_url && ds.clinic_phone && <div style={{ fontSize: 13, color: '#5f6b64' }}>{ds.clinic_phone}</div>}
           <div style={{
             marginTop: 10, fontSize: 15, fontWeight: 800, letterSpacing: .3,
             textTransform: 'uppercase', color: '#14201c',

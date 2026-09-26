@@ -33,6 +33,8 @@ export interface Prescription {
   clinic_name: string | null
   clinic_address: string | null
   clinic_phone: string | null
+  /** 0135: the clinic's banner for printing, when it has one. */
+  letterhead_url?: string | null
   patient_name: string
   patient_age: number | null
   patient_gender: string | null
@@ -276,6 +278,8 @@ export interface PublicPrescription {
   clinic_name: string | null
   clinic_address: string | null
   clinic_phone: string | null
+  /** 0135: the clinic's banner for printing, when it has one. */
+  letterhead_url?: string | null
   patient_name: string
   patient_age: number | null
   patient_gender: string | null

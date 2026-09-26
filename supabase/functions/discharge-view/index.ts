@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
   const { data: ds, error } = await supabase
     .from('discharge_summaries')
     .select(`
-      id, summary_no, issued_at, status, token_expires_at, prescription_id,
+      id, business_id, summary_no, issued_at, status, token_expires_at, prescription_id,
       doctor_name, doctor_qualification, doctor_reg_number,
       clinic_name, clinic_address, clinic_phone, ward_bed,
       patient_name, patient_age, patient_gender,
@@ -97,8 +97,18 @@ Deno.serve(async (req) => {
     }
   }
 
-  const { id: _id, prescription_id: _rx, token_expires_at: _exp, ...safe } =
+  const { id: _id, business_id: _biz, prescription_id: _rx, token_expires_at: _exp, ...safe } =
     ds as Record<string, unknown>
+  const letterhead_url = await letterheadOf(supabase, ds.business_id as string)
 
-  return json({ summary: { ...safe, medicines } })
+  return json({ summary: { ...safe, letterhead_url, medicines } })
 })
+
+// 0135: the clinic's banner, printed at the top when it has one. Read live
+// rather than snapshotted: it is branding, not part of the document's content.
+// deno-lint-ignore no-explicit-any
+async function letterheadOf(db: any, businessId: string | null): Promise<string | null> {
+  if (!businessId) return null
+  const { data } = await db.from('businesses').select('letterhead_url').eq('id', businessId).maybeSingle()
+  return (data as { letterhead_url?: string | null } | null)?.letterhead_url ?? null
+}

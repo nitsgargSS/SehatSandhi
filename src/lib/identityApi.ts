@@ -134,6 +134,8 @@ export interface RegisterPractitionerInput {
   smcId?: number | null
   phone?: string
   email?: string
+  /** 0079: a doctor needs a registration number; reception, nurse and manager do not. */
+  role?: string
 }
 
 /**
@@ -152,6 +154,7 @@ export async function registerPractitioner(input: RegisterPractitionerInput): Pr
     p_smc_id: input.smcId ?? null,
     p_phone: input.phone ?? '',
     p_email: input.email ?? '',
+    p_role: input.role ?? 'doctor',
   })
   if (error) throw new Error(error.message)
   return data as string

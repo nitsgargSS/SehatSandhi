@@ -29,6 +29,8 @@ export interface DischargeSummary {
   clinic_name: string | null
   clinic_address: string | null
   clinic_phone: string | null
+  /** 0135: the clinic's banner for printing, when it has one. */
+  letterhead_url?: string | null
   doctor_name: string
   doctor_qualification: string | null
   doctor_reg_number: string | null
@@ -77,6 +79,8 @@ export interface PublicDischargeSummary {
   clinic_name: string | null
   clinic_address: string | null
   clinic_phone: string | null
+  /** 0135: the clinic's banner for printing, when it has one. */
+  letterhead_url?: string | null
   ward_bed: string | null
   patient_name: string
   patient_age: number | null

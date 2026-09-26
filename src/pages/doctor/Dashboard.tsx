@@ -14,7 +14,8 @@ import RevenuePanel from './RevenuePanel'
 import PatientAreasPanel from './PatientAreasPanel'
 import WhatsAppPanel from './WhatsAppPanel'
 import PayListingPanel from './PayListingPanel'
-import { MyPractice, DoctorsOverview } from './DoctorWorkspace'
+import { MyPractice, DoctorsOverview, OpdFee } from './DoctorWorkspace'
+import LetterheadSettings from './LetterheadSettings'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
@@ -251,7 +252,8 @@ export default function DoctorDashboard() {
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
   const [showAddDoc, setShowAddDoc] = useState(false)
-  const [docForm, setDocForm] = useState({ name: '', speciality: 'GEN', qualification: '', phone: '', role: 'doctor' })
+  const [feeFor, setFeeFor] = useState<string | null>(null)
+  const [docForm, setDocForm] = useState({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
   interface PlanTerms {
     doctor_billing: string
     monthly_price: number | null
@@ -288,9 +290,12 @@ export default function DoctorDashboard() {
     try {
       const practitionerId = picked?.practitionerId ?? await registerPractitioner({
         fullName: docForm.name.trim(),
-        speciality: docForm.speciality,
-        qualification: docForm.qualification || null,
+        speciality: docForm.role === 'doctor' ? docForm.speciality : null,
+        qualification: docForm.role === 'doctor' ? (docForm.qualification || null) : null,
+        regNumber: docForm.role === 'doctor' ? (docForm.regNumber.trim() || null) : null,
         phone: docForm.phone || '',
+        email: docForm.email.trim(),
+        role: docForm.role,
       })
       await attachPractitioner({
         businessId: doctor.id,
@@ -298,7 +303,7 @@ export default function DoctorDashboard() {
         role: docForm.role as AffiliationRole,
         consultationFee: 0,
       })
-      setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', role: 'doctor' })
+      setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
       setShowAddDoc(false)
       await loadRoster(doctor.id)
     } catch (e) {
@@ -1827,6 +1832,11 @@ export default function DoctorDashboard() {
 
         {tab === 'clinic' && (
           <div className="space-y-4">
+            {doctor && (
+              <LetterheadSettings businessId={doctor.id}
+                current={(doctor as typeof doctor & { letterhead_url?: string | null }).letterhead_url ?? null}
+                onSaved={url => setDoctor(d => d ? ({ ...d, letterhead_url: url } as typeof d) : d)} />
+            )}
             {/* The doctors who work here. Shown for clinics too now: the roster
                 is affiliations, and a clinic has those the same as a hospital. */}
             {hasPractitioners(myVertical) && (
@@ -1840,8 +1850,9 @@ export default function DoctorDashboard() {
                   )}
                 </div>
                 <p className="text-sm text-gray-500 mb-3">
-                  Doctors get their own profile and appointment calendar, and are checked by our team
-                  before going live. Reception and managers do not appear publicly — they are here so
+                  Doctors get their own profile and appointment calendar, and appear in the WhatsApp bot
+                  and on the website as soon as they are added to a live listing. Set each doctor's OPD fee
+                  (and any discount) here. Reception and managers do not appear publicly — they are here so
                   they can sign in, and what they can see is set by the role you give them.
                 </p>
 
@@ -1885,6 +1896,8 @@ export default function DoctorDashboard() {
                         value={docForm.name} onChange={e => setDocForm(f => ({ ...f, name: e.target.value }))} />
                       <input className="input-field text-sm" placeholder="Mobile number *" inputMode="numeric"
                         value={docForm.phone} onChange={e => setDocForm(f => ({ ...f, phone: e.target.value }))} />
+                      <input className="input-field text-sm" placeholder="Email * — how they sign in" type="email" inputMode="email" autoComplete="off"
+                        value={docForm.email} onChange={e => setDocForm(f => ({ ...f, email: e.target.value }))} />
                       {docForm.role === 'doctor' && (
                         <>
                           <select className="input-field text-sm" value={docForm.speciality}
@@ -1893,6 +1906,8 @@ export default function DoctorDashboard() {
                           </select>
                           <input className="input-field text-sm" placeholder="Qualification, e.g. MD"
                             value={docForm.qualification} onChange={e => setDocForm(f => ({ ...f, qualification: e.target.value }))} />
+                          <input className="input-field text-sm" placeholder="Council registration number *"
+                            value={docForm.regNumber} onChange={e => setDocForm(f => ({ ...f, regNumber: e.target.value }))} />
                         </>
                       )}
                     </div>
@@ -1903,8 +1918,12 @@ export default function DoctorDashboard() {
                         never be used, which is what the signup wizard was
                         producing until it was fixed the same way. */}
                     <p className="text-xs text-gray-500">
-                      They sign in at <strong>/business/login</strong> with this number — nobody
-                      sends them a password. Without it they cannot get in at all.
+                      They sign in at <strong>sehatsandhi.com/business/login</strong> with this email: “Email me a code”
+                      the first time, then “Forgot your password?” to set their own password. Each person needs their
+                      own email. {docForm.role === 'receptionist'
+                        ? 'Reception sees Today, Queue, Appointments, Patients (to register and bill) and Beds — no medical notes, no business settings, no reports.'
+                        : docForm.role === 'nurse' ? 'A nurse charts the ward and vitals, and cannot prescribe.'
+                        : docForm.role === 'manager' ? 'A manager handles the listing, invoices and plan — no medical record.' : ''}
                     </p>
                     {marginalCost > 0 && docForm.role === 'doctor' && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
@@ -1914,7 +1933,9 @@ export default function DoctorDashboard() {
                     )}
                     <div className="flex gap-2">
                       <button onClick={() => addRosterDoctor()}
-                        disabled={rosterBusy || !docForm.name.trim() || docForm.phone.replace(/\D/g, '').length < 10}
+                        disabled={rosterBusy || !docForm.name.trim() || docForm.phone.replace(/\D/g, '').length < 10
+                          || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(docForm.email.trim())
+                          || (docForm.role === 'doctor' && !docForm.regNumber.trim())}
                         className="btn-teal text-sm py-2 px-5 disabled:opacity-50">
                         {rosterBusy ? 'Adding…' : 'Add'}
                       </button>
@@ -1954,12 +1975,21 @@ export default function DoctorDashboard() {
                               : (ROSTER_ROLES.find(r => r[0] === d.role)?.[1] ?? d.role)}
                             {d.role === 'doctor' && person?.qualification ? ` · ${person.qualification}` : ''}
                             {d.role === 'doctor' && d.consultation_fee > 0 ? ` · ₹${d.consultation_fee} here` : ''}
+                            {d.role === 'doctor' && !suspended && (
+                              <button onClick={() => setFeeFor(feeFor === d.practitioner_id ? null : d.practitioner_id)}
+                                className="ml-2 text-teal-700 underline font-medium">
+                                {feeFor === d.practitioner_id ? 'Close' : 'OPD fee & discount'}
+                              </button>
+                            )}
                             {suspended ? ' · not on your bill' : ''}
                             {/* Whether they can actually get in. A roster entry with
                                 no number is a name nobody can use, and that was
                                 invisible until it was too late. */}
                             {!person?.phone && ' · no number — cannot sign in'}
                           </div>
+                          {feeFor === d.practitioner_id && doctor && (
+                            <div className="mt-2"><OpdFee businessId={doctor.id} practitionerId={d.practitioner_id} /></div>
+                          )}
                         </div>
                         {!suspended && (
                           <select

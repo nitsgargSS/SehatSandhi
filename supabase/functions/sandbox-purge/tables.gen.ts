@@ -22,6 +22,7 @@ export const PURGE_TABLES: PurgeTable[] = [
   { name: 'ratings', purgeOrder: 20, pk: 'id' },
   { name: 'opd_queue', purgeOrder: 22, pk: 'id' },
   { name: 'appointment_events', purgeOrder: 24, pk: 'id' },
+  { name: 'patient_referrals', purgeOrder: 25, pk: 'id' },
   { name: 'notification_outbox', purgeOrder: 26, pk: 'id' },
   { name: 'email_outbox', purgeOrder: 27, pk: 'id' },
   { name: 'phone_verifications', purgeOrder: 28, pk: 'id' },

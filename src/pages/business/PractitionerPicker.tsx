@@ -250,6 +250,29 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
             </div>
           )}
 
+          {/* Results, but not the right person. The lists must never be a
+              dead end: a common name matches strangers in the register, and
+              the person being added may simply not be in it yet. */}
+          {searched && !searching && (matches.length > 0 || registry.length > 0) && (
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 13.5, color: BIZ.muted }}>
+              <span>Not in this list?</span>
+              <button onClick={() => {
+                  setDraft({ name: query.trim(), speciality: 'GEN' }); setManual(true)
+                  setQuery(''); setMatches([]); setRegistry([]); setSearched(false)
+                }}
+                style={{
+                  padding: '8px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: 13.5, fontWeight: 800, border: `2px solid ${BIZ.green}`, background: '#fff', color: BIZ.green,
+                }}>
+                Enter "{query.trim()}" manually
+              </button>
+              <button onClick={() => { setQuery(''); setMatches([]); setRegistry([]); setSearched(false) }}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: BIZ.mutedWarm, fontFamily: 'inherit', fontSize: 13.5, textDecoration: 'underline' }}>
+                Clear search
+              </button>
+            </div>
+          )}
+
           {/* Neither list has them. The register is not complete — nobody who
               qualified in the last few months is in it — so typing must stay
               possible. */}

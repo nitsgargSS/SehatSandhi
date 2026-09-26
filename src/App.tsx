@@ -19,6 +19,7 @@ const DoctorLogin = lazy(() => import('./pages/doctor/Login'))
 import PasswordGate from './components/PasswordGate'
 import { fetchPasswordState, mustChangeNow } from './lib/passwordState'
 const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
+const OpdSlipPage = lazy(() => import('./pages/doctor/OpdSlipPage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
 const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
@@ -187,6 +188,7 @@ export default function App() {
           <Route path="/doctor/register" element={<BusinessRegister mode="doctor" />} />
           <Route path="/business/login" element={<DoctorLogin />} />
           <Route path="/business/dashboard" element={<PasswordGate><DoctorDashboard /></PasswordGate>} />
+          <Route path="/business/print/opd/:id" element={<PasswordGate><OpdSlipPage /></PasswordGate>} />
 
           {/* Presentation view of the WhatsApp booking journey, for showing
               stakeholders the flow while the AISensy integration is built. All
