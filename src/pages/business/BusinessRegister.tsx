@@ -125,6 +125,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // (attached, not copied) or a new one; the picker decides which, and
   // saveRegistration below links them either way.
   const [practitioners, setPractitioners] = useState<DraftPractitioner[]>([])
+  const [ownerIsDoctor, setOwnerIsDoctor] = useState(false)
   const [invoiceToken, setInvoiceToken] = useState<string | null>(null)
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null)
 
@@ -330,10 +331,11 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       && isValidPhone(form.phone)
       && isValidEmail(form.email)
       && (!soloDoctor || (form.speciality && form.owner_name?.trim()
-                          && isValidRegNumber(form.reg_number))))
+                          && isValidRegNumber(form.reg_number)))
+      && (!ownerIsDoctor || practitioners.some(d => d.is_owner)))
     return true
   }
-  const nextStep = () => {
+  const nextStep = async () => {
     if (!stepValid(step)) {
       setError(step === 2
         ? (!form.business_name?.trim()
@@ -346,9 +348,24 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                   ? 'Please choose a speciality — it is how patients find you.'
                   : soloDoctor && !form.owner_name?.trim()
                     ? 'Please enter your name — it is what patients see.'
-                    : 'Please enter your council registration number.')
+                    : ownerIsDoctor && !practitioners.some(d => d.is_owner)
+                      ? 'Find the owner as a doctor and press Add doctor — or untick "The owner is a doctor".'
+                      : 'Please enter your council registration number.')
         : 'Please complete this step.')
       return
+    }
+    // 0129: an email or number that already has a listing is refused at
+    // registration; say so here, before they reach payment. The server check is
+    // the real one — if this lookup fails, carry on and let it answer.
+    if (step === 2 && !businessIdRef.current) {
+      const { data } = await supabase.rpc('sehat_signup_check', { p_email: form.email ?? '', p_phone: form.phone ?? '' })
+        .then(r => r, () => ({ data: null }))
+      const taken = data as { email_taken?: boolean; phone_taken?: boolean } | null
+      if (taken?.email_taken || taken?.phone_taken) {
+        setError(`A business is already registered with this ${taken.email_taken && taken.phone_taken ? 'email and mobile number' : taken.email_taken ? 'email' : 'mobile number'}. `
+          + 'Sign in at sehatsandhi.com/business/login instead, or call us if this is a second branch.')
+        return
+      }
     }
     setError('')
     setStep(s => Math.min(3, s + 1))
@@ -476,7 +493,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         // A doctor registering their own practice is primarily there. Somebody a
         // clinic added may already be primary elsewhere, and the server leaves
         // that alone.
-        is_primary: soloDoctor && i === 0,
+        is_primary: (soloDoctor && i === 0) || !!d.is_owner,
       })))
 
       businessIdRef.current = businessId
@@ -901,7 +918,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             emptyNote="Not found — type it in the box below instead."
                           />
                         ) : (
-                          <Field label="Registration number *" placeholder="e.g. HR-12345" value={form.reg_number} onChange={v => upd('reg_number', v)} />
+                          <Field label={`${verticalObj.label} registration no. (if any)`} placeholder="e.g. HR-12345" value={form.reg_number} onChange={v => upd('reg_number', v)} />
                         )}
                         {/* The register is not complete — it has nobody who
                             qualified in the last few months, and the search only
@@ -918,6 +935,45 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             This is your sign-in, and where your login code is sent. One account per address.
                           </p>
                         </div>
+                        {/* The owner may be a doctor or not. A doctor is found the
+                            same way as any other — on Sehatsandhi already, or in
+                            the medical register — so their registration number
+                            and details come filled in, and they are added to the
+                            doctors list once rather than typed twice. A
+                            non-doctor owner needs no registration number. */}
+                        {hasPractitioners(vertical) && !soloDoctor && (
+                          <div className="sm:col-span-2 xl:col-span-3" style={{ border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: '14px 16px', background: '#fff' }}>
+                            <label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={ownerIsDoctor}
+                                onChange={e => {
+                                  setOwnerIsDoctor(e.target.checked)
+                                  if (!e.target.checked) setPractitioners(list => list.filter(d => !d.is_owner))
+                                }}
+                                style={{ width: 18, height: 18, accentColor: BIZ.green, cursor: 'pointer' }} />
+                              <span style={{ fontSize: 14.5, fontWeight: 700, color: BIZ.ink }}>The owner is a doctor who sees patients here</span>
+                            </label>
+                            {ownerIsDoctor ? (
+                              <div style={{ marginTop: 12 }}>
+                                <PractitionerPicker
+                                  single
+                                  label="Find the owner — by name or registration number"
+                                  added={practitioners.filter(d => d.is_owner)}
+                                  onAdd={d => {
+                                    setPractitioners(list => [{ ...d, is_owner: true }, ...list.filter(x => !x.is_owner)])
+                                    upd('owner_name', d.name)
+                                  }}
+                                  onRemove={() => setPractitioners(list => list.filter(d => !d.is_owner))}
+                                  clinicPhone={form.phone}
+                                  clinicEmail={form.email}
+                                />
+                              </div>
+                            ) : (
+                              <p style={{ fontSize: 12.5, color: BIZ.mutedWarm, margin: '6px 0 0 28px' }}>
+                                Not a doctor? Leave this unticked — no registration number is needed, and you add your doctors below.
+                              </p>
+                            )}
+                          </div>
+                        )}
                         <div className="sm:col-span-2 xl:col-span-3">
                           {/* Also a lookup, in address mode rather than business
                               mode. Picking the clinic by name fills this in, but
@@ -994,11 +1050,19 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             {describeDoctorRate(plan) && <> {describeDoctorRate(plan)}</>}
                           </p>
 
+                          {practitioners.some(d => d.is_owner) && (
+                            <p style={{ fontSize: 13, color: BIZ.chipText, margin: '0 0 12px' }}>
+                              ✓ {practitioners.find(d => d.is_owner)!.name} (owner) is included. Add any other doctors below.
+                            </p>
+                          )}
                           <PractitionerPicker
-                            added={practitioners}
+                            added={practitioners.filter(d => !d.is_owner)}
                             onAdd={d => setPractitioners(list => [...list, d])}
-                            onRemove={i => setPractitioners(list => list.filter((_, j) => j !== i))}
-                            clinicPhone={form.phone}
+                            onRemove={i => {
+                              const target = practitioners.filter(d => !d.is_owner)[i]
+                              setPractitioners(list => list.filter(d => d !== target))
+                            }}
+                            clinicPhone={ownerIsDoctor ? undefined : form.phone}
                           />
 
                           {namedHospitalDoctors > 0 && (

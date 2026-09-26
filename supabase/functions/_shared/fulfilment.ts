@@ -148,6 +148,11 @@ export async function fulfilPayment(
       subscription_started_at: (acct as { subscription_started_at?: string } | null)?.subscription_started_at ?? now,
       onboarding_fee_paid_at: (acct as { onboarding_fee_paid_at?: string } | null)?.onboarding_fee_paid_at ?? now,
     }, { onConflict: 'business_id' })
+    // WhatsApp added mid-term (whatsapp-addon-order) renews with the plan from
+    // now on. A plan payment already set this when its order was created.
+    if (!boughtListing) {
+      await supabase.from('businesses').update({ renewal_whatsapp: true }).eq('id', pay.business_id)
+    }
   }
 
   // Best-effort delivery. A WhatsApp or email failure must never fail the

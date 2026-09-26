@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { MessageCircle, Wallet, Send, CheckSquare, Square } from 'lucide-react'
 import { shortDate, dateTime } from '../../lib/format'
 import PayListingPanel from './PayListingPanel'
+import { supabase } from '../../lib/supabase'
+import { whatsappAddon, WhatsappAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
+import { BIZ } from '../business/shared'
 import { Business } from '../../types'
 import {
   WaAccess, getWaAccess,
@@ -41,6 +44,31 @@ export default function WhatsAppPanel({ businessId, businessName, prefill, busin
   const [renewOpen, setRenewOpen] = useState(false)
   useEffect(() => { getWaAccess(businessId).then(setAccess).catch(() => setAccess(null)) }, [businessId])
 
+  // Mid-term (26 Sep 2026): with a plan already paid for, WhatsApp is its own
+  // fee, pro rata to the plan's end — not a second plan term. The renewal
+  // screen below is only for a business with no active plan to add it to.
+  const [addon, setAddon] = useState<WhatsappAddonQuote | 'none' | null>(null)
+  const offerable = !!access && (access.state === 'locked' || access.state === 'none')
+  useEffect(() => {
+    if (!offerable) return
+    let live = true
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) { if (live) setAddon('none'); return }
+      whatsappAddon(businessId, 'quote', session.access_token)
+        .then(q => { if (live) setAddon(q) }, () => { if (live) setAddon('none') })
+    })
+    return () => { live = false }
+  }, [offerable, businessId])
+
+  if (offerable && addon === null) {
+    return <div className="text-sm text-gray-500 py-6">Loading…</div>
+  }
+
+  if (offerable && addon && addon !== 'none') {
+    return <AddWhatsApp quote={addon} businessId={businessId} businessName={businessName}
+      email={business.email || undefined} locked={access!.state === 'locked'} expiresOn={access!.expires_on} />
+  }
+
   if (access && (access.state === 'locked' || access.state === 'none')) {
     return (
       <div className="space-y-4">
@@ -69,6 +97,86 @@ export default function WhatsAppPanel({ businessId, businessName, prefill, busin
         {renewOpen && <PayListingPanel business={business} canPay onPaid={() => window.location.reload()} />}
       </div>
     ) : null} />
+}
+
+const inr0 = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+
+function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn }: {
+  quote: WhatsappAddonQuote
+  businessId: string
+  businessName: string
+  email?: string
+  locked: boolean
+  expiresOn?: string | null
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const q = quote
+
+  const pay = async () => {
+    setBusy(true); setError('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Please sign in again.')
+      const order = await whatsappAddon(businessId, 'order', session.access_token)
+      await loadRazorpayCheckout()
+      const Razorpay = (window as unknown as { Razorpay: new (o: unknown) => { open: () => void } }).Razorpay
+      new Razorpay({
+        key: order.keyId, amount: order.amountPaise, currency: order.currency, order_id: order.orderId,
+        name: 'Sehatsandhi Business', description: `${businessName} · WhatsApp until ${shortDate(q.termEnd)}`,
+        prefill: { name: businessName, email },
+        theme: { color: BIZ.green },
+        remember_customer: false,
+        modal: { ondismiss: () => setBusy(false) },
+        handler: async (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          const v = await verifyRazorpayPayment({
+            orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id,
+            signature: r.razorpay_signature, paymentRowId: order.paymentRowId,
+          })
+          setBusy(false)
+          if (v.ok) window.location.reload()
+          else setError('Payment could not be verified. If money was deducted, our team will reconcile it.')
+        },
+      }).open()
+    } catch (e) {
+      setError(`Payment failed to start: ${(e as Error).message}`)
+      setBusy(false)
+    }
+  }
+
+  const prorated = q.daysLeft < q.daysInTerm
+  return (
+    <div className="space-y-4">
+      <div className={`rounded-xl px-4 py-3 text-sm border ${locked ? 'bg-red-50 border-red-200 text-red-800' : 'bg-teal-50 border-teal-200 text-teal-900'}`}>
+        {locked
+          ? <><b>WhatsApp marketing is paused.</b> It ended on {expiresOn ? shortDate(expiresOn) : '—'}. Add it again below — your wallet, patients and past broadcasts are all kept.</>
+          : <><b>Add WhatsApp to your plan</b> to send camp, notice and health-tip messages to patients who agreed to hear from you. Each message is paid separately from a wallet.</>}
+      </div>
+      <div className="card shadow-sm max-w-xl space-y-3">
+        <h3 className="font-bold text-navy-700">Add WhatsApp messaging</h3>
+        <p className="text-sm text-gray-600">
+          Your plan is already paid until <b>{shortDate(q.termEnd)}</b>, so you pay only the WhatsApp fee
+          {prorated ? ' for the days left in it' : ''}. From {shortDate(q.termEnd)} it renews together with your {q.termLabel.toLowerCase()} plan.
+        </p>
+        <div className="text-sm border rounded-lg divide-y">
+          <div className="flex justify-between px-3 py-2"><span>WhatsApp fee ({q.termLabel.toLowerCase()})</span><span>{inr0(q.fullFee)}</span></div>
+          {prorated && (
+            <div className="flex justify-between px-3 py-2 text-gray-600">
+              <span>{q.daysLeft} of {q.daysInTerm} days left</span><span>{inr0(q.amount)}</span>
+            </div>
+          )}
+          {q.tax.applied && (
+            <div className="flex justify-between px-3 py-2 text-gray-600"><span>GST {q.tax.rate}%</span><span>{inr0(q.tax.taxTotal)}</span></div>
+          )}
+          <div className="flex justify-between px-3 py-2 font-bold"><span>Pay now</span><span>{inr0(q.tax.grandTotal)}</span></div>
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button onClick={pay} disabled={busy} className="btn-teal w-full disabled:opacity-60">
+          {busy ? 'Opening payment…' : `Pay ${inr0(q.tax.grandTotal)} and add WhatsApp`}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function WhatsAppWorkspace({ businessId, businessName, prefill, banner }: {

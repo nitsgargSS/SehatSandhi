@@ -28,12 +28,17 @@ const input: React.CSSProperties = {
   fontFamily: 'inherit', fontSize: 15, color: BIZ.ink, background: '#fff', width: '100%',
 }
 
-export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone }: {
+export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone, clinicEmail, single, label = 'Add a doctor' }: {
   added: DraftPractitioner[]
   onAdd: (d: DraftPractitioner) => void
   onRemove: (index: number) => void
   /** The number the clinic itself registered on, for the "this doctor is me" case. */
   clinicPhone?: string
+  /** The clinic's email, filled in with the number when "this doctor is me" is ticked. */
+  clinicEmail?: string
+  /** One person only — the owner. The search goes away once they are added. */
+  single?: boolean
+  label?: string
 }) {
   const [query, setQuery] = useState('')
   const [matches, setMatches] = useState<PractitionerMatch[]>([])
@@ -157,10 +162,10 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
         </div>
       )}
 
-      {!manual && (
+      {!manual && !(single && added.length > 0) && (
         <>
           <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: BIZ.ink, marginBottom: 7 }}>
-            Add a doctor
+            {label}
           </label>
           <div style={{ position: 'relative' }}>
             <input
@@ -331,10 +336,16 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, cursor: 'pointer' }}>
               <input type="checkbox"
                 checked={(draft.phone ?? '').replace(/\D/g, '') === clinicPhone.replace(/\D/g, '')}
-                onChange={e => setDraft(d => ({ ...d, phone: e.target.checked ? clinicPhone : '' }))}
+                onChange={e => setDraft(d => ({
+                  ...d,
+                  phone: e.target.checked ? clinicPhone : '',
+                  // One person, one sign-in: the owner's own address, which the
+                  // server allows to be both the clinic's and the doctor's.
+                  ...(clinicEmail ? { email: e.target.checked ? clinicEmail : '' } : {}),
+                }))}
                 style={{ width: 16, height: 16, accentColor: BIZ.green, cursor: 'pointer' }} />
               <span style={{ fontSize: 13, color: BIZ.ink }}>
-                This doctor is me — use the clinic’s number ({clinicPhone})
+                This doctor is me — use the clinic’s number ({clinicPhone}){clinicEmail ? ' and email' : ''}
               </span>
             </label>
           )}

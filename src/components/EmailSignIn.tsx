@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isValidEmail, normEmail, passwordProblem, checkPassword } from '../lib/credentials'
+import { prepareEmailLogin } from '../lib/businessApi'
 import { markPasswordChanged } from '../lib/passwordState'
 import { Spinner } from './Loading'
 
@@ -94,6 +95,10 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
     if (!isValidEmail(email)) { setError('Enter the email address you registered with.'); return }
     setBusy(true)
     try {
+      // Registration records the address but creates no login for it, and
+      // Supabase sends codes only to existing logins. This creates it for a
+      // registered address, and does nothing for any other (0128).
+      await prepareEmailLogin(normEmail(email)!)
       const { error: err } = await supabase.auth.signInWithOtp({
         email: normEmail(email)!,
         // Without this, asking for a code for an unknown address CREATES the
@@ -109,7 +114,7 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
         return
       }
       setStep('code')
-      setNotice(`If ${normEmail(email)} is registered, a six-digit code is on its way. It expires in an hour.`)
+      setNotice(`If ${normEmail(email)} is registered, a six-digit code is on its way. It expires in 10 minutes — check your spam folder if it is not in your inbox.`)
     } finally { setBusy(false) }
   }
 

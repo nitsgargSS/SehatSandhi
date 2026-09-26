@@ -120,3 +120,12 @@ export default function SiteHeader(
     </div>
   )
 }
+
+/** The sign-in icon for the business login CTA. */
+export const loginIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
+    strokeLinecap="round" strokeLinejoin="round"
+    style={{ width: 16, height: 16, flex: '0 0 auto' }}>
+    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="M10 17l5-5-5-5" /><path d="M15 12H3" />
+  </svg>
+)

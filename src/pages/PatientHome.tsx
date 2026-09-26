@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
 import { WA_LINK, AMBULANCE_NUMBER } from '../types'
-import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PAGE } from '../components/SiteHeader'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon, loginIcon, PAGE } from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 
 // Design 1a / Turn-4 — patient homepage, "Warm Care".
@@ -25,7 +25,7 @@ interface Strings {
   doctors: string; hospitals: string; pharmacy: string; labs: string; insurance: string; ambulance: string
   doc_teaser_title: string; doc_teaser_sub: string; how: string; step1: string; step2: string; step3: string
   trust_verified: string; trust_free: string; trust_wa: string
-  biz_cta: string; biz_title: string; biz_sub: string
+  biz_cta: string; login_cta: string; biz_title: string; biz_sub: string
   faq_nav: string; faq_title: string; faq_sub: string; faqs: { q: string; a: string }[]
 }
 
@@ -44,6 +44,7 @@ const DICT: Record<'en' | 'hi', Strings> = {
     how: 'How it works', step1: 'Pick a service', step2: 'Chat on WhatsApp', step3: 'Booking confirmed',
     trust_verified: 'Verified providers', trust_free: 'Free for you', trust_wa: 'All on WhatsApp',
     biz_cta: 'Manage Business',
+    login_cta: 'Business login',
     biz_title: 'Are you a healthcare provider?',
     biz_sub: 'Doctors, hospitals, pharmacies, labs, insurance & ambulance — list your business, or log in to manage it.',
     faq_nav: 'Questions',
@@ -78,6 +79,7 @@ const DICT: Record<'en' | 'hi', Strings> = {
     how: 'यह कैसे काम करता है', step1: 'सेवा चुनें', step2: 'व्हाट्सएप पर बात करें', step3: 'बुकिंग पक्की',
     trust_verified: 'सत्यापित प्रोवाइडर', trust_free: 'आपके लिए मुफ़्त', trust_wa: 'सब कुछ व्हाट्सएप पर',
     biz_cta: 'बिज़नेस मैनेज करें',
+    login_cta: 'बिज़नेस लॉगिन',
     biz_title: 'आप हेल्थकेयर प्रोवाइडर हैं?',
     biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब, बीमा और एम्बुलेंस — अपना बिज़नेस लिस्ट करें, या लॉग इन करके मैनेज करें।',
     faq_nav: 'सवाल',
@@ -303,6 +305,7 @@ export default function PatientHome() {
           <SiteHeader>
             <HeaderLink href="#faq-m">{t.faq_nav}</HeaderLink>
             <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
+            <HeaderCta to="/business/login" icon={loginIcon}>{t.login_cta}</HeaderCta>
             <LangButton label={langBtn} onClick={toggleLang} />
           </SiteHeader>
           <div style={{ padding: '16px 22px 6px' }}>
@@ -340,6 +343,7 @@ export default function PatientHome() {
         <SiteHeader>
           <HeaderLink href="#faq-d">{t.faq_nav}</HeaderLink>
           <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
+            <HeaderCta to="/business/login" icon={loginIcon}>{t.login_cta}</HeaderCta>
           <LangButton label={langBtn} onClick={toggleLang} />
         </SiteHeader>
       </div>
