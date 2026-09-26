@@ -8,6 +8,7 @@
 //   business_welcome     → the business's own address
 //   admin_new_business   → ADMIN_EMAIL (admin@sehatsandhi.com)
 //   clinic_new_booking   → the business's address, and the doctor's if different (0136)
+//   doctor_invite        → the doctor: sign in, set a password, fill in the profile (0139)
 //
 // Until ZEPTOMAIL_TOKEN is set nothing is sent and rows wait. A welcome still
 // waiting after two days is skipped rather than sent late; the admin alert is
@@ -56,7 +57,7 @@ Deno.serve(async (req) => {
 
   const cutoff = new Date(Date.now() - 60_000).toISOString()
   const { data: rows, error } = await db.from('email_outbox')
-    .select('id, kind, business_id, appointment_id, attempts, created_at')
+    .select('id, kind, business_id, appointment_id, practitioner_id, attempts, created_at')
     .eq('status', 'pending').lte('created_at', cutoff)
     .order('created_at').limit(BATCH)
   if (error) return json({ error: error.message }, 500)
@@ -78,6 +79,17 @@ Deno.serve(async (req) => {
 
     if (r.kind === 'business_welcome' && Date.now() - Date.parse(r.created_at) > WELCOME_STALE_MS) {
       await finish({ status: 'skipped', last_error: 'welcome older than two days' })
+      continue
+    }
+
+    if (r.kind === 'doctor_invite') {
+      const res = await sendInvite(db, r.business_id, r.practitioner_id, site)
+      if (res === 'skip') { await finish({ status: 'skipped', last_error: 'doctor gone or no email' }); continue }
+      if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
+      else {
+        const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
+        await finish({ status: giveUp ? 'failed' : 'pending', last_error: res.error }); failed++
+      }
       continue
     }
 
@@ -225,4 +237,28 @@ ${rows.map(([k, v]) => `<tr><td style="padding:6px 10px 6px 0;color:#5b6b63;whit
     if (!last.ok) return last
   }
   return last
+}
+
+// The owner's invite to a doctor (0139): one login for every clinic they work at.
+// deno-lint-ignore no-explicit-any
+async function sendInvite(db: any, businessId: string | null, practitionerId: string | null, site: string): Promise<SendResult | 'skip'> {
+  if (!businessId || !practitionerId) return 'skip'
+  const { data: p } = await db.from('practitioners').select('full_name, email').eq('id', practitionerId).maybeSingle()
+  const { data: b } = await db.from('businesses').select('name').eq('id', businessId).maybeSingle()
+  const to = (p?.email ?? '').trim()
+  if (!p || !to.includes('@')) return 'skip'
+  const login = `${site}/business/login`
+  const steps = [
+    `Go to <a href="${login}" style="color:#0f6b4a">${login.replace(/^https?:\/\//, '')}</a> and choose <b>Email me a code</b>. Enter <b>${esc(to)}</b> and the 6-digit code we send.`,
+    'Set a password for next time: on the login page, <b>Forgot your password?</b> → code → choose a password.',
+    'Open <b>My practice → Public profile</b>: add your photo, qualification, experience, languages and a few lines about you. Patients see this page from the WhatsApp bot and the website.',
+    'Check your <b>OPD fee</b> on the same page, and any discount you offer.',
+  ]
+  const html = layout(`${b?.name ?? 'A clinic'} has added you on Sehatsandhi`, `
+<p style="margin:0 0 14px">Hello ${esc(p.full_name)}, <b>${esc(b?.name ?? 'your clinic')}</b> has listed you as a doctor on Sehatsandhi, so patients can find and book you on WhatsApp.</p>
+<ol style="margin:0 0 16px;padding-left:20px">${steps.map(x => `<li style="margin-bottom:8px">${x}</li>`).join('')}</ol>
+<p style="margin:0 0 16px"><a href="${login}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold">Sign in</a></p>
+<p style="margin:0;color:#5b6b63;font-size:13px">One login covers every clinic you work at — switch between them from the dashboard. You see the patients you treat or who are referred to you.</p>`)
+  const text = [`${b?.name ?? 'A clinic'} has added you on Sehatsandhi`, '', ...steps.map((x, i) => `${i + 1}. ${x.replace(/<[^>]+>/g, '')}`), '', `Sign in: ${login}`].join('\n')
+  return sendEmail({ to, toName: p.full_name, subject: `${b?.name ?? 'A clinic'} has added you on Sehatsandhi — set up your login and profile`, html, text })
 }

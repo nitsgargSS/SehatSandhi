@@ -606,13 +606,27 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   const [prescriber, setPrescriber] = useState(false)
   const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'money' | 'refer'>('history')
 
+  // 0138: a doctor sees only patients they have been involved with here (or
+  // were referred). Anyone else's shows a notice, not empty tabs that read as
+  // "no allergies, no history".
+  const [otherDoctors, setOtherDoctors] = useState(false)
   useEffect(() => {
     let cancelled = false
     getMyRole(businessId)
-      .then(r => { if (!cancelled) { setClinical(isClinicalRole(r)); setPrescriber(mayPrescribe(r)) } })
+      .then(async r => {
+        if (cancelled) return
+        let sees = true
+        if (isClinicalRole(r)) {
+          const { data, error } = await supabase.rpc('sehat_caller_sees_patient', { p_business: businessId, p_member: memberId })
+          sees = error ? true : data !== false   // older database without 0138: as before
+        }
+        if (cancelled) return
+        setOtherDoctors(isClinicalRole(r) && !sees)
+        setClinical(isClinicalRole(r) && sees); setPrescriber(mayPrescribe(r) && sees)
+      })
       .catch(() => { /* stays false — the database refuses either way */ })
     return () => { cancelled = true }
-  }, [businessId])
+  }, [businessId, memberId])
 
   // Note isClinicalRole returns TRUE against a database with no role system at
   // all (pre-0057), which is deliberate — see RoleLookup.enforced. It is the
@@ -763,7 +777,13 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           ))}
       </div>
 
-      {!clinical && (
+      {!clinical && otherDoctors && (
+        <div style={{ ...card, fontSize: 13, color: BIZ.ink, background: '#fff8eb', borderColor: '#f0dcb0' }}>
+          This patient is under another doctor here, so their medical record is not shown to you.
+          It opens once they are referred to you, booked with you, or seen in your OPD.
+        </div>
+      )}
+      {!clinical && !otherDoctors && (
         <div style={{ fontSize: 12.5, color: BIZ.mutedWarm }}>
           Your account is not registered as a doctor here, so the medical record
           is not shown. Beds, the queue and billing are.

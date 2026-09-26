@@ -240,6 +240,9 @@ export default function DoctorDashboard() {
       // Read so the roster can say who cannot sign in. It is the only thing
       // that gets somebody a login — clinic-otp matches on it.
       phone: string | null
+      /** 0139: how they sign in, and whether they ever have. */
+      email?: string | null
+      auth_uid?: string | null
     } | null
   }
   const [roster, setRoster] = useState<RosterRow[]>([])
@@ -254,6 +257,25 @@ export default function DoctorDashboard() {
   const [rosterErr, setRosterErr] = useState('')
   const [showAddDoc, setShowAddDoc] = useState(false)
   const [feeFor, setFeeFor] = useState<string | null>(null)
+  // 0139: invite a doctor to log in and set up their profile.
+  const [emailFor, setEmailFor] = useState<string | null>(null)
+  const [emailDraft, setEmailDraft] = useState('')
+  const inviteDoctor = async (practitionerId: string, name: string) => {
+    if (!doctor) return
+    setRosterErr('')
+    const { data, error } = await supabase.rpc('sehat_invite_doctor', { p_business: doctor.id, p_practitioner: practitionerId })
+    if (error) { setRosterErr(error.message); return }
+    setRosterErr(data === 'already_sent' ? `An invite to ${name} went out in the last hour.` : `✓ Invite emailed to ${name}. It arrives within a few minutes.`)
+  }
+  const saveDoctorEmail = async (practitionerId: string, name: string) => {
+    if (!doctor) return
+    setRosterErr('')
+    const { error } = await supabase.rpc('sehat_set_doctor_email', { p_business: doctor.id, p_practitioner: practitionerId, p_email: emailDraft })
+    if (error) { setRosterErr(error.message); return }
+    setEmailFor(null)
+    await loadRoster(doctor.id)
+    await inviteDoctor(practitionerId, name)
+  }
   const [docForm, setDocForm] = useState({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
   interface PlanTerms {
     doctor_billing: string
@@ -270,7 +292,7 @@ export default function DoctorDashboard() {
 
   const loadRoster = async (businessId: string) => {
     const { data } = await supabase.from('business_practitioners')
-      .select('*, practitioners(id, full_name, speciality, qualification, reg_number, status, phone)')
+      .select('*, practitioners(id, full_name, speciality, qualification, reg_number, status, phone, email, auth_uid)')
       .eq('business_id', businessId)
       .order('sort_order')
     setRoster((data as RosterRow[]) || [])
@@ -306,6 +328,9 @@ export default function DoctorDashboard() {
       })
       setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
       setShowAddDoc(false)
+      // Everyone added is asked to set up their own login (0139). Best effort:
+      // the Invite button on their row sends it again.
+      await supabase.rpc('sehat_invite_doctor', { p_business: doctor.id, p_practitioner: practitionerId }).then(() => undefined, () => undefined)
       await loadRoster(doctor.id)
     } catch (e) {
       setRosterErr((e as Error).message)
@@ -1867,7 +1892,7 @@ export default function DoctorDashboard() {
                   </div>
                 )}
 
-                {rosterErr && <div className="bg-red-50 text-red-600 text-sm rounded-xl p-3 mb-3">{rosterErr}</div>}
+                {rosterErr && <div className={`${rosterErr.startsWith('✓') ? 'bg-teal-50 text-teal-700' : 'bg-red-50 text-red-600'} text-sm rounded-xl p-3 mb-3`}>{rosterErr}</div>}
 
                 {showAddDoc && (
                   <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
@@ -1986,7 +2011,23 @@ export default function DoctorDashboard() {
                             {/* Whether they can actually get in. A roster entry with
                                 no number is a name nobody can use, and that was
                                 invisible until it was too late. */}
-                            {!person?.phone && ' · no number — cannot sign in'}
+                            {person?.auth_uid ? ' · ✓ has signed in'
+                              : person?.email ? ' · not signed in yet' : ' · no email — cannot sign in'}
+                            {!person?.auth_uid && !suspended && person && (
+                              person.email ? (
+                                <button onClick={() => inviteDoctor(person.id, person.full_name)} className="ml-2 text-teal-700 underline font-medium">
+                                  Invite to log in &amp; set up profile
+                                </button>
+                              ) : emailFor === person.id ? (
+                                <span className="ml-2 inline-flex gap-1 items-center">
+                                  <input className="input-field text-xs py-1 px-2 w-48" placeholder="their email" value={emailDraft}
+                                    onChange={e => setEmailDraft(e.target.value)} />
+                                  <button onClick={() => saveDoctorEmail(person.id, person.full_name)} className="text-teal-700 underline font-medium">Save &amp; invite</button>
+                                </span>
+                              ) : (
+                                <button onClick={() => { setEmailFor(person.id); setEmailDraft('') }} className="ml-2 text-teal-700 underline font-medium">Add email</button>
+                              )
+                            )}
                           </div>
                           {feeFor === d.practitioner_id && doctor && (
                             <div className="mt-2 space-y-3">
