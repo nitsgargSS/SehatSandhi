@@ -53,7 +53,8 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
   // The same four the server requires of a new doctor since 0079. Someone
   // matched from the register arrives with a practitioner_id and is exempt —
   // they are already registered, and their details are already checked.
-  const ready = draft.name.trim().length > 1
+  const existing = !!draft.practitioner_id
+  const ready = existing || draft.name.trim().length > 1
     && isValidPhone(draft.phone)
     && isValidEmail(draft.email)
     && isValidRegNumber(draft.reg_number)
@@ -279,7 +280,28 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
 
       {manual && (
         <div style={{ border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: 16, background: '#fdfcfa' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: BIZ.ink, marginBottom: 12 }}>New doctor</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: BIZ.ink, marginBottom: 12 }}>
+            {existing ? 'Already on Sehatsandhi' : 'New doctor'}
+          </div>
+          {/* Somebody already here is attached as they are. Their number, email
+              and registration are on file and checked — asking again is how two
+              records of one doctor started to disagree, and the server ignores
+              anything typed for them anyway (0079). Nor are those shown: this
+              page is open to anyone, and a doctor's number is not theirs to see. */}
+          {existing ? (
+            <div style={{ fontSize: 14, color: BIZ.ink, lineHeight: 1.6 }}>
+              <div style={{ fontWeight: 800 }}>{draft.name}</div>
+              <div style={{ color: BIZ.mutedWarm, fontSize: 13 }}>
+                {[SPECIALITIES.find(sp => sp.id === draft.speciality)?.en ?? draft.speciality,
+                  draft.qualification, draft.reg_number ? `Reg ${draft.reg_number}` : null]
+                  .filter(Boolean).join(' · ')}
+              </div>
+              <p style={{ fontSize: 12.5, color: BIZ.mutedWarm, margin: '8px 0 0' }}>
+                Their profile, login and contact details are already on file and stay as they are —
+                nothing to fill in again. They will show at your clinic as well.
+              </p>
+            </div>
+          ) : (<>
           <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-2">
             <input placeholder="Full name *" value={draft.name}
               onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} style={input} />
@@ -322,6 +344,7 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
             signed-in doctor can issue a prescription. One number can be both the
             clinic and the doctor.
           </div>
+          </>)}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button disabled={!ready}
               onClick={() => { onAdd({ ...draft, name: draft.name.trim(), phone: (draft.phone ?? '').trim() }); reset() }}

@@ -20,7 +20,7 @@ import {
 import { registerBusiness, registerPractitioner, attachPractitioner } from '../../lib/identityApi'
 import { isValidEmail, isValidPhone, isValidRegNumber } from '../../lib/credentials'
 import PractitionerPicker from './PractitionerPicker'
-import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
+import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal, termLabel } from '../../hooks/usePricing'
 import { useTaxSettings, localTax, isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { track } from '../../lib/analytics'
 // Same file the pricing engine uses, so the quote here and the amount charged
@@ -56,6 +56,28 @@ const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 // separate verticals with their own signup and their own billing, and choosing
 // one here would bill a doctor as a diagnostics centre.
 const DOCTOR_SPECIALITIES = SPECIALITIES.filter(s => s.id !== 'LAB' && s.id !== 'PHARMACY')
+
+// What a business may call itself (0126). Clinics and hospitals choose from the
+// doctor specialities; the other types have their own short lists. "Other"
+// opens a box for anything not listed.
+const OTHER_CATEGORY = 'Other'
+const categoryOptions = (v: VerticalKey): string[] => {
+  switch (v) {
+    case 'clinic':
+    case 'hospital':
+      return ['Multi-speciality', ...DOCTOR_SPECIALITIES.map(s => s.en)]
+    case 'lab':
+      return ['Pathology', 'Radiology & imaging', 'Pathology and imaging', 'Sample collection centre']
+    case 'pharmacy':
+      return ['Retail pharmacy', 'Hospital pharmacy', 'Ayurvedic / Homeopathic', 'Surgical & medical equipment']
+    case 'insurance':
+      return ['Insurance agent', 'Insurance broker', 'Insurance company']
+    case 'ambulance':
+      return ['Basic life support (BLS)', 'Advanced life support (ALS)', 'Patient transport', 'Mortuary van']
+    default:
+      return []
+  }
+}
 
 // Compact row input for the consultant list — narrower than the main Field so
 // four of them fit one line on a laptop.
@@ -458,6 +480,14 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       })))
 
       businessIdRef.current = businessId
+      // Best effort: a label failing to save must not fail the registration.
+      const category = soloDoctor
+        ? SPECIALITIES.find(sp => sp.id === form.speciality)?.en
+        : form.category === OTHER_CATEGORY ? (form.category_other?.trim() || OTHER_CATEGORY) : form.category
+      if (category) {
+        await supabase.rpc('sehat_signup_set_category', { p_business: businessId, p_category: category })
+          .then(() => undefined, () => undefined)
+      }
       return businessId
     } catch (e) {
       setError(`Could not save: ${(e as Error).message}`)
@@ -763,6 +793,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               if (!form.speciality) {
                                 const guess = guessSpeciality(d.name)
                                 if (guess) upd('speciality', guess)
+                                const label = SPECIALITIES.find(sp => sp.id === guess)?.en
+                                if (label && !form.category && categoryOptions(vertical).includes(label)) upd('category', label)
                               }
                             }}
                           />
@@ -820,7 +852,27 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             </p>
                           </div>
                         ) : (
-                          <Field label="Category / speciality" placeholder="e.g. Ophthalmology" value={form.category} onChange={v => upd('category', v)} />
+                          <div>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#3f4a44', marginBottom: 7 }}>
+                              Category / speciality
+                            </label>
+                            <select value={form.category ?? ''}
+                              onChange={e => upd('category', e.target.value)}
+                              style={{
+                                width: '100%', padding: '12px 14px', borderRadius: 12,
+                                border: `1px solid ${BIZ.inputBorder}`, fontFamily: 'inherit',
+                                fontSize: 16, color: form.category ? BIZ.ink : BIZ.mutedWarm, background: '#fdfbf6',
+                              }}>
+                              <option value="">Choose a category…</option>
+                              {categoryOptions(vertical).map(c => <option key={c} value={c}>{c}</option>)}
+                              <option value={OTHER_CATEGORY}>Other (type it in)</option>
+                            </select>
+                            {form.category === OTHER_CATEGORY && (
+                              <input value={form.category_other ?? ''} onChange={e => upd('category_other', e.target.value)}
+                                placeholder="Type your category" maxLength={80}
+                                style={{ width: '100%', marginTop: 8, padding: '12px 14px', border: `1px solid ${BIZ.inputBorder}`, borderRadius: 12, fontSize: 16, fontFamily: 'inherit', outline: 'none', background: '#fdfbf6' }} />
+                            )}
+                          </div>
                         )}
                         {/* Doctors search the Indian Medical Register by name and
                             get their own registration number back, which is
@@ -860,10 +912,12 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             placeholder={form.reg_number ? '' : 'or type it — e.g. HR-12345'}
                             value={form.reg_number} onChange={v => upd('reg_number', v)} />
                         )}
-                        <Field label="Email *" placeholder="you@example.com" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />
-                        <p className="text-xs text-gray-500 -mt-2">
-                          This is your sign-in, and where your login code is sent. One account per address.
-                        </p>
+                        <div>
+                          <Field label="Email *" placeholder="you@example.com" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />
+                          <p className="text-xs text-gray-500 mt-1.5">
+                            This is your sign-in, and where your login code is sent. One account per address.
+                          </p>
+                        </div>
                         <div className="sm:col-span-2 xl:col-span-3">
                           {/* Also a lookup, in address mode rather than business
                               mode. Picking the clinic by name fills this in, but
@@ -987,11 +1041,13 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                       <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, overflow: 'hidden' }}>
                         <ReviewRow label="Service type" value={verticalObj.label} />
                         <ReviewRow label="Business name" value={form.business_name || form.owner_name || '—'} />
+                        {!soloDoctor && form.category && (
+                          <ReviewRow label="Category" value={form.category === OTHER_CATEGORY ? (form.category_other?.trim() || OTHER_CATEGORY) : form.category} />
+                        )}
                         {/* Coverage was never asked for, so it is stated rather
                             than described as a selection — this is the only
                             place a business sees how wide their listing runs
                             before they pay for it. */}
-                        <ReviewRow label="Areas covered" value={`All ${price.count} service area${price.count === 1 ? '' : 's'}`} />
                         <ReviewRow label="Total reach" value={`${num(price.residents)} residents`} />
                         {onCommission
                           ? <ReviewRow label="Plan" value={`${commissionPct}% of ${commissionBasis}`} />
@@ -1111,7 +1167,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                   />
                                   <span style={{ flex: 1 }}>
                                     <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                                      <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{t.label ?? `${t.months} months`}</strong>
+                                      <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{t.label ?? termLabel(t.months)}</strong>
                                       <strong style={{ fontSize: 14.5, color: on ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
                                         {money(t.price)}
                                       </strong>
@@ -1161,7 +1217,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                 <strong style={{ fontSize: 14.5, color: BIZ.ink }}>Add WhatsApp messaging</strong>
                                 <strong style={{ fontSize: 14.5, color: whatsapp ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
                                   {money((shownTerms.find(t => t.months === months) as { whatsapp_price?: number } | undefined)?.whatsapp_price ?? 0)}
-                                  {' '}for {months === 1 ? '1 month' : `${months} months`}
+                                  {' '}{termLabel(months).toLowerCase()}
                                 </strong>
                               </span>
                               <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 4, lineHeight: 1.6 }}>

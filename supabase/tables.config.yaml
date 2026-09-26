@@ -376,6 +376,12 @@ tables:
     class: isolated
     purgeOrder: 159
 
+  # Registration emails waiting to go out (0125). Cascades from businesses, so
+  # purged before them.
+  email_outbox:
+    class: isolated
+    purgeOrder: 27
+
   # Every WhatsApp bot search (0111). Test searches are test data.
   bot_search_log:
     class: isolated

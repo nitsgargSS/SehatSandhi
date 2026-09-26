@@ -18,10 +18,11 @@
 //
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SITE_URL
 //      AISENSY_API_KEY, AISENSY_INVOICE_CAMPAIGN   (WhatsApp)
-//      MSG91_AUTHKEY, MSG91_EMAIL_TEMPLATE_ID, MSG91_EMAIL_FROM, MSG91_EMAIL_DOMAIN
+//      ZEPTOMAIL_TOKEN                               (email, see _shared/email.ts)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { emailConfigured, esc, layout, sendEmail } from '../_shared/email.ts'
 
 const money = (n: number | null) =>
   `₹${Number(n ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -102,48 +103,38 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ── Email, via MSG91 ──
+  // ── Email, from no-reply@ via ZeptoMail (_shared/email.ts) ──
   let email = 'skipped'
-  const msg91Key = Deno.env.get('MSG91_AUTHKEY')
-  const emailTemplate = Deno.env.get('MSG91_EMAIL_TEMPLATE_ID')
-  const emailFrom = Deno.env.get('MSG91_EMAIL_FROM')
-  const emailDomain = Deno.env.get('MSG91_EMAIL_DOMAIN')
   if (i.sent_email_at) {
     email = 'already sent'
-  } else if (!msg91Key || !emailTemplate || !emailFrom || !emailDomain) {
-    email = 'skipped: MSG91 email env not set'
+  } else if (!emailConfigured()) {
+    email = 'skipped: ZEPTOMAIL_TOKEN not set'
   } else if (!i.recipient_email) {
     // Email is optional at registration, so plenty of invoices will land here.
     email = 'skipped: no email on the invoice'
   } else {
-    try {
-      const res = await fetch('https://control.msg91.com/api/v5/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', authkey: msg91Key },
-        body: JSON.stringify({
-          to: [{ name: i.recipient_name ?? 'Business', email: i.recipient_email }],
-          from: { name: 'Sehatsandhi', email: emailFrom },
-          domain: emailDomain,
-          template_id: emailTemplate,
-          variables: {
-            invoice_number: i.invoice_number,
-            invoice_date: i.invoice_date,
-            amount: money(i.total_amount),
-            invoice_link: link,
-            business_name: i.recipient_name ?? 'Business',
-          },
-        }),
-      })
-      if (res.ok) {
-        email = 'sent'
-        await supabase.from('invoices').update({ sent_email_at: new Date().toISOString() }).eq('id', i.id)
-      } else {
-        email = `failed: ${res.status}`
-        errors.push(`email ${res.status}: ${(await res.text()).slice(0, 200)}`)
-      }
-    } catch (e) {
+    const who = i.recipient_name ?? 'there'
+    const res = await sendEmail({
+      to: i.recipient_email,
+      toName: i.recipient_name ?? undefined,
+      subject: `Sehatsandhi invoice ${i.invoice_number} — ${money(i.total_amount)}`,
+      html: layout(`Invoice ${i.invoice_number}`, `
+<p style="margin:0 0 14px">Hello ${esc(who)}, thank you for your payment. Your invoice is ready.</p>
+<table cellpadding="0" cellspacing="0" style="font-size:14px;margin:0 0 18px">
+<tr><td style="padding:4px 14px 4px 0;color:#5b6b63">Invoice</td><td>${esc(i.invoice_number)}</td></tr>
+<tr><td style="padding:4px 14px 4px 0;color:#5b6b63">Date</td><td>${esc(i.invoice_date)}</td></tr>
+<tr><td style="padding:4px 14px 4px 0;color:#5b6b63">Amount</td><td><b>${esc(money(i.total_amount))}</b></td></tr>
+</table>
+<p style="margin:0 0 14px"><a href="${link}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold">View or download invoice</a></p>
+<p style="margin:0;color:#5b6b63;font-size:13px">You can also find it any time in your dashboard under Plan.</p>`),
+      text: `Hello ${who}, thank you for your payment.\n\nInvoice ${i.invoice_number}\nDate: ${i.invoice_date}\nAmount: ${money(i.total_amount)}\n\nView or download: ${link}\n\nYou can also find it in your dashboard under Plan.`,
+    })
+    if (res.ok) {
+      email = 'sent'
+      await supabase.from('invoices').update({ sent_email_at: new Date().toISOString() }).eq('id', i.id)
+    } else {
       email = 'failed'
-      errors.push(`email: ${String((e as Error).message ?? e)}`)
+      errors.push(`email: ${res.error}`)
     }
   }
 

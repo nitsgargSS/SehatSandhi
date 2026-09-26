@@ -79,8 +79,8 @@ export default function SiteFooter() {
         </p>
 
         <p style={{ fontSize: 12.5, color: HEADER.muted, lineHeight: 1.7, margin: '0 0 10px' }}>
-          <a href="mailto:hello@sehatsandhi.com" style={{ color: HEADER.green, fontWeight: 700 }}>
-            hello@sehatsandhi.com
+          <a href="mailto:contact@sehatsandhi.com" style={{ color: HEADER.green, fontWeight: 700 }}>
+            contact@sehatsandhi.com
           </a>
           <span style={{ opacity: .5 }}>{'  ·  '}</span>
           <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer"
