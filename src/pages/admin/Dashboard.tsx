@@ -620,6 +620,25 @@ export default function AdminDashboard() {
       </span>
     )
   }
+  // 0130: the WhatsApp number is verified by code at signup once WhatsApp can
+  // send; until then — and for every listing from before — admin calls it.
+  const phoneBadge = (d: BusinessRow) => {
+    const v = (d as BusinessRow & { phone_verified_at?: string | null }).phone_verified_at
+    if (v) return <span className="text-[11px] text-teal-600">✓ phone verified</span>
+    return (
+      <span className="text-[11px] text-amber-700">
+        Phone not verified — call {d.phone || 'them'} to confirm{' '}
+        <button onClick={() => markPhoneVerified(d)} className="underline font-medium">Mark verified</button>
+      </span>
+    )
+  }
+  const markPhoneVerified = async (d: BusinessRow) => {
+    const { error } = await supabase.from('businesses')
+      .update({ phone_verified_at: new Date().toISOString() }).eq('id', d.id)
+    if (error) { setActionMsg(`Could not mark ${d.name}: ${error.message}`); return }
+    setActionMsg(`✓ ${d.name}: phone marked verified`); load(); setTimeout(() => setActionMsg(''), 3000)
+  }
+
   const placeOf = (d: BusinessRow) => {
     const b = d as BusinessRow & { own_city?: string | null; own_district?: string | null; own_pin_code?: string | null }
     return [b.own_city, b.own_district !== b.own_city ? b.own_district : null, b.own_pin_code].filter(Boolean).join(', ')
@@ -862,6 +881,7 @@ export default function AdminDashboard() {
                         <div>Reg <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">{d.reg_number}</span></div>
                       )}
                       {placeOf(d) && <div>{placeOf(d)}</div>}
+                      <div>{phoneBadge(d)}</div>
                       {d.pin_codes?.length ? <div>Areas: <AreasCell d={d} /></div> : null}
                       <div>Added {new Date(d.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div>
                     </div>
@@ -915,6 +935,7 @@ export default function AdminDashboard() {
                         <p className="font-medium text-gray-800">{d.name} {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}</p>
                         <p className="text-xs text-gray-400 capitalize">{d.vertical} · {d.phone}</p>
                         {placeOf(d) && <p className="text-xs text-gray-400">{placeOf(d)}</p>}
+                        <p>{phoneBadge(d)}</p>
                       </td>
                       <td className="py-3 px-2"><SpecialityCell d={d} /></td>
                       <td className="py-3 px-2">

@@ -382,6 +382,11 @@ tables:
     class: isolated
     purgeOrder: 27
 
+  # WhatsApp-number codes at signup (0130). Test codes are test data.
+  phone_verifications:
+    class: isolated
+    purgeOrder: 28
+
   # Every WhatsApp bot search (0111). Test searches are test data.
   bot_search_log:
     class: isolated

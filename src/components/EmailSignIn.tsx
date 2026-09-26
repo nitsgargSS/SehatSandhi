@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isValidEmail, normEmail, passwordProblem, checkPassword } from '../lib/credentials'
-import { prepareEmailLogin } from '../lib/businessApi'
+import { prepareEmailLogin, linkMyLogin } from '../lib/businessApi'
 import { markPasswordChanged } from '../lib/passwordState'
 import { Spinner } from './Loading'
 
@@ -64,6 +64,10 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
 
   /** Hand the session to the caller, and undo it if they say no. */
   const finish = async (userId: string, addr: string) => {
+    // A doctor's records find them by login, which registration could not set.
+    // Now that the address is proven, claim them — before the page decides
+    // what this person may see.
+    await linkMyLogin()
     const problem = await onSignedIn(userId, addr)
     if (problem) {
       await supabase.auth.signOut()

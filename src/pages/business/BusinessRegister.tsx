@@ -15,10 +15,13 @@ import { generateBusiness } from '../../lib/sandboxData'
 import {
   computePrice, createRazorpayOrder, verifyRazorpayPayment,
   loadRazorpayCheckout, businessBackendConfigured, listCareModules,
-  PriceResult, DraftPractitioner, CareModule,
+  PriceResult, DraftPractitioner, CareModule, linkMyLogin, phoneVerify,
 } from '../../lib/businessApi'
 import { registerBusiness, registerPractitioner, attachPractitioner } from '../../lib/identityApi'
-import { isValidEmail, isValidPhone, isValidRegNumber } from '../../lib/credentials'
+import { isValidEmail, isValidPhone, isValidRegNumber, normEmail, passwordProblem } from '../../lib/credentials'
+import { markPasswordChanged } from '../../lib/passwordState'
+import EmailAndPassword, { EmailPasswordState } from './EmailAndPassword'
+import PhoneVerify, { phoneKey } from './PhoneVerify'
 import PractitionerPicker from './PractitionerPicker'
 import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal, termLabel } from '../../hooks/usePricing'
 import { useTaxSettings, localTax, isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
@@ -126,6 +129,18 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // saveRegistration below links them either way.
   const [practitioners, setPractitioners] = useState<DraftPractitioner[]>([])
   const [ownerIsDoctor, setOwnerIsDoctor] = useState(false)
+  // Email verified by code, then a password of their own (26 Sep 2026).
+  const [signIn, setSignIn] = useState<EmailPasswordState>({ verifiedEmail: null, password: '', confirm: '' })
+  const [passwordSaved, setPasswordSaved] = useState(false)
+  const emailVerified = !!normEmail(form.email) && signIn.verifiedEmail === normEmail(form.email)
+  // WhatsApp-number verification (0130): only asked while the server says it
+  // can send. Until then admin confirms the number by calling.
+  const [phoneCheckOn, setPhoneCheckOn] = useState(false)
+  const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null)
+  useEffect(() => {
+    phoneVerify('status').then(r => setPhoneCheckOn(!!r.enabled), () => setPhoneCheckOn(false))
+  }, [])
+  const phoneVerified = !phoneCheckOn || (!!verifiedPhone && verifiedPhone === phoneKey(form.phone ?? ''))
   const [invoiceToken, setInvoiceToken] = useState<string | null>(null)
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null)
 
@@ -332,7 +347,10 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       && isValidEmail(form.email)
       && (!soloDoctor || (form.speciality && form.owner_name?.trim()
                           && isValidRegNumber(form.reg_number)))
-      && (!ownerIsDoctor || practitioners.some(d => d.is_owner)))
+      && (!ownerIsDoctor || practitioners.some(d => d.is_owner))
+      && emailVerified
+      && (passwordSaved || !passwordProblem(signIn.password, signIn.confirm))
+      && phoneVerified)
     return true
   }
   const nextStep = async () => {
@@ -344,6 +362,12 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
               ? 'Please enter a 10-digit mobile number.'
               : !isValidEmail(form.email)
                 ? 'Please enter an email address — it is how you will sign in.'
+                : !emailVerified
+                  ? 'Please verify your email — press Verify email and enter the code we send.'
+                  : !passwordSaved && passwordProblem(signIn.password, signIn.confirm)
+                    ? passwordProblem(signIn.password, signIn.confirm)!
+                    : !phoneVerified
+                      ? 'Please verify your WhatsApp number with the code we send.'
                 : soloDoctor && !form.speciality
                   ? 'Please choose a speciality — it is how patients find you.'
                   : soloDoctor && !form.owner_name?.trim()
@@ -367,13 +391,24 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         return
       }
     }
+    // The password goes on the session the code opened. Once saved it is not
+    // asked for again, even if they come back to this step.
+    if (step === 2 && !passwordSaved) {
+      const { error: pwErr } = await supabase.auth.updateUser({ password: signIn.password })
+      if (pwErr) { setError(`Could not save your password: ${pwErr.message}`); return }
+      await markPasswordChanged().catch(() => undefined)
+      setPasswordSaved(true)
+      setSignIn(st => ({ ...st, password: '', confirm: '' }))
+    }
     setError('')
     setStep(s => Math.min(3, s + 1))
   }
   const prevStep = () => { setError(''); setStep(s => Math.max(soloDoctor ? 2 : 1, s - 1)) }
   const goStep = (n: number) => {
     // allow jumping back freely, and forward only through validated steps
-    if (n <= step || [1, 2].slice(0, n - 1).every(stepValid)) { setError(''); setStep(n) }
+    // Forward past step 2 only once the password is saved — that happens in
+    // nextStep, which a jump from the sidebar would otherwise skip.
+    if (n <= step || ([1, 2].slice(0, n - 1).every(stepValid) && (n <= 2 || passwordSaved))) { setError(''); setStep(n) }
   }
 
   // ── Sandbox autofill ──
@@ -497,6 +532,12 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       })))
 
       businessIdRef.current = businessId
+      // The owner's own doctor record, if they are one, now has a login to
+      // point at: the address was verified on step 2.
+      await linkMyLogin()
+      if (phoneCheckOn) {
+        await supabase.rpc('sehat_mark_phone_verified', { p_business: businessId }).then(() => undefined, () => undefined)
+      }
       // Best effort: a label failing to save must not fail the registration.
       const category = soloDoctor
         ? SPECIALITIES.find(sp => sp.id === form.speciality)?.en
@@ -929,12 +970,17 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             placeholder={form.reg_number ? '' : 'or type it — e.g. HR-12345'}
                             value={form.reg_number} onChange={v => upd('reg_number', v)} />
                         )}
-                        <div>
-                          <Field label="Email *" placeholder="you@example.com" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />
-                          <p className="text-xs text-gray-500 mt-1.5">
-                            This is your sign-in, and where your login code is sent. One account per address.
-                          </p>
-                        </div>
+                        <EmailAndPassword
+                          email={form.email ?? ''}
+                          onEmail={v => upd('email', v)}
+                          state={signIn}
+                          onState={setSignIn}
+                          locked={passwordSaved}
+                        />
+                        {phoneCheckOn && (
+                          <PhoneVerify phone={form.phone ?? ''} verifiedPhone={verifiedPhone}
+                            onVerified={setVerifiedPhone} emailVerified={emailVerified} />
+                        )}
                         {/* The owner may be a doctor or not. A doctor is found the
                             same way as any other — on Sehatsandhi already, or in
                             the medical register — so their registration number

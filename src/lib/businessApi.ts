@@ -310,3 +310,21 @@ export const purgeSandbox = (token: string) =>
  */
 export const prepareEmailLogin = (email: string): Promise<void> =>
   callFn<{ ok: boolean }>('email-login-prepare', { email }).then(() => undefined, () => undefined)
+
+/**
+ * After a sign-in that proved the address: link the doctor and business
+ * records registered to it (link-my-login). Best effort — the owner's own
+ * listing is found by email regardless.
+ */
+export const linkMyLogin = async (): Promise<void> => {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return
+  await callFn('link-my-login', {}, session.access_token).then(() => undefined, () => undefined)
+}
+
+/** WhatsApp-number verification at signup (0130). Off until PHONE_VERIFY_ENABLED is set. */
+export const phoneVerify = async (action: 'status' | 'send' | 'verify', phone?: string, code?: string) => {
+  const { data: { session } } = await supabase.auth.getSession()
+  return callFn<{ enabled?: boolean; ok?: boolean; verified?: boolean }>(
+    'phone-verify', { action, phone, code }, session?.access_token)
+}
