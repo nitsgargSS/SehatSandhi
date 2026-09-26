@@ -14,7 +14,10 @@ import RevenuePanel from './RevenuePanel'
 import PatientAreasPanel from './PatientAreasPanel'
 import WhatsAppPanel from './WhatsAppPanel'
 import PayListingPanel from './PayListingPanel'
-import { MyPractice, DoctorsOverview } from './DoctorWorkspace'
+import { MyPractice, DoctorsOverview, OpdFee } from './DoctorWorkspace'
+import LetterheadSettings from './LetterheadSettings'
+import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
+import PublicProfileEditor from './PublicProfileEditor'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
@@ -232,12 +235,17 @@ export default function DoctorDashboard() {
     is_primary: boolean
     consultation_fee: number
     status: string
+    /** 0140: added mid-term past the included doctors; live once paid. */
+    awaiting_payment?: boolean
     practitioners: {
       id: string; full_name: string; speciality: string | null
       qualification: string | null; reg_number: string | null; status: string
       // Read so the roster can say who cannot sign in. It is the only thing
       // that gets somebody a login — clinic-otp matches on it.
       phone: string | null
+      /** 0139: how they sign in, and whether they ever have. */
+      email?: string | null
+      auth_uid?: string | null
     } | null
   }
   const [roster, setRoster] = useState<RosterRow[]>([])
@@ -251,7 +259,63 @@ export default function DoctorDashboard() {
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
   const [showAddDoc, setShowAddDoc] = useState(false)
-  const [docForm, setDocForm] = useState({ name: '', speciality: 'GEN', qualification: '', phone: '', role: 'doctor' })
+  const [feeFor, setFeeFor] = useState<string | null>(null)
+  // 0139: invite a doctor to log in and set up their profile.
+  const [emailFor, setEmailFor] = useState<string | null>(null)
+  const [emailDraft, setEmailDraft] = useState('')
+  // 0140: pay for a doctor added mid-term, pro rata to the plan's end.
+  const [addonQuote, setAddonQuote] = useState<Record<string, DoctorAddonQuote>>({})
+  const quoteAddon = async (practitionerId: string) => {
+    if (!doctor) return
+    try {
+      const q = await doctorAddon(doctor.id, practitionerId, 'quote')
+      setAddonQuote(m => ({ ...m, [practitionerId]: q }))
+    } catch (e) {
+      const msg = (e as Error).message
+      if (/released|no extra fee/i.test(msg)) { await loadRoster(doctor.id); setRosterErr('✓ No extra fee is due — the doctor is live.') }
+      else setRosterErr(msg)
+    }
+  }
+  const payAddon = async (practitionerId: string) => {
+    if (!doctor) return
+    setRosterBusy(true); setRosterErr('')
+    try {
+      const order = await doctorAddon(doctor.id, practitionerId, 'order')
+      await loadRazorpayCheckout()
+      const Razorpay = (window as unknown as { Razorpay: new (o: unknown) => { open: () => void } }).Razorpay
+      new Razorpay({
+        key: order.keyId, amount: order.amountPaise, currency: order.currency, order_id: order.orderId,
+        name: 'Sehatsandhi Business', description: `${doctor.name} · ${order.doctor} until ${shortDate(order.termEnd)}`,
+        prefill: { name: doctor.name, email: doctor.email || undefined },
+        remember_customer: false,
+        modal: { ondismiss: () => setRosterBusy(false) },
+        handler: async (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          const v = await verifyRazorpayPayment({ orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id, signature: r.razorpay_signature, paymentRowId: order.paymentRowId })
+          setRosterBusy(false)
+          if (v.ok) { setRosterErr(`✓ Paid. ${order.doctor} is live.`); await loadRoster(doctor.id) }
+          else setRosterErr('Payment could not be verified. If money was deducted, our team will reconcile it.')
+        },
+      }).open()
+    } catch (e) { setRosterErr((e as Error).message); setRosterBusy(false) }
+  }
+
+  const inviteDoctor = async (practitionerId: string, name: string) => {
+    if (!doctor) return
+    setRosterErr('')
+    const { data, error } = await supabase.rpc('sehat_invite_doctor', { p_business: doctor.id, p_practitioner: practitionerId })
+    if (error) { setRosterErr(error.message); return }
+    setRosterErr(data === 'already_sent' ? `An invite to ${name} went out in the last hour.` : `✓ Invite emailed to ${name}. It arrives within a few minutes.`)
+  }
+  const saveDoctorEmail = async (practitionerId: string, name: string) => {
+    if (!doctor) return
+    setRosterErr('')
+    const { error } = await supabase.rpc('sehat_set_doctor_email', { p_business: doctor.id, p_practitioner: practitionerId, p_email: emailDraft })
+    if (error) { setRosterErr(error.message); return }
+    setEmailFor(null)
+    await loadRoster(doctor.id)
+    await inviteDoctor(practitionerId, name)
+  }
+  const [docForm, setDocForm] = useState({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
   interface PlanTerms {
     doctor_billing: string
     monthly_price: number | null
@@ -267,7 +331,7 @@ export default function DoctorDashboard() {
 
   const loadRoster = async (businessId: string) => {
     const { data } = await supabase.from('business_practitioners')
-      .select('*, practitioners(id, full_name, speciality, qualification, reg_number, status, phone)')
+      .select('*, practitioners(id, full_name, speciality, qualification, reg_number, status, phone, email, auth_uid)')
       .eq('business_id', businessId)
       .order('sort_order')
     setRoster((data as RosterRow[]) || [])
@@ -288,9 +352,12 @@ export default function DoctorDashboard() {
     try {
       const practitionerId = picked?.practitionerId ?? await registerPractitioner({
         fullName: docForm.name.trim(),
-        speciality: docForm.speciality,
-        qualification: docForm.qualification || null,
+        speciality: docForm.role === 'doctor' ? docForm.speciality : null,
+        qualification: docForm.role === 'doctor' ? (docForm.qualification || null) : null,
+        regNumber: docForm.role === 'doctor' ? (docForm.regNumber.trim() || null) : null,
         phone: docForm.phone || '',
+        email: docForm.email.trim(),
+        role: docForm.role,
       })
       await attachPractitioner({
         businessId: doctor.id,
@@ -298,8 +365,11 @@ export default function DoctorDashboard() {
         role: docForm.role as AffiliationRole,
         consultationFee: 0,
       })
-      setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', role: 'doctor' })
+      setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
       setShowAddDoc(false)
+      // Everyone added is asked to set up their own login (0139). Best effort:
+      // the Invite button on their row sends it again.
+      await supabase.rpc('sehat_invite_doctor', { p_business: doctor.id, p_practitioner: practitionerId }).then(() => undefined, () => undefined)
       await loadRoster(doctor.id)
     } catch (e) {
       setRosterErr((e as Error).message)
@@ -334,7 +404,15 @@ export default function DoctorDashboard() {
   // the signup wizard also use. Computing it here separately is what let this
   // panel go on quoting a superseded model.
   const hc = plan ? headcountFor(plan, billableDoctors) : null
-  const marginalCost = plan ? marginalDoctorCost(plan, billableDoctors) : 0
+  // The business type's own extra-doctor price (0140) — what is actually
+  // charged — with the pricing plan's rule as a fallback on an older database.
+  const [typeMarginal, setTypeMarginal] = useState<number | null>(null)
+  useEffect(() => {
+    if (!showAddDoc || !doctor) return
+    supabase.rpc('sehat_extra_doctor_monthly', { p_business: doctor.id, p_practitioner: '00000000-0000-0000-0000-000000000000' })
+      .then(({ data, error }) => setTypeMarginal(error ? null : Number(data ?? 0)))
+  }, [showAddDoc, doctor, roster.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const marginalCost = typeMarginal ?? (plan ? marginalDoctorCost(plan, billableDoctors) : 0)
   const headcountSentence = plan ? describeHeadcount(plan, billableDoctors) : null
 
   const [gstinDraft, setGstinDraft] = useState('')
@@ -1636,7 +1714,7 @@ export default function DoctorDashboard() {
         )}
 
         {tab === 'whatsapp' && doctor && (
-          <WhatsAppPanel businessId={doctor.id} businessName={doctor.name}
+          <WhatsAppPanel businessId={doctor.id} businessName={doctor.name} business={doctor}
             prefill={{ name: doctor.name, email: doctor.email ?? undefined, contact: doctor.phone ?? undefined }} />
         )}
 
@@ -1827,6 +1905,11 @@ export default function DoctorDashboard() {
 
         {tab === 'clinic' && (
           <div className="space-y-4">
+            {doctor && (
+              <LetterheadSettings businessId={doctor.id}
+                current={(doctor as typeof doctor & { letterhead_url?: string | null }).letterhead_url ?? null}
+                onSaved={url => setDoctor(d => d ? ({ ...d, letterhead_url: url } as typeof d) : d)} />
+            )}
             {/* The doctors who work here. Shown for clinics too now: the roster
                 is affiliations, and a clinic has those the same as a hospital. */}
             {hasPractitioners(myVertical) && (
@@ -1840,8 +1923,9 @@ export default function DoctorDashboard() {
                   )}
                 </div>
                 <p className="text-sm text-gray-500 mb-3">
-                  Doctors get their own profile and appointment calendar, and are checked by our team
-                  before going live. Reception and managers do not appear publicly — they are here so
+                  Doctors get their own profile and appointment calendar, and appear in the WhatsApp bot
+                  and on the website as soon as they are added to a live listing. Set each doctor's OPD fee
+                  (and any discount) here. Reception and managers do not appear publicly — they are here so
                   they can sign in, and what they can see is set by the role you give them.
                 </p>
 
@@ -1855,7 +1939,7 @@ export default function DoctorDashboard() {
                   </div>
                 )}
 
-                {rosterErr && <div className="bg-red-50 text-red-600 text-sm rounded-xl p-3 mb-3">{rosterErr}</div>}
+                {rosterErr && <div className={`${rosterErr.startsWith('✓') ? 'bg-teal-50 text-teal-700' : 'bg-red-50 text-red-600'} text-sm rounded-xl p-3 mb-3`}>{rosterErr}</div>}
 
                 {showAddDoc && (
                   <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
@@ -1885,6 +1969,8 @@ export default function DoctorDashboard() {
                         value={docForm.name} onChange={e => setDocForm(f => ({ ...f, name: e.target.value }))} />
                       <input className="input-field text-sm" placeholder="Mobile number *" inputMode="numeric"
                         value={docForm.phone} onChange={e => setDocForm(f => ({ ...f, phone: e.target.value }))} />
+                      <input className="input-field text-sm" placeholder="Email * — how they sign in" type="email" inputMode="email" autoComplete="off"
+                        value={docForm.email} onChange={e => setDocForm(f => ({ ...f, email: e.target.value }))} />
                       {docForm.role === 'doctor' && (
                         <>
                           <select className="input-field text-sm" value={docForm.speciality}
@@ -1893,6 +1979,8 @@ export default function DoctorDashboard() {
                           </select>
                           <input className="input-field text-sm" placeholder="Qualification, e.g. MD"
                             value={docForm.qualification} onChange={e => setDocForm(f => ({ ...f, qualification: e.target.value }))} />
+                          <input className="input-field text-sm" placeholder="Council registration number *"
+                            value={docForm.regNumber} onChange={e => setDocForm(f => ({ ...f, regNumber: e.target.value }))} />
                         </>
                       )}
                     </div>
@@ -1903,18 +1991,25 @@ export default function DoctorDashboard() {
                         never be used, which is what the signup wizard was
                         producing until it was fixed the same way. */}
                     <p className="text-xs text-gray-500">
-                      They sign in at <strong>/business/login</strong> with this number — nobody
-                      sends them a password. Without it they cannot get in at all.
+                      They sign in at <strong>sehatsandhi.com/business/login</strong> with this email: “Email me a code”
+                      the first time, then “Forgot your password?” to set their own password. Each person needs their
+                      own email. {docForm.role === 'receptionist'
+                        ? 'Reception sees Today, Queue, Appointments, Patients (to register and bill) and Beds — no medical notes, no business settings, no reports.'
+                        : docForm.role === 'nurse' ? 'A nurse charts the ward and vitals, and cannot prescribe.'
+                        : docForm.role === 'manager' ? 'A manager handles the listing, invoices and plan — no medical record.' : ''}
                     </p>
                     {marginalCost > 0 && docForm.role === 'doctor' && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
                         Adding this doctor takes you to {billableDoctors + 1}, which adds
-                        {money(marginalCost)}/month from your next renewal.
+                        {money(marginalCost)}/month. If your plan is running, you pay that for the days left in
+                        this term before they go live; from your next renewal it is part of your plan.
                       </p>
                     )}
                     <div className="flex gap-2">
                       <button onClick={() => addRosterDoctor()}
-                        disabled={rosterBusy || !docForm.name.trim() || docForm.phone.replace(/\D/g, '').length < 10}
+                        disabled={rosterBusy || !docForm.name.trim() || docForm.phone.replace(/\D/g, '').length < 10
+                          || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(docForm.email.trim())
+                          || (docForm.role === 'doctor' && !docForm.regNumber.trim())}
                         className="btn-teal text-sm py-2 px-5 disabled:opacity-50">
                         {rosterBusy ? 'Adding…' : 'Add'}
                       </button>
@@ -1954,12 +2049,53 @@ export default function DoctorDashboard() {
                               : (ROSTER_ROLES.find(r => r[0] === d.role)?.[1] ?? d.role)}
                             {d.role === 'doctor' && person?.qualification ? ` · ${person.qualification}` : ''}
                             {d.role === 'doctor' && d.consultation_fee > 0 ? ` · ₹${d.consultation_fee} here` : ''}
+                            {d.awaiting_payment && !suspended && (
+                              <span className="block mt-1 text-amber-800">
+                                <span className="font-bold">Payment pending</span> — not live until paid.{' '}
+                                {addonQuote[d.practitioner_id] ? (
+                                  <button disabled={rosterBusy} onClick={() => payAddon(d.practitioner_id)} className="underline font-medium text-teal-700">
+                                    Pay {money(addonQuote[d.practitioner_id].tax.grandTotal)} to activate
+                                    {' '}({money(addonQuote[d.practitioner_id].perMonth)}/month × {addonQuote[d.practitioner_id].daysLeft} of {addonQuote[d.practitioner_id].daysInTerm} days, incl. GST)
+                                  </button>
+                                ) : (
+                                  <button onClick={() => quoteAddon(d.practitioner_id)} className="underline font-medium text-teal-700">See amount</button>
+                                )}
+                              </span>
+                            )}
+                            {d.role === 'doctor' && !suspended && (
+                              <button onClick={() => setFeeFor(feeFor === d.practitioner_id ? null : d.practitioner_id)}
+                                className="ml-2 text-teal-700 underline font-medium">
+                                {feeFor === d.practitioner_id ? 'Close' : 'Fee & public profile'}
+                              </button>
+                            )}
                             {suspended ? ' · not on your bill' : ''}
                             {/* Whether they can actually get in. A roster entry with
                                 no number is a name nobody can use, and that was
                                 invisible until it was too late. */}
-                            {!person?.phone && ' · no number — cannot sign in'}
+                            {person?.auth_uid ? ' · ✓ has signed in'
+                              : person?.email ? ' · not signed in yet' : ' · no email — cannot sign in'}
+                            {!person?.auth_uid && !suspended && person && (
+                              person.email ? (
+                                <button onClick={() => inviteDoctor(person.id, person.full_name)} className="ml-2 text-teal-700 underline font-medium">
+                                  Invite to log in &amp; set up profile
+                                </button>
+                              ) : emailFor === person.id ? (
+                                <span className="ml-2 inline-flex gap-1 items-center">
+                                  <input className="input-field text-xs py-1 px-2 w-48" placeholder="their email" value={emailDraft}
+                                    onChange={e => setEmailDraft(e.target.value)} />
+                                  <button onClick={() => saveDoctorEmail(person.id, person.full_name)} className="text-teal-700 underline font-medium">Save &amp; invite</button>
+                                </span>
+                              ) : (
+                                <button onClick={() => { setEmailFor(person.id); setEmailDraft('') }} className="ml-2 text-teal-700 underline font-medium">Add email</button>
+                              )
+                            )}
                           </div>
+                          {feeFor === d.practitioner_id && doctor && (
+                            <div className="mt-2 space-y-3">
+                              <OpdFee businessId={doctor.id} practitionerId={d.practitioner_id} />
+                              <PublicProfileEditor practitionerId={d.practitioner_id} />
+                            </div>
+                          )}
                         </div>
                         {!suspended && (
                           <select

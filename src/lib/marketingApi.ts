@@ -8,9 +8,6 @@ import { loadRazorpayCheckout, verifyRazorpayPayment } from './businessApi'
 // broadcast cannot be created (so nobody is charged).
 
 export interface MarketingSettings {
-  monthly_subscription_paise: number
-  onboarding_fee_paise: number
-  onboarding_fee_label: string
   per_message_paise: number
   grace_days: number
   sending_enabled: boolean
@@ -142,6 +139,21 @@ export async function getWallet(businessId: string): Promise<{ balance: number; 
   ])
   oops(w.error); oops(t.error)
   return { balance: (w.data as { balance_paise: number } | null)?.balance_paise ?? 0, txs: (t.data ?? []) as WalletTx[] }
+}
+
+/** 0122: where this clinic stands on the WhatsApp add-on. */
+export interface WaAccess {
+  state: 'none' | 'active' | 'grace' | 'locked'
+  expires_on: string | null
+  /** First day the tab is locked, if the add-on is not renewed. */
+  locks_on: string | null
+  grace_days: number
+}
+
+export async function getWaAccess(businessId: string): Promise<WaAccess> {
+  const { data, error } = await supabase.rpc('sehat_wa_access', { p_business: businessId })
+  oops(error)
+  return data as WaAccess
 }
 
 export async function getBroadcastBlocker(businessId: string): Promise<string | null> {

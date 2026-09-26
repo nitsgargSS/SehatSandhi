@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
   const { data: rx, error } = await supabase
     .from('prescriptions')
     .select(`
-      id, prescription_no, issued_at, status, token_expires_at,
+      id, business_id, prescription_no, issued_at, status, token_expires_at,
       prescriber_name, prescriber_qualification, prescriber_reg_number,
       clinic_name, clinic_address, clinic_phone,
       patient_name, patient_age, patient_gender,
@@ -79,7 +79,17 @@ Deno.serve(async (req) => {
 
   // The id and the expiry have both done their job here; neither belongs in a
   // payload that gets forwarded around.
-  const { id: _id, token_expires_at: _exp, ...safe } = rx as Record<string, unknown>
+  const { id: _id, business_id: _biz, token_expires_at: _exp, ...safe } = rx as Record<string, unknown>
+  const letterhead_url = await letterheadOf(supabase, rx.business_id as string)
 
-  return json({ prescription: { ...safe, items: items ?? [] } })
+  return json({ prescription: { ...safe, letterhead_url, items: items ?? [] } })
 })
+
+// 0135: the clinic's banner, printed at the top when it has one. Read live
+// rather than snapshotted: it is branding, not part of the document's content.
+// deno-lint-ignore no-explicit-any
+async function letterheadOf(db: any, businessId: string | null): Promise<string | null> {
+  if (!businessId) return null
+  const { data } = await db.from('businesses').select('letterhead_url').eq('id', businessId).maybeSingle()
+  return (data as { letterhead_url?: string | null } | null)?.letterhead_url ?? null
+}

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PAGE } from '../../components/SiteHeader'
+import SiteHeader, { HeaderLink, HeaderCta, shopIcon, loginIcon, PAGE } from '../../components/SiteHeader'
 import SiteFooter from '../../components/SiteFooter'
 import { BIZ, VERTICALS } from './shared'
 import VerticalIcon from './VerticalIcon'
@@ -73,8 +73,8 @@ export default function BusinessLanding() {
         <HeaderLink href="#systems">OPD &amp; IPD</HeaderLink>
         <HeaderLink href="#pricing">Pricing</HeaderLink>
         <HeaderLink href="#partners">Partners</HeaderLink>
-        <HeaderLink to="/business/login">Log in</HeaderLink>
         <HeaderCta to="/business/register" icon={shopIcon}>List your business</HeaderCta>
+        <HeaderCta to="/business/login" icon={loginIcon}>Log in</HeaderCta>
       </SiteHeader>
 
       {/* hero */}

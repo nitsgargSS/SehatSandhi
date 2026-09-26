@@ -1,13 +1,14 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Search, Plus, BellRing, Check, X, UserPlus } from 'lucide-react'
+import { Search, Plus, BellRing, Check, X, UserPlus, Printer } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
 import {
-  getBoard, issueToken, callNext, setTokenStatus,
+  getBoard, callNext, setTokenStatus, opdVisit, patientHistory, opdSlipUrl, HistoryRow,
   stillWaiting, inProgress, finished,
   QueueEntry,
 } from '../../lib/queueApi'
-import { searchPatients, PatientSearchResult } from '../../lib/patientsApi'
+import { searchPatients, PatientSearchResult, registerPatient } from '../../lib/patientsApi'
+import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
 import { listBusinessDoctors, BusinessDoctor } from '../../lib/doctorsApi'
 import DoctorSelect from '../../components/DoctorSelect'
 
@@ -143,7 +144,7 @@ export default function Queue({ businessId, practitionerId }: {
       {adding && (
         <IssueToken
           businessId={businessId} practitionerId={practitionerId} doctors={doctors} defaultDoctor={view}
-          onIssued={() => { setAdding(false); reload() }}
+          onIssued={() => reload()}
           onError={setErr}
         />
       )}
@@ -244,6 +245,10 @@ function Row({ e, busy, act, emphasis }: {
       </div>
 
       <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+        <a href={opdSlipUrl(e.id)} target="_blank" rel="noreferrer" title="Print OPD slip"
+          style={{ ...btn(), fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+          <Printer className="w-3.5 h-3.5" /> Slip
+        </a>
         {e.status === 'waiting' && (
           <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
             onClick={() => act(() => setTokenStatus(e.id, 'left'))}>Left</button>
@@ -290,6 +295,38 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
   // single-doctor clinic has nothing to pick.
   const [forDoctor, setForDoctor] = useState<string | null>(
     defaultDoctor ?? practitionerId ?? (doctors.length === 1 ? doctors[0].practitioner_id : null))
+  // 0135: the doctor's fee (or a discount, or free), the patient's history
+  // here, and a new patient registered in place when the search finds nobody.
+  const [fee, setFee] = useState<FeeChoice>(emptyFee)
+  const [history, setHistory] = useState<HistoryRow[] | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [np, setNp] = useState({ name: '', phone: '', age: '', gender: '' })
+  const [issued, setIssued] = useState<{ id: string; token: number } | null>(null)
+
+  useEffect(() => {
+    if (!picked) { setHistory(null); return }
+    patientHistory(businessId, picked.patient_member_id).then(h => {
+      setHistory(h)
+      // A returning patient goes back to the doctor they last saw, unless the
+      // desk has a reason to pick someone else.
+      const last = h.find(r => r.doctor_id && doctors.some(d => d.practitioner_id === r.doctor_id))
+      if (last && !defaultDoctor && doctors.length > 1) setForDoctor(last.doctor_id)
+    }).catch(() => setHistory([]))
+  }, [picked, businessId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const chosenDoctor = doctors.find(d => d.practitioner_id === (forDoctor ?? practitionerId ?? null)) ?? null
+
+  const registerNew = async () => {
+    setBusy(true)
+    try {
+      const id = await registerPatient(businessId, {
+        fullName: np.name.trim(), phone: np.phone.trim(), relation: 'self',
+        gender: np.gender || undefined, ageYears: np.age ? Number(np.age) : null,
+      })
+      setPicked({ patient_member_id: id, full_name: np.name.trim(), phone: np.phone.trim(), age_years: np.age ? Number(np.age) : null } as PatientSearchResult)
+      setAdding(false); setNp({ name: '', phone: '', age: '', gender: '' })
+    } catch (e) { onError((e as Error).message) } finally { setBusy(false) }
+  }
 
   useEffect(() => {
     const q = query.trim()
@@ -308,17 +345,21 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
     if (!picked) return
     if (priority && !why.trim()) { onError('Say why this token goes out of turn.'); return }
     if (doctors.length > 1 && !forDoctor) { onError('Choose which doctor this token is for.'); return }
+    if (!feeValid(fee, chosenDoctor)) { onError('For a discount or free visit, enter the amount and say why.'); return }
     setBusy(true)
     try {
-      await issueToken({
+      const r = await opdVisit({
         patientMemberId: picked.patient_member_id,
         businessId,
         practitionerId: forDoctor ?? practitionerId ?? null,
         reason,
+        fee: feeToCharge(fee),
+        discountReason: fee.mode === 'full' ? null : fee.reason.trim(),
         priority: priority ? 10 : 0,
         priorityReason: priority ? why.trim() : undefined,
-        createdBy: practitionerId ?? null,
       })
+      setIssued({ id: r.queue_id, token: r.token_number })
+      setPicked(null); setQuery(''); setFee(emptyFee); setReason(''); setPriority(false); setWhy('')
       onIssued()
     } catch (e) { onError((e as Error).message) } finally { setBusy(false) }
   }
@@ -326,6 +367,15 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
   return (
     <div style={{ ...card, borderColor: BIZ.green }}>
       <div style={{ ...label, marginBottom: 9 }}>Who is it for?</div>
+      {issued && (
+        <div style={{ fontSize: 13, marginBottom: 10, padding: '8px 10px', borderRadius: 9, background: '#f3faf6', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          ✓ Token {issued.token} issued.
+          <a href={opdSlipUrl(issued.id)} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>
+            Print OPD slip
+          </a>
+          <button onClick={() => setIssued(null)} style={{ ...btn(), padding: 4 }}><X className="w-3 h-3" /></button>
+        </div>
+      )}
 
       {picked ? (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 11 }}>
@@ -363,11 +413,32 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
               ))}
             </div>
           )}
-          {query.trim().length >= 2 && results.length === 0 && (
-            <div style={{ marginTop: 9, fontSize: 12.5, color: BIZ.mutedWarm }}>
-              <UserPlus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 5 }} />
-              Nobody matches. A new patient has to be added first — book them, or
-              scan them in at reception.
+          {query.trim().length >= 2 && results.length === 0 && !adding && (
+            <div style={{ marginTop: 9, fontSize: 12.5, color: BIZ.mutedWarm, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              Nobody matches — a new patient.
+              <button style={{ ...btn(), fontSize: 12.5 }} onClick={() => {
+                const d = query.replace(/\D/g, '')
+                setNp({ name: d.length >= 10 ? '' : query.trim(), phone: d.length >= 10 ? d.slice(-10) : '', age: '', gender: '' })
+                setAdding(true)
+              }}>
+                <UserPlus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 5 }} />Register new patient
+              </button>
+            </div>
+          )}
+          {adding && (
+            <div style={{ marginTop: 9, display: 'grid', gap: 7 }}>
+              <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                <input style={{ ...input, flex: '2 1 180px' }} placeholder="Full name" value={np.name} onChange={e => setNp({ ...np, name: e.target.value })} />
+                <input style={{ ...input, flex: '1 1 130px' }} placeholder="Mobile (10 digits)" inputMode="numeric" value={np.phone} onChange={e => setNp({ ...np, phone: e.target.value })} />
+                <input style={{ ...input, flex: '0 1 80px' }} placeholder="Age" inputMode="numeric" value={np.age} onChange={e => setNp({ ...np, age: e.target.value })} />
+                <select style={{ ...input, flex: '0 1 110px' }} value={np.gender} onChange={e => setNp({ ...np, gender: e.target.value })}>
+                  <option value="">Gender</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={btn(true)} disabled={busy || np.name.trim().length < 2 || np.phone.replace(/\D/g, '').length < 10} onClick={registerNew}>Register</button>
+                <button style={btn()} onClick={() => setAdding(false)}>Cancel</button>
+              </div>
             </div>
           )}
         </>
@@ -375,9 +446,21 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
 
       {picked && (
         <div style={{ display: 'grid', gap: 9 }}>
-          {doctors.length > 1 && (
-            <DoctorSelect doctors={doctors} value={forDoctor} onChange={setForDoctor} allLabel="Which doctor?" style={input} />
+          {history && history.length > 0 && (
+            <div style={{ fontSize: 12.5, color: BIZ.muted, background: '#fcfbf8', border: `1px solid ${BIZ.border}`, borderRadius: 9, padding: '7px 10px' }}>
+              <b style={{ color: BIZ.ink }}>Seen here before ({history.length}):</b>
+              {history.slice(0, 4).map((h, i) => (
+                <div key={i}>{new Date(h.seen_on).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · {h.doctor_name ?? 'no doctor'} · {h.kind}{h.detail ? ` — ${h.detail}` : ''}</div>
+              ))}
+            </div>
           )}
+          {history && history.length === 0 && (
+            <div style={{ fontSize: 12.5, color: BIZ.mutedWarm }}>First visit here.</div>
+          )}
+          {doctors.length > 1 && (
+            <DoctorSelect doctors={doctors} value={forDoctor} onChange={v => { setForDoctor(v); setFee(emptyFee) }} allLabel="Which doctor did they come for?" style={input} />
+          )}
+          <FeeChooser doctor={chosenDoctor} value={fee} onChange={setFee} input={input} />
           <input style={input} value={reason} onChange={e => setReason(e.target.value)}
             placeholder="What have they come for? (optional)" />
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: BIZ.ink }}>
@@ -389,7 +472,7 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
               placeholder="Why — emergency, elderly, unwell in the waiting room…" />
           )}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button style={btn(true)} disabled={busy} onClick={give}>Give token</button>
+            <button style={btn(true)} disabled={busy} onClick={give}>Give token{chosenDoctor && ((chosenDoctor.discounted_fee ?? chosenDoctor.consultation_fee ?? 0) > 0) ? ' & add fee' : ''}</button>
           </div>
         </div>
       )}

@@ -267,3 +267,12 @@ export function localMonthlyTotal(
   const priceByTier = new Map(tiers.map(t => [t.tier_number, t.monthly_price]))
   return selected.reduce((sum, s) => sum + (priceByTier.get(s.tier_number) ?? 0), 0)
 }
+
+/** "Monthly", "Half-yearly", "Yearly" — mirrors termLabel in _shared/pricing.ts. */
+export function termLabel(months: number): string {
+  if (months === 1) return 'Monthly'
+  if (months === 3) return 'Quarterly'
+  if (months === 6) return 'Half-yearly'
+  if (months === 12) return 'Yearly'
+  return `${months} months`
+}

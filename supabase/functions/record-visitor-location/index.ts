@@ -47,6 +47,8 @@ interface GeoResult {
   postal: string | null
   latitude: number | null
   longitude: number | null
+  /** The address belongs to a data centre, not a person. */
+  hosting?: boolean
 }
 
 /**
@@ -80,6 +82,15 @@ function coarsen(n: number): number {
   return Math.round(n * 1000) / 1000
 }
 
+// Networks that are data centres, not people: search crawlers, link
+// previewers, cloud servers and monitors. A visit from one of these is a
+// machine, and counting it put Altoona, Dallas and San Jose on the admin's
+// "where we are noticed" list. Matched against the lookup's network owner.
+const HOSTING = /google|amazon|aws|microsoft|azure|facebook|meta platforms|digitalocean|ovh|hetzner|linode|akamai|oracle|alibaba|tencent|cloudflare|fastly|vultr|choopa|leaseweb|contabo|scaleway|m247|datacamp|hostinger|colocrossing|zscaler|apple inc|yandex|baidu|bytedance|hurricane electric|cogent|psychz|quadranet|servers\.com|vercel/i
+
+// Bots that identify themselves in the request.
+const BOT_UA = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|preview|facebookexternalhit|whatsapp\/|googleother|embedly|vercel|uptime|monitor|curl|wget|python|axios|node-fetch/i
+
 async function lookupIp(ip: string): Promise<GeoResult | null> {
   const base = Deno.env.get('IPGEO_ENDPOINT') || DEFAULT_ENDPOINT
   const ctrl = new AbortController()
@@ -90,6 +101,8 @@ async function lookupIp(ip: string): Promise<GeoResult | null> {
     const b = await res.json()
     // ipwho.is answers 200 with { success: false } for addresses it cannot place.
     if (b?.success === false) return null
+    const owner = `${b?.connection?.org ?? ''} ${b?.connection?.isp ?? ''}`
+    if (HOSTING.test(owner)) return { hosting: true } as GeoResult
     const lat = typeof b?.latitude === 'number' ? coarsen(b.latitude) : null
     const lng = typeof b?.longitude === 'number' ? coarsen(b.longitude) : null
     return {
@@ -147,8 +160,13 @@ Deno.serve(async (req) => {
   // geocoding every fix would be a second paid dependency for a label the IP
   // already gives us. The precise coordinates are the visitor's; the place name
   // around them is ours.
+  if (BOT_UA.test(req.headers.get('user-agent') ?? '')) {
+    return json({ ok: true, recorded: false, reason: 'bot' })
+  }
+
   const ip = clientIp(req)
   const geo = ip && isRoutable(ip) ? await lookupIp(ip) : null
+  if (geo?.hosting) return json({ ok: true, recorded: false, reason: 'data centre' })
 
   if (!consented && !geo) {
     // Nothing to record. Still a 200 — the page did nothing wrong and there is

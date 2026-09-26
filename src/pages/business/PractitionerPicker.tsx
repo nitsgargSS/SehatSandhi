@@ -28,12 +28,17 @@ const input: React.CSSProperties = {
   fontFamily: 'inherit', fontSize: 15, color: BIZ.ink, background: '#fff', width: '100%',
 }
 
-export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone }: {
+export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone, clinicEmail, single, label = 'Add a doctor' }: {
   added: DraftPractitioner[]
   onAdd: (d: DraftPractitioner) => void
   onRemove: (index: number) => void
   /** The number the clinic itself registered on, for the "this doctor is me" case. */
   clinicPhone?: string
+  /** The clinic's email, filled in with the number when "this doctor is me" is ticked. */
+  clinicEmail?: string
+  /** One person only — the owner. The search goes away once they are added. */
+  single?: boolean
+  label?: string
 }) {
   const [query, setQuery] = useState('')
   const [matches, setMatches] = useState<PractitionerMatch[]>([])
@@ -53,7 +58,8 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
   // The same four the server requires of a new doctor since 0079. Someone
   // matched from the register arrives with a practitioner_id and is exempt —
   // they are already registered, and their details are already checked.
-  const ready = draft.name.trim().length > 1
+  const existing = !!draft.practitioner_id
+  const ready = existing || draft.name.trim().length > 1
     && isValidPhone(draft.phone)
     && isValidEmail(draft.email)
     && isValidRegNumber(draft.reg_number)
@@ -156,10 +162,10 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
         </div>
       )}
 
-      {!manual && (
+      {!manual && !(single && added.length > 0) && (
         <>
           <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: BIZ.ink, marginBottom: 7 }}>
-            Add a doctor
+            {label}
           </label>
           <div style={{ position: 'relative' }}>
             <input
@@ -244,6 +250,29 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
             </div>
           )}
 
+          {/* Results, but not the right person. The lists must never be a
+              dead end: a common name matches strangers in the register, and
+              the person being added may simply not be in it yet. */}
+          {searched && !searching && (matches.length > 0 || registry.length > 0) && (
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 13.5, color: BIZ.muted }}>
+              <span>Not in this list?</span>
+              <button onClick={() => {
+                  setDraft({ name: query.trim(), speciality: 'GEN' }); setManual(true)
+                  setQuery(''); setMatches([]); setRegistry([]); setSearched(false)
+                }}
+                style={{
+                  padding: '8px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: 13.5, fontWeight: 800, border: `2px solid ${BIZ.green}`, background: '#fff', color: BIZ.green,
+                }}>
+                Enter "{query.trim()}" manually
+              </button>
+              <button onClick={() => { setQuery(''); setMatches([]); setRegistry([]); setSearched(false) }}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: BIZ.mutedWarm, fontFamily: 'inherit', fontSize: 13.5, textDecoration: 'underline' }}>
+                Clear search
+              </button>
+            </div>
+          )}
+
           {/* Neither list has them. The register is not complete — nobody who
               qualified in the last few months is in it — so typing must stay
               possible. */}
@@ -279,7 +308,28 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
 
       {manual && (
         <div style={{ border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: 16, background: '#fdfcfa' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: BIZ.ink, marginBottom: 12 }}>New doctor</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: BIZ.ink, marginBottom: 12 }}>
+            {existing ? 'Already on Sehatsandhi' : 'New doctor'}
+          </div>
+          {/* Somebody already here is attached as they are. Their number, email
+              and registration are on file and checked — asking again is how two
+              records of one doctor started to disagree, and the server ignores
+              anything typed for them anyway (0079). Nor are those shown: this
+              page is open to anyone, and a doctor's number is not theirs to see. */}
+          {existing ? (
+            <div style={{ fontSize: 14, color: BIZ.ink, lineHeight: 1.6 }}>
+              <div style={{ fontWeight: 800 }}>{draft.name}</div>
+              <div style={{ color: BIZ.mutedWarm, fontSize: 13 }}>
+                {[SPECIALITIES.find(sp => sp.id === draft.speciality)?.en ?? draft.speciality,
+                  draft.qualification, draft.reg_number ? `Reg ${draft.reg_number}` : null]
+                  .filter(Boolean).join(' · ')}
+              </div>
+              <p style={{ fontSize: 12.5, color: BIZ.mutedWarm, margin: '8px 0 0' }}>
+                Their profile, login and contact details are already on file and stay as they are —
+                nothing to fill in again. They will show at your clinic as well.
+              </p>
+            </div>
+          ) : (<>
           <div className="grid gap-2.5 grid-cols-1 sm:grid-cols-2">
             <input placeholder="Full name *" value={draft.name}
               onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} style={input} />
@@ -309,10 +359,16 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, cursor: 'pointer' }}>
               <input type="checkbox"
                 checked={(draft.phone ?? '').replace(/\D/g, '') === clinicPhone.replace(/\D/g, '')}
-                onChange={e => setDraft(d => ({ ...d, phone: e.target.checked ? clinicPhone : '' }))}
+                onChange={e => setDraft(d => ({
+                  ...d,
+                  phone: e.target.checked ? clinicPhone : '',
+                  // One person, one sign-in: the owner's own address, which the
+                  // server allows to be both the clinic's and the doctor's.
+                  ...(clinicEmail ? { email: e.target.checked ? clinicEmail : '' } : {}),
+                }))}
                 style={{ width: 16, height: 16, accentColor: BIZ.green, cursor: 'pointer' }} />
               <span style={{ fontSize: 13, color: BIZ.ink }}>
-                This doctor is me — use the clinic’s number ({clinicPhone})
+                This doctor is me — use the clinic’s number ({clinicPhone}){clinicEmail ? ' and email' : ''}
               </span>
             </label>
           )}
@@ -322,6 +378,7 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
             signed-in doctor can issue a prescription. One number can be both the
             clinic and the doctor.
           </div>
+          </>)}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button disabled={!ready}
               onClick={() => { onAdd({ ...draft, name: draft.name.trim(), phone: (draft.phone ?? '').trim() }); reset() }}

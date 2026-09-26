@@ -51,6 +51,10 @@ export interface Practitioner {
   photo_url?: string | null
   status: DoctorStatus
   created_at: string
+  /** 0137: what the doctor writes on their public page. */
+  about?: string | null
+  experience_years?: number | null
+  languages?: string[] | null
 }
 
 /** Who works where, and on what terms. */

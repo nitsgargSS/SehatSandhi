@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
+import { supabase } from '../../lib/supabase'
 import { Spinner } from '../../components/Loading'
 import {
   searchPatients, searchByDiagnosis, getPatientSummary, getVisits, getVitals, getAllergies,
@@ -43,6 +44,8 @@ import { RECORDING_ENABLED } from '../../lib/env'
 import { getMarketingConsent, setMarketingConsent } from '../../lib/marketingApi'
 import { listBusinessDoctors, BusinessDoctor, setPatientDoctor, getPatientDoctor, setAttending } from '../../lib/doctorsApi'
 import DoctorSelect from '../../components/DoctorSelect'
+import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
+import { opdVisit, opdSlipUrl, patientHistory, HistoryRow } from '../../lib/queueApi'
 
 // A hospital's doctors, for the "which doctor" pickers below (0121). Empty on
 // a failure, which simply hides the pickers.
@@ -416,6 +419,21 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
   const doctors = useDoctors(businessId)
   // "Registered under" (0121): a doctor registering defaults to themselves.
   const [underDoctor, setUnderDoctor] = useState<string | null>(practitionerId ?? null)
+  // 0135: straight to the doctor they came for — the fee and a token today —
+  // and a warning when the number already has patients here.
+  const [toOpd, setToOpd] = useState(true)
+  const [fee, setFee] = useState<FeeChoice>(emptyFee)
+  const [done, setDone] = useState<{ id: string; queueId: string | null; token: number | null } | null>(null)
+  const [onNumber, setOnNumber] = useState<PatientSearchResult[]>([])
+  useEffect(() => {
+    const d = form.phone.replace(/\D/g, '')
+    if (d.length < 10) { setOnNumber([]); return }
+    let live = true
+    searchPatients(d.slice(-10), businessId).then(r => { if (live) setOnNumber(r) }, () => undefined)
+    return () => { live = false }
+  }, [form.phone, businessId])
+  const opdDoctorId = underDoctor ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)
+  const opdDoctor = doctors.find(d => d.practitioner_id === opdDoctorId) ?? null
 
   const save = async () => {
     setBusy(true); setErr('')
@@ -432,15 +450,52 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
       })
       const doc = underDoctor ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)
       if (doc) await setPatientDoctor(businessId, id, doc)
-      onDone(id)
+      if (!toOpd) { onDone(id); return }
+      const r = await opdVisit({
+        businessId, patientMemberId: id, practitionerId: doc,
+        fee: feeToCharge(fee), discountReason: fee.mode === 'full' ? null : fee.reason.trim(),
+      })
+      setDone({ id, queueId: r.queue_id, token: r.token_number })
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
   const ready = form.fullName.trim().length > 1 && form.phone.replace(/\D/g, '').length >= 10
+    && (!toOpd || feeValid(fee, opdDoctor)) && (!toOpd || doctors.length <= 1 || !!underDoctor)
+
+  if (done) {
+    return (
+      <div style={card}>
+        <div style={{ fontSize: 14, color: BIZ.ink, marginBottom: 10 }}>
+          ✓ Registered{done.token != null ? ` · Token ${done.token}` : ''}{opdDoctor ? ` for ${opdDoctor.full_name}` : ''}.
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {done.queueId && (
+            <a href={opdSlipUrl(done.queueId)} target="_blank" rel="noreferrer"
+              style={{ ...btn(true), textDecoration: 'none' }}>Print OPD slip</a>
+          )}
+          <button style={btn()} onClick={() => onDone(done.id)}>Open record</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={card}>
       <div style={{ ...label, marginBottom: 10 }}>New patient</div>
+      {onNumber.length > 0 && (
+        <div style={{ fontSize: 13, background: '#fff8eb', border: '1px solid #f0dcb0', borderRadius: 9, padding: '8px 10px', marginBottom: 10 }}>
+          <b>Already registered on this number:</b>
+          {onNumber.slice(0, 5).map(r => (
+            <div key={r.patient_member_id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+              <span>{r.full_name}{r.age_years != null ? ` · ${r.age_years}y` : ''}</span>
+              <button style={{ ...btn(), fontSize: 12, padding: '3px 9px' }} onClick={() => onDone(r.patient_member_id)}>
+                Open — returning patient
+              </button>
+            </div>
+          ))}
+          <div style={{ color: BIZ.muted, marginTop: 4 }}>A different family member on the same number? Carry on below.</div>
+        </div>
+      )}
       <div style={{ display: 'grid', gap: 10 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ flex: '2 1 220px' }}><div style={label}>Full name</div>
@@ -486,10 +541,16 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
               placeholder="where they live"
               onChange={e => setForm({ ...form, pinCode: e.target.value.replace(/\D/g, '') })} /></div>
           {doctors.length > 1 && (
-            <div style={{ flex: '1 1 200px' }}><div style={label}>Registered under</div>
-              <DoctorSelect doctors={doctors} value={underDoctor} onChange={setUnderDoctor} allLabel="No particular doctor" style={input} /></div>
+            <div style={{ flex: '1 1 200px' }}><div style={label}>Came to see</div>
+              <DoctorSelect doctors={doctors} value={underDoctor} onChange={v => { setUnderDoctor(v); setFee(emptyFee) }} allLabel="Choose the doctor" style={input} /></div>
           )}
         </div>
+
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: BIZ.ink }}>
+          <input type="checkbox" checked={toOpd} onChange={e => setToOpd(e.target.checked)} />
+          OPD visit now — give a token{opdDoctor ? ` for ${opdDoctor.full_name}` : ''} and add the fee
+        </label>
+        {toOpd && <FeeChooser doctor={opdDoctor} value={fee} onChange={setFee} input={input} />}
 
         {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
 
@@ -500,7 +561,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={btn(true)} disabled={!ready || busy} onClick={save}>
-            {busy ? 'Registering…' : 'Register and open'}
+            {busy ? 'Registering…' : toOpd ? 'Register & give token' : 'Register and open'}
           </button>
           <button style={btn()} onClick={onCancel}>Cancel</button>
         </div>
@@ -543,15 +604,29 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   // A nurse is clinical but is not a prescriber. Same reason as above for
   // starting false: the ordering form is offered only once we know.
   const [prescriber, setPrescriber] = useState(false)
-  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'money'>('history')
+  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'money' | 'refer'>('history')
 
+  // 0138: a doctor sees only patients they have been involved with here (or
+  // were referred). Anyone else's shows a notice, not empty tabs that read as
+  // "no allergies, no history".
+  const [otherDoctors, setOtherDoctors] = useState(false)
   useEffect(() => {
     let cancelled = false
     getMyRole(businessId)
-      .then(r => { if (!cancelled) { setClinical(isClinicalRole(r)); setPrescriber(mayPrescribe(r)) } })
+      .then(async r => {
+        if (cancelled) return
+        let sees = true
+        if (isClinicalRole(r)) {
+          const { data, error } = await supabase.rpc('sehat_caller_sees_patient', { p_business: businessId, p_member: memberId })
+          sees = error ? true : data !== false   // older database without 0138: as before
+        }
+        if (cancelled) return
+        setOtherDoctors(isClinicalRole(r) && !sees)
+        setClinical(isClinicalRole(r) && sees); setPrescriber(mayPrescribe(r) && sees)
+      })
       .catch(() => { /* stays false — the database refuses either way */ })
     return () => { cancelled = true }
-  }, [businessId])
+  }, [businessId, memberId])
 
   // Note isClinicalRole returns TRUE against a database with no role system at
   // all (pre-0057), which is deliberate — see RoleLookup.enforced. It is the
@@ -683,6 +758,8 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         />
       )}
 
+      <OpdVisitCard memberId={memberId} businessId={businessId} practitionerId={practitionerId} onChange={reload} />
+
       {/* Panes. The clinical ones are not shown to reception — the database
           refuses them either way, but a tab that opens onto nothing looks like
           a patient with no history rather than a permission you do not have. */}
@@ -691,7 +768,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           ['history', 'Visits', true], ['clinical', 'Allergies & medicines', true],
           ['vitals', 'Vitals', false], ['rx', 'Prescriptions', true],
           ['docs', 'Documents', true], ['ipd', 'Admissions', false],
-          ['money', 'Billing', false],
+          ['money', 'Billing', false], ['refer', 'Refer to doctor', false],
         ] as const)
           .filter(([, , needsClinical]) => clinical || !needsClinical)
           .map(([id, lbl]) => (
@@ -700,7 +777,13 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           ))}
       </div>
 
-      {!clinical && (
+      {!clinical && otherDoctors && (
+        <div style={{ ...card, fontSize: 13, color: BIZ.ink, background: '#fff8eb', borderColor: '#f0dcb0' }}>
+          This patient is under another doctor here, so their medical record is not shown to you.
+          It opens once they are referred to you, booked with you, or seen in your OPD.
+        </div>
+      )}
+      {!clinical && !otherDoctors && (
         <div style={{ fontSize: 12.5, color: BIZ.mutedWarm }}>
           Your account is not registered as a doctor here, so the medical record
           is not shown. Beds, the queue and billing are.
@@ -734,6 +817,9 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           practitionerId={practitionerId} onChange={reload}
           clinical={clinical} prescriber={prescriber}
         />
+      )}
+      {shown === 'refer' && (
+        <ReferPane memberId={memberId} businessId={businessId} practitionerId={practitionerId} onChange={reload} />
       )}
       {shown === 'money' && (
         <BillingPane
@@ -2738,6 +2824,217 @@ const CHARGE_CATEGORIES: [ChargeCategory, string][] = [
   ['other', 'Other'],
 ]
 
+// A returning patient's visits here and which doctor they saw, and a new OPD
+// visit — back to their last doctor by default — with the fee and a token
+// (0135). Visible to reception: it is the front desk's view of the patient.
+function OpdVisitCard({ memberId, businessId, practitionerId, onChange }: {
+  memberId: string; businessId: string; practitionerId?: string | null; onChange: () => void
+}) {
+  const doctors = useDoctors(businessId)
+  const [history, setHistory] = useState<HistoryRow[]>([])
+  const [open, setOpen] = useState(false)
+  const [doc, setDoc] = useState<string | null>(null)
+  const [fee, setFee] = useState<FeeChoice>(emptyFee)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [issued, setIssued] = useState<{ id: string; token: number } | null>(null)
+
+  const load = useCallback(() => {
+    patientHistory(businessId, memberId).then(h => {
+      setHistory(h)
+      const last = h.find(r => r.doctor_id)?.doctor_id ?? null
+      setDoc(d => d ?? last ?? practitionerId ?? null)
+    }).catch(() => setHistory([]))
+  }, [businessId, memberId, practitionerId])
+  useEffect(() => { load() }, [load])
+
+  const chosen = doctors.find(d => d.practitioner_id === (doc ?? (doctors.length === 1 ? doctors[0].practitioner_id : null))) ?? null
+  const seenBy = Array.from(new Set(history.map(h => h.doctor_name).filter(Boolean)))
+
+  const go = async () => {
+    setBusy(true); setErr('')
+    try {
+      const r = await opdVisit({
+        businessId, patientMemberId: memberId, practitionerId: chosen?.practitioner_id ?? null,
+        reason, fee: feeToCharge(fee), discountReason: fee.mode === 'full' ? null : fee.reason.trim(),
+      })
+      setIssued({ id: r.queue_id, token: r.token_number })
+      setOpen(false); setFee(emptyFee); setReason('')
+      load(); onChange()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, color: BIZ.ink }}>
+          <b>History here:</b>{' '}
+          {history.length === 0 ? 'first visit' : `${history.length} visit${history.length === 1 ? '' : 's'}`}
+          {history[0] && `, last ${new Date(history[0].seen_on).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+          {seenBy.length > 0 && ` · seen by ${seenBy.join(', ')}`}
+        </div>
+        {!open && <button style={btn(true)} onClick={() => setOpen(true)}>New OPD visit</button>}
+      </div>
+      {issued && (
+        <div style={{ fontSize: 13, marginTop: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
+          ✓ Token {issued.token} issued.
+          <a href={opdSlipUrl(issued.id)} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>Print OPD slip</a>
+        </div>
+      )}
+      {history.length > 0 && (
+        <details style={{ marginTop: 6, fontSize: 12.5, color: BIZ.muted }}>
+          <summary style={{ cursor: 'pointer' }}>All visits</summary>
+          {history.map((h, i) => (
+            <div key={i} style={{ padding: '3px 0' }}>
+              {new Date(h.seen_on).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · {h.kind} · {h.doctor_name ?? 'no doctor'}{h.detail ? ` — ${h.detail}` : ''}
+            </div>
+          ))}
+        </details>
+      )}
+      {open && (
+        <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+          {doctors.length > 1 && (
+            <DoctorSelect doctors={doctors} value={doc} onChange={v => { setDoc(v); setFee(emptyFee) }} allLabel="Which doctor?" style={input} />
+          )}
+          <FeeChooser doctor={chosen} value={fee} onChange={setFee} input={input} />
+          <input style={input} placeholder="What have they come for? (optional)" value={reason} onChange={e => setReason(e.target.value)} />
+          {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={btn(true)} disabled={busy || (doctors.length > 1 && !chosen) || !feeValid(fee, chosen)} onClick={go}>
+              {busy ? 'Adding…' : 'Give token & add fee'}
+            </button>
+            <button style={btn()} onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Refer to another doctor of this clinic (0134). Their OPD fee from the system,
+// a different price, or free — and into their queue today.
+interface ReferralRow {
+  id: string; created_at: string; note: string | null; fee_charged: number | null
+  from_p: { full_name: string } | null; to_p: { full_name: string } | null
+}
+
+function ReferPane({ memberId, businessId, practitionerId, onChange }: {
+  memberId: string; businessId: string; practitionerId?: string | null; onChange: () => void
+}) {
+  const doctors = useDoctors(businessId)
+  const [to, setTo] = useState<string | null>(null)
+  const [mode, setMode] = useState<'fee' | 'custom' | 'free'>('fee')
+  const [custom, setCustom] = useState('')
+  const [note, setNote] = useState('')
+  const [queue, setQueue] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const [past, setPast] = useState<ReferralRow[]>([])
+
+  const load = useCallback(() => {
+    supabase.from('patient_referrals')
+      .select('id, created_at, note, fee_charged, from_p:practitioners!patient_referrals_from_practitioner_id_fkey(full_name), to_p:practitioners!patient_referrals_to_practitioner_id_fkey(full_name)')
+      .eq('patient_member_id', memberId).eq('business_id', businessId)
+      .order('created_at', { ascending: false }).limit(10)
+      .then(({ data }) => setPast((data ?? []) as unknown as ReferralRow[]))
+  }, [memberId, businessId])
+  useEffect(() => { load() }, [load])
+
+  const others = doctors.filter(d => d.practitioner_id !== practitionerId)
+  const target = others.find(d => d.practitioner_id === to)
+  const theirFee = target ? (target.discounted_fee ?? target.consultation_fee ?? 0) : 0
+
+  const refer = async () => {
+    if (!target) return
+    setBusy(true); setErr(''); setMsg('')
+    const fee = mode === 'fee' ? null : mode === 'free' ? 0 : Number(custom)
+    const { data, error } = await supabase.rpc('sehat_refer_patient', {
+      p_business: businessId, p_member: memberId, p_to_practitioner: target.practitioner_id,
+      p_note: note.trim() || null, p_fee: fee, p_from_visit: null,
+      p_from_practitioner: practitionerId ?? null, p_queue: queue,
+    })
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    const r = data as { fee: number; queue_id: string | null }
+    setMsg(`Referred to ${target.full_name}. ${Number(r.fee) > 0 ? `${moneyExact(Number(r.fee))} added to the bill.` : 'No charge.'}`
+      + (queue ? (r.queue_id ? ' Added to their queue today.' : ' Already in their queue today.') : ''))
+    setTo(null); setMode('fee'); setCustom(''); setNote('')
+    load(); onChange()
+  }
+
+  if (doctors.length < 2) {
+    return <div style={{ ...card, fontSize: 13, color: BIZ.muted }}>Only one doctor works here, so there is nobody to refer to. Add doctors under Clinic → Your team.</div>
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div style={card}>
+        <div style={{ ...label, marginBottom: 9 }}>Refer to another doctor here</div>
+        <div style={{ display: 'grid', gap: 9 }}>
+          <select style={input} value={to ?? ''} onChange={e => { setTo(e.target.value || null); setMode('fee') }}>
+            <option value="">Choose a doctor…</option>
+            {others.map(d => {
+              const f = d.discounted_fee ?? d.consultation_fee ?? 0
+              return <option key={d.practitioner_id} value={d.practitioner_id}>
+                {d.full_name}{d.speciality ? ` — ${d.speciality}` : ''}{f > 0 ? ` · ₹${f}` : ''}
+              </option>
+            })}
+          </select>
+          {target && (
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 13, alignItems: 'center' }}>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                <input type="radio" name="refFee" checked={mode === 'fee'} onChange={() => setMode('fee')} />
+                {theirFee > 0 ? `Their OPD fee ${moneyExact(theirFee)}` : 'Their OPD fee (not set — no charge)'}
+              </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                <input type="radio" name="refFee" checked={mode === 'custom'} onChange={() => setMode('custom')} /> Different amount
+              </label>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                <input type="radio" name="refFee" checked={mode === 'free'} onChange={() => setMode('free')} /> Free (₹0)
+              </label>
+              {mode === 'custom' && (
+                <input style={{ ...input, width: 130 }} inputMode="decimal" placeholder="₹" value={custom}
+                  onChange={e => setCustom(e.target.value.replace(/[^0-9.]/g, ''))} />
+              )}
+            </div>
+          )}
+          <input style={input} maxLength={300} placeholder="Reason for referral, e.g. needs cardiology opinion"
+            value={note} onChange={e => setNote(e.target.value)} />
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={queue} onChange={e => setQueue(e.target.checked)} /> Add to their OPD queue today
+          </label>
+          {target && mode !== 'fee' && theirFee > 0 && (
+            <div style={{ fontSize: 12, color: BIZ.muted }}>
+              Below their fee is recorded as a referral discount in {target.full_name}'s report.
+            </div>
+          )}
+          <div>
+            <button style={btn(true)} disabled={busy || !target || (mode === 'custom' && custom === '')} onClick={refer}>
+              {busy ? 'Referring…' : 'Refer'}
+            </button>
+          </div>
+          {msg && <div style={{ fontSize: 13, color: BIZ.green }}>{msg}</div>}
+          {err && <div style={{ fontSize: 13, color: '#8a2b2b' }}>{err}</div>}
+        </div>
+      </div>
+      {past.length > 0 && (
+        <div style={card}>
+          <div style={{ ...label, marginBottom: 7 }}>Referrals</div>
+          {past.map(r => (
+            <div key={r.id} style={{ fontSize: 13, padding: '6px 0', borderTop: '1px solid #f0ebe0' }}>
+              {shortDate(r.created_at)} · {r.from_p?.full_name ?? 'Clinic'} → <b>{r.to_p?.full_name ?? '—'}</b>
+              {' · '}{Number(r.fee_charged ?? 0) > 0 ? moneyExact(Number(r.fee_charged)) : 'free'}
+              {r.note ? ` · ${r.note}` : ''}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const PAYMENT_METHODS: [PaymentMethod, string][] = [
   ['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'],
   ['netbanking', 'Net banking'], ['cheque', 'Cheque'],
@@ -2765,6 +3062,11 @@ function BillingPane({
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [note, setNote] = useState('')
+  // 0133: a consultation is charged at the doctor's fee from the system, or —
+  // as the doctor asks — a discount or free, with the reason recorded.
+  const [feeMode, setFeeMode] = useState<'full' | 'discount' | 'free'>('full')
+  const [discPrice, setDiscPrice] = useState('')
+  const [discReason, setDiscReason] = useState('')
 
   const balance = account?.balance ?? 0
   const openStay = stays.find(s => s.status === 'admitted')
@@ -2776,6 +3078,17 @@ function BillingPane({
 
   // Charges and payments interleaved, newest first — a statement reads as one
   // sequence, not two lists a reader has to merge in their head.
+  const consultDocId = creditTo ?? practitionerId ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)
+  const consultDoc = doctors.find(d => d.practitioner_id === consultDocId)
+  // The doctor's standing offer is the public price, so charging it needs no
+  // reason; anything below it does.
+  const docFee = consultDoc ? (consultDoc.discounted_fee ?? consultDoc.consultation_fee ?? 0) : 0
+  const feeFlow = c.category === 'consultation' && docFee > 0
+  const feeCharged = feeMode === 'full' ? docFee : feeMode === 'free' ? 0 : Number(discPrice)
+  const feeValid = !feeFlow || (feeMode === 'full'
+    || ((feeMode === 'free' || (discPrice !== '' && Number(discPrice) >= 0 && Number(discPrice) < docFee))
+        && discReason.trim().length > 2))
+
   const ledger = [
     ...charges.map(x => ({ kind: 'charge' as const, on: x.charged_on, row: x })),
     ...payments.map(x => ({ kind: 'payment' as const, on: x.received_on, row: x })),
@@ -2838,18 +3151,30 @@ function BillingPane({
           </select>
           <input style={{ ...input, flex: '2 1 180px' }} placeholder="What for"
             value={c.description} onChange={e => setC({ ...c, description: e.target.value })} />
-          <input style={{ ...input, flex: '0 1 80px' }} inputMode="decimal" placeholder="Qty"
-            value={c.quantity} onChange={e => setC({ ...c, quantity: e.target.value })} />
-          <input style={{ ...input, flex: '0 1 110px' }} inputMode="decimal" placeholder="Rate ₹"
-            value={c.unitPrice} onChange={e => setC({ ...c, unitPrice: e.target.value })} />
+          {!feeFlow && <>
+            <input style={{ ...input, flex: '0 1 80px' }} inputMode="decimal" placeholder="Qty"
+              value={c.quantity} onChange={e => setC({ ...c, quantity: e.target.value })} />
+            <input style={{ ...input, flex: '0 1 110px' }} inputMode="decimal" placeholder="Rate ₹"
+              value={c.unitPrice} onChange={e => setC({ ...c, unitPrice: e.target.value })} />
+          </>}
           {doctors.length > 1 && (
             <DoctorSelect doctors={doctors} value={creditTo} onChange={setCreditTo}
               allLabel={openStay ? 'Credit: attending doctor' : 'Credit: me / no doctor'}
               style={{ ...input, flex: '1 1 170px' }} />
           )}
-          <button style={btn(true)} disabled={busy || !c.description.trim() || !c.unitPrice.trim()}
+          <button style={btn(true)}
+            disabled={busy || (feeFlow ? !feeValid : (!c.description.trim() || !c.unitPrice.trim()))}
             onClick={() => guard(async () => {
-              await addCharge(memberId, businessId, {
+              await addCharge(memberId, businessId, feeFlow ? {
+                category: 'consultation',
+                description: c.description.trim() || `OPD consultation — ${consultDoc!.full_name}`,
+                quantity: 1,
+                unitPrice: feeCharged,
+                admissionId: openStay?.id ?? null,
+                practitionerId: consultDocId,
+                listPrice: docFee,
+                discountReason: feeMode === 'full' ? null : discReason.trim(),
+              } : {
                 category: c.category,
                 description: c.description.trim(),
                 quantity: Number(c.quantity) || 1,
@@ -2858,8 +3183,39 @@ function BillingPane({
                 practitionerId: creditTo ?? (openStay ? null : practitionerId ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)),
               }, practitionerId)
               setC({ category: 'consultation', description: '', quantity: '1', unitPrice: '' })
+              setFeeMode('full'); setDiscPrice(''); setDiscReason('')
             })}>Add</button>
         </div>
+        {feeFlow && (
+          <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+            <div style={{ fontSize: 13, color: BIZ.ink }}>
+              {consultDoc!.full_name}'s OPD fee: <b>{moneyExact(docFee)}</b>
+              {consultDoc!.discounted_fee != null && consultDoc!.consultation_fee
+                ? <span style={{ color: BIZ.muted }}> (offer price; regular {moneyExact(consultDoc!.consultation_fee)})</span> : null}
+            </div>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 13 }}>
+              {([['full', `Full fee ${moneyExact(docFee)}`], ['discount', 'Discount'], ['free', 'Free']] as const).map(([v, l]) => (
+                <label key={v} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                  <input type="radio" name="feeMode" checked={feeMode === v} onChange={() => setFeeMode(v)} /> {l}
+                </label>
+              ))}
+            </div>
+            {feeMode === 'discount' && (
+              <input style={{ ...input, maxWidth: 200 }} inputMode="decimal" placeholder={`Charge ₹ (below ${docFee})`}
+                value={discPrice} onChange={e => setDiscPrice(e.target.value.replace(/[^0-9.]/g, ''))} />
+            )}
+            {feeMode !== 'full' && (
+              <input style={input} maxLength={300}
+                placeholder="Why? e.g. Doctor's advice — follow-up within 7 days, staff family, hardship"
+                value={discReason} onChange={e => setDiscReason(e.target.value)} />
+            )}
+            {feeMode !== 'full' && (
+              <div style={{ fontSize: 12, color: BIZ.muted }}>
+                Recorded with your name and shown in the doctor's report.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={card}>
@@ -2913,6 +3269,8 @@ function BillingPane({
                     ` · ${(e.row as Charge).quantity} × ${moneyExact((e.row as Charge).unit_price)}`}
                   {e.kind === 'payment' && (e.row as PatientPayment).reference &&
                     ` · ${(e.row as PatientPayment).reference}`}
+                  {e.kind === 'charge' && Number((e.row as Charge).discount_amount ?? 0) > 0 &&
+                    ` · ${(e.row as Charge).discount_kind === 'free' ? 'free' : `${moneyExact(Number((e.row as Charge).discount_amount))} off`}: ${(e.row as Charge).discount_reason}`}
                   {e.row.bill_id && ' · billed'}
                 </div>
               </div>

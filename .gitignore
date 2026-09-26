@@ -29,3 +29,4 @@ supabase/.temp/
 .env.sandbox
 .env.production.local
 .env.*.local
+deno.lock

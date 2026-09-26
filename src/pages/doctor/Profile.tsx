@@ -18,6 +18,9 @@ interface Post {
   pin_codes: string[]
   consultation_fee: number
   is_primary: boolean
+  /** 0136 */
+  discounted_fee?: number | null
+  reg_verified?: boolean
 }
 
 interface RatingAgg {
@@ -81,7 +84,11 @@ export default function DoctorProfile() {
       // ("operator does not exist: uuid ~~*"), so the prefix match is expressed
       // as a range over the text form instead: everything from the fragment up
       // to the next value. Uses the primary key index rather than a scan.
-      let query = supabase.from('practitioners').select('*').eq('status', 'active')
+      // Public columns only (0137): anonymous readers are no longer allowed the
+      // doctor's phone, email or login id, and '*' would ask for them.
+      let query = supabase.from('practitioners')
+        .select('id, full_name, speciality, qualification, reg_number, photo_url, status, about, experience_years, languages, imr_status, created_at')
+        .eq('status', 'active')
       query = looksLikeId
         ? query.gte('id', `${idFragment}-0000-0000-0000-000000000000`)
                .lte('id', `${idFragment}-ffff-ffff-ffff-ffffffffffff`)
@@ -94,7 +101,7 @@ export default function DoctorProfile() {
       if (error) console.warn('[profile] lookup failed:', error.message)
       const data = rows?.[0] ?? null
 
-      setDoctor(data)
+      setDoctor(data as unknown as Practitioner | null)
       // A profile open is the signal a business cares most about, and the
       // denominator for "seen 240 times, opened 12".
       if (data?.id) track('doctor_view', { practitionerId: data.id, speciality: data.speciality })
@@ -199,9 +206,14 @@ export default function DoctorProfile() {
           <div className="px-6 pb-6">
             {/* Avatar */}
             <div className="flex items-end justify-between -mt-12 mb-4">
-              <div className="w-24 h-24 rounded-2xl bg-white border-4 border-white shadow-md flex items-center justify-center text-3xl font-bold text-teal-600 bg-teal-50">
-                {doctor.full_name.split(' ').pop()?.charAt(0)}
-              </div>
+              {doctor.photo_url ? (
+                <img src={doctor.photo_url} alt={doctor.full_name}
+                  className="w-24 h-24 rounded-2xl border-4 border-white shadow-md object-cover bg-white" />
+              ) : (
+                <div className="w-24 h-24 rounded-2xl bg-white border-4 border-white shadow-md flex items-center justify-center text-3xl font-bold text-teal-600 bg-teal-50">
+                  {doctor.full_name.split(' ').pop()?.charAt(0)}
+                </div>
+              )}
               <div className="flex gap-2 mt-12">
                 <button onClick={copyLink}
                   className="flex items-center gap-1.5 text-xs border border-gray-200 px-3 py-1.5 rounded-lg hover:border-teal-400 text-gray-500 hover:text-teal-600 transition">
@@ -218,12 +230,30 @@ export default function DoctorProfile() {
             <div className="flex items-start justify-between flex-wrap gap-2 mb-1">
               <div>
                 <h1 className="text-2xl font-bold text-navy-700">{doctor.full_name}</h1>
-                <p className="text-gray-500 text-sm">{doctor.qualification}</p>
+                <p className="text-gray-500 text-sm">
+                  {doctor.qualification}
+                  {posts.some(x => x.reg_verified) && (
+                    <span className="text-teal-600 ml-2" title="Registration number checked">✓ Registered doctor</span>
+                  )}
+                </p>
+                {(doctor.experience_years || doctor.languages?.length) ? (
+                  <p className="text-gray-500 text-sm mt-0.5">
+                    {[doctor.experience_years ? `${doctor.experience_years} years' experience` : null,
+                      doctor.languages?.length ? `Speaks ${doctor.languages.join(', ')}` : null].filter(Boolean).join(' · ')}
+                  </p>
+                ) : null}
+                {doctor.about && (
+                  <p className="text-sm text-gray-700 mt-3 whitespace-pre-line leading-relaxed">{doctor.about}</p>
+                )}
               </div>
               <div className="flex flex-col items-end gap-1.5">
-                <span className="flex items-center gap-1.5 bg-teal-50 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-full text-xs font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> {t('profilePage.verifiedBadge')}
-                </span>
+                {/* Only when the registration was actually checked (0136) —
+                    it used to show on every doctor. */}
+                {['matched', 'confirmed'].includes((doctor as Practitioner & { imr_status?: string }).imr_status ?? '') && (
+                  <span className="flex items-center gap-1.5 bg-teal-50 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-full text-xs font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> {t('profilePage.verifiedBadge')}
+                  </span>
+                )}
                 {/* Top Rated — auto-computed, never influenced by payment.
                     Deliberately a separate, differently-styled badge from
                     Verified, so patients can tell the two apart. */}
@@ -278,7 +308,11 @@ export default function DoctorProfile() {
                         </p>
                         {b.address && <p className="text-xs text-gray-500">{b.address}</p>}
                         {b.consultation_fee > 0 && (
-                          <p className="text-xs text-gray-500">₹{b.consultation_fee} consultation</p>
+                          <p className="text-xs text-gray-500">
+                            {b.discounted_fee != null && b.discounted_fee < b.consultation_fee
+                              ? <><s className="text-gray-400">₹{b.consultation_fee}</s> <b className="text-teal-700">₹{b.discounted_fee}</b> consultation</>
+                              : <>₹{b.consultation_fee} consultation</>}
+                          </p>
                         )}
                       </div>
                     ))

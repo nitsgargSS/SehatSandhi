@@ -730,7 +730,7 @@ export async function computePrice(
     couponRes = await resolveCoupon(supabase, extra.couponCode, { businessId: businessId ?? null, subscription: subscriptionTotal, months })
     const discount = couponRes.coupon?.discount ?? 0
 
-    const termName = months === 1 ? '1 month' : `${months} months`
+    const termName = termLabel(months)
     if (subscriptionTotal > 0) lineItems.push({ label: `Sehatsandhi subscription — ${termName}`, amount: subscriptionTotal })
     if (doctorTotal > 0) lineItems.push({ label: `Additional doctors — ${typeExtraDoctors} × ₹${vb.extraDoctorPrice}/month × ${months}`, amount: doctorTotal })
     if (moduleTermTotal > 0) lineItems.push({ label: `Clinical systems — ${termName}`, amount: moduleTermTotal })
@@ -779,4 +779,17 @@ export async function computePrice(
     lineItems,
     ...planFields,
   }
+}
+
+/**
+ * A term by its plain name — "Monthly", not "1 month", which read as a one-off
+ * month rather than a recurring charge (decided 26 Sep 2026). Mirrored in
+ * src/hooks/usePricing.ts for the wizard.
+ */
+export function termLabel(months: number): string {
+  if (months === 1) return 'Monthly'
+  if (months === 3) return 'Quarterly'
+  if (months === 6) return 'Half-yearly'
+  if (months === 12) return 'Yearly'
+  return `${months} months`
 }

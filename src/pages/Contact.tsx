@@ -25,7 +25,7 @@ const prettyPhone = (digits: string) =>
     : `+${digits}`
 
 const ADDRESS = '1743 Vishnu Garden, Jagadhri – 135003, Haryana, India'
-const EMAIL = 'hello@sehatsandhi.com'
+const EMAIL = 'contact@sehatsandhi.com'
 const GSTIN = '06AELPG4279G1ZD'
 
 /** `refund` marks the one item whose sentence ends in a link to /refund. */

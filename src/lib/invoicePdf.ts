@@ -1,3 +1,4 @@
+import { termLabel } from '../hooks/usePricing'
 import { supabase } from './supabase'
 import type { Invoice } from './invoiceApi'
 
@@ -182,7 +183,7 @@ function drawInvoice(doc: Doc, inv: Invoice): boolean {
   const items = inv.line_items?.length
     ? inv.line_items.map(li => ({ desc: li.label, amount: li.amount }))
     : [{ desc: (inv.description || 'Business listing services')
-        + (inv.months ? ` - ${inv.months} month${inv.months === 1 ? '' : 's'}` : ''), amount: Number(inv.taxable_value) }]
+        + (inv.months ? ` - ${termLabel(inv.months)}` : ''), amount: Number(inv.taxable_value) }]
   for (const it of items) {
     const dl = lines(it.desc, 100)
     doc.text(dl, M, y)

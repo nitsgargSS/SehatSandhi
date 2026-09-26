@@ -34,6 +34,10 @@ export interface Charge {
   notes: string | null
   /** Set once this line was copied onto a bill. Non-null means frozen. */
   bill_id: string | null
+  /** 0133: below the doctor's fee — how much, free or discount, and why. */
+  discount_amount?: number | null
+  discount_kind?: 'free' | 'discount' | null
+  discount_reason?: string | null
 }
 
 export interface Payment {
@@ -98,6 +102,9 @@ export interface NewCharge {
   notes?: string
   /** 0121: the doctor this charge is credited to. Blank = the visit's or the admission's doctor. */
   practitionerId?: string | null
+  /** 0133: the price this was charged against (the doctor's fee), and why it is lower. */
+  listPrice?: number | null
+  discountReason?: string | null
 }
 
 export async function addCharge(
@@ -120,6 +127,8 @@ export async function addCharge(
     notes: c.notes || null,
     recorded_by: recordedBy ?? null,
     practitioner_id: c.practitionerId ?? null,
+    list_price: c.listPrice ?? null,
+    discount_reason: c.discountReason || null,
   })
   oops(error)
 }
@@ -216,6 +225,8 @@ export interface Bill {
   clinic_name: string | null
   clinic_address: string | null
   clinic_phone: string | null
+  /** 0135: the clinic's banner for printing, when it has one. */
+  letterhead_url?: string | null
   clinic_gstin: string | null
   admission_no: string | null
   admitted_at: string | null
@@ -330,6 +341,8 @@ export interface PublicBill {
   clinic_name: string | null
   clinic_address: string | null
   clinic_phone: string | null
+  /** 0135: the clinic's banner for printing, when it has one. */
+  letterhead_url?: string | null
   clinic_gstin: string | null
   admission_no: string | null
   admitted_at: string | null

@@ -220,6 +220,17 @@ export default function AdminDashboard() {
     await load()
   }
   const [search, setSearch] = useState('')
+  // 0124: the Pending and All Doctors lists are searched in the database, a
+  // page at a time — they used to download every business and filter here.
+  const PAGE_SIZE = 50
+  const [listRows, setListRows] = useState<BusinessRow[]>([])
+  const [listTotal, setListTotal] = useState(0)
+  const [listPage, setListPage] = useState(0)
+  const [listStatus, setListStatus] = useState('')
+  const [listVertical, setListVertical] = useState('')
+  const [listLoading, setListLoading] = useState(false)
+  const [listNonce, setListNonce] = useState(0)
+  const [openAreas, setOpenAreas] = useState<string | null>(null)
   const [actionMsg, setActionMsg] = useState('')
   const [expandedDoctorId, setExpandedDoctorId] = useState<string | null>(null)
   const [notesDraft, setNotesDraft] = useState('')
@@ -326,6 +337,7 @@ export default function AdminDashboard() {
 
   const load = async () => {
     setLoading(true)
+    setListNonce(n => n + 1)
     // Every query below falls back to [] on error, which renders an empty tab
     // that looks identical to "no data yet". That is exactly how a database
     // missing a table (a half-applied migration, an incomplete sandbox clone)
@@ -566,11 +578,71 @@ export default function AdminDashboard() {
   const pendingCamps = camps.filter(c => c.status === 'pending_approval')
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
   const newThisWeek = doctors.filter(d => new Date(d.created_at) >= oneWeekAgo).length
-  const filtered = doctors.filter(d => {
-    const matchTab = tab === 'pending' ? d.status === 'pending' : true
-    const matchSearch = !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.phone.includes(search)
-    return matchTab && matchSearch
-  })
+  const filtered = listRows
+
+  // Back to the first page whenever what is being asked for changes.
+  useEffect(() => { setListPage(0) }, [tab, search, listStatus, listVertical])
+
+  useEffect(() => {
+    if (tab !== 'pending' && tab !== 'all') return
+    let cancelled = false
+    setListLoading(true)
+    // Typing is debounced: one query when they pause, not one per letter.
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.rpc('sehat_admin_find_businesses', {
+        p_query: search.trim() || null,
+        p_status: tab === 'pending' ? 'pending' : (listStatus || null),
+        p_vertical: listVertical || null,
+        p_limit: PAGE_SIZE,
+        p_offset: listPage * PAGE_SIZE,
+      })
+      if (cancelled) return
+      if (error) { console.warn('[admin] business search failed:', error.message); setListRows([]); setListTotal(0) }
+      else {
+        const res = data as { total: number; rows: BusinessRow[] }
+        setListRows(res.rows ?? []); setListTotal(res.total ?? 0)
+      }
+      setListLoading(false)
+    }, search ? 300 : 0)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [tab, search, listStatus, listVertical, listPage, listNonce])
+
+  // "All 24 areas" until opened; a listing sold everywhere is a wall of PINs.
+  const AreasCell = ({ d }: { d: BusinessRow }) => {
+    const pins = d.pin_codes ?? []
+    if (!pins.length) return <span className="text-xs text-gray-400">—</span>
+    if (pins.length <= 3) return <span className="text-xs text-gray-600">{pins.join(', ')}</span>
+    const open = openAreas === d.id
+    return (
+      <span className="text-xs text-gray-600">
+        {open ? pins.join(', ') : `All ${pins.length} areas`}
+        <button onClick={() => setOpenAreas(open ? null : d.id)} className="ml-1.5 text-teal-700 font-semibold">{open ? 'Hide' : 'Show'}</button>
+      </span>
+    )
+  }
+  // 0130: the WhatsApp number is verified by code at signup once WhatsApp can
+  // send; until then — and for every listing from before — admin calls it.
+  const phoneBadge = (d: BusinessRow) => {
+    const v = (d as BusinessRow & { phone_verified_at?: string | null }).phone_verified_at
+    if (v) return <span className="text-[11px] text-teal-600">✓ phone verified</span>
+    return (
+      <span className="text-[11px] text-amber-700">
+        Phone not verified — call {d.phone || 'them'} to confirm{' '}
+        <button onClick={() => markPhoneVerified(d)} className="underline font-medium">Mark verified</button>
+      </span>
+    )
+  }
+  const markPhoneVerified = async (d: BusinessRow) => {
+    const { error } = await supabase.from('businesses')
+      .update({ phone_verified_at: new Date().toISOString() }).eq('id', d.id)
+    if (error) { setActionMsg(`Could not mark ${d.name}: ${error.message}`); return }
+    setActionMsg(`✓ ${d.name}: phone marked verified`); load(); setTimeout(() => setActionMsg(''), 3000)
+  }
+
+  const placeOf = (d: BusinessRow) => {
+    const b = d as BusinessRow & { own_city?: string | null; own_district?: string | null; own_pin_code?: string | null }
+    return [b.own_city, b.own_district !== b.own_city ? b.own_district : null, b.own_pin_code].filter(Boolean).join(', ')
+  }
 
 
   // Rendered by both the desktop table and the mobile cards. Defined once: the
@@ -590,6 +662,40 @@ export default function AdminDashboard() {
     </select>
   )
 
+  // 0136: the doctor's registration number, checked by hand against the NMC
+  // register. Confirmed or matched shows ✓ in the bot; no match takes the doctor
+  // off the bot and the website until corrected.
+  const setImr = async (doc: Practitioner, status: 'confirmed' | 'no_match' | 'unchecked') => {
+    setSpecBusy(doc.id)
+    const { error } = await supabase.from('practitioners')
+      .update({ imr_status: status, imr_checked_at: new Date().toISOString() }).eq('id', doc.id)
+    setSpecBusy(null)
+    if (error) { setActionMsg(`Could not update ${doc.full_name}: ${error.message}`); return }
+    setActionMsg(`✓ ${doc.full_name}: registration ${status === 'confirmed' ? 'confirmed' : status === 'no_match' ? 'marked wrong — hidden from the bot and website' : 'reset'}`)
+    load(); setTimeout(() => setActionMsg(''), 3000)
+  }
+  const RegCheck = ({ p }: { p: Practitioner }) => {
+    const st = p.imr_status ?? 'unchecked'
+    const label = st === 'confirmed' ? '✓ reg. confirmed' : st === 'matched' ? '✓ from register' : st === 'no_match' ? '✗ reg. wrong — hidden' : 'reg. not checked'
+    const color = st === 'confirmed' || st === 'matched' ? 'text-teal-600' : st === 'no_match' ? 'text-red-600' : 'text-amber-700'
+    return (
+      <div className="text-[11px] mt-1 flex flex-wrap gap-x-2 items-center">
+        <span className="text-gray-500">{p.reg_number ? `Reg ${p.reg_number}` : 'no reg. number'}</span>
+        <span className={color}>{label}</span>
+        {st !== 'confirmed' && (
+          <button disabled={specBusy === p.id} onClick={() => setImr(p, 'confirmed')} className="underline text-teal-700">Confirm</button>
+        )}
+        {st !== 'no_match' && (
+          <button disabled={specBusy === p.id} onClick={() => setImr(p, 'no_match')} className="underline text-red-600">No match</button>
+        )}
+        {st === 'no_match' && (
+          <button disabled={specBusy === p.id} onClick={() => setImr(p, 'unchecked')} className="underline text-gray-600">Undo</button>
+        )}
+        <a href="https://www.nmc.org.in/information-desk/indian-medical-register/" target="_blank" rel="noreferrer" className="underline text-gray-500">Check on NMC</a>
+      </div>
+    )
+  }
+
   // Pharmacies, labs and the rest have no doctors: their type is what patients
   // search by, so it is shown as text.
   const SpecialityCell = ({ d }: { d: BusinessRow }) => {
@@ -601,6 +707,7 @@ export default function AdminDashboard() {
           <div key={p.id}>
             {docs.length > 1 && <p className="text-[11px] text-gray-400 truncate">{p.full_name}</p>}
             <SpecialitySelect d={p} />
+            <RegCheck p={p} />
           </div>
         ))}
       </div>
@@ -746,8 +853,32 @@ export default function AdminDashboard() {
               <h2 className="font-bold text-navy-700 text-lg flex-1">
                 {tab === 'pending' ? t('adminDashboardPage.headingPending') : t('adminDashboardPage.headingAll')}
               </h2>
-              <input className="input-field w-56" placeholder={t('adminDashboardPage.searchPlaceholder')}
+              <input className="input-field w-full sm:w-80" placeholder="Search doctor, business, phone, town, district or PIN"
                 value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mb-4 text-sm">
+              {tab === 'all' && (
+                <select className="input-field w-auto text-sm" value={listStatus} onChange={e => setListStatus(e.target.value)}>
+                  <option value="">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="pending">Pending</option>
+                  <option value="suspended">Suspended</option>
+                </select>
+              )}
+              <select className="input-field w-auto text-sm" value={listVertical} onChange={e => setListVertical(e.target.value)}>
+                <option value="">All business types</option>
+                {['clinic', 'hospital', 'lab', 'pharmacy', 'insurance', 'ambulance'].map(v => (
+                  <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>
+                ))}
+              </select>
+              <span className="text-xs text-gray-500 ml-auto">
+                {listLoading ? 'Searching…' : listTotal === 0 ? 'No matches'
+                  : `Showing ${listPage * PAGE_SIZE + 1}–${Math.min((listPage + 1) * PAGE_SIZE, listTotal)} of ${listTotal.toLocaleString('en-IN')}`}
+              </span>
+              <button className="btn-outline text-xs px-3 py-1.5 disabled:opacity-40" disabled={listPage === 0 || listLoading}
+                onClick={() => setListPage(p => Math.max(0, p - 1))}>← Previous</button>
+              <button className="btn-outline text-xs px-3 py-1.5 disabled:opacity-40" disabled={(listPage + 1) * PAGE_SIZE >= listTotal || listLoading}
+                onClick={() => setListPage(p => p + 1)}>Next →</button>
             </div>
 
             {specMsg && (
@@ -756,7 +887,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {loading ? <p className="text-gray-400 text-sm py-8 text-center">{t('adminDashboardPage.loadingText')}</p> :
+            {(loading || (listLoading && !listRows.length)) ? <p className="text-gray-400 text-sm py-8 text-center">{t('adminDashboardPage.loadingText')}</p> :
               filtered.length === 0 ? <p className="text-gray-400 text-sm py-12 text-center">{t('adminDashboardPage.noDoctorsFound')}</p> : (
               <>
               {/* Cards below md. The table is 541px wide inside a 278px column on
@@ -784,7 +915,9 @@ export default function AdminDashboard() {
                       {d.reg_number && (
                         <div>Reg <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">{d.reg_number}</span></div>
                       )}
-                      {d.pin_codes?.length ? <div>Areas: {d.pin_codes.join(', ')}</div> : null}
+                      {placeOf(d) && <div>{placeOf(d)}</div>}
+                      <div>{phoneBadge(d)}</div>
+                      {d.pin_codes?.length ? <div>Areas: <AreasCell d={d} /></div> : null}
                       <div>Added {new Date(d.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div>
                     </div>
 
@@ -836,13 +969,15 @@ export default function AdminDashboard() {
                       <td className="py-3 px-2">
                         <p className="font-medium text-gray-800">{d.name} {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}</p>
                         <p className="text-xs text-gray-400 capitalize">{d.vertical} · {d.phone}</p>
+                        {placeOf(d) && <p className="text-xs text-gray-400">{placeOf(d)}</p>}
+                        <p>{phoneBadge(d)}</p>
                       </td>
                       <td className="py-3 px-2"><SpecialityCell d={d} /></td>
                       <td className="py-3 px-2">
                         <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{d.reg_number}</span>
                       </td>
                       <td className="py-3 px-2">
-                        <span className="text-xs text-gray-600">{d.pin_codes?.join(', ')}</span>
+                        <AreasCell d={d} />
                       </td>
                       <td className="py-3 px-2 text-xs text-gray-500">
                         {new Date(d.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}

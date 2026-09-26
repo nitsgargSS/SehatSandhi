@@ -15,12 +15,15 @@ import { generateBusiness } from '../../lib/sandboxData'
 import {
   computePrice, createRazorpayOrder, verifyRazorpayPayment,
   loadRazorpayCheckout, businessBackendConfigured, listCareModules,
-  PriceResult, DraftPractitioner, CareModule,
+  PriceResult, DraftPractitioner, CareModule, linkMyLogin, phoneVerify,
 } from '../../lib/businessApi'
 import { registerBusiness, registerPractitioner, attachPractitioner } from '../../lib/identityApi'
-import { isValidEmail, isValidPhone, isValidRegNumber } from '../../lib/credentials'
+import { isValidEmail, isValidPhone, isValidRegNumber, normEmail, passwordProblem } from '../../lib/credentials'
+import { markPasswordChanged } from '../../lib/passwordState'
+import EmailAndPassword, { EmailPasswordState } from './EmailAndPassword'
+import PhoneVerify, { phoneKey } from './PhoneVerify'
 import PractitionerPicker from './PractitionerPicker'
-import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal } from '../../hooks/usePricing'
+import { usePricing, monthlyAppliesTo, commissionFor, localMonthlyTotal, termLabel } from '../../hooks/usePricing'
 import { useTaxSettings, localTax, isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { track } from '../../lib/analytics'
 // Same file the pricing engine uses, so the quote here and the amount charged
@@ -56,6 +59,28 @@ const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 // separate verticals with their own signup and their own billing, and choosing
 // one here would bill a doctor as a diagnostics centre.
 const DOCTOR_SPECIALITIES = SPECIALITIES.filter(s => s.id !== 'LAB' && s.id !== 'PHARMACY')
+
+// What a business may call itself (0126). Clinics and hospitals choose from the
+// doctor specialities; the other types have their own short lists. "Other"
+// opens a box for anything not listed.
+const OTHER_CATEGORY = 'Other'
+const categoryOptions = (v: VerticalKey): string[] => {
+  switch (v) {
+    case 'clinic':
+    case 'hospital':
+      return ['Multi-speciality', ...DOCTOR_SPECIALITIES.map(s => s.en)]
+    case 'lab':
+      return ['Pathology', 'Radiology & imaging', 'Pathology and imaging', 'Sample collection centre']
+    case 'pharmacy':
+      return ['Retail pharmacy', 'Hospital pharmacy', 'Ayurvedic / Homeopathic', 'Surgical & medical equipment']
+    case 'insurance':
+      return ['Insurance agent', 'Insurance broker', 'Insurance company']
+    case 'ambulance':
+      return ['Basic life support (BLS)', 'Advanced life support (ALS)', 'Patient transport', 'Mortuary van']
+    default:
+      return []
+  }
+}
 
 // Compact row input for the consultant list — narrower than the main Field so
 // four of them fit one line on a laptop.
@@ -103,6 +128,19 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // (attached, not copied) or a new one; the picker decides which, and
   // saveRegistration below links them either way.
   const [practitioners, setPractitioners] = useState<DraftPractitioner[]>([])
+  const [ownerIsDoctor, setOwnerIsDoctor] = useState(false)
+  // Email verified by code, then a password of their own (26 Sep 2026).
+  const [signIn, setSignIn] = useState<EmailPasswordState>({ verifiedEmail: null, password: '', confirm: '' })
+  const [passwordSaved, setPasswordSaved] = useState(false)
+  const emailVerified = !!normEmail(form.email) && signIn.verifiedEmail === normEmail(form.email)
+  // WhatsApp-number verification (0130): only asked while the server says it
+  // can send. Until then admin confirms the number by calling.
+  const [phoneCheckOn, setPhoneCheckOn] = useState(false)
+  const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null)
+  useEffect(() => {
+    phoneVerify('status').then(r => setPhoneCheckOn(!!r.enabled), () => setPhoneCheckOn(false))
+  }, [])
+  const phoneVerified = !phoneCheckOn || (!!verifiedPhone && verifiedPhone === phoneKey(form.phone ?? ''))
   const [invoiceToken, setInvoiceToken] = useState<string | null>(null)
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null)
 
@@ -308,10 +346,14 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       && isValidPhone(form.phone)
       && isValidEmail(form.email)
       && (!soloDoctor || (form.speciality && form.owner_name?.trim()
-                          && isValidRegNumber(form.reg_number))))
+                          && isValidRegNumber(form.reg_number)))
+      && (!ownerIsDoctor || practitioners.some(d => d.is_owner))
+      && emailVerified
+      && (passwordSaved || !passwordProblem(signIn.password, signIn.confirm))
+      && phoneVerified)
     return true
   }
-  const nextStep = () => {
+  const nextStep = async () => {
     if (!stepValid(step)) {
       setError(step === 2
         ? (!form.business_name?.trim()
@@ -320,13 +362,43 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
               ? 'Please enter a 10-digit mobile number.'
               : !isValidEmail(form.email)
                 ? 'Please enter an email address — it is how you will sign in.'
+                : !emailVerified
+                  ? 'Please verify your email — press Verify email and enter the code we send.'
+                  : !passwordSaved && passwordProblem(signIn.password, signIn.confirm)
+                    ? passwordProblem(signIn.password, signIn.confirm)!
+                    : !phoneVerified
+                      ? 'Please verify your WhatsApp number with the code we send.'
                 : soloDoctor && !form.speciality
                   ? 'Please choose a speciality — it is how patients find you.'
                   : soloDoctor && !form.owner_name?.trim()
                     ? 'Please enter your name — it is what patients see.'
-                    : 'Please enter your council registration number.')
+                    : ownerIsDoctor && !practitioners.some(d => d.is_owner)
+                      ? 'Find the owner as a doctor and press Add doctor — or untick "The owner is a doctor".'
+                      : 'Please enter your council registration number.')
         : 'Please complete this step.')
       return
+    }
+    // 0129: an email or number that already has a listing is refused at
+    // registration; say so here, before they reach payment. The server check is
+    // the real one — if this lookup fails, carry on and let it answer.
+    if (step === 2 && !businessIdRef.current) {
+      const { data } = await supabase.rpc('sehat_signup_check', { p_email: form.email ?? '', p_phone: form.phone ?? '' })
+        .then(r => r, () => ({ data: null }))
+      const taken = data as { email_taken?: boolean; phone_taken?: boolean } | null
+      if (taken?.email_taken || taken?.phone_taken) {
+        setError(`A business is already registered with this ${taken.email_taken && taken.phone_taken ? 'email and mobile number' : taken.email_taken ? 'email' : 'mobile number'}. `
+          + 'Sign in at sehatsandhi.com/business/login instead, or call us if this is a second branch.')
+        return
+      }
+    }
+    // The password goes on the session the code opened. Once saved it is not
+    // asked for again, even if they come back to this step.
+    if (step === 2 && !passwordSaved) {
+      const { error: pwErr } = await supabase.auth.updateUser({ password: signIn.password })
+      if (pwErr) { setError(`Could not save your password: ${pwErr.message}`); return }
+      await markPasswordChanged().catch(() => undefined)
+      setPasswordSaved(true)
+      setSignIn(st => ({ ...st, password: '', confirm: '' }))
     }
     setError('')
     setStep(s => Math.min(3, s + 1))
@@ -334,7 +406,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   const prevStep = () => { setError(''); setStep(s => Math.max(soloDoctor ? 2 : 1, s - 1)) }
   const goStep = (n: number) => {
     // allow jumping back freely, and forward only through validated steps
-    if (n <= step || [1, 2].slice(0, n - 1).every(stepValid)) { setError(''); setStep(n) }
+    // Forward past step 2 only once the password is saved — that happens in
+    // nextStep, which a jump from the sidebar would otherwise skip.
+    if (n <= step || ([1, 2].slice(0, n - 1).every(stepValid) && (n <= 2 || passwordSaved))) { setError(''); setStep(n) }
   }
 
   // ── Sandbox autofill ──
@@ -454,10 +528,24 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         // A doctor registering their own practice is primarily there. Somebody a
         // clinic added may already be primary elsewhere, and the server leaves
         // that alone.
-        is_primary: soloDoctor && i === 0,
+        is_primary: (soloDoctor && i === 0) || !!d.is_owner,
       })))
 
       businessIdRef.current = businessId
+      // The owner's own doctor record, if they are one, now has a login to
+      // point at: the address was verified on step 2.
+      await linkMyLogin()
+      if (phoneCheckOn) {
+        await supabase.rpc('sehat_mark_phone_verified', { p_business: businessId }).then(() => undefined, () => undefined)
+      }
+      // Best effort: a label failing to save must not fail the registration.
+      const category = soloDoctor
+        ? SPECIALITIES.find(sp => sp.id === form.speciality)?.en
+        : form.category === OTHER_CATEGORY ? (form.category_other?.trim() || OTHER_CATEGORY) : form.category
+      if (category) {
+        await supabase.rpc('sehat_signup_set_category', { p_business: businessId, p_category: category })
+          .then(() => undefined, () => undefined)
+      }
       return businessId
     } catch (e) {
       setError(`Could not save: ${(e as Error).message}`)
@@ -763,6 +851,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               if (!form.speciality) {
                                 const guess = guessSpeciality(d.name)
                                 if (guess) upd('speciality', guess)
+                                const label = SPECIALITIES.find(sp => sp.id === guess)?.en
+                                if (label && !form.category && categoryOptions(vertical).includes(label)) upd('category', label)
                               }
                             }}
                           />
@@ -820,7 +910,27 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             </p>
                           </div>
                         ) : (
-                          <Field label="Category / speciality" placeholder="e.g. Ophthalmology" value={form.category} onChange={v => upd('category', v)} />
+                          <div>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#3f4a44', marginBottom: 7 }}>
+                              Category / speciality
+                            </label>
+                            <select value={form.category ?? ''}
+                              onChange={e => upd('category', e.target.value)}
+                              style={{
+                                width: '100%', padding: '12px 14px', borderRadius: 12,
+                                border: `1px solid ${BIZ.inputBorder}`, fontFamily: 'inherit',
+                                fontSize: 16, color: form.category ? BIZ.ink : BIZ.mutedWarm, background: '#fdfbf6',
+                              }}>
+                              <option value="">Choose a category…</option>
+                              {categoryOptions(vertical).map(c => <option key={c} value={c}>{c}</option>)}
+                              <option value={OTHER_CATEGORY}>Other (type it in)</option>
+                            </select>
+                            {form.category === OTHER_CATEGORY && (
+                              <input value={form.category_other ?? ''} onChange={e => upd('category_other', e.target.value)}
+                                placeholder="Type your category" maxLength={80}
+                                style={{ width: '100%', marginTop: 8, padding: '12px 14px', border: `1px solid ${BIZ.inputBorder}`, borderRadius: 12, fontSize: 16, fontFamily: 'inherit', outline: 'none', background: '#fdfbf6' }} />
+                            )}
+                          </div>
                         )}
                         {/* Doctors search the Indian Medical Register by name and
                             get their own registration number back, which is
@@ -849,7 +959,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             emptyNote="Not found — type it in the box below instead."
                           />
                         ) : (
-                          <Field label="Registration number *" placeholder="e.g. HR-12345" value={form.reg_number} onChange={v => upd('reg_number', v)} />
+                          <Field label={`${verticalObj.label} registration no. (if any)`} placeholder="e.g. HR-12345" value={form.reg_number} onChange={v => upd('reg_number', v)} />
                         )}
                         {/* The register is not complete — it has nobody who
                             qualified in the last few months, and the search only
@@ -860,10 +970,56 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             placeholder={form.reg_number ? '' : 'or type it — e.g. HR-12345'}
                             value={form.reg_number} onChange={v => upd('reg_number', v)} />
                         )}
-                        <Field label="Email *" placeholder="you@example.com" value={form.email} onChange={v => upd('email', v)} type="email" inputMode="email" autoComplete="email" />
-                        <p className="text-xs text-gray-500 -mt-2">
-                          This is your sign-in, and where your login code is sent. One account per address.
-                        </p>
+                        <EmailAndPassword
+                          email={form.email ?? ''}
+                          onEmail={v => upd('email', v)}
+                          state={signIn}
+                          onState={setSignIn}
+                          locked={passwordSaved}
+                        />
+                        {phoneCheckOn && (
+                          <PhoneVerify phone={form.phone ?? ''} verifiedPhone={verifiedPhone}
+                            onVerified={setVerifiedPhone} emailVerified={emailVerified} />
+                        )}
+                        {/* The owner may be a doctor or not. A doctor is found the
+                            same way as any other — on Sehatsandhi already, or in
+                            the medical register — so their registration number
+                            and details come filled in, and they are added to the
+                            doctors list once rather than typed twice. A
+                            non-doctor owner needs no registration number. */}
+                        {hasPractitioners(vertical) && !soloDoctor && (
+                          <div className="sm:col-span-2 xl:col-span-3" style={{ border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: '14px 16px', background: '#fff' }}>
+                            <label style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={ownerIsDoctor}
+                                onChange={e => {
+                                  setOwnerIsDoctor(e.target.checked)
+                                  if (!e.target.checked) setPractitioners(list => list.filter(d => !d.is_owner))
+                                }}
+                                style={{ width: 18, height: 18, accentColor: BIZ.green, cursor: 'pointer' }} />
+                              <span style={{ fontSize: 14.5, fontWeight: 700, color: BIZ.ink }}>The owner is a doctor who sees patients here</span>
+                            </label>
+                            {ownerIsDoctor ? (
+                              <div style={{ marginTop: 12 }}>
+                                <PractitionerPicker
+                                  single
+                                  label="Find the owner — by name or registration number"
+                                  added={practitioners.filter(d => d.is_owner)}
+                                  onAdd={d => {
+                                    setPractitioners(list => [{ ...d, is_owner: true }, ...list.filter(x => !x.is_owner)])
+                                    upd('owner_name', d.name)
+                                  }}
+                                  onRemove={() => setPractitioners(list => list.filter(d => !d.is_owner))}
+                                  clinicPhone={form.phone}
+                                  clinicEmail={form.email}
+                                />
+                              </div>
+                            ) : (
+                              <p style={{ fontSize: 12.5, color: BIZ.mutedWarm, margin: '6px 0 0 28px' }}>
+                                Not a doctor? Leave this unticked — no registration number is needed, and you add your doctors below.
+                              </p>
+                            )}
+                          </div>
+                        )}
                         <div className="sm:col-span-2 xl:col-span-3">
                           {/* Also a lookup, in address mode rather than business
                               mode. Picking the clinic by name fills this in, but
@@ -940,11 +1096,19 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             {describeDoctorRate(plan) && <> {describeDoctorRate(plan)}</>}
                           </p>
 
+                          {practitioners.some(d => d.is_owner) && (
+                            <p style={{ fontSize: 13, color: BIZ.chipText, margin: '0 0 12px' }}>
+                              ✓ {practitioners.find(d => d.is_owner)!.name} (owner) is included. Add any other doctors below.
+                            </p>
+                          )}
                           <PractitionerPicker
-                            added={practitioners}
+                            added={practitioners.filter(d => !d.is_owner)}
                             onAdd={d => setPractitioners(list => [...list, d])}
-                            onRemove={i => setPractitioners(list => list.filter((_, j) => j !== i))}
-                            clinicPhone={form.phone}
+                            onRemove={i => {
+                              const target = practitioners.filter(d => !d.is_owner)[i]
+                              setPractitioners(list => list.filter(d => d !== target))
+                            }}
+                            clinicPhone={ownerIsDoctor ? undefined : form.phone}
                           />
 
                           {namedHospitalDoctors > 0 && (
@@ -987,11 +1151,13 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                       <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, overflow: 'hidden' }}>
                         <ReviewRow label="Service type" value={verticalObj.label} />
                         <ReviewRow label="Business name" value={form.business_name || form.owner_name || '—'} />
+                        {!soloDoctor && form.category && (
+                          <ReviewRow label="Category" value={form.category === OTHER_CATEGORY ? (form.category_other?.trim() || OTHER_CATEGORY) : form.category} />
+                        )}
                         {/* Coverage was never asked for, so it is stated rather
                             than described as a selection — this is the only
                             place a business sees how wide their listing runs
                             before they pay for it. */}
-                        <ReviewRow label="Areas covered" value={`All ${price.count} service area${price.count === 1 ? '' : 's'}`} />
                         <ReviewRow label="Total reach" value={`${num(price.residents)} residents`} />
                         {onCommission
                           ? <ReviewRow label="Plan" value={`${commissionPct}% of ${commissionBasis}`} />
@@ -1111,7 +1277,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                   />
                                   <span style={{ flex: 1 }}>
                                     <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                                      <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{t.label ?? `${t.months} months`}</strong>
+                                      <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{t.label ?? termLabel(t.months)}</strong>
                                       <strong style={{ fontSize: 14.5, color: on ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
                                         {money(t.price)}
                                       </strong>
@@ -1161,7 +1327,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                 <strong style={{ fontSize: 14.5, color: BIZ.ink }}>Add WhatsApp messaging</strong>
                                 <strong style={{ fontSize: 14.5, color: whatsapp ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
                                   {money((shownTerms.find(t => t.months === months) as { whatsapp_price?: number } | undefined)?.whatsapp_price ?? 0)}
-                                  {' '}for {months === 1 ? '1 month' : `${months} months`}
+                                  {' '}{termLabel(months).toLowerCase()}
                                 </strong>
                               </span>
                               <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 4, lineHeight: 1.6 }}>

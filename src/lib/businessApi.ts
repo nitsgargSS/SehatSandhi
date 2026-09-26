@@ -171,6 +171,8 @@ export interface DraftPractitioner {
   consultation_fee?: number
   /** Set when the wizard matched an existing person rather than typing a new one. */
   practitioner_id?: string
+  /** The business's owner, added from the owner field rather than the doctors list. */
+  is_owner?: boolean
 }
 
 export interface CareModuleLine {
@@ -220,6 +222,18 @@ export const createRazorpayOrder = (
   modules: string[] = [], gst: BuyerGstDetails = {}, authToken?: string,
 ) =>
   callFn<RazorpayOrder>('razorpay-order', { pincodes, businessId, periodMonths, modules, ...gst }, authToken)
+
+export interface WhatsappAddonQuote {
+  ok: true
+  termMonths: number; termLabel: string; termStart: string; termEnd: string
+  daysLeft: number; daysInTerm: number; fullFee: number; amount: number
+  tax: { taxableValue: number; taxTotal: number; grandTotal: number; rate: number; applied: boolean }
+  orderId?: string; amountPaise?: number; currency?: string; keyId?: string; paymentRowId?: string
+}
+
+/** WhatsApp added to a plan already paid for: its fee alone, pro rata to the plan's end. */
+export const whatsappAddon = (businessId: string, action: 'quote' | 'order', authToken: string) =>
+  callFn<WhatsappAddonQuote>('whatsapp-addon-order', { businessId, action }, authToken)
 
 export const verifyRazorpayPayment = (args: {
   orderId: string
@@ -288,3 +302,43 @@ export const purgeSandbox = (token: string) =>
     'sandbox-purge',
     { token, confirm: 'PURGE SANDBOX' },
   )
+
+/**
+ * Before asking for an email code: creates the login for an address a business
+ * or doctor registered with, if it has none yet (0128). Best effort — the code
+ * request that follows is what the person sees succeed or fail.
+ */
+export const prepareEmailLogin = (email: string): Promise<void> =>
+  callFn<{ ok: boolean }>('email-login-prepare', { email }).then(() => undefined, () => undefined)
+
+/**
+ * After a sign-in that proved the address: link the doctor and business
+ * records registered to it (link-my-login). Best effort — the owner's own
+ * listing is found by email regardless.
+ */
+export const linkMyLogin = async (): Promise<void> => {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return
+  await callFn('link-my-login', {}, session.access_token).then(() => undefined, () => undefined)
+}
+
+/** WhatsApp-number verification at signup (0130). Off until PHONE_VERIFY_ENABLED is set. */
+export const phoneVerify = async (action: 'status' | 'send' | 'verify', phone?: string, code?: string) => {
+  const { data: { session } } = await supabase.auth.getSession()
+  return callFn<{ enabled?: boolean; ok?: boolean; verified?: boolean }>(
+    'phone-verify', { action, phone, code }, session?.access_token)
+}
+
+export interface DoctorAddonQuote {
+  ok: true; doctor: string; perMonth: number; termMonths: number; termLabel: string; termEnd: string
+  daysLeft: number; daysInTerm: number; fullTerm: number; amount: number
+  tax: { taxableValue: number; taxTotal: number; grandTotal: number; rate: number; applied: boolean }
+  orderId?: string; amountPaise?: number; currency?: string; keyId?: string; paymentRowId?: string
+}
+
+/** A doctor added mid-term (0140): their extra fee pro rata to the plan's end. */
+export const doctorAddon = async (businessId: string, practitionerId: string, action: 'quote' | 'order') => {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Please sign in again.')
+  return callFn<DoctorAddonQuote>('doctor-addon-order', { businessId, practitionerId, action }, session.access_token)
+}

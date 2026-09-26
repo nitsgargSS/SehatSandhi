@@ -120,13 +120,20 @@ export default function BillPage() {
         )}
 
         <header style={{ borderBottom: '2px solid #14201c', paddingBottom: 14 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#14201c' }}>
-            {bill.clinic_name ?? 'Bill'}
-          </div>
-          {bill.clinic_address && (
+          {/* 0135: the clinic's own banner, when it has uploaded one. */}
+          {bill.letterhead_url && (
+            <img src={bill.letterhead_url} alt={bill.clinic_name ?? ''}
+              style={{ width: '100%', maxHeight: 160, objectFit: 'contain', display: 'block', marginBottom: 8 }} />
+          )}
+          {!bill.letterhead_url && (
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#14201c' }}>
+              {bill.clinic_name ?? 'Bill'}
+            </div>
+          )}
+          {!bill.letterhead_url && bill.clinic_address && (
             <div style={{ fontSize: 13, color: '#5f6b64', marginTop: 3 }}>{bill.clinic_address}</div>
           )}
-          {bill.clinic_phone && <div style={{ fontSize: 13, color: '#5f6b64' }}>{bill.clinic_phone}</div>}
+          {!bill.letterhead_url && bill.clinic_phone && <div style={{ fontSize: 13, color: '#5f6b64' }}>{bill.clinic_phone}</div>}
           {/* An insurer looks for this before anything else on the page. */}
           {bill.clinic_gstin && (
             <div style={{ fontSize: 13, color: '#5f6b64' }}>GSTIN {bill.clinic_gstin}</div>

@@ -3,9 +3,10 @@ import { supabase } from '../../lib/supabase'
 import { StatTile } from '../../components/Charts'
 import { isoDate, shortDate } from '../../lib/format'
 import {
-  getDoctorPerformance, getDoctorPatients, DoctorPerformanceRow, DoctorPatientRow,
+  getDoctorPerformance, getDoctorPatients, DoctorPerformanceRow, DoctorPatientRow, getDiscounts, DiscountRow,
 } from '../../lib/doctorsApi'
 import RevenuePanel from './RevenuePanel'
+import PublicProfileEditor from './PublicProfileEditor'
 
 // One hospital, many doctors (0121). All patients live in the business; every
 // visit, admission, prescription, token and charge says which doctor it is for.
@@ -146,6 +147,132 @@ function Tiles({ r }: { r: DoctorPerformanceRow | undefined }) {
 }
 
 // ── A doctor's own page ─────────────────────────────────────────────────────
+// OPD fee at this clinic, and an optional discounted price (0132). The WhatsApp
+// bot shows a discount as ~₹600~ ₹450. The server decides who may change it:
+// the doctor themselves, the owner or a manager.
+export function OpdFee({ businessId, practitionerId }: { businessId: string; practitionerId: string }) {
+  const [fee, setFee] = useState('')
+  const [disc, setDisc] = useState('')
+  const [offer, setOffer] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    supabase.from('business_practitioners').select('consultation_fee, discounted_fee')
+      .eq('business_id', businessId).eq('practitioner_id', practitionerId).maybeSingle()
+      .then(({ data }) => {
+        const d = data as { consultation_fee: number | null; discounted_fee: number | null } | null
+        setFee(d?.consultation_fee ? String(d.consultation_fee) : '')
+        setDisc(d?.discounted_fee != null ? String(d.discounted_fee) : '')
+        setOffer(d?.discounted_fee != null)
+      })
+  }, [businessId, practitionerId])
+
+  const save = async () => {
+    setErr(''); setMsg('')
+    const f = Number(fee)
+    const dv = offer && disc !== '' ? Number(disc) : null
+    if (!Number.isFinite(f) || f < 0) { setErr('Enter the regular fee in rupees.'); return }
+    if (dv !== null && (!Number.isFinite(dv) || dv < 0 || dv >= f)) { setErr(`The discounted price must be less than ₹${f}.`); return }
+    setBusy(true)
+    const { error } = await supabase.rpc('sehat_set_opd_fee', {
+      p_business: businessId, p_practitioner: practitionerId, p_fee: Math.round(f), p_discounted_fee: dv === null ? null : Math.round(dv),
+    })
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    setMsg(dv !== null ? `Saved. The WhatsApp bot now shows ₹${Math.round(f)} crossed out and ₹${Math.round(dv)}.` : `Saved. The WhatsApp bot now shows ₹${Math.round(f)}.`)
+  }
+
+  return (
+    <div className="card shadow-sm space-y-3">
+      <div>
+        <h3 className="font-bold text-navy-700">OPD fee</h3>
+        <p className="text-sm text-gray-500">What patients see in the WhatsApp bot and on your profile for a consultation here.</p>
+      </div>
+      <div className="flex gap-3 flex-wrap items-end">
+        <label className="text-sm">
+          <span className="block text-xs font-medium text-gray-600 mb-1">Regular fee (₹)</span>
+          <input className="input-field w-36" inputMode="numeric" value={fee}
+            onChange={e => setFee(e.target.value.replace(/\D/g, ''))} placeholder="e.g. 600" />
+        </label>
+        <label className="flex items-center gap-2 text-sm pb-2.5 cursor-pointer">
+          <input type="checkbox" checked={offer} onChange={e => setOffer(e.target.checked)} />
+          Offer a discount
+        </label>
+        {offer && (
+          <label className="text-sm">
+            <span className="block text-xs font-medium text-gray-600 mb-1">Discounted price (₹)</span>
+            <input className="input-field w-36" inputMode="numeric" value={disc}
+              onChange={e => setDisc(e.target.value.replace(/\D/g, ''))} placeholder="e.g. 450" />
+          </label>
+        )}
+        <button onClick={save} disabled={busy || fee === ''} className="btn-teal text-sm px-5 py-2.5 disabled:opacity-50">
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+      {offer && fee && disc && Number(disc) < Number(fee) && (
+        <p className="text-sm text-gray-600">Patients will see: <s>₹{fee}</s> <b>₹{disc}</b> ({Math.round((1 - Number(disc) / Number(fee)) * 100)}% off)</p>
+      )}
+      {msg && <p className="text-sm text-teal-700">{msg}</p>}
+      {err && <p className="text-sm text-red-600">{err}</p>}
+    </div>
+  )
+}
+
+// Every consultation charged below the doctor's fee (0133), with who gave it and
+// why — how the practice checks what the desk gave away.
+function DiscountsGiven({ businessId, practitionerId, period }: { businessId: string; practitionerId: string; period: Period }) {
+  const [rows, setRows] = useState<DiscountRow[] | null>(null)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    const { from, to } = periodRange(period)
+    getDiscounts(businessId, practitionerId, from, to)
+      .then(r => { setRows(r); setErr('') })
+      .catch(e => { setRows([]); setErr((e as Error).message) })
+  }, [businessId, practitionerId, period])
+
+  const total = (rows ?? []).reduce((t, r) => t + r.discount_amount, 0)
+  const free = (rows ?? []).filter(r => r.discount_kind === 'free').length
+  return (
+    <div className="card shadow-sm space-y-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h3 className="font-bold text-navy-700">Free &amp; discounted consultations</h3>
+        {rows && rows.length > 0 && (
+          <span className="text-sm text-gray-600">
+            {rows.length} visit{rows.length === 1 ? '' : 's'} · {free} free · ₹{Math.round(total).toLocaleString('en-IN')} given
+          </span>
+        )}
+      </div>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {rows === null ? <p className="text-sm text-gray-400">Loading…</p>
+        : rows.length === 0 ? <p className="text-sm text-gray-400">None in this period.</p>
+        : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs text-gray-500">
+                <th className="py-1 pr-3">Date</th><th className="pr-3">Patient</th><th className="pr-3">Fee</th>
+                <th className="pr-3">Charged</th><th className="pr-3">Reason</th><th>Given by</th>
+              </tr></thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} className="border-t border-gray-100 align-top">
+                    <td className="py-1.5 pr-3 whitespace-nowrap">{shortDate(r.charged_on)}</td>
+                    <td className="pr-3">{r.patient_name ?? '—'}</td>
+                    <td className="pr-3 whitespace-nowrap">₹{Math.round(r.list_price)}</td>
+                    <td className="pr-3 whitespace-nowrap font-medium">{r.discount_kind === 'free' ? 'Free' : `₹${Math.round(r.amount)}`}</td>
+                    <td className="pr-3">{r.discount_reason}</td>
+                    <td className="whitespace-nowrap">{r.given_by}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+    </div>
+  )
+}
+
 export function MyPractice({ businessId, practitionerId, doctorName, onOpenPatient }: {
   businessId: string; practitionerId: string; doctorName?: string; onOpenPatient: (memberId: string) => void
 }) {
@@ -170,10 +297,13 @@ export function MyPractice({ businessId, practitionerId, doctorName, onOpenPatie
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Tiles r={row} />
+      <OpdFee businessId={businessId} practitionerId={practitionerId} />
+      <PublicProfileEditor practitionerId={practitionerId} />
       <TodayAppointments businessId={businessId} practitionerId={practitionerId} />
       <PatientList businessId={businessId} practitionerId={practitionerId} onOpenPatient={onOpenPatient} />
       <RevenuePanel businessId={businessId} practitionerId={practitionerId}
         title="What you earned" subtitle="Charges credited to you: your consultations, and bed, medicine and procedure charges on patients admitted under you." />
+      <DiscountsGiven businessId={businessId} practitionerId={practitionerId} period={period} />
     </div>
   )
 }

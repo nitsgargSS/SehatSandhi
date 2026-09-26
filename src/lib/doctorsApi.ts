@@ -8,6 +8,9 @@ export interface BusinessDoctor {
   practitioner_id: string
   full_name: string
   speciality: string | null
+  /** 0132: the OPD fee here, and the doctor's standing offer if any. */
+  consultation_fee?: number | null
+  discounted_fee?: number | null
 }
 
 export interface DoctorPerformanceRow {
@@ -46,12 +49,18 @@ const oops = (e: { message: string } | null) => { if (e) throw new Error(e.messa
 /** Doctors (and a doctor-owner) at this business, not suspended, by name. */
 export async function listBusinessDoctors(businessId: string): Promise<BusinessDoctor[]> {
   const { data, error } = await supabase.from('business_practitioners')
-    .select('practitioner_id, role, status, practitioners(full_name, speciality)')
+    .select('practitioner_id, role, status, consultation_fee, discounted_fee, practitioners(full_name, speciality)')
     .eq('business_id', businessId).in('role', ['doctor', 'owner']).neq('status', 'suspended')
   oops(error)
-  return ((data ?? []) as unknown as { practitioner_id: string; practitioners: { full_name: string; speciality: string | null } | null }[])
+  return ((data ?? []) as unknown as {
+    practitioner_id: string; consultation_fee: number | null; discounted_fee: number | null
+    practitioners: { full_name: string; speciality: string | null } | null
+  }[])
     .filter(r => r.practitioners)
-    .map(r => ({ practitioner_id: r.practitioner_id, full_name: r.practitioners!.full_name, speciality: r.practitioners!.speciality }))
+    .map(r => ({
+      practitioner_id: r.practitioner_id, full_name: r.practitioners!.full_name, speciality: r.practitioners!.speciality,
+      consultation_fee: r.consultation_fee, discounted_fee: r.discounted_fee,
+    }))
     .sort((a, b) => a.full_name.localeCompare(b.full_name))
 }
 
@@ -92,4 +101,21 @@ export async function getPatientDoctor(businessId: string, memberId: string): Pr
 export async function setAttending(admissionId: string, practitionerId: string | null) {
   const { error } = await supabase.rpc('sehat_set_attending', { p_admission: admissionId, p_practitioner: practitionerId })
   oops(error)
+}
+
+export interface DiscountRow {
+  charged_on: string; patient_name: string | null; doctor_name: string | null; description: string
+  list_price: number; amount: number; discount_amount: number; discount_kind: 'free' | 'discount'
+  discount_reason: string; given_by: string
+}
+
+/** Free and discounted consultations (0133): owner/manager see all, a doctor their own. */
+export async function getDiscounts(businessId: string, practitionerId: string | null, from: string, to: string): Promise<DiscountRow[]> {
+  const { data, error } = await supabase.rpc('sehat_discount_report', {
+    p_business: businessId, p_practitioner: practitionerId, p_from: from, p_to: to,
+  })
+  oops(error)
+  return ((data ?? []) as DiscountRow[]).map(r => ({
+    ...r, list_price: num(r.list_price), amount: num(r.amount), discount_amount: num(r.discount_amount),
+  }))
 }

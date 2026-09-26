@@ -28,6 +28,9 @@ interface DoctorResult {
   business_name: string
   address: string | null
   consultation_fee: number
+  /** 0136: the doctor's offer price, and whether their registration was checked. */
+  discounted_fee?: number | null
+  reg_verified?: boolean
   is_primary: boolean
   /** Serves the area's district but not its own pincode (0110). */
   nearby: boolean
@@ -230,9 +233,7 @@ export default function SpecialityLanding() {
                       {[d.qualification, d.business_name].filter(Boolean).join(' · ')}
                     </p>
                     <p className="text-gray-400 text-xs">{d.address}</p>
-                    {d.consultation_fee > 0 && (
-                      <p className="text-gray-400 text-xs">₹{d.consultation_fee} consultation</p>
-                    )}
+                    <FeeLine fee={d.consultation_fee} discounted={d.discounted_fee} verified={d.reg_verified} />
                     <Link to={doctorUrl({ id: d.practitioner_id, name: d.full_name })}
                       className="text-teal-600 text-xs font-medium hover:underline inline-block mt-1.5">
                       {t('specialityLandingPage.viewProfile')}
@@ -277,5 +278,17 @@ export default function SpecialityLanding() {
 
       <SiteFooter />
     </div>
+  )
+}
+
+/** OPD fee as the bot shows it (0136): the offer price with the regular one struck through. */
+function FeeLine({ fee, discounted, verified }: { fee: number; discounted?: number | null; verified?: boolean }) {
+  const offer = fee > 0 && discounted != null && discounted < fee
+  return (
+    <p className="text-xs text-gray-500">
+      {offer ? <><s className="text-gray-400">₹{fee}</s> <b className="text-teal-700">₹{discounted}</b> consultation</>
+        : fee > 0 ? <>₹{fee} consultation</> : null}
+      {verified && <span className="text-teal-600 ml-1.5" title="Registration number checked">✓ Registered doctor</span>}
+    </p>
   )
 }
