@@ -100,23 +100,24 @@ Deno.serve(async (req) => {
   let body: Row
   try { body = await req.json() } catch { return json({ error: 'invalid JSON' }, 400) }
 
-  // ── Who is asking: a signed-in admin whose password has not expired ──
+  // ── Who is asking: a signed-in admin or manager (0145) whose password has not expired ──
   const who = caller(req)
   if (!who || who.isServiceRole) return json({ error: 'Sign in as an admin.' }, 401)
-  const { data: isAdmin } = await who.asCaller.rpc('sehat_is_admin')
-  if (isAdmin !== true) return json({ error: 'Admins only.' }, 403)
+  const { data: isStaff } = await who.asCaller.rpc('sehat_is_staff')
+  if (isStaff !== true) return json({ error: 'Admins and managers only.' }, 403)
   const token = (req.headers.get('Authorization') ?? '').slice(7).trim()
   const db = who.asService
   const { data: { user } } = await db.auth.getUser(token)
   if (!user) return json({ error: 'Sign in as an admin.' }, 401)
-  const { data: adminRow } = await db.from('admin_users').select('email').eq('auth_uid', user.id).maybeSingle()
+  const { data: adminRow } = await db.from('admin_users').select('email, role').eq('auth_uid', user.id).maybeSingle()
+  const actorRole = String(adminRow?.role ?? 'admin')
   const adminEmail = String(adminRow?.email || user.email || '').trim()
   if (!adminEmail.includes('@')) {
     return json({ error: 'Your admin login has no email address, so no code can be sent.' }, 400)
   }
 
   if (body.op === 'request') return await request(db, user.id, adminEmail, body)
-  if (body.op === 'confirm') return await confirm(db, user.id, adminEmail, body)
+  if (body.op === 'confirm') return await confirm(db, user.id, adminEmail, actorRole, body)
   return json({ error: "op must be 'request' or 'confirm'" }, 400)
 })
 
@@ -190,7 +191,7 @@ ${details.html}
 }
 
 // deno-lint-ignore no-explicit-any
-async function confirm(db: any, uid: string, adminEmail: string, body: Row): Promise<Response> {
+async function confirm(db: any, uid: string, adminEmail: string, actorRole: string, body: Row): Promise<Response> {
   const requestId = typeof body.requestId === 'string' ? body.requestId : ''
   const code = typeof body.code === 'string' ? body.code.replace(/\D/g, '') : ''
   if (!requestId || code.length !== 6) return json({ error: 'Enter the 6-digit code from the email.' }, 400)
@@ -246,6 +247,13 @@ async function confirm(db: any, uid: string, adminEmail: string, body: Row): Pro
   }
   const result = { previous_status: biz.status }
   await db.from('admin_business_actions').update({ result }).eq('id', requestId)
+  // The service-role update above is invisible to the 0145 trigger (no auth.uid),
+  // so the team activity log is written here.
+  await db.from('staff_activity').insert({
+    actor_uid: uid, actor_email: adminEmail, actor_role: actorRole,
+    action: 'business_disabled', entity_type: 'business', entity_id: row.business_id, entity_name: row.business_name,
+    detail: { from: biz.status, to: 'suspended', note: row.reason, request_id: requestId },
+  })
 
   // The receipt. Best effort: the action is done whether or not this arrives.
   const snap = row.business_snapshot ?? {}

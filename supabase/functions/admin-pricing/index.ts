@@ -131,14 +131,17 @@ Deno.serve(async (req) => {
   const bearer = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? ''
   const suppliedKey = typeof body.key === 'string' ? body.key : ''
   let authorised = false
+  // 0145: a manager may look at the plans but never change them.
+  let readOnly = false
 
   if (bearer) {
     const { data: { user } } = await supabase.auth.getUser(bearer)
     if (user) {
       const { data: admin } = await supabase
-        .from('admin_users').select('email, is_active').eq('auth_uid', user.id).maybeSingle()
+        .from('admin_users').select('email, is_active, role').eq('auth_uid', user.id).maybeSingle()
       if (admin && admin.is_active !== false) {
         authorised = true
+        readOnly = admin.role === 'manager'
         actor = (admin.email as string) || user.email || user.id
       }
     }
@@ -152,6 +155,7 @@ Deno.serve(async (req) => {
   if (!authorised) return json({ error: 'unauthorised' }, 401)
 
   const action = typeof body.action === 'string' ? body.action : ''
+  if (readOnly && action !== 'list') return json({ error: 'Managers can view billing plans but not change them.' }, 403)
 
   const logEvent = (planCode: string | null, act: string, detail: unknown) =>
     supabase.from('pricing_plan_events').insert({
