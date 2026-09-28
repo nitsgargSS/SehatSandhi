@@ -52,3 +52,70 @@ export async function listStaffLog(businessId: string, limit = 50): Promise<Staf
   if (error) throw new Error(error.message)
   return (data ?? []) as StaffLogRow[]
 }
+
+// ── 0151: one person, several clinics ─────────────────────────────────────
+
+export interface PersonMatch {
+  practitioner_id: string
+  full_name: string
+  speciality: string | null
+  /** Has a login or works at another clinic: they must accept an invitation. */
+  needs_invitation: boolean
+  /** Their place at THIS clinic, if any. */
+  here_status: string | null
+  here_role: string | null
+}
+
+export interface MyInvitation {
+  id: string
+  business_id: string
+  business_name: string
+  business_city: string | null
+  role: string
+  invited_by_label: string | null
+  created_at: string
+  expires_at: string
+}
+
+export interface ClinicInvitation {
+  id: string
+  practitioner_id: string
+  full_name: string
+  role: string
+  created_at: string
+  expires_at: string
+}
+
+const fail = (e: { message: string } | null) => { if (e) throw new Error(e.message) }
+
+/** Anyone already on Sehatsandhi with this email or phone (up to five). */
+export async function findPeople(businessId: string, email: string, phone: string): Promise<PersonMatch[]> {
+  const { data, error } = await supabase.rpc('sehat_find_person', {
+    p_business: businessId, p_email: email.trim() || null, p_phone: phone.trim() || null,
+  })
+  fail(error)
+  return (data ?? []) as PersonMatch[]
+}
+
+export async function listMyInvitations(): Promise<MyInvitation[]> {
+  const { data, error } = await supabase.rpc('sehat_my_invitations')
+  fail(error)
+  return (data ?? []) as MyInvitation[]
+}
+
+export async function respondInvitation(id: string, accept: boolean): Promise<{ status: string; awaiting_payment?: boolean }> {
+  const { data, error } = await supabase.rpc('sehat_respond_invitation', { p_invitation: id, p_accept: accept })
+  fail(error)
+  return data as { status: string; awaiting_payment?: boolean }
+}
+
+/** Invitations this clinic has sent that are still open (owners and managers). */
+export async function listClinicInvitations(businessId: string): Promise<ClinicInvitation[]> {
+  const { data, error } = await supabase.rpc('sehat_clinic_invitations', { p_business: businessId })
+  fail(error)
+  return (data ?? []) as ClinicInvitation[]
+}
+
+export async function cancelInvitation(id: string) {
+  fail((await supabase.rpc('sehat_cancel_invitation', { p_invitation: id })).error)
+}

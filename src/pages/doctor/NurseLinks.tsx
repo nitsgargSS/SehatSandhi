@@ -3,6 +3,8 @@ import { linkNurse, listNurseLinks, setWardNurse, unlinkNurse, type NurseLink } 
 import { registerPractitioner } from '../../lib/identityApi'
 import { supabase } from '../../lib/supabase'
 import StaffCodeModal from './StaffCodeModal'
+import { PersonMatches } from './Invitations'
+import { findPeople, type PersonMatch } from '../../lib/staffApi'
 
 // 0149: nurses and the doctors they work for, on Doctors & staff (owner and
 // manager) and in My practice (a doctor's own nurses). The database decides
@@ -95,6 +97,7 @@ export function MyNurses({ businessId, practitionerId }: { businessId: string; p
   const [links, setLinks] = useState<NurseLink[]>([])
   const [form, setForm] = useState({ name: '', phone: '', email: '' })
   const [adding, setAdding] = useState<{ id: string; name: string } | null>(null)
+  const [matches, setMatches] = useState<PersonMatch[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
@@ -120,7 +123,13 @@ export function MyNurses({ businessId, practitionerId }: { businessId: string; p
     try { await fn(); load() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
-  const startAdd = () => run(async () => {
+  const startAdd = (skipLookup = false) => run(async () => {
+    // 0151: a nurse already on Sehatsandhi (another clinic, or a login) is invited.
+    if (!skipLookup) {
+      const found = await findPeople(businessId, form.email, form.phone)
+      if (found.length) { setMatches(found); return }
+    }
+    setMatches(null)
     const id = await registerPractitioner({
       fullName: form.name.trim(), phone: form.phone, email: form.email.trim(), role: 'nurse',
     })
@@ -162,20 +171,28 @@ export function MyNurses({ businessId, practitionerId }: { businessId: string; p
           <input className="input-field text-sm" placeholder="Mobile" inputMode="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
           <input className="input-field text-sm" placeholder="Email (they sign in with it)" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
         </div>
-        <button onClick={startAdd} disabled={busy || !form.name.trim() || !form.phone.trim() || !form.email.trim()}
+        <button onClick={() => startAdd()} disabled={busy || !form.name.trim() || !form.phone.trim() || !form.email.trim()}
           className="btn-teal text-sm py-2 px-4 mt-2 disabled:opacity-50">Add nurse</button>
       </div>
+
+      {matches && (
+        <PersonMatches matches={matches}
+          onPick={m => { setMatches(null); setAdding({ id: m.practitioner_id, name: m.full_name }) }}
+          onNew={() => startAdd(true)} onCancel={() => setMatches(null)} />
+      )}
 
       {adding && (
         <StaffCodeModal businessId={businessId} action="add" role="nurse" person={adding}
           onClose={() => setAdding(null)}
-          onDone={() => {
+          onDone={done => {
             const who = adding
             setAdding(null)
             setForm({ name: '', phone: '', email: '' })
             // Their login invite is queued by the database (0149): the invite
             // function is for owners and managers.
-            setMsg(`✓ ${who.name} added as your nurse and invited to set up their login. The clinic owner has been told.`)
+            setMsg(done.result.status === 'invited'
+              ? `✓ Invitation sent to ${who.name}. They become your nurse once they accept it.`
+              : `✓ ${who.name} added as your nurse and invited to set up their login. The clinic owner has been told.`)
             load()
           }} />
       )}
