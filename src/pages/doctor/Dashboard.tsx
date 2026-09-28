@@ -46,6 +46,7 @@ import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../compon
 import { headcountFor, marginalDoctorCost, describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import StaffCodeModal from './StaffCodeModal'
 import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from './NurseLinks'
+import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
 import { listNurseLinks, type NurseLink } from '../../lib/nurseApi'
 import { listStaffLog, type StaffAction, type StaffChangeDone, type StaffLogRow } from '../../lib/staffApi'
 
@@ -1411,6 +1412,8 @@ export default function DoctorDashboard() {
         {/* ══════════ SCHEDULE — areas info + weekly availability template ══════════ */}
         {tab === 'appointments' && (
           <div className="space-y-4">
+            {/* 0150: bookings a doctor's new leave now covers — to move, not cancelled. */}
+            <LeaveConflicts businessId={doctor.id} />
             <div className="card shadow-sm">
               <h3 className="font-bold text-navy-700 mb-1">All appointments</h3>
               <p className="text-sm text-gray-500 mb-4">
@@ -1524,6 +1527,11 @@ export default function DoctorDashboard() {
 
         {tab === 'schedule' && (
           <div className="space-y-4">
+            {/* 0150: doctors' leave here, and marking one unavailable at this clinic. */}
+            {businessRole && (
+              <ClinicLeave businessId={doctor.id}
+                doctors={rosterDoctors.map(r => ({ id: r.practitioner_id, name: r.practitioners!.full_name }))} />
+            )}
             <div className="card shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-navy-700">{t('dashboardPage.activeAreasHeading')}</h3>
@@ -1769,6 +1777,9 @@ export default function DoctorDashboard() {
             <MyPractice businessId={doctor.id} practitionerId={myPractitionerId} onOpenPatient={openPatient} />
             {/* 0149: a doctor's own nurses. Owners manage everyone's on Doctors & staff. */}
             {role.role === 'doctor' && <MyNurses businessId={doctor.id} practitionerId={myPractitionerId} />}
+            {/* 0150: across every clinic this doctor works at. */}
+            <MyWeek />
+            <MyLeave practitionerId={myPractitionerId} clinics={listings.map(l => ({ id: l.id, name: l.name }))} />
           </>
         )}
 

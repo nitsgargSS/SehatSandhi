@@ -28,6 +28,7 @@ export const PURGE_TABLES: PurgeTable[] = [
   { name: 'business_staff_requests', purgeOrder: 27, pk: 'id' },
   { name: 'business_staff_log', purgeOrder: 27, pk: 'id' },
   { name: 'nurse_doctor_links', purgeOrder: 27, pk: 'id' },
+  { name: 'practitioner_leave', purgeOrder: 27, pk: 'id' },
   { name: 'phone_verifications', purgeOrder: 28, pk: 'id' },
   { name: 'admin_business_actions', purgeOrder: 29, pk: 'id' },
   { name: 'staff_activity', purgeOrder: 29, pk: 'id' },
