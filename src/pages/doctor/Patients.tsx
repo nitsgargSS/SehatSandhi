@@ -50,7 +50,7 @@ import { getMarketingConsent, setMarketingConsent } from '../../lib/marketingApi
 import { listBusinessDoctors, BusinessDoctor, setPatientDoctor, getPatientDoctor, setAttending } from '../../lib/doctorsApi'
 import DoctorSelect from '../../components/DoctorSelect'
 import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
-import { opdVisit, opdSlipUrl, patientHistory, HistoryRow } from '../../lib/queueApi'
+import { opdVisit, opdSlipUrl, patientHistory, HistoryRow, vitalsLine } from '../../lib/queueApi'
 
 // A hospital's doctors, for the "which doctor" pickers below (0121). Empty on
 // a failure, which simply hides the pickers.
@@ -821,6 +821,15 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
               style={{ ...btn(shown === id), fontSize: 12.5 }}>{lbl}</button>
           ))}
       </div>
+
+      {/* 0152: today's vitals up front for the consultation, whichever pane is
+          open — taken at the queue by the nurse or the desk. */}
+      {clinical && vitals[0] && new Date(vitals[0].recorded_at).toDateString() === new Date().toDateString() && (
+        <div style={{ ...card, fontSize: 13, color: '#0f4f37', background: '#f3faf6', borderColor: '#bfe3d0' }}>
+          <b>Today's vitals</b> ({new Date(vitals[0].recorded_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}):{' '}
+          {vitalsLine(vitals[0]) || '—'}
+        </div>
+      )}
 
       {!clinical && otherDoctors && (
         <div style={{ ...card, fontSize: 13, color: BIZ.ink, background: '#fff8eb', borderColor: '#f0dcb0' }}>

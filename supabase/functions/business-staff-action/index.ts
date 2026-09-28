@@ -121,6 +121,11 @@ async function request(who: any, user: Row, body: Row): Promise<Response> {
     if (action !== 'remove' && action !== 'restore') {
       return json({ error: 'Sehatsandhi can remove or bring back staff; adding and roles are for the clinic.' }, 403)
     }
+  } else if (myRole === 'doctor') {
+    // 0149: a doctor may add a nurse of their own, who is linked to them.
+    if (action !== 'add' || role !== 'nurse') {
+      return json({ error: 'A doctor can add a nurse of their own; other staff changes are for the owner or manager.' }, 403)
+    }
   } else if (myRole !== 'owner' && myRole !== 'manager') {
     return json({ error: 'Only an owner or manager can change the staff.' }, 403)
   }
@@ -252,7 +257,9 @@ async function confirm(who: any, user: Row, body: Row): Promise<Response> {
     db.from('practitioners').select('full_name, email').eq('id', r.practitioner_id).maybeSingle(),
   ])
   const res = result as Row
-  const what = describe(r.action, r.role, prevAff?.role ?? null)
+  // 0151: someone already known elsewhere is invited rather than added.
+  const invited = res?.status === 'invited'
+  const what = invited ? `Invite to join as ${ROLE_LABEL[r.role ?? 'doctor'] ?? r.role}` : describe(r.action, r.role, prevAff?.role ?? null)
   const details = table([
     ['Clinic', biz?.name],
     ['Change', what],
@@ -260,11 +267,16 @@ async function confirm(who: any, user: Row, body: Row): Promise<Response> {
     ['Reason', r.reason],
     ['Done by', r.requested_by_email],
     ['At', istTime(new Date())],
-    ['Now', res?.awaiting_payment ? 'Waiting for the extra-doctor fee to be paid' : res?.status],
+    ['Now', invited ? 'Invited — waiting for them to accept'
+      : res?.awaiting_payment ? 'Waiting for the extra-doctor fee to be paid' : res?.status],
   ])
   const sends: Promise<unknown>[] = []
   if (deliverable(person?.email)) {
-    const toPerson = r.action === 'remove'
+    const login = `${(Deno.env.get('SITE_URL') ?? 'https://sehatsandhi.com').replace(/\/$/, '')}/business/login`
+    const toPerson = invited
+      ? { subject: `${biz?.name} has invited you to join as ${ROLE_LABEL[r.role ?? 'doctor'] ?? r.role}`,
+          lead: `${biz?.name} would like you on its staff on Sehatsandhi. Sign in at ${login} with your usual email and accept or decline under Invitations at the top of your dashboard. You keep one login for every clinic you work at, and each clinic's patients stay with that clinic.` }
+      : r.action === 'remove'
       ? { subject: `You have been removed from ${biz?.name}`, lead: `${biz?.name} has removed you from its staff on Sehatsandhi. You can no longer open its patients or records. Your own profile, and any other clinic you work with, are not affected.` }
       : { subject: `Your place at ${biz?.name} on Sehatsandhi`, lead: `${biz?.name} has made a change to your place on its staff.` }
     sends.push(sendEmail({

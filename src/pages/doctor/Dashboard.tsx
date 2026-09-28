@@ -45,7 +45,12 @@ import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../components/Charts'
 import { headcountFor, marginalDoctorCost, describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import StaffCodeModal from './StaffCodeModal'
-import { listStaffLog, type StaffAction, type StaffChangeDone, type StaffLogRow } from '../../lib/staffApi'
+import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from './NurseLinks'
+import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
+import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
+import DeskBooking from './DeskBooking'
+import { listNurseLinks, type NurseLink } from '../../lib/nurseApi'
+import { findPeople, listStaffLog, type PersonMatch, type StaffAction, type StaffChangeDone, type StaffLogRow } from '../../lib/staffApi'
 
 
 interface CampOffer {
@@ -243,6 +248,8 @@ export default function DoctorDashboard() {
     status: string
     /** 0140: added mid-term past the included doctors; live once paid. */
     awaiting_payment?: boolean
+    /** 0149: sees every admitted patient, whoever the doctor. */
+    ward_nurse?: boolean
     practitioners: {
       id: string; full_name: string; speciality: string | null
       qualification: string | null; reg_number: string | null; status: string
@@ -269,6 +276,10 @@ export default function DoctorDashboard() {
     action: StaffAction; person: { id: string; name: string; currentRole?: string | null }; role?: string | null
   } | null>(null)
   const [staffLog, setStaffLog] = useState<StaffLogRow[]>([])
+  // 0151: people already on Sehatsandhi who match the add form's email/phone.
+  const [personMatches, setPersonMatches] = useState<PersonMatch[] | null>(null)
+  // 0149: which nurse works for which doctor.
+  const [nurseLinks, setNurseLinks] = useState<NurseLink[]>([])
   const [showAddDoc, setShowAddDoc] = useState(false)
   const [feeFor, setFeeFor] = useState<string | null>(null)
   // 0139: invite a doctor to log in and set up their profile.
@@ -348,7 +359,11 @@ export default function DoctorDashboard() {
     setRoster((data as RosterRow[]) || [])
     // 0147: owners and managers only; RLS gives anyone else an empty list.
     listStaffLog(businessId).then(setStaffLog, () => setStaffLog([]))
+    listNurseLinks(businessId).then(setNurseLinks, () => setNurseLinks([]))
   }
+  const staffLite: StaffLite[] = roster.filter(r => r.practitioners).map(r => ({
+    id: r.practitioner_id, name: r.practitioners!.full_name, role: r.role ?? 'doctor', status: r.status, ward_nurse: r.ward_nurse,
+  }))
 
   /**
    * Add a doctor — attaching one who already exists wherever possible.
@@ -359,10 +374,16 @@ export default function DoctorDashboard() {
    * number), so a doctor entered with their real registration resolves to the
    * person already on file.
    */
-  const addRosterDoctor = async (picked?: { practitionerId: string }) => {
+  const addRosterDoctor = async (picked?: { practitionerId: string }, skipLookup = false) => {
     if (!doctor || (!picked && !docForm.name.trim())) return
     setRosterBusy(true); setRosterErr('')
     try {
+      // 0151: someone already on Sehatsandhi is invited, not registered twice.
+      if (!picked && !skipLookup) {
+        const found = await findPeople(doctor.id, docForm.email, docForm.phone)
+        if (found.length) { setPersonMatches(found); return }
+      }
+      setPersonMatches(null)
       const practitionerId = picked?.practitionerId ?? await registerPractitioner({
         fullName: docForm.name.trim(),
         speciality: docForm.role === 'doctor' ? docForm.speciality : null,
@@ -410,7 +431,10 @@ export default function DoctorDashboard() {
       await supabase.rpc('sehat_invite_doctor', { p_business: doctor.id, p_practitioner: change.person.id }).then(() => undefined, () => undefined)
     }
     const r = done.result
-    setRosterErr(r.awaiting_payment
+    setPersonMatches(null)
+    setRosterErr(r.status === 'invited'
+      ? `✓ Invitation sent to ${change.person.name}. They join once they accept it from their own dashboard.`
+      : r.awaiting_payment
       ? `✓ ${change.person.name} is added and will go live once the extra-doctor fee is paid (see their row).`
       : `✓ ${change.person.name}: ${change.action === 'remove' ? 'removed' : change.action === 'restore' ? 'brought back' : change.action === 'add' ? 'added' : 'role changed'}. They have been emailed.`)
     await loadRoster(doctor.id)
@@ -1065,7 +1089,9 @@ export default function DoctorDashboard() {
   // /business/login before any of this renders.)
   if (!doctor) return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="text-center text-sm max-w-xs">
+      <div className="text-center text-sm max-w-md">
+        {/* 0151: someone whose only way in is a clinic's invitation. */}
+        <div className="text-left"><MyInvitations onJoined={() => window.location.reload()} /></div>
         <p className="text-gray-500">
           {t('dashboardPage.noProfileFound')}{' '}
           <a href="/business/register" className="text-teal-600 hover:underline">{t('dashboardPage.registerHereLink')}</a>
@@ -1296,6 +1322,9 @@ export default function DoctorDashboard() {
           </div>
         )}
 
+        {/* 0151: clinics that have invited this person to join them. */}
+        <MyInvitations onJoined={() => window.location.reload()} />
+
         {/* ══════════ TODAY (default) — today's slot grid + recent appointments ══════════ */}
         {tab === 'today' && (
           <div className="space-y-4">
@@ -1401,6 +1430,10 @@ export default function DoctorDashboard() {
         {/* ══════════ SCHEDULE — areas info + weekly availability template ══════════ */}
         {tab === 'appointments' && (
           <div className="space-y-4">
+            {/* 0150: bookings a doctor's new leave now covers — to move, not cancelled. */}
+            <LeaveConflicts businessId={doctor.id} />
+            {/* 0152: the desk books into the same free slots the bot offers. */}
+            <DeskBooking businessId={doctor.id} onBooked={reloadAppointments} />
             <div className="card shadow-sm">
               <h3 className="font-bold text-navy-700 mb-1">All appointments</h3>
               <p className="text-sm text-gray-500 mb-4">
@@ -1514,6 +1547,11 @@ export default function DoctorDashboard() {
 
         {tab === 'schedule' && (
           <div className="space-y-4">
+            {/* 0150: doctors' leave here, and marking one unavailable at this clinic. */}
+            {businessRole && (
+              <ClinicLeave businessId={doctor.id}
+                doctors={rosterDoctors.map(r => ({ id: r.practitioner_id, name: r.practitioners!.full_name }))} />
+            )}
             <div className="card shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-navy-700">{t('dashboardPage.activeAreasHeading')}</h3>
@@ -1755,7 +1793,14 @@ export default function DoctorDashboard() {
         )}
 
         {tab === 'mypractice' && doctor && myPractitionerId && (
-          <MyPractice businessId={doctor.id} practitionerId={myPractitionerId} onOpenPatient={openPatient} />
+          <>
+            <MyPractice businessId={doctor.id} practitionerId={myPractitionerId} onOpenPatient={openPatient} />
+            {/* 0149: a doctor's own nurses. Owners manage everyone's on Doctors & staff. */}
+            {role.role === 'doctor' && <MyNurses businessId={doctor.id} practitionerId={myPractitionerId} />}
+            {/* 0150: across every clinic this doctor works at. */}
+            <MyWeek />
+            <MyLeave practitionerId={myPractitionerId} clinics={listings.map(l => ({ id: l.id, name: l.name }))} />
+          </>
         )}
 
         {tab === 'doctors' && doctor && (
@@ -1997,6 +2042,7 @@ export default function DoctorDashboard() {
                   </div>
                 )}
 
+                <UnlinkedNursesAlert staff={staffLite} links={nurseLinks} />
                 {rosterErr && <div className={`${rosterErr.startsWith('✓') ? 'bg-teal-50 text-teal-700' : 'bg-red-50 text-red-600'} text-sm rounded-xl p-3 mb-3`}>{rosterErr}</div>}
 
                 {showAddDoc && (
@@ -2074,6 +2120,14 @@ export default function DoctorDashboard() {
                       <button onClick={() => { setShowAddDoc(false); setRosterErr('') }}
                         className="text-sm text-gray-500 px-4">Cancel</button>
                     </div>
+                    {personMatches && (
+                      <PersonMatches matches={personMatches}
+                        onPick={m => setStaffChange(m.here_status === 'suspended'
+                          ? { action: 'restore', person: { id: m.practitioner_id, name: m.full_name, currentRole: m.here_role } }
+                          : { action: 'add', person: { id: m.practitioner_id, name: m.full_name }, role: docForm.role })}
+                        onNew={() => addRosterDoctor(undefined, true)}
+                        onCancel={() => setPersonMatches(null)} />
+                    )}
                   </div>
                 )}
 
@@ -2148,6 +2202,11 @@ export default function DoctorDashboard() {
                               )
                             )}
                           </div>
+                          {doctor && (
+                            <NurseLinksLine businessId={doctor.id} canEdit={!suspended}
+                              person={{ id: d.practitioner_id, name: person?.full_name ?? '', role: d.role ?? 'doctor', status: d.status, ward_nurse: d.ward_nurse }}
+                              staff={staffLite} links={nurseLinks} onChanged={() => loadRoster(doctor.id)} />
+                          )}
                           {feeFor === d.practitioner_id && doctor && (
                             <div className="mt-2 space-y-3">
                               <OpdFee businessId={doctor.id} practitionerId={d.practitioner_id} />
@@ -2227,6 +2286,8 @@ export default function DoctorDashboard() {
                 )}
               </div>
             )}
+
+            {doctor && <ClinicInvitations businessId={doctor.id} refreshKey={staffLog.length} />}
 
             {staffChange && doctor && (
               <StaffCodeModal businessId={doctor.id} action={staffChange.action} person={staffChange.person}

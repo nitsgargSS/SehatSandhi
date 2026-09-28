@@ -5,9 +5,9 @@ import { Spinner } from '../../components/Loading'
 import {
   getBoard, callNext, setTokenStatus, opdVisit, patientHistory, opdSlipUrl, HistoryRow,
   stillWaiting, inProgress, finished,
-  QueueEntry,
+  QueueEntry, getVitalsDone, getTodaysVitals, vitalsLine,
 } from '../../lib/queueApi'
-import { searchPatients, PatientSearchResult, registerPatient } from '../../lib/patientsApi'
+import { searchPatients, PatientSearchResult, registerPatient, addVital, Vital } from '../../lib/patientsApi'
 import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
 import { listBusinessDoctors, BusinessDoctor } from '../../lib/doctorsApi'
 import DoctorSelect from '../../components/DoctorSelect'
@@ -58,8 +58,22 @@ export default function Queue({ businessId, practitionerId }: {
   const [view, setView] = useState<string | null>(practitionerId ?? null)
   useEffect(() => { listBusinessDoctors(businessId).then(setDoctors).catch(() => setDoctors([])) }, [businessId])
 
+  // 0152: who has had vitals taken (everyone sees), and the readings (only the
+  // doctor and the patient's nurse can read them; reception gets none).
+  const [vitalsDone, setVitalsDone] = useState<Record<string, string | null>>({})
+  const [vitals, setVitals] = useState<Record<string, Vital>>({})
+  const [recordFor, setRecordFor] = useState<QueueEntry | null>(null)
+
   const reload = useCallback(async () => {
-    try { setBoard(await getBoard(businessId)); setErr('') }
+    try {
+      const b = await getBoard(businessId)
+      setBoard(b); setErr('')
+      const [done, vals] = await Promise.all([
+        getVitalsDone(b.map(e => e.id)),
+        getTodaysVitals(businessId, [...new Set(b.map(e => e.patient_member_id))]),
+      ])
+      setVitalsDone(done); setVitals(vals)
+    }
     catch (e) { setErr((e as Error).message) }
     finally { setLoading(false) }
   }, [businessId])
@@ -141,6 +155,12 @@ export default function Queue({ businessId, practitionerId }: {
 
       {err && <div style={{ ...card, color: '#8a2b2b', fontSize: 13 }}>{err}</div>}
 
+      {recordFor && (
+        <VitalsForm entry={recordFor} businessId={businessId}
+          onClose={() => setRecordFor(null)}
+          onSaved={() => { setRecordFor(null); reload() }} />
+      )}
+
       {adding && (
         <IssueToken
           businessId={businessId} practitionerId={practitionerId} doctors={doctors} defaultDoctor={view}
@@ -154,7 +174,8 @@ export default function Queue({ businessId, practitionerId }: {
           <div style={{ ...label, marginBottom: 10 }}>Now</div>
           <div style={{ display: 'grid', gap: 9 }}>
             {active.map(e => (
-              <Row key={e.id} e={e} busy={busy} act={act} emphasis />
+              <Row key={e.id} e={e} busy={busy} act={act} emphasis
+                vitalsAt={vitalsDone[e.id]} vitals={vitals[e.patient_member_id]} onRecord={() => setRecordFor(e)} />
             ))}
           </div>
         </div>
@@ -168,7 +189,8 @@ export default function Queue({ businessId, practitionerId }: {
           <div style={{ fontSize: 13.5, color: BIZ.muted }}>Nobody is waiting.</div>
         ) : (
           <div style={{ display: 'grid', gap: 9 }}>
-            {waiting.map(e => <Row key={e.id} e={e} busy={busy} act={act} />)}
+            {waiting.map(e => <Row key={e.id} e={e} busy={busy} act={act}
+              vitalsAt={vitalsDone[e.id]} vitals={vitals[e.patient_member_id]} onRecord={() => setRecordFor(e)} />)}
           </div>
         )}
       </div>
@@ -191,11 +213,14 @@ export default function Queue({ businessId, practitionerId }: {
   )
 }
 
-function Row({ e, busy, act, emphasis }: {
+function Row({ e, busy, act, emphasis, vitalsAt, vitals, onRecord }: {
   e: QueueEntry
   busy: boolean
   act: (fn: () => Promise<unknown>) => Promise<void>
   emphasis?: boolean
+  vitalsAt?: string | null
+  vitals?: Vital
+  onRecord?: () => void
 }) {
   return (
     <div style={{
@@ -241,10 +266,21 @@ function Row({ e, busy, act, emphasis }: {
           {e.reason && (
             <div style={{ fontSize: 12.5, color: BIZ.ink, marginTop: 2 }}>{e.reason}</div>
           )}
+          {/* 0152: vitals travel with the token. The numbers only for those who may read them. */}
+          {vitalsAt && (
+            <div style={{ fontSize: 12.5, marginTop: 3, color: '#0f6b4a', fontWeight: 600 }}>
+              ✓ Vitals {clock(vitalsAt)}{vitals ? ` — ${vitalsLine(vitals)}` : ''}
+            </div>
+          )}
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+        {onRecord && (e.status === 'waiting' || e.status === 'called') && (
+          <button style={{ ...btn(!vitalsAt), fontSize: 12 }} disabled={busy} onClick={onRecord}>
+            {vitalsAt ? 'More vitals' : 'Record vitals'}
+          </button>
+        )}
         <a href={opdSlipUrl(e.id)} target="_blank" rel="noreferrer" title="Print OPD slip"
           style={{ ...btn(), fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
           <Printer className="w-3.5 h-3.5" /> Slip
@@ -480,6 +516,70 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// 0152: vitals from the queue — nurse or front desk, before the doctor calls.
+// Saved to the patient's record like the Patients tab's Vitals pane; the token
+// is then stamped "Vitals ✓" for everyone on the queue.
+const VITAL_FIELDS: [keyof Vital, string, string][] = [
+  ['bp_systolic', 'BP systolic', '120'], ['bp_diastolic', 'BP diastolic', '80'],
+  ['pulse', 'Pulse /min', '72'], ['temperature_c', 'Temp °C', '37'],
+  ['spo2', 'SpO₂ %', '98'], ['weight_kg', 'Weight kg', '64'],
+  ['blood_sugar_mg_dl', 'Sugar mg/dL', '110'],
+]
+
+function VitalsForm({ entry, businessId, onClose, onSaved }: {
+  entry: QueueEntry; businessId: string; onClose: () => void; onSaved: () => void
+}) {
+  const [v, setV] = useState<Record<string, string>>({})
+  const [sugarType, setSugarType] = useState('random')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const num = (k: string) => (v[k] ?? '').trim() === '' ? null : Number(v[k])
+  const any = VITAL_FIELDS.some(([k]) => num(k as string) != null)
+
+  const save = async () => {
+    setBusy(true); setErr('')
+    try {
+      const rec: Partial<Vital> = {}
+      for (const [k] of VITAL_FIELDS) {
+        const n = num(k as string)
+        if (n != null && !Number.isFinite(n)) throw new Error('Numbers only, please.')
+        if (n != null) (rec as Record<string, number>)[k as string] = n
+      }
+      if (rec.blood_sugar_mg_dl != null) rec.blood_sugar_type = sugarType
+      await addVital(entry.patient_member_id, businessId, rec)
+      onSaved()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}
+      onClick={busy ? undefined : onClose}>
+      <div style={{ ...card, maxWidth: 440, width: '100%' }} onClick={ev => ev.stopPropagation()}>
+        <div style={{ fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>Vitals — #{entry.token_number} {entry.patient_name}</div>
+        <div style={{ fontSize: 12.5, color: BIZ.muted, marginBottom: 12 }}>Fill what you measured; leave the rest blank.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {VITAL_FIELDS.map(([k, l, ph]) => (
+            <label key={k as string} style={{ fontSize: 12, color: BIZ.muted }}>{l}
+              <input style={{ ...input, width: '100%' }} inputMode="decimal" placeholder={ph}
+                value={v[k as string] ?? ''} onChange={ev => setV(x => ({ ...x, [k as string]: ev.target.value }))} />
+            </label>
+          ))}
+          <label style={{ fontSize: 12, color: BIZ.muted }}>Sugar taken
+            <select style={{ ...input, width: '100%' }} value={sugarType} onChange={ev => setSugarType(ev.target.value)}>
+              <option value="random">Random</option><option value="fasting">Fasting</option><option value="pp">After food</option>
+            </select>
+          </label>
+        </div>
+        {err && <div style={{ color: '#8a2b2b', fontSize: 13, marginTop: 8 }}>{err}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+          <button style={btn()} disabled={busy} onClick={onClose}>Cancel</button>
+          <button style={btn(true)} disabled={busy || !any} onClick={save}>{busy ? 'Saving…' : 'Save vitals'}</button>
+        </div>
+      </div>
     </div>
   )
 }
