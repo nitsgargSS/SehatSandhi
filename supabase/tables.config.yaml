@@ -263,6 +263,12 @@ tables:
     purgeOrder: 103
     pk: business_id
 
+  # ── Contact Us form (0165) ─────────────────────────────────────────────
+  # Written only by the contact-submit edge function; no foreign keys.
+  contact_inquiries:
+    class: isolated
+    purgeOrder: 94.4
+
   # ── Changes to clinic payments (0159) ───────────────────────────────────
   # A log, no FK to the payment (it outlives a deleted one).
   payment_changes:

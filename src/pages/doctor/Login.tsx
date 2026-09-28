@@ -41,10 +41,10 @@ const SEND_ERRORS: Record<string, string> = {
   // Our side is not set up to send. Do not tell them to try again — it will
   // fail identically until someone configures a provider.
   DELIVERY_UNAVAILABLE:
-    'We cannot send login codes right now. This is a problem at our end, not with your number — please call us and we will get you in.',
+    'We cannot send login codes right now. This is a problem at our end, not with your number — please call us on +91 85708 89188 and we will get you in.',
   // A provider was reachable but refused. This one might genuinely be transient.
   DELIVERY_FAILED:
-    'We could not send your code just now. Please try again in a minute, or call us if it keeps happening.',
+    'We could not send your code just now. Please try again in a minute, or call us on +91 85708 89188 if it keeps happening.',
 }
 
 export default function DoctorLogin() {

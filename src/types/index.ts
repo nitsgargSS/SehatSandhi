@@ -164,6 +164,12 @@ export const WA_NUMBER = '917015399355'
 // silence instead of the menu. Every patient-facing link sends exactly this.
 export const WA_START = 'Hi'
 export const WA_LINK = `https://wa.me/${WA_NUMBER}?text=${WA_START}`
+// WA_NUMBER is a WhatsApp Business API number: it takes messages, not calls.
+// This is the number people call. Same digits-only form; tel: links add the '+'.
+export const CALL_NUMBER = '918570889188'
+/** 918570889188 → +91 85708 89188 */
+export const prettyPhone = (digits: string) =>
+  /^91\d{10}$/.test(digits) ? `+91 ${digits.slice(2, 7)} ${digits.slice(7)}` : `+${digits}`
 // National emergency ambulance: free, 24x7, works from any phone without data.
 export const AMBULANCE_NUMBER = '108'
 // No listing price lives in code. It is pricing_plans.monthly_price (flat plans)

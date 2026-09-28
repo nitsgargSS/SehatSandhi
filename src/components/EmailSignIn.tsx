@@ -114,7 +114,7 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
       // the same reason as above. A real delivery failure still surfaces,
       // because that one is our problem and they can do nothing about it.
       if (err && /smtp|rate|limit|sending/i.test(err.message)) {
-        setError('We cannot send codes right now. This is a problem at our end — please call us and we will get you in.')
+        setError('We cannot send codes right now. This is a problem at our end — please call us on +91 85708 89188 and we will get you in.')
         return
       }
       setStep('code')
