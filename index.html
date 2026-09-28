@@ -14,16 +14,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <title>Sehatsandhi — स्वास्थ्य की नई साझेदारी</title>
 
-    <!-- Google Analytics (GA4) — Sehatsandhi property.
-         Tracks pageviews and visitor location automatically —
-         no other code needed for the geographic breakdown. -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-TDG8G7ZXZ5"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-TDG8G7ZXZ5');
-    </script>
+    <!-- Google Analytics is NOT loaded here: it loads only after the visitor
+         allows it (src/components/AnalyticsConsent.tsx, src/lib/ga.ts). -->
   </head>
   <body>
     <div id="root"></div>

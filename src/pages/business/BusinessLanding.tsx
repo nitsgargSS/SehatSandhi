@@ -88,7 +88,7 @@ export default function BusinessLanding() {
           <p style={{ fontSize: 'clamp(16px,4vw,18px)', color: BIZ.muted, lineHeight: 1.55, margin: '0 0 28px', maxWidth: 520 }}>
             Doctors, hospitals, pharmacies, labs, insurers and ambulance services get discovered by families nearby — over WhatsApp &amp; SMS.
             {flatPlan
-              ? ` Every pincode included for ${money(flatPrice)} a month.`
+              ? ' Every pincode in your district, covered in one plan.'
               : ' Choose your pincodes, pay only for the audience you reach.'}
           </p>
           {/* on phones the CTA goes full-width so it's an easy thumb target */}
@@ -103,7 +103,7 @@ export default function BusinessLanding() {
       {/* trust strip */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: 'clamp(16px,5vw,48px)', padding: '20px clamp(16px,4vw,40px)', background: BIZ.creamAlt, borderTop: `1px solid ${BIZ.border}`, borderBottom: `1px solid ${BIZ.border}`, flexWrap: 'wrap', textAlign: 'center' }}>
         {['6 service categories',
-          flatPlan ? `${money(flatPrice)}/month, all pincodes` : 'Pay by audience, not per click',
+          flatPlan ? 'One plan, every pincode' : 'Pay by audience, not per click',
           'WhatsApp & SMS delivery', 'Villages to tier-1 cities'].map(s => (
           <span key={s} style={{ fontSize: 14, fontWeight: 700, color: '#3f4a44' }}>{s}</span>
         ))}
@@ -118,7 +118,7 @@ export default function BusinessLanding() {
             { n: '1', t: 'Pick your pincodes', d: 'Select any number of pincodes — villages, towns or full cities — where you want patients to find you.' },
             { n: '2', t: 'We show you to those users', d: 'When a patient in your pincodes needs your category, you appear in their WhatsApp options.' },
             flatPlan
-              ? { n: '3', t: 'One flat monthly price', d: `${money(flatPrice)} a month covers every pincode you pick, for as many months as you pay upfront.` }
+              ? { n: '3', t: 'One simple plan', d: 'A single monthly plan covers every pincode you pick, for as many months as you pay upfront. See pricing below.' }
               : { n: '3', t: 'Pay by audience size', d: 'Your fee scales with how many users live in your chosen pincodes. Bigger reach, higher premium.' },
           ].map(s => (
             <div key={s.n} style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: 'clamp(20px,5vw,26px)' }}>

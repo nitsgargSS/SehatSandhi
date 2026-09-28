@@ -5,7 +5,6 @@ import { supabase } from '../../lib/supabase'
 import { optedOut, sessionId } from '../../lib/analytics'
 import { usePricing } from '../../hooks/usePricing'
 import { BIZ } from './shared'
-import { money } from '../../lib/format'
 import CountUp from '../../components/CountUp'
 
 // The coverage card — the hero card on the business page.
@@ -21,7 +20,9 @@ import CountUp from '../../components/CountUp'
 // Everything is read, never asserted: districts and pincodes from India Post's
 // directory, population from Census 2011 (labelled so, with the disclaimer), our
 // own patient and clinic counts only once they are big enough to mean something,
-// and the price from the active pricing plan.
+// and whether one plan covers every pincode from the active pricing plan. No
+// rupee amount is shown here (decided 29 Sep 2026): prices live on the pricing
+// section, where the terms around them are.
 //
 // A link can open the card on a place: /business?area=gurgaon.
 //
@@ -147,7 +148,7 @@ function DistrictRows({ rows, highlight }: { rows: DistrictRow[]; highlight?: st
 }
 
 export default function ReachSnapshot() {
-  const { plan, tiers } = usePricing()
+  const { plan } = usePricing()
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const [res, setRes] = useState<AreaResult | null>(null)
@@ -157,10 +158,6 @@ export default function ReachSnapshot() {
   const [nearYou, setNearYou] = useState(false)
 
   const everyPin = plan.mode === 'flat_all_pincodes'
-  const flat = plan.mode !== 'pincode_tiers'
-  const fromPrice = flat ? plan.monthly_price ?? 0
-    : Math.min(...tiers.map(t => t.monthly_price).filter(p => p > 0), Infinity)
-  const price = fromPrice && Number.isFinite(fromPrice) ? `${flat ? '' : 'from '}${money(fromPrice)}` : '—'
 
   const search = async (text: string, state?: string, method: Method = 'typed') => {
     const mine = method === 'location'
@@ -223,7 +220,7 @@ export default function ReachSnapshot() {
     : 'Every district in India'
   const sub = found
     ? [found.kind !== 'district' ? `${found.district_count} districts` : null, found.state !== found.label ? found.state : null,
-       everyPin ? 'every pincode included, one flat price' : null].filter(Boolean).join(' · ')
+       everyPin ? 'every pincode covered in one plan' : 'choose the pincodes you want'].filter(Boolean).join(' · ')
     : totals ? `${totals.pincodes.toLocaleString('en-IN')} pincodes across ${totals.districts} districts — search yours` : 'Search your city or pincode'
 
   return (
@@ -282,10 +279,10 @@ export default function ReachSnapshot() {
           {stat(found.census_population ? <><CountUp value={found.census_population} format={inShort} />+</> : '—',
                 found.census_population ? `people${found.census_partial ? ' (part)' : ''} · Census 2011` : 'population not published')}
           {stat(<CountUp value={found.pincode_count ?? 0} format={n => String(Math.round(n))} />, everyPin ? 'pincodes, all included' : 'pincodes')}
-          {stat(price, everyPin ? 'a month, every pincode' : 'a month')}
+          {stat(everyPin ? '1 plan' : 'Your pick', everyPin ? 'covers every pincode here' : 'of pincodes to reach')}
         </> : <>
           {stat(totals ? totals.pincodes.toLocaleString('en-IN') : '—', 'pincodes, every district')}
-          {stat(price, everyPin ? 'a month, every pincode' : 'a month')}
+          {stat(everyPin ? '1 plan' : 'Your pick', everyPin ? 'covers every pincode in your district' : 'of pincodes to reach')}
           {stat('24×7', 'booking on WhatsApp')}
         </>}
       </div>

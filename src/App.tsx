@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import AnalyticsConsent from './components/AnalyticsConsent'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { LanguageProvider } from './i18n/LanguageContext'
 import { supabase } from './lib/supabase'
@@ -165,6 +166,7 @@ export default function App() {
       <BrowserRouter>
         {/* Outside <Routes> so the staging warning is present on every page. */}
         <StagingBanner />
+        <AnalyticsConsent />
         <Suspense fallback={
           <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">
             Loading…
