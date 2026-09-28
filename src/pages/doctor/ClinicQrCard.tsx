@@ -34,7 +34,7 @@ export default function ClinicQrCard({ businessId, name, code }: { businessId: s
         {img ? <img src={img} alt={`QR code for ${name}`} className="w-40 h-40 border rounded-lg" /> : <div className="w-40 h-40 border rounded-lg bg-gray-50" />}
         <div className="space-y-2 text-sm">
           <div>Code: <b className="font-mono">{code}</b></div>
-          <div className="text-gray-500">Opens WhatsApp {wa === '917015399355' ? 'to Sehatsandhi (+91 70153 99355)' : `to your number +${wa}`}</div>
+          <div className="text-gray-500">Opens WhatsApp {wa === '917015399355' ? 'to the Sehatsandhi booking assistant' : `to your number +${wa}`}</div>
           <div className="flex gap-2 flex-wrap">
             <a href={`/business/print/qr/${businessId}`} target="_blank" rel="noreferrer" className="btn-teal text-sm px-4 py-2">Print poster</a>
             {img && <a href={img} download={`${code}-qr.png`} className="btn-outline text-sm px-4 py-2">Download QR image</a>}

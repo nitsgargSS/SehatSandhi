@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { MessageCircle, Mail, MapPin, Clock, Phone, Send, CheckCircle2 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
-import { WA_NUMBER, CALL_NUMBER, prettyPhone } from '../types'
+import { WA_LINK, CALL_NUMBER, prettyPhone } from '../types'
 import { activeConfig } from '../lib/env'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter, { SOCIALS } from '../components/SiteFooter'
@@ -50,9 +50,9 @@ const content: Record<'en' | 'hi', Copy> = {
     title: 'Contact Us',
     subtitle: "We're a small team, and a person reads every message.",
     waTitle: 'WhatsApp',
-    waDesc: 'The fastest way to reach us — for patients booking an appointment and for businesses alike.',
+    waDesc: 'Book an appointment, find a doctor, pharmacy or ambulance nearby — our WhatsApp assistant answers straight away, any time.',
     waCta: 'Message us on WhatsApp',
-    waOnly: 'WhatsApp messages only — this number does not take calls.',
+    waOnly: 'Just send "Hi" to start. To speak to someone, call us or use the form below.',
     callTitle: 'Call us',
     callDesc: 'To speak to someone — Monday to Saturday, 9:00 AM to 7:00 PM IST.',
     mailTitle: 'Email',
@@ -114,9 +114,9 @@ const content: Record<'en' | 'hi', Copy> = {
     title: 'संपर्क करें',
     subtitle: 'हम एक छोटी टीम हैं, और हर मैसेज एक इंसान पढ़ता है।',
     waTitle: 'WhatsApp',
-    waDesc: 'हम तक पहुंचने का सबसे तेज़ तरीका — अपॉइंटमेंट बुक करने वाले मरीज़ों और बिज़नेस, दोनों के लिए।',
+    waDesc: 'अपॉइंटमेंट बुक करें, पास में डॉक्टर, फार्मेसी या एम्बुलेंस ढूंढें — हमारा WhatsApp असिस्टेंट तुरंत जवाब देता है, किसी भी समय।',
     waCta: 'WhatsApp पर मैसेज करें',
-    waOnly: 'सिर्फ़ WhatsApp मैसेज — इस नंबर पर कॉल नहीं लगती।',
+    waOnly: 'शुरू करने के लिए बस "Hi" भेजें। किसी से बात करने के लिए कॉल करें या नीचे का फ़ॉर्म भरें।',
     callTitle: 'कॉल करें',
     callDesc: 'किसी से बात करने के लिए — सोमवार से शनिवार, सुबह 9:00 से शाम 7:00 बजे तक (IST)।',
     form: {
@@ -179,7 +179,8 @@ const content: Record<'en' | 'hi', Copy> = {
 export default function Contact() {
   const { lang } = useLanguage()
   const c = content[lang]
-  const wa = `https://wa.me/${WA_NUMBER}`
+  // Opens the booking bot with "Hi", which is what starts it.
+  const wa = WA_LINK
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -198,7 +199,7 @@ export default function Contact() {
             <p className="text-gray-500 text-xs leading-relaxed mb-3">{c.waDesc}</p>
             <a href={wa} target="_blank" rel="noreferrer"
                className="text-teal-600 font-semibold text-sm hover:underline">
-              {prettyPhone(WA_NUMBER)}
+              {c.waCta} →
             </a>
             <p className="text-gray-400 text-xs mt-1">{c.waOnly}</p>
           </div>

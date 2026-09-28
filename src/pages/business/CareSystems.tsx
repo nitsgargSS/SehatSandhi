@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  ListOrdered, FileText, Mic, ShieldAlert, Search, BedDouble,
-  Pill, ClipboardCheck, ReceiptText, Users, CalendarClock, Lock,
+  ListOrdered, FileText, ShieldAlert, Search, BedDouble, QrCode, Scissors,
+  Pill, ClipboardCheck, ReceiptText, Users, CalendarClock, Lock, UserRound,
 } from 'lucide-react'
 import { PAGE } from '../../components/SiteHeader'
 import { BIZ } from './shared'
@@ -28,25 +28,29 @@ import { money } from '../../lib/format'
 // Everything claimed below is something the product actually does today. The
 // temptation on a page like this is to describe the roadmap; a doctor who signs
 // up on the strength of a bullet and cannot find the screen is a refund and a
-// bad review, so the list is deliberately shorter than it could be.
+// bad review, so the list is deliberately shorter than it could be. (Voice
+// notes are built but switched off in production — VITE_RECORDING_ENABLED — so
+// they are not claimed here until they are on.)
 
 interface Feature { icon: JSX.Element; text: string }
 
 const OPD: Feature[] = [
-  { icon: <ListOrdered className="w-4 h-4" />, text: 'Token queue — call the next patient, no crowd at the desk' },
+  { icon: <ListOrdered className="w-4 h-4" />, text: 'Token queue — vitals taken at the desk travel with the token to the doctor' },
+  { icon: <QrCode className="w-4 h-4" />,      text: 'OPD slip on your letterhead, with your clinic\'s QR code for the next booking' },
   { icon: <FileText className="w-4 h-4" />,    text: 'Patient records: visits, vitals, allergies, ongoing medicines' },
-  { icon: <Pill className="w-4 h-4" />,        text: 'Prescriptions in seconds, sent straight to the patient on WhatsApp' },
-  { icon: <Mic className="w-4 h-4" />,         text: 'Speak your notes — they are typed up for you, and the audio is never kept' },
+  { icon: <Pill className="w-4 h-4" />,        text: 'Prescriptions in seconds, sent straight to the patient' },
   { icon: <ShieldAlert className="w-4 h-4" />, text: 'Allergy warnings before you prescribe, not after' },
-  { icon: <Search className="w-4 h-4" />,      text: 'Find every past patient by diagnosis or procedure, for follow-ups' },
+  { icon: <UserRound className="w-4 h-4" />,   text: 'Refer a patient to another doctor in one tap — the record goes with them' },
 ]
 
 const IPD: Feature[] = [
   { icon: <BedDouble className="w-4 h-4" />,      text: 'Admissions and a live bed board, ward by ward' },
+  { icon: <Scissors className="w-4 h-4" />,       text: 'OT register — every operation, major or minor OT, surgeon, anaesthesia and implants' },
   { icon: <ClipboardCheck className="w-4 h-4" />, text: 'Drug chart — what is ordered, what is due, what was actually given' },
-  { icon: <Users className="w-4 h-4" />,          text: 'Nurses chart the dose they gave; only doctors can prescribe it' },
+  { icon: <Users className="w-4 h-4" />,          text: 'Nurses work for their own doctors or a ward; only doctors prescribe' },
   { icon: <FileText className="w-4 h-4" />,       text: 'Discharge summaries written, issued and sent to the family' },
   { icon: <ReceiptText className="w-4 h-4" />,    text: 'Inpatient billing with bed charges posted for you' },
+  { icon: <Search className="w-4 h-4" />,         text: 'Find any patient by surgery, diagnosis or anything you wrote — "lap chole", "mesh", "no lifting"' },
 ]
 
 // The wider argument: a clinic is not buying two modules, it is putting the

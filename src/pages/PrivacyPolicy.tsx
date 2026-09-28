@@ -5,12 +5,12 @@ import SiteFooter from '../components/SiteFooter'
 const content = {
   en: {
     title: 'Privacy Policy',
-    updated: 'Last updated: August 2026',
+    updated: 'Last updated: September 2026',
     intro: 'Sehatsandhi ("we," "us," "our") is operated by NG Technologies. This policy explains what information we collect, how we use it, and your rights regarding it. Sehatsandhi is a WhatsApp-first platform connecting patients with verified doctors and healthcare partners in the pincodes we serve.',
     sections: [
       {
         h: '1. Information We Collect',
-        p: 'From patients: name, phone number, age, and the details you share while booking an appointment (speciality needed, area/PIN code). From doctors and partners: registration details, qualification, clinic address, phone, email, and payment information for listing fees. We also use Google Analytics to understand website traffic (anonymized, aggregate data — not tied to individual patients). Separately, we record anonymous usage events on our own systems: which pages were opened, what speciality or area was searched for, which listings were shown, viewed or tapped, and when the WhatsApp or call button was used. Each event carries a temporary per-visit identifier that is discarded when you close the tab, your device type (mobile, tablet or desktop), and the website you arrived from. We remove search text from the page address before storing it, and these events are not linked to your name or phone number. We use them to improve the service and to show partners how their own listing is performing. If your browser sends a "Do Not Track" signal, we record no usage events at all.',
+        p: 'From patients: name, phone number, age, and the details you share while booking an appointment (speciality needed, area/PIN code). From doctors and partners: registration details, qualification, clinic address, phone, email, and the details of payments for listing fees — payments are made through Razorpay, and we never see or store your card number. From a clinic\'s staff: name, phone, email and role, so each person can sign in to their own account. If you rate a visit by replying on WhatsApp, we keep the score and any words you add. If you use the form on our Contact page, we keep your name, phone or email and your message so we can reply. We also use Google Analytics to understand website traffic (anonymized, aggregate data — not tied to individual patients). Separately, we record anonymous usage events on our own systems: which pages were opened, what speciality or area was searched for, which listings were shown, viewed or tapped, and when the WhatsApp or call button was used. Each event carries a temporary per-visit identifier that is discarded when you close the tab, your device type (mobile, tablet or desktop), and the website you arrived from. We remove search text from the page address before storing it, and these events are not linked to your name or phone number. We use them to improve the service and to show partners how their own listing is performing. If your browser sends a "Do Not Track" signal, we record no usage events at all.',
       },
       {
         h: '2. Location',
@@ -18,11 +18,11 @@ const content = {
       },
       {
         h: '3. How We Use Your Information',
-        p: 'To connect patients with appropriate doctors/partners, to verify doctor credentials against official medical registries, to process appointment bookings, to send booking confirmations and reminders, and to improve our service. We never sell your personal information to third parties.',
+        p: 'To connect patients with appropriate doctors/partners, to verify doctor credentials against official medical registries, to process appointment bookings, to send booking confirmations and reminders, to send you the prescriptions, bills and discharge summaries your clinic asks us to send, to answer your messages, and to improve our service. We never sell your personal information to third parties.',
       },
       {
-        h: '4. We Do Not Store Health Records',
-        p: "Sehatsandhi's role is limited to aggregating doctor and clinic listings and helping you book an appointment. We do not maintain medical records, treatment history, prescriptions, or diagnoses for any patient. The only information we hold related to your booking is what's needed to make the connection: your name, phone number, age, the speciality you're looking for, and your chosen area. Any actual medical discussion — symptoms, history, diagnosis, treatment — takes place directly between you and your doctor, and is not stored on our platform.",
+        h: '4. Health Records Kept by Your Clinic',
+        p: "When you visit a clinic or hospital that uses Sehatsandhi's software, that clinic may record your visits, vitals, allergies, diagnoses, prescriptions, operations, admissions, bills and the medicines it dispenses to you on our system. These records belong to the clinic, which decides what is recorded and is responsible for it. We store them securely on the clinic's behalf, show them only to that clinic's staff whose role needs them (a doctor sees the patients they are treating), keep a log of who searched or opened records, and never use them for advertising or share them with anyone else. You can ask the clinic, or us, to see or correct your records. Documents uploaded to a record are kept for the retention period for medical records and then deleted. For a booking alone, Sehatsandhi holds only what is needed to make it: your name, phone number, age, the speciality you are looking for and your area.",
       },
       {
         h: '5. WhatsApp Messaging Data',
@@ -30,7 +30,7 @@ const content = {
       },
       {
         h: '6. Data Sharing',
-        p: 'We share your booking details only with the specific doctor or partner you choose to connect with, so they can provide the service you requested. We do not sell, rent, or trade personal information with advertisers or unrelated third parties.',
+        p: 'We share your booking details only with the specific doctor or partner you choose to connect with, so they can provide the service you requested. To run the service we use a small number of providers who handle data only on our instructions: WhatsApp messaging (Meta, through AiSensy), SMS, email (Zoho ZeptoMail), payments (Razorpay) and secure hosting (Supabase). We do not sell, rent, or trade personal information with advertisers or unrelated third parties.',
       },
       {
         h: '7. Your Rights',
@@ -50,18 +50,18 @@ const content = {
       },
       {
         h: '11. Contact Us',
-        p: 'For any privacy-related questions or requests, message us on WhatsApp or reach us via the details on our Contact page.',
+        p: 'For any privacy-related questions or requests, use the form on our Contact page, email contact@sehatsandhi.com, or message us on WhatsApp.',
       },
     ],
   },
   hi: {
     title: 'गोपनीयता नीति',
-    updated: 'आखिरी अपडेट: अगस्त 2026',
+    updated: 'आखिरी अपडेट: सितंबर 2026',
     intro: 'Sehatsandhi ("हम", "हमारा") NG Technologies द्वारा संचालित है। यह नीति बताती है कि हम कौनसी जानकारी इकट्ठा करते हैं, उसका इस्तेमाल कैसे करते हैं, और इस बारे में आपके अधिकार क्या हैं। Sehatsandhi उन पिनकोड्स में मरीज़ों को वेरिफाइड डॉक्टरों और हेल्थकेयर पार्टनर्स से जोड़ने वाला एक WhatsApp-फर्स्ट प्लेटफॉर्म है जहां हम उपलब्ध हैं।',
     sections: [
       {
         h: '1. हम कौनसी जानकारी इकट्ठा करते हैं',
-        p: 'मरीज़ों से: नाम, फ़ोन नंबर, उम्र, और अपॉइंटमेंट बुक करते समय आपके द्वारा शेयर की गई डिटेल्स (चाहिए स्पेशलिटी, एरिया/PIN कोड)। डॉक्टरों और पार्टनर्स से: रजिस्ट्रेशन डिटेल्स, क्वालिफिकेशन, क्लिनिक एड्रेस, फ़ोन, ईमेल, और लिस्टिंग फीस के लिए पेमेंट जानकारी। हम Google Analytics का भी इस्तेमाल करते हैं वेबसाइट ट्रैफिक समझने के लिए (एनोनिमाइज्ड, एग्रीगेट डेटा — किसी इंडिविजुअल मरीज़ से जुड़ा नहीं)। इसके अलावा, हम अपने सिस्टम पर एनोनिमस यूसेज इवेंट्स रिकॉर्ड करते हैं: कौनसे पेज खोले गए, कौनसी स्पेशलिटी या एरिया सर्च किया गया, कौनसी लिस्टिंग्स दिखाई गईं, देखी गईं या टैप की गईं, और WhatsApp या कॉल बटन कब इस्तेमाल हुआ। हर इवेंट के साथ एक टेम्पररी पर-विज़िट आइडेंटिफायर होता है जो टैब बंद करते ही खत्म हो जाता है, आपका डिवाइस टाइप (मोबाइल, टैबलेट या डेस्कटॉप), और वो वेबसाइट जहां से आप आए। हम पेज एड्रेस से सर्च टेक्स्ट हटा देते हैं स्टोर करने से पहले, और ये इवेंट्स आपके नाम या फ़ोन नंबर से जुड़े नहीं होते। हम इन्हें सर्विस बेहतर बनाने और पार्टनर्स को उनकी अपनी लिस्टिंग की परफॉर्मेंस दिखाने के लिए इस्तेमाल करते हैं। अगर आपका ब्राउज़र "Do Not Track" सिग्नल भेजता है, तो हम कोई भी यूसेज इवेंट रिकॉर्ड नहीं करते।',
+        p: 'मरीज़ों से: नाम, फ़ोन नंबर, उम्र, और अपॉइंटमेंट बुक करते समय आपके द्वारा शेयर की गई डिटेल्स (चाहिए स्पेशलिटी, एरिया/PIN कोड)। डॉक्टरों और पार्टनर्स से: रजिस्ट्रेशन डिटेल्स, क्वालिफिकेशन, क्लिनिक एड्रेस, फ़ोन, ईमेल, और लिस्टिंग फीस के पेमेंट की डिटेल्स — पेमेंट Razorpay के ज़रिए होता है, और हम आपका कार्ड नंबर कभी नहीं देखते या स्टोर करते। क्लिनिक के स्टाफ से: नाम, फ़ोन, ईमेल और रोल, ताकि हर व्यक्ति अपने अकाउंट में साइन इन कर सके। अगर आप WhatsApp पर जवाब देकर विज़िट की रेटिंग देते हैं, तो हम रेटिंग और आपके लिखे शब्द रखते हैं। अगर आप हमारे संपर्क पेज का फ़ॉर्म भरते हैं, तो जवाब देने के लिए हम आपका नाम, फ़ोन या ईमेल और मैसेज रखते हैं। हम Google Analytics का भी इस्तेमाल करते हैं वेबसाइट ट्रैफिक समझने के लिए (एनोनिमाइज्ड, एग्रीगेट डेटा — किसी इंडिविजुअल मरीज़ से जुड़ा नहीं)। इसके अलावा, हम अपने सिस्टम पर एनोनिमस यूसेज इवेंट्स रिकॉर्ड करते हैं: कौनसे पेज खोले गए, कौनसी स्पेशलिटी या एरिया सर्च किया गया, कौनसी लिस्टिंग्स दिखाई गईं, देखी गईं या टैप की गईं, और WhatsApp या कॉल बटन कब इस्तेमाल हुआ। हर इवेंट के साथ एक टेम्पररी पर-विज़िट आइडेंटिफायर होता है जो टैब बंद करते ही खत्म हो जाता है, आपका डिवाइस टाइप (मोबाइल, टैबलेट या डेस्कटॉप), और वो वेबसाइट जहां से आप आए। हम पेज एड्रेस से सर्च टेक्स्ट हटा देते हैं स्टोर करने से पहले, और ये इवेंट्स आपके नाम या फ़ोन नंबर से जुड़े नहीं होते। हम इन्हें सर्विस बेहतर बनाने और पार्टनर्स को उनकी अपनी लिस्टिंग की परफॉर्मेंस दिखाने के लिए इस्तेमाल करते हैं। अगर आपका ब्राउज़र "Do Not Track" सिग्नल भेजता है, तो हम कोई भी यूसेज इवेंट रिकॉर्ड नहीं करते।',
       },
       {
         h: '2. लोकेशन',
@@ -69,11 +69,11 @@ const content = {
       },
       {
         h: '3. हम आपकी जानकारी का इस्तेमाल कैसे करते हैं',
-        p: 'मरीज़ों को सही डॉक्टर/पार्टनर से जोड़ने के लिए, डॉक्टर की क्रेडेंशियल्स ऑफिशियल मेडिकल रजिस्ट्री के खिलाफ वेरिफाई करने के लिए, अपॉइंटमेंट बुकिंग प्रोसेस करने के लिए, बुकिंग कन्फर्मेशन और रिमाइंडर भेजने के लिए, और हमारी सर्विस बेहतर बनाने के लिए। हम कभी भी आपकी पर्सनल जानकारी थर्ड पार्टीज़ को नहीं बेचते।',
+        p: 'मरीज़ों को सही डॉक्टर/पार्टनर से जोड़ने के लिए, डॉक्टर की क्रेडेंशियल्स ऑफिशियल मेडिकल रजिस्ट्री के खिलाफ वेरिफाई करने के लिए, अपॉइंटमेंट बुकिंग प्रोसेस करने के लिए, बुकिंग कन्फर्मेशन और रिमाइंडर भेजने के लिए, आपके क्लिनिक के कहने पर आपको प्रिस्क्रिप्शन, बिल और डिस्चार्ज समरी भेजने के लिए, आपके मैसेज का जवाब देने के लिए, और हमारी सर्विस बेहतर बनाने के लिए। हम कभी भी आपकी पर्सनल जानकारी थर्ड पार्टीज़ को नहीं बेचते।',
       },
       {
-        h: '4. हम हेल्थ रिकॉर्ड्स स्टोर नहीं करते',
-        p: 'Sehatsandhi का रोल सिर्फ डॉक्टर और क्लिनिक लिस्टिंग्स को एग्रीगेट करने और आपको अपॉइंटमेंट बुक करने में मदद करने तक सीमित है। हम किसी भी मरीज़ के लिए मेडिकल रिकॉर्ड्स, ट्रीटमेंट हिस्ट्री, प्रिस्क्रिप्शन, या डायग्नोसिस मेंटेन नहीं करते। आपकी बुकिंग से जुड़ी जो जानकारी हम रखते हैं वो सिर्फ कनेक्शन बनाने के लिए ज़रूरी है: आपका नाम, फ़ोन नंबर, उम्र, जो स्पेशलिटी आप ढूंढ रहे हैं, और आपका चुना हुआ एरिया। कोई भी असली मेडिकल डिस्कशन — सिम्प्टम्स, हिस्ट्री, डायग्नोसिस, ट्रीटमेंट — सीधे आपके और आपके डॉक्टर के बीच होता है, और हमारे प्लेटफॉर्म पर स्टोर नहीं होता।',
+        h: '4. आपके क्लिनिक द्वारा रखे गए हेल्थ रिकॉर्ड',
+        p: 'जब आप किसी ऐसे क्लिनिक या हॉस्पिटल में जाते हैं जो Sehatsandhi का सॉफ्टवेयर इस्तेमाल करता है, तो वह क्लिनिक हमारे सिस्टम पर आपकी विज़िट, वाइटल्स, एलर्जी, डायग्नोसिस, प्रिस्क्रिप्शन, ऑपरेशन, भर्ती, बिल और आपको दी गई दवाइयां रिकॉर्ड कर सकता है। ये रिकॉर्ड क्लिनिक के हैं — क्या रिकॉर्ड होगा, यह क्लिनिक तय करता है और उसकी ज़िम्मेदारी क्लिनिक की है। हम ये रिकॉर्ड क्लिनिक की ओर से सुरक्षित रखते हैं, सिर्फ उस क्लिनिक के उन्हीं स्टाफ को दिखाते हैं जिनके काम के लिए ज़रूरी हो (डॉक्टर सिर्फ अपने मरीज़ देखते हैं), किसने रिकॉर्ड सर्च किए या खोले इसका लॉग रखते हैं, और इन्हें कभी विज्ञापन के लिए इस्तेमाल नहीं करते या किसी और से शेयर नहीं करते। आप अपने रिकॉर्ड देखने या ठीक कराने के लिए क्लिनिक से या हमसे कह सकते हैं। रिकॉर्ड में अपलोड किए गए डॉक्यूमेंट मेडिकल रिकॉर्ड की तय अवधि तक रखे जाते हैं और फिर डिलीट कर दिए जाते हैं। सिर्फ बुकिंग के लिए Sehatsandhi उतनी ही जानकारी रखता है जितनी ज़रूरी है: आपका नाम, फ़ोन नंबर, उम्र, जो स्पेशलिटी आप ढूंढ रहे हैं और आपका एरिया।',
       },
       {
         h: '5. WhatsApp मैसेजिंग डेटा',
@@ -81,7 +81,7 @@ const content = {
       },
       {
         h: '6. डेटा शेयरिंग',
-        p: 'हम आपकी बुकिंग डिटेल्स सिर्फ उसी डॉक्टर या पार्टनर के साथ शेयर करते हैं जिसे आप कनेक्ट करना चुनते हैं, ताकि वो आपकी रिक्वेस्टेड सर्विस दे सकें। हम पर्सनल जानकारी एडवरटाइज़र्स या अनरिलेटेड थर्ड पार्टीज़ के साथ नहीं बेचते, रेंट नहीं करते, या ट्रेड नहीं करते।',
+        p: 'हम आपकी बुकिंग डिटेल्स सिर्फ उसी डॉक्टर या पार्टनर के साथ शेयर करते हैं जिसे आप कनेक्ट करना चुनते हैं, ताकि वो आपकी रिक्वेस्टेड सर्विस दे सकें। सर्विस चलाने के लिए हम कुछ प्रोवाइडर्स का इस्तेमाल करते हैं जो सिर्फ हमारे निर्देश पर डेटा संभालते हैं: WhatsApp मैसेजिंग (Meta, AiSensy के ज़रिए), SMS, ईमेल (Zoho ZeptoMail), पेमेंट (Razorpay) और सुरक्षित होस्टिंग (Supabase)। हम पर्सनल जानकारी एडवरटाइज़र्स या अनरिलेटेड थर्ड पार्टीज़ के साथ नहीं बेचते, रेंट नहीं करते, या ट्रेड नहीं करते।',
       },
       {
         h: '7. आपके अधिकार',
@@ -101,7 +101,7 @@ const content = {
       },
       {
         h: '11. हमसे संपर्क करें',
-        p: 'किसी भी प्राइवेसी-रिलेटेड सवाल या रिक्वेस्ट के लिए, हमें WhatsApp पर मैसेज करें या हमारे संपर्क पेज पर दी गई डिटेल्स से संपर्क करें।',
+        p: 'किसी भी प्राइवेसी-रिलेटेड सवाल या रिक्वेस्ट के लिए, हमारे संपर्क पेज का फ़ॉर्म भरें, contact@sehatsandhi.com पर ईमेल करें, या WhatsApp पर मैसेज करें।',
       },
     ],
   },
