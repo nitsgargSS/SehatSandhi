@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState, useCallback } from 'react'
+import { SPECIALITIES } from '../../types'
 import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { supabase } from '../../lib/supabase'
@@ -44,6 +45,8 @@ import {
   clinicalSearch, getSurgeries, recordSurgery, cancelSurgery, SOURCES, ANAESTHESIA,
   ClinicalHit, RecordSource, OtType, Surgery, NewSurgery,
 } from '../../lib/surgeryApi'
+import { getLabSettings, getTests, getPackages, getOrders, createOrder, getUploads, STATUS_LABEL, LabTest, LabPackage, LabOrder, UploadedReport } from '../../lib/labApi'
+import { TestPicker } from './LabPanel'
 import { moneyExact, shortDate } from '../../lib/format'
 import { RECORDING_ENABLED } from '../../lib/env'
 import { getMarketingConsent, setMarketingConsent } from '../../lib/marketingApi'
@@ -619,7 +622,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
 
 // Panes that show the medical record rather than the logistics around it.
 // Mirrors the table list gated in 0057; if one moves, both move.
-const CLINICAL_PANES = new Set(['history', 'clinical', 'rx', 'docs', 'ot'])
+const CLINICAL_PANES = new Set(['history', 'clinical', 'rx', 'docs', 'ot', 'lab'])
 
 function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   memberId: string
@@ -649,7 +652,10 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   // A nurse is clinical but is not a prescriber. Same reason as above for
   // starting false: the ordering form is offered only once we know.
   const [prescriber, setPrescriber] = useState(false)
-  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'ot' | 'money' | 'refer'>('history')
+  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'ot' | 'lab' | 'money' | 'refer'>('history')
+  // 0168: the Lab tests pane, where the clinic runs a lab (or is one).
+  const [labOn, setLabOn] = useState(false)
+  useEffect(() => { getLabSettings(businessId).then(s => setLabOn(s.on)).catch(() => setLabOn(false)) }, [businessId])
 
   // 0138: a doctor sees only patients they have been involved with here (or
   // were referred). Anyone else's shows a notice, not empty tabs that read as
@@ -813,6 +819,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           ['history', 'Visits', true], ['clinical', 'Allergies & medicines', true],
           ['vitals', 'Vitals', false], ['rx', 'Prescriptions', true],
           ['docs', 'Documents', true], ['ipd', 'Admissions', false], ['ot', 'Operations', true],
+          ...(labOn ? [['lab', 'Lab tests', true] as const] : []),
           ['money', 'Billing', false], ['refer', 'Refer to doctor', false],
         ] as const)
           .filter(([, , needsClinical]) => clinical || !needsClinical)
@@ -872,6 +879,9 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           clinical={clinical} prescriber={prescriber}
         />
       )}
+      {shown === 'lab' && labOn && (
+        <LabTestsPane memberId={memberId} businessId={businessId} visits={visits} />
+      )}
       {shown === 'ot' && (
         <OperationsPane memberId={memberId} businessId={businessId} stays={stays} />
       )}
@@ -890,6 +900,107 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           docs={docs} memberId={memberId} businessId={businessId}
           practitionerId={practitionerId} onChange={reload}
         />
+      )}
+    </div>
+  )
+}
+
+// ── Lab tests (0168) ────────────────────────────────────────────────────────
+//
+// The doctor orders tests or a package from the visit, into the clinic's own
+// lab; the order goes to the lab's queue and the charge onto the patient's
+// account. Results come back here as the approved report.
+
+function LabTestsPane({ memberId, businessId, visits }: { memberId: string; businessId: string; visits: Visit[] }) {
+  const [orders, setOrders] = useState<LabOrder[]>([])
+  const [tests, setTests] = useState<LabTest[]>([])
+  const [packages, setPackages] = useState<LabPackage[]>([])
+  const [ordering, setOrdering] = useState(false)
+  const [testIds, setTestIds] = useState<string[]>([])
+  const [packageIds, setPackageIds] = useState<string[]>([])
+  const [visitId, setVisitId] = useState('')
+  const [urgent, setUrgent] = useState(false)
+  const [notes, setNotes] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [uploads, setUploads] = useState<UploadedReport[]>([])
+  const load = useCallback(() => {
+    getOrders(businessId, { memberId }).then(setOrders).catch(() => setOrders([]))
+    getUploads(businessId, { memberId }).then(setUploads).catch(() => setUploads([]))
+  }, [businessId, memberId])
+  useEffect(load, [load])
+  useEffect(() => {
+    getTests(businessId).then(setTests).catch(() => setTests([]))
+    getPackages(businessId).then(setPackages).catch(() => setPackages([]))
+  }, [businessId])
+  const today = new Date().toISOString().slice(0, 10)
+  const openOrder = () => {
+    setVisitId(visits.find(v => (v.visit_date ?? '') === today)?.id ?? '')
+    setTestIds([]); setPackageIds([]); setUrgent(false); setNotes(''); setErr(''); setOrdering(true)
+  }
+  const submit = async () => {
+    setBusy(true); setErr('')
+    try {
+      await createOrder(businessId, { memberId, testIds, packageIds, visitId: visitId || null, priority: urgent ? 'urgent' : 'routine', notes })
+      setOrdering(false); load()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      {!ordering && (
+        <div><button style={btn(true)} onClick={openOrder} disabled={!tests.length}>
+          <Plus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />Order lab tests
+        </button>
+        {!tests.length && <span style={{ fontSize: 12.5, color: BIZ.muted, marginLeft: 10 }}>The lab has no tests set up yet.</span>}</div>
+      )}
+      {ordering && (
+        <div style={{ ...card, display: 'grid', gap: 10 }}>
+          <TestPicker tests={tests} packages={packages} testIds={testIds} packageIds={packageIds} setTestIds={setTestIds} setPackageIds={setPackageIds} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <select style={{ ...input, flex: '1 1 220px' }} value={visitId} onChange={e => setVisitId(e.target.value)}>
+              <option value="">Not linked to a visit</option>
+              {visits.slice(0, 10).map(v => <option key={v.id} value={v.id}>Visit {when(v.visit_date)}{v.diagnosis ? ` · ${v.diagnosis}` : ''}</option>)}
+            </select>
+            <input style={{ ...input, flex: '2 1 240px' }} placeholder="Note for the lab (fasting, clinical details)" value={notes} onChange={e => setNotes(e.target.value)} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}><input type="checkbox" checked={urgent} onChange={e => setUrgent(e.target.checked)} /> Urgent</label>
+          </div>
+          {err && <div style={{ color: '#8a2b2b', fontSize: 13 }}>{err}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={btn(true)} disabled={busy || (!testIds.length && !packageIds.length)} onClick={submit}>{busy ? 'Ordering…' : 'Send to lab'}</button>
+            <button style={btn()} onClick={() => setOrdering(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {orders.length === 0 && !ordering && <div style={{ ...card, color: BIZ.muted, fontSize: 13.5 }}>No lab tests for this patient.</div>}
+      {orders.map(o => (
+        <div key={o.id} style={card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: BIZ.ink }}>{o.order_no}{o.priority === 'urgent' ? ' · URGENT' : ''}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: o.status === 'reported' ? BIZ.green : BIZ.mutedWarm }}>{STATUS_LABEL[o.status]} · {when(o.created_at)}</span>
+          </div>
+          <div style={{ fontSize: 13, color: BIZ.ink, marginTop: 4 }}>{o.items.map(i => i.name).join(', ')}</div>
+          <div style={{ fontSize: 12, color: BIZ.muted, marginTop: 4 }}>
+            Ordered by {o.ordered_by_name ?? o.created_by_name ?? '—'}
+            {o.latest_report && <> · <a href={`/lab/${o.latest_report.token}`} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>View report {o.latest_report.report_no}</a>
+              {' '}(signed {o.latest_report.approved_by_name})</>}
+            {uploads.filter(u => u.order_id === o.id && !u.purged_at).map(u => (
+              <span key={u.id}> · <a href={`/lab/file/${u.public_token}`} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>Open report file</a></span>
+            ))}
+          </div>
+        </div>
+      ))}
+      {uploads.some(u => !u.order_id) && (
+        <div style={card}>
+          <div style={{ ...label, marginBottom: 6 }}>Uploaded lab reports</div>
+          {uploads.filter(u => !u.order_id).map(u => (
+            <div key={u.id} style={{ fontSize: 13, padding: '5px 0', borderTop: `1px solid ${BIZ.border}` }}>
+              {u.purged_at ? <span style={{ color: BIZ.muted }}>{u.title} — removed after the retention period</span>
+                : <a href={`/lab/file/${u.public_token}`} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>{u.title}</a>}
+              <span style={{ color: BIZ.muted }}> · {when(u.report_date ?? u.created_at)} · kept until {when(u.expires_on)}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -1275,21 +1386,21 @@ function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }:
   practitionerId?: string | null
   onChange: () => void
 }) {
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [kind, setKind] = useState('lab_report')
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
   const upload = async () => {
-    if (!file) return
+    if (!files.length) return
     setBusy(true); setErr('')
     try {
-      await uploadDocument(file, {
+      await uploadDocument(files, {
         businessId, patientMemberId: memberId, kind,
-        title: title.trim() || file.name, uploadedBy: practitionerId ?? null,
+        title: title.trim() || files[0].name.replace(/\.[^.]+$/, ''), uploadedBy: practitionerId ?? null,
       })
-      setFile(null); setTitle(''); onChange()
+      setFiles([]); setTitle(''); onChange()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -1306,7 +1417,7 @@ function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }:
       <div style={card}>
         <div style={{ ...label, marginBottom: 9 }}>Add a document</div>
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input type="file" onChange={e => setFile(e.target.files?.[0] ?? null)}
+          <input type="file" multiple onChange={e => setFiles(Array.from(e.target.files ?? []))}
             accept="image/*,application/pdf"
             style={{ ...input, flex: '1 1 220px', padding: 7 }} />
           <select style={{ ...input, flex: '0 1 170px' }} value={kind} onChange={e => setKind(e.target.value)}>
@@ -1314,9 +1425,12 @@ function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }:
           </select>
           <input style={{ ...input, flex: '1 1 160px' }} placeholder="Title (optional)"
             value={title} onChange={e => setTitle(e.target.value)} />
-          <button style={btn(true)} disabled={!file || busy} onClick={upload}>
-            <Upload className="w-4 h-4" style={{ display: 'inline', marginRight: 5 }} /> Upload
+          <button style={btn(true)} disabled={!files.length || busy} onClick={upload}>
+            <Upload className="w-4 h-4" style={{ display: 'inline', marginRight: 5 }} /> {busy ? 'Compressing…' : 'Upload'}
           </button>
+        </div>
+        <div style={{ fontSize: 12, color: BIZ.muted, marginTop: 6 }}>
+          A PDF, or photos — pick all pages of a report together and they are compressed into one PDF.
         </div>
         {err && <div style={{ fontSize: 12.5, color: '#8a2b2b', marginTop: 8 }}>{err}</div>}
       </div>
@@ -1626,7 +1740,7 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, onAdded }:
           {/* Imported register lines carry notes and nothing else. */}
           {v.notes && <Row k="Notes" v={v.notes} />}
 
-          <Examination visitId={v.id} practitionerId={practitionerId} />
+          <Examination visitId={v.id} practitionerId={practitionerId} doctorId={v.practitioner_id} />
         </div>
       ))}
     </div>
@@ -1644,9 +1758,12 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, onAdded }:
 // which is how a refraction is written on paper, fields down and eyes across.
 // Thirty-two is a chart, laid out in quadrants the way a dentist reads it.
 
-function Examination({ visitId, practitionerId }: {
+function Examination({ visitId, practitionerId, doctorId }: {
   visitId: string
+  /** Who is signed in — recorded as the person who took the findings. */
   practitionerId?: string | null
+  /** 0167: the visit's own doctor, whose speciality decides the form. */
+  doctorId?: string | null
 }) {
   const [open, setOpen] = useState(false)
   const [speciality, setSpeciality] = useState<string | null>(null)
@@ -1674,14 +1791,19 @@ function Examination({ visitId, practitionerId }: {
 
   // The speciality comes from the doctor, not the clinic: a hospital has an eye
   // surgeon and a dentist, and the form has to follow whoever is examining.
+  // 0167: it follows the VISIT's doctor, so the nurse or optometrist who takes
+  // the refraction or the growth measurements before the consultation sees
+  // that doctor's form. The signed-in doctor is the fallback for a visit with
+  // no doctor on it, and a doctor with no speciality set gets the general form.
+  const formDoctor = doctorId ?? practitionerId ?? null
   useEffect(() => {
-    if (!practitionerId) return
+    if (!formDoctor) return
     let off = false
-    getPractitionerSpeciality(practitionerId)
-      .then(sp => { if (!off) setSpeciality(sp) })
+    getPractitionerSpeciality(formDoctor)
+      .then(sp => { if (!off) setSpeciality(sp || (doctorId || practitionerId ? 'GEN' : null)) })
       .catch(() => { /* no speciality, no form — the general case */ })
     return () => { off = true }
-  }, [practitionerId])
+  }, [formDoctor, doctorId, practitionerId])
 
   useEffect(() => {
     if (!speciality) return
@@ -1734,7 +1856,7 @@ function Examination({ visitId, practitionerId }: {
   return (
     <div style={{ marginTop: 10, borderTop: `1px solid ${BIZ.border}`, paddingTop: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-        <div style={label}>Examination{speciality ? ` · ${speciality}` : ''}</div>
+        <div style={label}>Examination{speciality ? ` · ${SPECIALITIES.find(sp => sp.id === speciality)?.en ?? speciality}` : ''}</div>
         {fields.length > 0 && (
           <button style={{ ...btn(), fontSize: 12 }} onClick={() => setOpen(o => !o)}>
             {open ? 'Close' : saved.length ? 'Edit' : 'Record'}

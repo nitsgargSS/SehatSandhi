@@ -22,6 +22,8 @@ const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
 const OpdSlipPage = lazy(() => import('./pages/doctor/OpdSlipPage'))
 const QrPosterPage = lazy(() => import('./pages/doctor/QrPosterPage'))
 const PharmacyBillPage = lazy(() => import('./pages/doctor/PharmacyBillPage'))
+const LabReportPage = lazy(() => import('./pages/LabReportPage'))
+const LabFilePage = lazy(() => import('./pages/LabFilePage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
 const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
@@ -113,7 +115,7 @@ const FLOAT_HIDDEN_PATHS = ['/business/register', '/doctor/register', '/business
 // so tracking these would hand every one of them to Google Analytics, where
 // anyone with report access could open a patient's medicines, their hospital
 // stay, or what they were charged for it.
-const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/', '/ds/', '/bill/']
+const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/', '/ds/', '/bill/', '/lab/']
 
 const PageViewTracker = () => {
   const { pathname } = useLocation()
@@ -211,6 +213,8 @@ export default function App() {
               forwarded into a family group should not open a year later.
               Carries no header or footer at all: what prints is the slip. */}
           <Route path="/rx/:token" element={<PrescriptionPage />} />
+          <Route path="/lab/file/:token" element={<LabFilePage />} />
+          <Route path="/lab/:token" element={<LabReportPage />} />
 
           {/* The discharge summary, same no-login token pattern. Its link lasts
               a year rather than 90 days: this is the document patients are told

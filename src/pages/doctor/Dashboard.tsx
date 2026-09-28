@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -14,6 +14,7 @@ import RevenuePanel from './RevenuePanel'
 import PharmacyPanel from './PharmacyPanel'
 import CollectionsPanel from './CollectionsPanel'
 import PatientReportPanel from './PatientReportPanel'
+import LabPanel from './LabPanel'
 import PatientAreasPanel from './PatientAreasPanel'
 import WhatsAppPanel from './WhatsAppPanel'
 import PayListingPanel from './PayListingPanel'
@@ -100,7 +101,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -980,6 +981,10 @@ export default function DoctorDashboard() {
     ...(doctor?.pharmacy_module ? [
       { id: 'pharmacy', label: 'Pharmacy', icon: <Pill className="w-4 h-4" /> },
     ] : []),
+    // 0168: the lab — every Diagnostic Lab, and clinics an admin switches it on for.
+    ...(doctor && (doctor.vertical === 'lab' || doctor.lab_module) ? [
+      { id: 'lab', label: 'Lab', icon: <FlaskConical className="w-4 h-4" /> },
+    ] : []),
     // 0159: the tally — for anyone who takes money. The RPC shows owner and
     // manager everybody's payments and everyone else only their own.
     ...((emr && (access.opd || access.ipd)) || doctor?.pharmacy_module ? [
@@ -1776,6 +1781,14 @@ export default function DoctorDashboard() {
           <PharmacyPanel businessId={doctor.id}
             canManage={!role.enforced || role.role === 'owner' || role.role === 'manager' || role.role === 'doctor'}
             canSettings={businessRole} />
+        )}
+
+        {/* ══════════ LAB — tests, orders, results, reports (0168) ══════════ */}
+        {tab === 'lab' && doctor && (doctor.vertical === 'lab' || doctor.lab_module) && (
+          <LabPanel businessId={doctor.id}
+            canManage={!role.enforced || ['owner', 'manager', 'doctor'].includes(role.role ?? '')}
+            canResults={!role.enforced || ['owner', 'doctor', 'nurse'].includes(role.role ?? '')}
+            canApprove={!role.enforced || ['owner', 'doctor'].includes(role.role ?? '')} />
         )}
 
         {/* ══════════ COLLECTIONS — who took how much, how (0159) ══════════ */}

@@ -1,3 +1,4 @@
+import { prepareUpload } from './shrinkUpload'
 import { supabase } from './supabase'
 import { activeConfig } from './env'
 
@@ -191,7 +192,7 @@ export async function sendPrescription(prescriptionId: string, email?: string) {
  * would not be allowed to read it back from.
  */
 export async function uploadDocument(
-  file: File,
+  files: File | File[],
   opts: {
     businessId: string
     patientMemberId: string
@@ -202,6 +203,8 @@ export async function uploadDocument(
     uploadedBy?: string | null
   },
 ): Promise<string> {
+  // Photos are compressed, several joined into one PDF (shrinkUpload.ts).
+  const { file } = await prepareUpload(Array.isArray(files) ? files : [files])
   const clean = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
   const path = `${opts.businessId}/${opts.patientMemberId}/${crypto.randomUUID()}-${clean}`
 
