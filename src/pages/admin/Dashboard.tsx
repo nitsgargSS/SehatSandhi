@@ -19,12 +19,12 @@ import WhatsAppMarketingPanel from './WhatsAppMarketingPanel'
 import TypePricingCard from './TypePricingCard'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
+import PharmacySwitch from './PharmacySwitch'
 import { listBroadcastsForReview } from '../../lib/marketingApi'
 import { PhoneVerifyCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import DisableBusinessModal from './DisableBusinessModal'
 import TeamPanel, { ActivityFeed } from './TeamPanel'
 import ClinicStaffList from './ClinicStaffList'
-import PharmacySwitch from './PharmacySwitch'
 
 // A listing as admin sees it: the business, plus the verification note a
 // reviewer leaves on it. organization_id and is_hospital_doctor are gone —
@@ -1061,7 +1061,7 @@ export default function AdminDashboard() {
                               {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                             </div>
                             <ClinicStaffList businessId={d.id} canVerify={!isManager} />
-                        <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
+                            <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                           </div>
                         </td>
