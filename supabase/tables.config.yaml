@@ -227,6 +227,12 @@ tables:
     class: isolated
     purgeOrder: 89.6
 
+  # ── The OT register (0162) ──────────────────────────────────────────────
+  # References admissions (94), patient_visits (160) and patient_members.
+  surgeries:
+    class: isolated
+    purgeOrder: 89.7
+
   # ── Speciality examination fields (0066) ────────────────────────────────
   # The catalogue is reference data we author, like pricing_plans — a purge
   # must not empty the list of what an eye doctor examines.

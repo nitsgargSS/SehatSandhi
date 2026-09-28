@@ -4,7 +4,7 @@ import { BIZ } from '../business/shared'
 import { supabase } from '../../lib/supabase'
 import { Spinner } from '../../components/Loading'
 import {
-  searchPatients, searchByDiagnosis, getPatientSummary, getVisits, getVitals, getAllergies,
+  searchPatients, getPatientSummary, getVisits, getVitals, getAllergies,
   getConditions, getMedications, addVisit, addVital, addAllergy, addCondition,
   addMedication, stopMedication, registerPatient, grantRecordingConsent, withdrawRecordingConsent,
   getSpecialityFields, getFindings, saveFindings, getPractitionerSpeciality,
@@ -13,7 +13,7 @@ import {
   requestTranscription, requestMedicineSuggestions, discardConsultationAudio,
   startRecording, stopRecording, confirmTranscript, getRecording,
   LiveRecording, Recording,
-  PatientSearchResult, DiagnosisSearchResult, PatientSummary, Visit, Vital, Allergy, Condition, Medication,
+  PatientSearchResult, PatientSummary, Visit, Vital, Allergy, Condition, Medication,
 } from '../../lib/patientsApi'
 import {
   getAdmissions, admitPatient, dischargePatient, getOccupancy,
@@ -37,9 +37,13 @@ import {
   addPayment, removePayment, postBedCharges, refundPayment,
   getBills, issueBill, cancelBill, sendBill,
   Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod, Bill,
-  PAYMENT_METHOD_OPTIONS, methodLabel,
+  PAYMENT_METHOD_OPTIONS, methodLabel, downloadCsv,
 } from '../../lib/billingApi'
 import { getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
+import {
+  clinicalSearch, getSurgeries, recordSurgery, cancelSurgery, SOURCES, ANAESTHESIA,
+  ClinicalHit, RecordSource, OtType, Surgery, NewSurgery,
+} from '../../lib/surgeryApi'
 import { moneyExact, shortDate } from '../../lib/format'
 import { RECORDING_ENABLED } from '../../lib/env'
 import { getMarketingConsent, setMarketingConsent } from '../../lib/marketingApi'
@@ -106,6 +110,7 @@ const when = (iso: string | null) =>
 // list" and "discharge summary" mean different things to a doctor deciding
 // whether a hit is worth opening.
 const SOURCE_LABEL: Record<string, string> = {
+  surgery: 'Surgery',
   visit: 'OPD visit',
   condition: 'Problem list',
   admission: 'Admission',
@@ -131,8 +136,16 @@ export default function Patients({ businessId, practitionerId, openMemberId }: {
   // for. The second answers "who did I operate on that needs seeing again?",
   // which the name search cannot.
   const [mode, setMode] = useState<'name' | 'diagnosis'>('name')
-  const [dxResults, setDxResults] = useState<DiagnosisSearchResult[]>([])
-  const [followUpOnly, setFollowUpOnly] = useState(false)
+  const [dxResults, setDxResults] = useState<ClinicalHit[]>([])
+  // 0162: narrow by when, where it was written, major/minor OT and doctor —
+  // or, with no words, list by those alone ("all minor OTs in March").
+  const [dxFrom, setDxFrom] = useState('')
+  const [dxTo, setDxTo] = useState('')
+  const [dxSources, setDxSources] = useState<RecordSource[]>([])
+  const [dxOt, setDxOt] = useState<'' | OtType>('')
+  const [dxDoctor, setDxDoctor] = useState('')
+  const searchDoctors = useDoctors(businessId)
+  const dxFiltered = !!(dxFrom || dxTo || dxSources.length || dxOt || dxDoctor)
 
   // Diagnosis search is clinical staff only. The RPC enforces that and returns
   // an empty list to reception either way; this only decides whether to draw
@@ -141,7 +154,8 @@ export default function Patients({ businessId, practitionerId, openMemberId }: {
   useEffect(() => {
     let cancelled = false
     getMyRole(businessId)
-      .then(r => { if (!cancelled) setClinical(isClinicalRole(r)) })
+      // 0162: a manager searches records too (the clinic asked); reception does not.
+      .then(r => { if (!cancelled) setClinical(isClinicalRole(r) || r.role === 'manager') })
       .catch(() => { /* stays false — the RPC refuses either way */ })
     return () => { cancelled = true }
   }, [businessId])
@@ -173,12 +187,14 @@ export default function Patients({ businessId, practitionerId, openMemberId }: {
   useEffect(() => {
     if (mode !== 'diagnosis') { setDxResults([]); return }
     const q = query.trim()
-    if (q.length < 2) { setDxResults([]); return }
+    if (q.length < 2 && !dxFiltered) { setDxResults([]); return }
     let cancelled = false
     setSearching(true)
     const timer = setTimeout(async () => {
       try {
-        const rows = await searchByDiagnosis(q, businessId, { followUpOnly })
+        const rows = await clinicalSearch(businessId, q.length >= 2 ? q : '', {
+          from: dxFrom, to: dxTo, sources: dxSources, otType: dxOt || null, practitionerId: dxDoctor || null,
+        })
         if (!cancelled) { setDxResults(rows); setError('') }
       } catch (e) {
         if (!cancelled) setError((e as Error).message)
@@ -187,7 +203,7 @@ export default function Patients({ businessId, practitionerId, openMemberId }: {
       }
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [query, businessId, mode, followUpOnly])
+  }, [query, businessId, mode, dxFrom, dxTo, dxSources, dxOt, dxDoctor, dxFiltered])
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -197,7 +213,7 @@ export default function Patients({ businessId, practitionerId, openMemberId }: {
             RPC refuses it and the tab is not drawn. */}
         {clinical && (
           <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            {([['name', 'By name'], ['diagnosis', 'By diagnosis']] as [typeof mode, string][]).map(([m, label]) => (
+            {([['name', 'By name'], ['diagnosis', 'By surgery, diagnosis or keyword']] as [typeof mode, string][]).map(([m, label]) => (
               <button
                 key={m}
                 onClick={() => { setMode(m); setQuery(''); setResults([]); setDxResults([]) }}
@@ -219,7 +235,7 @@ export default function Patients({ businessId, practitionerId, openMemberId }: {
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder={mode === 'diagnosis'
-              ? 'Search diagnosis, condition, ICD-10 code or procedure…'
+              ? 'Any words — surgery, diagnosis, implant, drug, instruction… (e.g. "lap chole", "mesh", "no lifting")'
               : 'Search by name, phone number or file number…'}
             aria-label={mode === 'diagnosis' ? 'Search by diagnosis' : 'Search patients'}
             style={{ ...input, border: 'none', padding: '4px 0', fontSize: 15 }}
@@ -236,17 +252,40 @@ export default function Patients({ businessId, practitionerId, openMemberId }: {
         {/* Following someone up is the whole reason this search exists, so the
             filter for it sits with the box rather than behind a menu. */}
         {mode === 'diagnosis' && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 11, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={followUpOnly}
-              onChange={e => setFollowUpOnly(e.target.checked)}
-              style={{ width: 15, height: 15, accentColor: BIZ.green, cursor: 'pointer' }}
-            />
-            <span style={{ fontSize: 12.5, color: BIZ.muted }}>
-              Only those with a follow-up date
-            </span>
-          </label>
+          <div style={{ display: 'grid', gap: 9, marginTop: 11 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {SOURCES.map(([s, l]) => {
+                const on = dxSources.includes(s)
+                return (
+                  <button key={s} onClick={() => setDxSources(on ? dxSources.filter(x => x !== s) : [...dxSources, s])}
+                    style={{ ...btn(false), fontSize: 12, padding: '5px 10px', borderColor: on ? BIZ.green : BIZ.inputBorder,
+                             background: on ? '#f3faf6' : '#fff', color: on ? BIZ.green : BIZ.muted }}>{l}</button>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
+              <select style={{ ...input, flex: '0 1 150px' }} value={dxOt} onChange={e => setDxOt(e.target.value as '' | OtType)}>
+                <option value="">Any OT</option><option value="major">Major OT</option><option value="minor">Minor OT</option>
+              </select>
+              {searchDoctors.length > 1 && (
+                <select style={{ ...input, flex: '0 1 190px' }} value={dxDoctor} onChange={e => setDxDoctor(e.target.value)}>
+                  <option value="">Any doctor</option>
+                  {searchDoctors.map(d => <option key={d.practitioner_id} value={d.practitioner_id}>{d.full_name}</option>)}
+                </select>
+              )}
+              <input type="date" style={{ ...input, flex: '0 1 150px' }} value={dxFrom} onChange={e => setDxFrom(e.target.value)} aria-label="From" />
+              <span style={{ fontSize: 12, color: BIZ.muted }}>to</span>
+              <input type="date" style={{ ...input, flex: '0 1 150px' }} value={dxTo} onChange={e => setDxTo(e.target.value)} aria-label="To" />
+              {(dxFiltered || query) && (
+                <button style={{ ...btn(false), fontSize: 12 }}
+                  onClick={() => { setDxFrom(''); setDxTo(''); setDxSources([]); setDxOt(''); setDxDoctor(''); setQuery('') }}>Clear</button>
+              )}
+            </div>
+            <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
+              Every word must appear in the same record, in any order. With no words, the filters list on their own — e.g. Major OT and a month.
+              Searches are logged.
+            </div>
+          </div>
         )}
       </div>
 
@@ -315,26 +354,24 @@ export default function Patients({ businessId, practitionerId, openMemberId }: {
               }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>{r.full_name}</span>
-                {/* The date they are being followed up on, if there is one —
-                    the single most actionable thing in the row. */}
-                {r.follow_up_date && (
-                  <span style={{ fontSize: 12, fontWeight: 700, color: BIZ.green, whiteSpace: 'nowrap' }}>
-                    follow-up {shortDate(r.follow_up_date)}
-                  </span>
-                )}
+                <span style={{ fontSize: 12, fontWeight: 700, color: BIZ.green, whiteSpace: 'nowrap' }}>
+                  {r.ot_type && <span style={{ color: r.ot_type === 'major' ? '#9a3412' : BIZ.mutedWarm, marginRight: 8 }}>{r.ot_type === 'major' ? 'Major OT' : 'Minor OT'}</span>}
+                  {r.event_date ? shortDate(r.event_date) : ''}
+                </span>
               </div>
-              {/* What actually matched, and where it was written down. */}
-              <div style={{ fontSize: 13, color: BIZ.ink, marginTop: 3 }}>
-                {r.matched_text || '—'}
-                {r.icd10_code && (
-                  <span style={{ color: BIZ.mutedWarm, fontWeight: 700 }}> · {r.icd10_code}</span>
-                )}
-              </div>
+              {/* What it was, then the words that matched and where. */}
+              <div style={{ fontSize: 13.5, color: BIZ.ink, marginTop: 3, fontWeight: 600 }}>{r.title || '—'}</div>
+              {r.snippet && r.snippet !== r.title && (
+                <div style={{ fontSize: 12.5, color: BIZ.ink, marginTop: 2 }}>
+                  <span style={{ color: BIZ.mutedWarm }}>{r.matched_field}: </span>{r.snippet}
+                </div>
+              )}
               <div style={{ fontSize: 12, color: BIZ.muted, marginTop: 2 }}>
                 {SOURCE_LABEL[r.source] ?? r.source}
-                {r.matched_field ? ` · ${r.matched_field}` : ''}
-                {r.event_date ? ` · ${shortDate(r.event_date)}` : ''}
+                {r.admission_no ? ` · ${r.admission_no}` : ''}
+                {r.doctor_name ? ` · ${r.doctor_name}` : ''}
                 {r.age_years != null ? ` · ${r.age_years}y` : ''}
+                {r.phone ? ` · ${r.phone}` : ''}
                 {r.mrn ? ` · file ${r.mrn}` : ''}
               </div>
             </button>
@@ -344,14 +381,21 @@ export default function Patients({ businessId, practitionerId, openMemberId }: {
 
       {/* A diagnosis search that finds nothing is not an invitation to register
           somebody — that is only sensible when looking for a person by name. */}
-      {!selected && mode === 'diagnosis' && query.trim().length >= 2 && !searching && dxResults.length === 0 && (
+      {!selected && mode === 'diagnosis' && (query.trim().length >= 2 || dxFiltered) && !searching && dxResults.length === 0 && (
         <div style={{ ...card, textAlign: 'center', color: BIZ.muted, fontSize: 13.5 }}>
-          No record mentions “{query.trim()}”.
-          {followUpOnly && (
-            <div style={{ marginTop: 6, fontSize: 12.5 }}>
-              Only records with a follow-up date are being shown — untick that to widen the search.
-            </div>
-          )}
+          {query.trim().length >= 2 ? <>No record mentions “{query.trim()}”{dxFiltered ? ' with these filters' : ''}.</> : 'Nothing matches these filters.'}
+        </div>
+      )}
+      {!selected && mode === 'diagnosis' && dxResults.length > 0 && (
+        <div style={{ fontSize: 12.5, color: BIZ.muted, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <span>{dxResults.length} record{dxResults.length === 1 ? '' : 's'} · {new Set(dxResults.map(r => r.patient_member_id)).size} patient{new Set(dxResults.map(r => r.patient_member_id)).size === 1 ? '' : 's'}{dxResults.length >= 300 ? ' (first 300 — narrow the search)' : ''}</span>
+          <button style={{ ...btn(false), fontSize: 12 }} onClick={() => downloadCsv(`patient-search-${new Date().toISOString().slice(0, 10)}.csv`,
+            [['Patient', 'Phone', 'File no.', 'Age', 'Record', 'Date', 'What', 'OT', 'Doctor', 'Found in', 'Text'],
+             ...dxResults.map(r => [r.full_name, r.phone ?? '', r.mrn ?? '', r.age_years ?? '', SOURCE_LABEL[r.source] ?? r.source,
+               r.event_date ?? '', r.title ?? '', r.ot_type ?? '', r.doctor_name ?? '', r.matched_field ?? '', r.snippet ?? ''])]
+              .map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n'))}>
+            Download list
+          </button>
         </div>
       )}
 
@@ -575,7 +619,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
 
 // Panes that show the medical record rather than the logistics around it.
 // Mirrors the table list gated in 0057; if one moves, both move.
-const CLINICAL_PANES = new Set(['history', 'clinical', 'rx', 'docs'])
+const CLINICAL_PANES = new Set(['history', 'clinical', 'rx', 'docs', 'ot'])
 
 function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   memberId: string
@@ -605,7 +649,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   // A nurse is clinical but is not a prescriber. Same reason as above for
   // starting false: the ordering form is offered only once we know.
   const [prescriber, setPrescriber] = useState(false)
-  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'money' | 'refer'>('history')
+  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'ot' | 'money' | 'refer'>('history')
 
   // 0138: a doctor sees only patients they have been involved with here (or
   // were referred). Anyone else's shows a notice, not empty tabs that read as
@@ -768,7 +812,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
         {([
           ['history', 'Visits', true], ['clinical', 'Allergies & medicines', true],
           ['vitals', 'Vitals', false], ['rx', 'Prescriptions', true],
-          ['docs', 'Documents', true], ['ipd', 'Admissions', false],
+          ['docs', 'Documents', true], ['ipd', 'Admissions', false], ['ot', 'Operations', true],
           ['money', 'Billing', false], ['refer', 'Refer to doctor', false],
         ] as const)
           .filter(([, , needsClinical]) => clinical || !needsClinical)
@@ -828,6 +872,9 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           clinical={clinical} prescriber={prescriber}
         />
       )}
+      {shown === 'ot' && (
+        <OperationsPane memberId={memberId} businessId={businessId} stays={stays} />
+      )}
       {shown === 'refer' && (
         <ReferPane memberId={memberId} businessId={businessId} practitionerId={practitionerId} onChange={reload} />
       )}
@@ -844,6 +891,162 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           practitionerId={practitionerId} onChange={reload}
         />
       )}
+    </div>
+  )
+}
+
+// ── Operations (0162) ───────────────────────────────────────────────────────
+//
+// The OT register for one patient: every surgery as its own record — the day
+// it was done, major or minor OT, surgeon, anaesthesia, findings, implants and
+// what the patient was told after — so it can be found later by any of them.
+
+const blankSurgery = (): NewSurgery => ({
+  admission_id: null, performed_on: new Date().toISOString().slice(0, 10), start_time: null, end_time: null,
+  ot_type: 'major', urgency: 'elective', procedure_name: '', indication: null, surgeon_id: null, surgeon_name: null,
+  assistants: null, anaesthetist: null, anaesthesia: null, findings: null, procedure_notes: null, implants: null,
+  specimen: null, complications: null, post_op_instructions: null,
+})
+
+function OperationsPane({ memberId, businessId, stays }: { memberId: string; businessId: string; stays: Admission[] }) {
+  const [list, setList] = useState<Surgery[]>([])
+  const [adding, setAdding] = useState(false)
+  const [f, setF] = useState<NewSurgery>(blankSurgery)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [cancelling, setCancelling] = useState<string | null>(null)
+  const [why, setWhy] = useState('')
+  const doctors = useDoctors(businessId)
+  const load = useCallback(() => { getSurgeries(memberId, businessId).then(setList) }, [memberId, businessId])
+  useEffect(load, [load])
+
+  const set = (k: keyof NewSurgery) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setF(x => ({ ...x, [k]: e.target.value || null }))
+  const text = (k: keyof NewSurgery, lbl: string, ph = '') => (
+    <div style={{ flex: '1 1 100%' }}><div style={label}>{lbl}</div>
+      <textarea style={{ ...input, minHeight: 54 }} placeholder={ph} value={(f[k] as string) ?? ''} onChange={set(k)} /></div>
+  )
+  const save = async () => {
+    setBusy(true); setErr('')
+    try { await recordSurgery(memberId, businessId, f); setAdding(false); setF(blankSurgery()); load() }
+    catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      {!adding && (
+        <div><button style={btn(true)} onClick={() => {
+          const open = stays.find(s => s.status === 'admitted')
+          setF({ ...blankSurgery(), admission_id: open?.id ?? null, ot_type: open ? 'major' : 'minor' }); setAdding(true)
+        }}>
+          <Plus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />Record an operation
+        </button></div>
+      )}
+
+      {adding && (
+        <div style={{ ...card, display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ flex: '2 1 260px' }}><div style={label}>Operation / procedure *</div>
+              <input style={input} value={f.procedure_name} onChange={e => setF({ ...f, procedure_name: e.target.value })}
+                placeholder="Laparoscopic cholecystectomy" /></div>
+            <div style={{ flex: '0 1 150px' }}><div style={label}>Date performed *</div>
+              <input type="date" style={input} value={f.performed_on} onChange={e => setF({ ...f, performed_on: e.target.value })} /></div>
+            <div style={{ flex: '0 1 110px' }}><div style={label}>Start</div>
+              <input type="time" style={input} value={f.start_time ?? ''} onChange={set('start_time')} /></div>
+            <div style={{ flex: '0 1 110px' }}><div style={label}>End</div>
+              <input type="time" style={input} value={f.end_time ?? ''} onChange={set('end_time')} /></div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ flex: '0 1 140px' }}><div style={label}>OT</div>
+              <select style={input} value={f.ot_type} onChange={e => setF({ ...f, ot_type: e.target.value as OtType })}>
+                <option value="major">Major OT</option><option value="minor">Minor OT</option></select></div>
+            <div style={{ flex: '0 1 140px' }}><div style={label}>Urgency</div>
+              <select style={input} value={f.urgency} onChange={e => setF({ ...f, urgency: e.target.value as NewSurgery['urgency'] })}>
+                <option value="elective">Elective</option><option value="emergency">Emergency</option></select></div>
+            <div style={{ flex: '0 1 150px' }}><div style={label}>Anaesthesia</div>
+              <select style={input} value={f.anaesthesia ?? ''} onChange={set('anaesthesia')}>
+                <option value="">—</option>
+                {ANAESTHESIA.map(a => <option key={a} value={a}>{a[0].toUpperCase() + a.slice(1)}</option>)}</select></div>
+            <div style={{ flex: '1 1 200px' }}><div style={label}>Admission (IPD)</div>
+              <select style={input} value={f.admission_id ?? ''} onChange={set('admission_id')}>
+                <option value="">None — OPD / day care</option>
+                {stays.map(s => <option key={s.id} value={s.id}>{s.admission_no} · {when(s.admitted_at)}</option>)}</select></div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 200px' }}><div style={label}>Surgeon</div>
+              <select style={input} value={f.surgeon_id ?? ''} onChange={set('surgeon_id')}>
+                <option value="">Visiting surgeon (type the name)</option>
+                {doctors.map(d => <option key={d.practitioner_id} value={d.practitioner_id}>{d.full_name}</option>)}</select></div>
+            {!f.surgeon_id && (
+              <div style={{ flex: '1 1 180px' }}><div style={label}>Surgeon's name</div>
+                <input style={input} value={f.surgeon_name ?? ''} onChange={set('surgeon_name')} /></div>
+            )}
+            <div style={{ flex: '1 1 180px' }}><div style={label}>Assistants</div>
+              <input style={input} value={f.assistants ?? ''} onChange={set('assistants')} /></div>
+            <div style={{ flex: '1 1 180px' }}><div style={label}>Anaesthetist</div>
+              <input style={input} value={f.anaesthetist ?? ''} onChange={set('anaesthetist')} /></div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {text('indication', 'Indication / pre-op diagnosis')}
+            {text('findings', 'Findings')}
+            {text('procedure_notes', 'Procedure notes')}
+            {text('implants', 'Implants', 'Mesh, plate, IOL… with size and lot number')}
+            {text('specimen', 'Specimen sent')}
+            {text('complications', 'Complications')}
+            {text('post_op_instructions', 'Post-op instructions', 'No heavy lifting for 6 weeks, dressing on day 3…')}
+          </div>
+          {err && <div style={{ color: '#8a2b2b', fontSize: 13 }}>{err}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={btn(true)} disabled={busy || f.procedure_name.trim().length < 3 || !f.performed_on} onClick={save}>
+              {busy ? 'Saving…' : 'Save operation'}</button>
+            <button style={btn()} onClick={() => setAdding(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {list.length === 0 && !adding && (
+        <div style={{ ...card, color: BIZ.muted, fontSize: 13.5 }}>No operations recorded for this patient.</div>
+      )}
+      {list.map(s => (
+        <div key={s.id} style={{ ...card, opacity: s.status === 'cancelled' ? 0.55 : 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink, textDecoration: s.status === 'cancelled' ? 'line-through' : 'none' }}>
+              {s.procedure_name}
+            </span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: s.ot_type === 'major' ? '#9a3412' : BIZ.mutedWarm }}>
+              {s.ot_type === 'major' ? 'Major OT' : 'Minor OT'}{s.urgency === 'emergency' ? ' · Emergency' : ''} · {when(s.performed_on)}
+              {s.start_time ? ` · ${s.start_time.slice(0, 5)}${s.end_time ? `–${s.end_time.slice(0, 5)}` : ''}` : ''}
+            </span>
+          </div>
+          <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 3 }}>
+            {[s.surgeon_name && `Surgeon ${s.surgeon_name}`, s.assistants && `assisted by ${s.assistants}`,
+              s.anaesthesia && `${s.anaesthesia} anaesthesia`, s.anaesthetist && `by ${s.anaesthetist}`,
+              stays.find(a => a.id === s.admission_id)?.admission_no].filter(Boolean).join(' · ')}
+          </div>
+          {([['Indication', s.indication], ['Findings', s.findings], ['Procedure', s.procedure_notes], ['Implants', s.implants],
+             ['Specimen', s.specimen], ['Complications', s.complications], ['Post-op instructions', s.post_op_instructions]] as const)
+            .filter(([, v]) => v).map(([k, v]) => (
+              <div key={k} style={{ fontSize: 13, color: BIZ.ink, marginTop: 4, whiteSpace: 'pre-wrap' }}><b>{k}:</b> {v}</div>
+            ))}
+          <div style={{ fontSize: 11.5, color: BIZ.mutedWarm, marginTop: 6 }}>
+            Recorded by {s.recorded_by_name ?? '—'} on {when(s.created_at)}
+            {s.status === 'cancelled' && ` · cancelled: ${s.cancelled_reason}`}
+            {s.status === 'done' && cancelling !== s.id && (
+              <button style={{ ...btn(), padding: '2px 8px', fontSize: 11.5, marginLeft: 8 }} onClick={() => { setCancelling(s.id); setWhy('') }}>
+                Recorded by mistake?</button>
+            )}
+          </div>
+          {cancelling === s.id && (
+            <div style={{ display: 'flex', gap: 7, marginTop: 8 }}>
+              <input style={input} placeholder="Why is this record wrong?" value={why} onChange={e => setWhy(e.target.value)} />
+              <button style={btn(true)} disabled={why.trim().length < 3}
+                onClick={async () => { try { await cancelSurgery(s.id, why); setCancelling(null); load() } catch (e) { setErr((e as Error).message) } }}>
+                Cancel record</button>
+              <button style={btn()} onClick={() => setCancelling(null)}>Keep</button>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
