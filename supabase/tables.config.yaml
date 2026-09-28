@@ -309,6 +309,9 @@ tables:
   contact_inquiries:
     class: isolated
     purgeOrder: 94.4
+  area_searches:
+    class: isolated
+    purgeOrder: 94.5
 
   # ── Changes to clinic payments (0159) ───────────────────────────────────
   # A log, no FK to the payment (it outlives a deleted one).
