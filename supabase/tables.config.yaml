@@ -227,6 +227,41 @@ tables:
     class: isolated
     purgeOrder: 89.6
 
+  # ── The lab (0168) ──────────────────────────────────────────────────────
+  # Results before items before orders; reports and items before orders;
+  # package links before packages and tests. All before patient_visits (160)
+  # and patient_members (174).
+  lab_results:
+    class: isolated
+    purgeOrder: 89.71
+  lab_reports:
+    class: isolated
+    purgeOrder: 89.72
+  lab_order_items:
+    class: isolated
+    purgeOrder: 89.73
+  lab_orders:
+    class: isolated
+    purgeOrder: 89.74
+  lab_counters:
+    class: isolated
+    purgeOrder: 89.75
+  lab_package_tests:
+    class: isolated
+    purgeOrder: 89.76
+  lab_packages:
+    class: isolated
+    purgeOrder: 89.77
+  lab_test_parameters:
+    class: isolated
+    purgeOrder: 89.78
+  lab_tests:
+    class: isolated
+    purgeOrder: 89.79
+  lab_catalogue:
+    class: sync
+    key: [code]
+
   # ── The OT register (0162) ──────────────────────────────────────────────
   # References admissions (94), patient_visits (160) and patient_members.
   surgeries:
@@ -738,6 +773,7 @@ tables:
   discharge_summary_detail: { class: view }
   patient_bill_detail:      { class: view }
   pharmacy_bill_detail:     { class: view }
+  lab_order_detail:         { class: view }
   pharmacy_stock:           { class: view }
   patient_documents_to_purge: { class: view }
   practitioner_daily_stats: { class: view }

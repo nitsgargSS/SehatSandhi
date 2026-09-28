@@ -38,7 +38,7 @@ export default function Browse() {
             {t('browsePage.specialityLabel')}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" style={{ gap: 10 }}>
-            {SPECIALITIES.map(s => (
+            {SPECIALITIES.filter(s => !('staffOnly' in s)).map(s => (
               <a key={s.id} href={WA_LINK} target="_blank" rel="noreferrer"
                 onClick={() => track('whatsapp_click', { path: '/browse', speciality: s.id })}
                 style={{

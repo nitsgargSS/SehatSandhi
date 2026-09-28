@@ -20,6 +20,7 @@ import TypePricingCard from './TypePricingCard'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 import PharmacySwitch from './PharmacySwitch'
+import LabSwitch from './LabSwitch'
 import { listBroadcastsForReview } from '../../lib/marketingApi'
 import { PhoneVerifyCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import DisableBusinessModal from './DisableBusinessModal'
@@ -942,7 +943,7 @@ export default function AdminDashboard() {
                       <div className="min-w-0">
                         <p className="font-medium text-gray-800 leading-snug">
                           {d.name}
-                          {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}{d.pharmacy_module && <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded ml-1">In-house dispensing</span>}
+                          {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}{d.pharmacy_module && <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded ml-1">In-house dispensing</span>}{d.lab_module && d.vertical !== 'lab' && <span className="text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded ml-1">In-house lab</span>}
                         </p>
                         <p className="text-xs text-gray-400 capitalize">{d.vertical} · {d.phone}</p>
                       </div>
@@ -990,6 +991,8 @@ export default function AdminDashboard() {
                         <ClinicStaffList businessId={d.id} canVerify={!isManager} />
                         <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
+                        {d.vertical !== 'lab' && <LabSwitch businessId={d.id} on={!!d.lab_module} canChange={!isManager}
+                          onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, lab_module: on } : x))} />}
                       </div>
                     )}
                   </div>
@@ -1011,7 +1014,7 @@ export default function AdminDashboard() {
                     <Fragment key={d.id}>
                     <tr className="border-b border-gray-50 hover:bg-gray-50 transition">
                       <td className="py-3 px-2">
-                        <p className="font-medium text-gray-800">{d.name} {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}{d.pharmacy_module && <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded ml-1">In-house dispensing</span>}</p>
+                        <p className="font-medium text-gray-800">{d.name} {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}{d.pharmacy_module && <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded ml-1">In-house dispensing</span>}{d.lab_module && d.vertical !== 'lab' && <span className="text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded ml-1">In-house lab</span>}</p>
                         <p className="text-xs text-gray-400 capitalize">{d.vertical} · {d.phone}</p>
                         {placeOf(d) && <p className="text-xs text-gray-400">{placeOf(d)}</p>}
                         <p>{phoneBadge(d)}</p>
@@ -1063,6 +1066,8 @@ export default function AdminDashboard() {
                             <ClinicStaffList businessId={d.id} canVerify={!isManager} />
                             <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
+                        {d.vertical !== 'lab' && <LabSwitch businessId={d.id} on={!!d.lab_module} canChange={!isManager}
+                          onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, lab_module: on } : x))} />}
                           </div>
                         </td>
                       </tr>

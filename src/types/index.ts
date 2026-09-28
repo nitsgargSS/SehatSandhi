@@ -38,6 +38,8 @@ export interface Business {
   pharmacy_module?: boolean
   pharmacy_gstin?: string | null
   pharmacy_drug_licence?: string | null
+  /** 0168: in-house lab, switched on by an admin (a Diagnostic Lab has it anyway). */
+  lab_module?: boolean
 }
 
 /** A person. Exists independently of any business, so one doctor can hold
@@ -143,6 +145,10 @@ export const SPECIALITIES = [
   { id: 'PHYS', en: 'Physiotherapy',               hi: 'फिजियोथेरेपी' },
   { id: 'ALT',  en: 'Ayurveda / Homeopathy',       hi: 'आयुर्वेद' },
   { id: 'LAB',  en: 'Blood Test / Diagnostics',    hi: 'जांच' },
+  // 0168: doctors a hospital or lab adds to sign reports. Staff specialities —
+  // not something a patient books, so Browse leaves them out (staffOnly).
+  { id: 'PATH', en: 'Pathology',                   hi: 'पैथोलॉजी', staffOnly: true },
+  { id: 'RAD',  en: 'Radiology',                   hi: 'रेडियोलॉजी', staffOnly: true },
   // PHARMACY, not PHRM: this id is written to doctors.speciality, and the
   // pricing engine resolves a listing's vertical from that value. A code it
   // does not know is billed as a doctor, so a pharmacy picked here would have

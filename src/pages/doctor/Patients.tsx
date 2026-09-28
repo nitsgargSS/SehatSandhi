@@ -45,6 +45,8 @@ import {
   clinicalSearch, getSurgeries, recordSurgery, cancelSurgery, SOURCES, ANAESTHESIA,
   ClinicalHit, RecordSource, OtType, Surgery, NewSurgery,
 } from '../../lib/surgeryApi'
+import { getLabSettings, getTests, getPackages, getOrders, createOrder, STATUS_LABEL, LabTest, LabPackage, LabOrder } from '../../lib/labApi'
+import { TestPicker } from './LabPanel'
 import { moneyExact, shortDate } from '../../lib/format'
 import { RECORDING_ENABLED } from '../../lib/env'
 import { getMarketingConsent, setMarketingConsent } from '../../lib/marketingApi'
@@ -620,7 +622,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
 
 // Panes that show the medical record rather than the logistics around it.
 // Mirrors the table list gated in 0057; if one moves, both move.
-const CLINICAL_PANES = new Set(['history', 'clinical', 'rx', 'docs', 'ot'])
+const CLINICAL_PANES = new Set(['history', 'clinical', 'rx', 'docs', 'ot', 'lab'])
 
 function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   memberId: string
@@ -650,7 +652,10 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
   // A nurse is clinical but is not a prescriber. Same reason as above for
   // starting false: the ordering form is offered only once we know.
   const [prescriber, setPrescriber] = useState(false)
-  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'ot' | 'money' | 'refer'>('history')
+  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'ot' | 'lab' | 'money' | 'refer'>('history')
+  // 0168: the Lab tests pane, where the clinic runs a lab (or is one).
+  const [labOn, setLabOn] = useState(false)
+  useEffect(() => { getLabSettings(businessId).then(s => setLabOn(s.on)).catch(() => setLabOn(false)) }, [businessId])
 
   // 0138: a doctor sees only patients they have been involved with here (or
   // were referred). Anyone else's shows a notice, not empty tabs that read as
@@ -814,6 +819,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           ['history', 'Visits', true], ['clinical', 'Allergies & medicines', true],
           ['vitals', 'Vitals', false], ['rx', 'Prescriptions', true],
           ['docs', 'Documents', true], ['ipd', 'Admissions', false], ['ot', 'Operations', true],
+          ...(labOn ? [['lab', 'Lab tests', true] as const] : []),
           ['money', 'Billing', false], ['refer', 'Refer to doctor', false],
         ] as const)
           .filter(([, , needsClinical]) => clinical || !needsClinical)
@@ -873,6 +879,9 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           clinical={clinical} prescriber={prescriber}
         />
       )}
+      {shown === 'lab' && labOn && (
+        <LabTestsPane memberId={memberId} businessId={businessId} visits={visits} />
+      )}
       {shown === 'ot' && (
         <OperationsPane memberId={memberId} businessId={businessId} stays={stays} />
       )}
@@ -892,6 +901,88 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
           practitionerId={practitionerId} onChange={reload}
         />
       )}
+    </div>
+  )
+}
+
+// ── Lab tests (0168) ────────────────────────────────────────────────────────
+//
+// The doctor orders tests or a package from the visit, into the clinic's own
+// lab; the order goes to the lab's queue and the charge onto the patient's
+// account. Results come back here as the approved report.
+
+function LabTestsPane({ memberId, businessId, visits }: { memberId: string; businessId: string; visits: Visit[] }) {
+  const [orders, setOrders] = useState<LabOrder[]>([])
+  const [tests, setTests] = useState<LabTest[]>([])
+  const [packages, setPackages] = useState<LabPackage[]>([])
+  const [ordering, setOrdering] = useState(false)
+  const [testIds, setTestIds] = useState<string[]>([])
+  const [packageIds, setPackageIds] = useState<string[]>([])
+  const [visitId, setVisitId] = useState('')
+  const [urgent, setUrgent] = useState(false)
+  const [notes, setNotes] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const load = useCallback(() => { getOrders(businessId, { memberId }).then(setOrders).catch(() => setOrders([])) }, [businessId, memberId])
+  useEffect(load, [load])
+  useEffect(() => {
+    getTests(businessId).then(setTests).catch(() => setTests([]))
+    getPackages(businessId).then(setPackages).catch(() => setPackages([]))
+  }, [businessId])
+  const today = new Date().toISOString().slice(0, 10)
+  const openOrder = () => {
+    setVisitId(visits.find(v => (v.visit_date ?? '') === today)?.id ?? '')
+    setTestIds([]); setPackageIds([]); setUrgent(false); setNotes(''); setErr(''); setOrdering(true)
+  }
+  const submit = async () => {
+    setBusy(true); setErr('')
+    try {
+      await createOrder(businessId, { memberId, testIds, packageIds, visitId: visitId || null, priority: urgent ? 'urgent' : 'routine', notes })
+      setOrdering(false); load()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      {!ordering && (
+        <div><button style={btn(true)} onClick={openOrder} disabled={!tests.length}>
+          <Plus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />Order lab tests
+        </button>
+        {!tests.length && <span style={{ fontSize: 12.5, color: BIZ.muted, marginLeft: 10 }}>The lab has no tests set up yet.</span>}</div>
+      )}
+      {ordering && (
+        <div style={{ ...card, display: 'grid', gap: 10 }}>
+          <TestPicker tests={tests} packages={packages} testIds={testIds} packageIds={packageIds} setTestIds={setTestIds} setPackageIds={setPackageIds} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <select style={{ ...input, flex: '1 1 220px' }} value={visitId} onChange={e => setVisitId(e.target.value)}>
+              <option value="">Not linked to a visit</option>
+              {visits.slice(0, 10).map(v => <option key={v.id} value={v.id}>Visit {when(v.visit_date)}{v.diagnosis ? ` · ${v.diagnosis}` : ''}</option>)}
+            </select>
+            <input style={{ ...input, flex: '2 1 240px' }} placeholder="Note for the lab (fasting, clinical details)" value={notes} onChange={e => setNotes(e.target.value)} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}><input type="checkbox" checked={urgent} onChange={e => setUrgent(e.target.checked)} /> Urgent</label>
+          </div>
+          {err && <div style={{ color: '#8a2b2b', fontSize: 13 }}>{err}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={btn(true)} disabled={busy || (!testIds.length && !packageIds.length)} onClick={submit}>{busy ? 'Ordering…' : 'Send to lab'}</button>
+            <button style={btn()} onClick={() => setOrdering(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {orders.length === 0 && !ordering && <div style={{ ...card, color: BIZ.muted, fontSize: 13.5 }}>No lab tests for this patient.</div>}
+      {orders.map(o => (
+        <div key={o.id} style={card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700, color: BIZ.ink }}>{o.order_no}{o.priority === 'urgent' ? ' · URGENT' : ''}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: o.status === 'reported' ? BIZ.green : BIZ.mutedWarm }}>{STATUS_LABEL[o.status]} · {when(o.created_at)}</span>
+          </div>
+          <div style={{ fontSize: 13, color: BIZ.ink, marginTop: 4 }}>{o.items.map(i => i.name).join(', ')}</div>
+          <div style={{ fontSize: 12, color: BIZ.muted, marginTop: 4 }}>
+            Ordered by {o.ordered_by_name ?? o.created_by_name ?? '—'}
+            {o.latest_report && <> · <a href={`/lab/${o.latest_report.token}`} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>View report {o.latest_report.report_no}</a>
+              {' '}(signed {o.latest_report.approved_by_name})</>}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
