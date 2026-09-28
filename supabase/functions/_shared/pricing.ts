@@ -717,7 +717,14 @@ export async function computePrice(
   let couponRes: { coupon: { code: string; label: string; discount: number } | null; error: string | null } =
     { coupon: null, error: null }
   const lineItems: LineItem[] = []
-  const whatsappSelected = byType && Boolean(extra.whatsapp)
+  // 0157: a clinic given WhatsApp free is never charged the fee, even with it ticked.
+  let waComplimentary = false
+  if (byType && extra.whatsapp && businessId) {
+    const { data: wa } = await supabase.from('business_wa_accounts')
+      .select('complimentary').eq('business_id', businessId).maybeSingle()
+    waComplimentary = Boolean((wa as { complimentary?: boolean } | null)?.complimentary)
+  }
+  const whatsappSelected = byType && Boolean(extra.whatsapp) && !waComplimentary
 
   if (byType) {
     // Subscription for the term (a negotiated price still wins), the doctor
