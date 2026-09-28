@@ -13,6 +13,9 @@
 //       emails the staff member and the business what happened.
 //       → { ok: true, result: { status, role, awaiting_payment } }
 //
+// 0148: Sehatsandhi admins and managers may also remove or bring back (never
+// add or re-role), from the admin panel. Only an owner removes an owner.
+//
 // A trigger on business_practitioners refuses these changes without a verified
 // request, so this function is the only way to make them on a live business.
 //
@@ -107,9 +110,18 @@ async function request(who: any, user: Row, body: Row): Promise<Response> {
   if (action === 'remove' && reason.length < 10) return json({ error: 'Give a reason of at least 10 characters.' }, 400)
   if (reason.length > 1000) return json({ error: 'Keep the reason under 1,000 characters.' }, 400)
 
-  // Owner or manager of THIS business, asked as the caller.
-  const { data: myRole } = await who.asCaller.rpc('sehat_caller_role', { p_business: businessId })
-  if (myRole !== 'owner' && myRole !== 'manager') {
+  // Owner or manager of THIS business — or (0148) Sehatsandhi's own team, who
+  // may remove and bring back but not hire. Asked as the caller.
+  const [{ data: myRole }, { data: isPlatform }] = await Promise.all([
+    who.asCaller.rpc('sehat_caller_role', { p_business: businessId }),
+    who.asCaller.rpc('sehat_is_staff'),
+  ])
+  const platform = isPlatform === true
+  if (platform) {
+    if (action !== 'remove' && action !== 'restore') {
+      return json({ error: 'Sehatsandhi can remove or bring back staff; adding and roles are for the clinic.' }, 403)
+    }
+  } else if (myRole !== 'owner' && myRole !== 'manager') {
     return json({ error: 'Only an owner or manager can change the staff.' }, 403)
   }
 
@@ -122,11 +134,14 @@ async function request(who: any, user: Row, body: Row): Promise<Response> {
   if (person.auth_uid && person.auth_uid === user.id) return json({ error: 'You cannot change your own place on the staff.' }, 400)
   if (action === 'remove' && (!aff || aff.status === 'suspended')) return json({ error: `${person.full_name} is not on the staff.` }, 400)
   if (action === 'restore' && aff?.status !== 'suspended') return json({ error: `${person.full_name} is not removed.` }, 400)
+  if (action === 'remove' && aff?.role === 'owner' && myRole !== 'owner' && !platform) {
+    return json({ error: 'Only an owner can remove an owner.' }, 403)
+  }
 
   // Where the code goes: the caller's own address. A phone-OTP owner has none,
   // so their business address stands in — it is theirs as the owner.
   const to = deliverable(user.email) ? user.email
-    : (myRole === 'owner' && deliverable(biz.email) ? biz.email : null)
+    : (!platform && myRole === 'owner' && deliverable(biz.email) ? biz.email : null)
   if (!to) return json({ error: 'Your login has no email address to send the code to. Add an email to your account first.' }, 400)
 
   const since = new Date(Date.now() - 15 * 60_000).toISOString()

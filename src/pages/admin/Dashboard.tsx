@@ -21,6 +21,7 @@ import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 import DisableBusinessModal from './DisableBusinessModal'
 import TeamPanel, { ActivityFeed } from './TeamPanel'
+import ClinicStaffList from './ClinicStaffList'
 
 // A listing as admin sees it: the business, plus the verification note a
 // reviewer leaves on it. organization_id and is_hospital_doctor are gone —
@@ -972,6 +973,7 @@ export default function AdminDashboard() {
                             className="btn-teal text-xs py-1.5 px-4">{t('adminDashboardPage.saveNotesButton')}</button>
                           {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                         </div>
+                        <ClinicStaffList businessId={d.id} />
                       </div>
                     )}
                   </div>
@@ -1042,6 +1044,7 @@ export default function AdminDashboard() {
                               </button>
                               {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                             </div>
+                            <ClinicStaffList businessId={d.id} />
                           </div>
                         </td>
                       </tr>

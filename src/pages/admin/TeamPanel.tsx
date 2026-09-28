@@ -21,6 +21,8 @@ const ACTION_LABEL: Record<string, string> = {
   speciality_changed: 'Changed speciality',
   lead_created: 'Added lead',
   lead_updated: 'Updated lead',
+  clinic_staff_removed: 'Removed clinic staff member',
+  clinic_staff_restored: 'Brought back clinic staff member',
   manager_added: 'Added manager',
   manager_deactivated: 'Deactivated manager',
   manager_reactivated: 'Reactivated manager',
