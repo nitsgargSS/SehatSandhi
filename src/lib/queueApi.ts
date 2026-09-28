@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { Vital } from './patientsApi'
 
 // The OPD line.
 //
@@ -169,3 +170,39 @@ export async function patientHistory(businessId: string, memberId: string): Prom
 
 /** The printable OPD slip for a token. Opens in a new tab. */
 export const opdSlipUrl = (queueId: string) => `/business/print/opd/${queueId}`
+
+// ── 0152: vitals on the queue ────────────────────────────────────────────────
+
+/** Which of these tokens have had vitals taken today. Everyone on the queue sees it. */
+export async function getVitalsDone(queueIds: string[]): Promise<Record<string, string | null>> {
+  if (!queueIds.length) return {}
+  const { data, error } = await supabase.from('opd_queue').select('id, vitals_at').in('id', queueIds)
+  oops(error)
+  return Object.fromEntries(((data ?? []) as { id: string; vitals_at: string | null }[]).map(r => [r.id, r.vitals_at]))
+}
+
+/** Today's latest vitals per patient — only those the caller may read (0149): the
+ *  doctor and the patient's nurse, never reception. */
+export async function getTodaysVitals(businessId: string, memberIds: string[]): Promise<Record<string, Vital>> {
+  if (!memberIds.length) return {}
+  const since = new Date(); since.setHours(0, 0, 0, 0)
+  const { data, error } = await supabase.from('patient_vitals').select('*')
+    .eq('business_id', businessId).in('patient_member_id', memberIds)
+    .gte('recorded_at', since.toISOString()).order('recorded_at', { ascending: false })
+  oops(error)
+  const out: Record<string, Vital> = {}
+  for (const v of (data ?? []) as (Vital & { patient_member_id: string })[]) out[v.patient_member_id] ??= v
+  return out
+}
+
+/** One line: "BP 120/80 · P 72 · 37°C · SpO₂ 98% · 64 kg · Sugar 110 (fasting)". */
+export function vitalsLine(v: Vital): string {
+  return [
+    v.bp_systolic && v.bp_diastolic ? `BP ${v.bp_systolic}/${v.bp_diastolic}` : null,
+    v.pulse ? `P ${v.pulse}` : null,
+    v.temperature_c != null ? `${v.temperature_c}°C` : null,
+    v.spo2 ? `SpO₂ ${v.spo2}%` : null,
+    v.weight_kg ? `${v.weight_kg} kg` : null,
+    v.blood_sugar_mg_dl ? `Sugar ${v.blood_sugar_mg_dl}${v.blood_sugar_type ? ` (${v.blood_sugar_type})` : ''}` : null,
+  ].filter(Boolean).join(' · ')
+}
