@@ -408,6 +408,12 @@ tables:
     class: isolated
     purgeOrder: 27
 
+  # Doctors' leave and clinic-only unavailability (0150). Cascades from
+  # practitioners and businesses.
+  practitioner_leave:
+    class: isolated
+    purgeOrder: 27
+
   # WhatsApp-number codes at signup (0130). Test codes are test data.
   phone_verifications:
     class: isolated
