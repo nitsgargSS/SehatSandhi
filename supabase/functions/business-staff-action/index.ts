@@ -121,6 +121,11 @@ async function request(who: any, user: Row, body: Row): Promise<Response> {
     if (action !== 'remove' && action !== 'restore') {
       return json({ error: 'Sehatsandhi can remove or bring back staff; adding and roles are for the clinic.' }, 403)
     }
+  } else if (myRole === 'doctor') {
+    // 0149: a doctor may add a nurse of their own, who is linked to them.
+    if (action !== 'add' || role !== 'nurse') {
+      return json({ error: 'A doctor can add a nurse of their own; other staff changes are for the owner or manager.' }, 403)
+    }
   } else if (myRole !== 'owner' && myRole !== 'manager') {
     return json({ error: 'Only an owner or manager can change the staff.' }, 403)
   }
