@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -12,6 +12,7 @@ import Queue from './Queue'
 import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess, AffiliationRole } from '../../lib/identityApi'
 import RevenuePanel from './RevenuePanel'
 import PharmacyPanel from './PharmacyPanel'
+import CollectionsPanel from './CollectionsPanel'
 import PatientAreasPanel from './PatientAreasPanel'
 import WhatsAppPanel from './WhatsAppPanel'
 import PayListingPanel from './PayListingPanel'
@@ -89,7 +90,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'doctors' | 'pharmacy'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'doctors' | 'pharmacy' | 'collections'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -936,6 +937,11 @@ export default function DoctorDashboard() {
     ...(doctor?.pharmacy_module ? [
       { id: 'pharmacy', label: 'Pharmacy', icon: <Pill className="w-4 h-4" /> },
     ] : []),
+    // 0159: the tally — for anyone who takes money. The RPC shows owner and
+    // manager everybody's payments and everyone else only their own.
+    ...((emr && (access.opd || access.ipd)) || doctor?.pharmacy_module ? [
+      { id: 'collections', label: 'Collections', icon: <IndianRupee className="w-4 h-4" /> },
+    ] : []),
     // Hours and branches matter to a pharmacy and an ambulance service too —
     // patients need to know when they are open and where.
     ...(businessRole || prescriber ? [
@@ -1707,6 +1713,11 @@ export default function DoctorDashboard() {
           <PharmacyPanel businessId={doctor.id}
             canManage={!role.enforced || role.role === 'owner' || role.role === 'manager' || role.role === 'doctor'}
             canSettings={businessRole} />
+        )}
+
+        {/* ══════════ COLLECTIONS — who took how much, how (0159) ══════════ */}
+        {tab === 'collections' && doctor && ((emr && (access.opd || access.ipd)) || doctor.pharmacy_module) && (
+          <CollectionsPanel businessId={doctor.id} seesEveryone={businessRole} />
         )}
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}

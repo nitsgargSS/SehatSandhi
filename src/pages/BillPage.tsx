@@ -30,7 +30,7 @@ const CATEGORY: Record<string, string> = {
 }
 
 const METHOD: Record<string, string> = {
-  cash: 'Cash', upi: 'UPI', card: 'Card', netbanking: 'Net banking',
+  cash: 'Cash', upi: 'UPI', card: 'Card', credit_card: 'Credit card', debit_card: 'Debit card', netbanking: 'Net banking',
   cheque: 'Cheque', insurance: 'Insurance / TPA', other: 'Other',
 }
 

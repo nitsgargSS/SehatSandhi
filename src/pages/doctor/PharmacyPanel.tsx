@@ -6,7 +6,7 @@ import {
   getStock, saveItem, getBatches, adjustStock, recordPurchase, getPurchases, getSuppliers,
   issueBill, getBills, recordPayment, returnItems, cancelBill, getPrescriptionsForDispensing,
   getSummary, getPharmacySettings, savePharmacySettings, itemLabel, matchItem,
-  getDues, getBillsByIds, getStockMoves, Due, StockMove, PAYMENT_STATUS,
+  getDues, getBillsByIds, getStockMoves, Due, StockMove, PAYMENT_STATUS, payMethodLabel,
   StockRow, Batch, PharmacyBill, Purchase, RxForDispensing, PharmacySummary, PharmacySettings,
   PharmacyItem, PharmacyPayMethod, PurchaseLine, PAY_METHODS, GST_RATES,
 } from '../../lib/pharmacyApi'
@@ -455,7 +455,7 @@ function BillActions({ bill, canManage, onChanged }: { bill: PharmacyBill; canMa
         <p>Billed by {bill.issued_by_name ?? '—'}{bill.customer_phone ? ` · ${bill.customer_phone}` : ''}</p>
         {bill.discount_amount > 0 && <p>Discount {Number(bill.discount_pct)}% = {moneyExact(bill.discount_amount)} · “{bill.discount_reason}” · given by {bill.issued_by_name ?? '—'}</p>}
         {bill.payments.length === 0 ? <p>No payment yet.</p> : bill.payments.map((p, k) => (
-          <p key={k}>Received {moneyExact(p.amount)} by {p.method}{p.reference ? ` (${p.reference})` : ''} · {new Date(p.received_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}{p.received_by_name ? ` · ${p.received_by_name}` : ''}</p>
+          <p key={k}>Received {moneyExact(p.amount)} by {payMethodLabel(p.method)}{p.reference ? ` (${p.reference})` : ''} · {new Date(p.received_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}{p.received_by_name ? ` · ${p.received_by_name}` : ''}</p>
         ))}
         {bill.credited > 0 && <p>Returned {moneyExact(bill.credited)}{bill.refunded ? ` · refunded ${moneyExact(bill.refunded)}` : ''}</p>}
         {bill.cancelled_reason && <p>Cancelled: {bill.cancelled_reason}</p>}
@@ -939,7 +939,7 @@ function SummarySection({ businessId }: { businessId: string }) {
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {tile('Sold', moneyExact(Number(s.sales) - Number(s.returns)), `${s.bills} bills${s.cancelled ? `, ${s.cancelled} cancelled` : ''}; returns ${moneyExact(s.returns)}`)}
-            {tile('Money in', moneyExact(collected - Number(s.refunded)), `${Object.entries(s.collected).map(([m, v]) => `${m} ${moneyExact(Number(v))}`).join(' · ') || 'nothing'}${Number(s.refunded) ? `; refunded ${moneyExact(s.refunded)}` : ''}`)}
+            {tile('Money in', moneyExact(collected - Number(s.refunded)), `${Object.entries(s.collected).map(([m, v]) => `${payMethodLabel(m)} ${moneyExact(Number(v))}`).join(' · ') || 'nothing'}${Number(s.refunded) ? `; refunded ${moneyExact(s.refunded)}` : ''}`)}
             {tile('Due from customers', moneyExact(s.outstanding), 'All bills, not just these dates')}
             {tile('Purchases', moneyExact(s.purchases), `Discounts given ${moneyExact(s.discounts)}`)}
           </div>
