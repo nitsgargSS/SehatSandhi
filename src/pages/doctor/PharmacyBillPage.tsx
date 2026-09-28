@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { getBill, PharmacyBill } from '../../lib/pharmacyApi'
+import { getBill, PharmacyBill, PAYMENT_STATUS } from '../../lib/pharmacyApi'
 
 // The pharmacy bill (0158), printed at the counter. A "Tax invoice" with HSN,
 // rates and CGST/SGST when the dispensary has a GSTIN; a plain "Bill" at MRP
@@ -126,12 +126,13 @@ export default function PharmacyBillPage() {
               {bill.credited > 0 && bill.status === 'issued' && row('Less returns', `− ${rupees(bill.credited)}`)}
               {bill.status === 'issued' && row('Paid', rupees(bill.paid - bill.refunded))}
               {bill.status === 'issued' && bill.balance_due > 0 && row('Balance due', rupees(bill.balance_due), true)}
+              {bill.status === 'issued' && row('Status', PAYMENT_STATUS[bill.payment_status]?.label ?? '')}
             </tbody>
           </table>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 36, fontSize: 11.5 }}>
-          <span>Check medicines and expiry before leaving the counter.</span>
+          <span>Check medicines and expiry before leaving the counter.{bill.issued_by_name ? <><br />Billed by {bill.issued_by_name}</> : null}</span>
           <span>Signature: ____________________</span>
         </div>
       </div>

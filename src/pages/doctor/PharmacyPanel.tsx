@@ -6,6 +6,7 @@ import {
   getStock, saveItem, getBatches, adjustStock, recordPurchase, getPurchases, getSuppliers,
   issueBill, getBills, recordPayment, returnItems, cancelBill, getPrescriptionsForDispensing,
   getSummary, getPharmacySettings, savePharmacySettings, itemLabel, matchItem,
+  getDues, getBillsByIds, getStockMoves, Due, StockMove, PAYMENT_STATUS,
   StockRow, Batch, PharmacyBill, Purchase, RxForDispensing, PharmacySummary, PharmacySettings,
   PharmacyItem, PharmacyPayMethod, PurchaseLine, PAY_METHODS, GST_RATES,
 } from '../../lib/pharmacyApi'
@@ -17,7 +18,7 @@ import {
 // a manager or a doctor — the database refuses anyone else, so the hidden
 // sections are a courtesy, not the lock.
 
-type Section = 'sell' | 'bills' | 'stock' | 'purchases' | 'summary' | 'settings'
+type Section = 'sell' | 'bills' | 'dues' | 'stock' | 'purchases' | 'summary' | 'settings'
 
 const printBill = (id: string) => window.open(`/business/print/pharmacy/${id}`, '_blank')
 const today = () => isoDate()
@@ -47,7 +48,7 @@ export default function PharmacyPanel({ businessId, canManage, canSettings }: {
   const expiring = stock.filter(s => s.qty_expired > 0 || (s.qty_available > 0 && soon(s.next_expiry, 60))).length
 
   const sections: [Section, string][] = [
-    ['sell', 'New bill'], ['bills', 'Bills'], ['stock', 'Stock'],
+    ['sell', 'New bill'], ['bills', 'Bills'], ['dues', 'Dues'], ['stock', 'Stock'],
     ...(canManage ? [['purchases', 'Purchases'], ['summary', 'Summary']] as [Section, string][] : []),
     ...(canSettings ? [['settings', 'Settings']] as [Section, string][] : []),
   ]
@@ -84,6 +85,7 @@ export default function PharmacyPanel({ businessId, canManage, canSettings }: {
       {section === 'sell' && <SellSection businessId={businessId} stock={stock} onSold={reloadStock}
         gst={!!settings?.pharmacy_gstin} goStock={() => setSection('stock')} canManage={canManage} />}
       {section === 'bills' && <BillsSection businessId={businessId} canManage={canManage} onStockChanged={reloadStock} />}
+      {section === 'dues' && <DuesSection businessId={businessId} canManage={canManage} onStockChanged={reloadStock} />}
       {section === 'stock' && <StockSection businessId={businessId} stock={stock} canManage={canManage} reload={reloadStock} />}
       {section === 'purchases' && canManage && <PurchasesSection businessId={businessId} stock={stock} reload={reloadStock} />}
       {section === 'summary' && canManage && <SummarySection businessId={businessId} />}
@@ -337,7 +339,12 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
           </select>
           <input className="input-field" value={ref} onChange={e => setRef(e.target.value)} placeholder="UPI / card reference (optional)" />
         </div>
-        <p className="text-xs text-gray-500">Received less than the total? The rest stays on the bill as due. Received nothing? Leave it at 0 for credit.</p>
+        <div className="flex gap-2 flex-wrap text-xs">
+          <button type="button" onClick={() => setPay(String(estimate))} className={`px-3 py-1 rounded-full border ${Number(pay) >= estimate && estimate > 0 ? 'border-green-600 bg-green-50 text-green-700' : 'border-gray-200'}`}>Paid in full</button>
+          <button type="button" onClick={() => setPay('')} className={`px-3 py-1 rounded-full border ${!Number(pay) ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200'}`}>Nothing now (credit)</button>
+          {Number(pay) > 0 && Number(pay) < estimate && <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800">Part payment · {moneyExact(estimate - Number(pay))} will be due</span>}
+        </div>
+        <p className="text-xs text-gray-500">For a part payment, type what was received — the rest stays on the patient's dues.</p>
       </div>
 
       <Err msg={err} />
@@ -388,14 +395,7 @@ function BillsSection({ businessId, canManage, onStockChanged }: { businessId: s
               <div key={b.id}>
                 <button onClick={() => setOpen(open === b.id ? null : b.id)} className="w-full text-left px-4 py-3 flex flex-wrap justify-between gap-2 text-sm hover:bg-gray-50">
                   <span><b>{b.bill_no}</b> · {b.customer_name} · <span className="text-gray-500">{new Date(b.issued_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span></span>
-                  <span className="flex gap-3">
-                    {b.status === 'cancelled'
-                      ? <span className="text-gray-400 line-through">{moneyExact(b.net_payable)}</span>
-                      : <span className="font-semibold">{moneyExact(b.net_payable)}</span>}
-                    {b.status === 'cancelled' ? <span className="text-gray-500">Cancelled</span>
-                      : b.balance_due > 0 ? <span className="text-red-600">Due {moneyExact(b.balance_due)}</span>
-                      : <span className="text-green-700">Paid</span>}
-                  </span>
+                  <BillMoney b={b} />
                 </button>
                 {open === b.id && <BillActions bill={b} canManage={canManage} onChanged={afterChange} />}
               </div>
@@ -403,6 +403,19 @@ function BillsSection({ businessId, canManage, onStockChanged }: { businessId: s
           </div>
         )}
     </div>
+  )
+}
+
+/** Total, the payment state, and for a part-paid bill how much is in and how much is due. */
+function BillMoney({ b }: { b: PharmacyBill }) {
+  const st = PAYMENT_STATUS[b.payment_status] ?? PAYMENT_STATUS.unpaid
+  return (
+    <span className="flex gap-2 items-center text-xs">
+      <span className={`text-sm ${b.status === 'cancelled' ? 'text-gray-400 line-through' : 'font-semibold'}`}>{moneyExact(b.net_payable)}</span>
+      <span className={`px-2 py-0.5 rounded-full font-semibold ${st.cls}`}>{st.label}</span>
+      {b.payment_status === 'partly_paid' && <span className="text-gray-600">paid {moneyExact(b.paid - b.refunded)} · due {moneyExact(b.balance_due)}</span>}
+      {b.payment_status === 'unpaid' && <span className="text-red-600">due {moneyExact(b.balance_due)}</span>}
+    </span>
   )
 }
 
@@ -438,14 +451,15 @@ function BillActions({ bill, canManage, onChanged }: { bill: PharmacyBill; canMa
           ))}
         </tbody>
       </table>
-      <p className="text-xs text-gray-600">
-        Paid {moneyExact(bill.paid)}
-        {bill.payments.length ? ` (${bill.payments.map(p => `${moneyExact(p.amount)} ${p.method}`).join(', ')})` : ''}
-        {bill.credited ? ` · returned ${moneyExact(bill.credited)}` : ''}
-        {bill.refunded ? ` · refunded ${moneyExact(bill.refunded)}` : ''}
-        {bill.discount_amount ? ` · discount ${moneyExact(bill.discount_amount)} (${bill.discount_reason})` : ''}
-        {bill.cancelled_reason ? ` · cancelled: ${bill.cancelled_reason}` : ''}
-      </p>
+      <div className="text-xs text-gray-600 space-y-0.5">
+        <p>Billed by {bill.issued_by_name ?? '—'}{bill.customer_phone ? ` · ${bill.customer_phone}` : ''}</p>
+        {bill.discount_amount > 0 && <p>Discount {Number(bill.discount_pct)}% = {moneyExact(bill.discount_amount)} · “{bill.discount_reason}” · given by {bill.issued_by_name ?? '—'}</p>}
+        {bill.payments.length === 0 ? <p>No payment yet.</p> : bill.payments.map((p, k) => (
+          <p key={k}>Received {moneyExact(p.amount)} by {p.method}{p.reference ? ` (${p.reference})` : ''} · {new Date(p.received_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}{p.received_by_name ? ` · ${p.received_by_name}` : ''}</p>
+        ))}
+        {bill.credited > 0 && <p>Returned {moneyExact(bill.credited)}{bill.refunded ? ` · refunded ${moneyExact(bill.refunded)}` : ''}</p>}
+        {bill.cancelled_reason && <p>Cancelled: {bill.cancelled_reason}</p>}
+      </div>
       {msg && <p className="text-green-700 text-xs">{msg}</p>}
 
       <div className="flex gap-2 flex-wrap">
@@ -511,6 +525,76 @@ function BillActions({ bill, canManage, onChanged }: { bill: PharmacyBill; canMa
         </div>
       )}
       <Err msg={err} />
+    </div>
+  )
+}
+
+// ── Dues: who owes the counter ──────────────────────────────────────────────
+
+function DuesSection({ businessId, canManage, onStockChanged }: { businessId: string; canManage: boolean; onStockChanged: () => void }) {
+  const [dues, setDues] = useState<Due[] | null>(null)
+  const [open, setOpen] = useState<string | null>(null)
+  const [bills, setBills] = useState<PharmacyBill[]>([])
+  const [openBill, setOpenBill] = useState<string | null>(null)
+  const [q, setQ] = useState('')
+  const [err, setErr] = useState('')
+  const keyOf = (d: Due) => d.patient_member_id ?? `${d.customer_name}|${d.customer_phone ?? ''}`
+
+  const load = useCallback(() => {
+    getDues(businessId).then(d => { setDues(d); setErr('') }).catch(e => setErr((e as Error).message))
+  }, [businessId])
+  useEffect(load, [load])
+  useEffect(() => {
+    const d = dues?.find(x => keyOf(x) === open)
+    if (d) getBillsByIds(d.bill_ids).then(setBills).catch(() => setBills([])); else setBills([])
+  }, [open, dues])
+
+  if (err) return <Err msg={err} />
+  if (!dues) return <div className="card shadow-sm text-sm text-gray-400 py-10 text-center">Loading…</div>
+  const total = dues.reduce((s, d) => s + d.total_due, 0)
+  const days = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
+  const rows = dues.filter(d => !q.trim() || `${d.customer_name} ${d.customer_phone ?? ''}`.toLowerCase().includes(q.trim().toLowerCase()))
+
+  return (
+    <div className="space-y-3">
+      <div className="card shadow-sm py-4 flex flex-wrap justify-between gap-2 items-center">
+        <div>
+          <p className="text-xs text-gray-500">Due from {dues.length} patient{dues.length === 1 ? '' : 's'}</p>
+          <p className="text-2xl font-bold text-navy-700">{moneyExact(total)}</p>
+        </div>
+        <p className="text-xs text-gray-500 max-w-xs">Unpaid and part-paid pharmacy bills, biggest first. Open a patient to take a payment against their bills.</p>
+      </div>
+      {dues.length > 0 && <input className="input-field" value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name or phone" />}
+      {rows.length === 0 ? <div className="card shadow-sm text-sm text-gray-500 py-10 text-center">Nobody owes the pharmacy anything.</div> : (
+        <div className="card shadow-sm p-0 divide-y">
+          {rows.map(d => (
+            <div key={keyOf(d)}>
+              <button onClick={() => setOpen(open === keyOf(d) ? null : keyOf(d))} className="w-full text-left px-4 py-3 text-sm flex flex-wrap justify-between gap-2 hover:bg-gray-50">
+                <span>
+                  <b>{d.customer_name}</b>{d.customer_phone ? ` · ${d.customer_phone}` : ''}{!d.patient_member_id && <span className="text-gray-400"> · walk-in</span>}
+                  <span className="block text-xs text-gray-500">
+                    {d.bills} bill{d.bills === 1 ? '' : 's'} · oldest {days(d.oldest_bill_at)} days ago · {d.last_paid_at ? `last paid ${shortDate(d.last_paid_at)}` : 'nothing paid yet'}
+                  </span>
+                </span>
+                <span className={`font-bold ${days(d.oldest_bill_at) > 30 ? 'text-red-600' : 'text-navy-700'}`}>{moneyExact(d.total_due)}</span>
+              </button>
+              {open === keyOf(d) && (
+                <div className="bg-gray-50 divide-y">
+                  {bills.map(b => (
+                    <div key={b.id}>
+                      <button onClick={() => setOpenBill(openBill === b.id ? null : b.id)} className="w-full text-left px-6 py-2 text-sm flex flex-wrap justify-between gap-2">
+                        <span>{b.bill_no} · {shortDate(b.issued_at)} · by {b.issued_by_name ?? '—'}</span>
+                        <BillMoney b={b} />
+                      </button>
+                      {openBill === b.id && <BillActions bill={b} canManage={canManage} onChanged={() => { load(); onStockChanged() }} />}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -625,12 +709,58 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
                       <tbody>{batches.map(b => <BatchRow key={b.id} b={b} unit={s.unit} canManage={canManage} onDone={() => { reload(); getBatches(s.id).then(setBatches) }} />)}</tbody>
                     </table>
                   )}
+                  <StockHistory itemId={s.id} unit={s.unit} qtyNow={s.qty_available + s.qty_expired} />
                   {canManage && <button onClick={() => setEditing(s)} className="btn-outline text-xs py-1.5 px-3">Edit medicine</button>}
                 </div>
               )}
             </div>
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+const MOVE_LABEL: Record<StockMove['kind'], string> = {
+  purchase: 'Purchased', sale: 'Sold', return: 'Returned', cancel: 'Bill cancelled', adjust: 'Count corrected',
+}
+
+// Every movement of the medicine, so a shelf count can be matched to the
+// system: in, out, back, corrected — each with its bill, supplier or reason.
+function StockHistory({ itemId, unit, qtyNow }: { itemId: string; unit: string; qtyNow: number }) {
+  const [open, setOpen] = useState(false)
+  const [moves, setMoves] = useState<StockMove[] | null>(null)
+  useEffect(() => { if (open) getStockMoves(itemId).then(setMoves).catch(() => setMoves([])) }, [open, itemId])
+  if (!open) return <button onClick={() => setOpen(true)} className="text-xs text-teal-700 mr-3">Stock history</button>
+  const totals = (moves ?? []).reduce<Record<string, number>>((t, m) => ({ ...t, [m.kind]: (t[m.kind] ?? 0) + m.qty }), {})
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-2 text-xs space-y-1">
+      <div className="flex justify-between">
+        <b>Stock history</b>
+        <button onClick={() => setOpen(false)} className="text-gray-400">Hide</button>
+      </div>
+      {moves === null ? <p className="text-gray-400">Loading…</p> : (
+        <>
+          <p className="text-gray-600">
+            {Object.entries(totals).map(([k, v]) => `${MOVE_LABEL[k as StockMove['kind']]} ${v > 0 ? '+' : ''}${v}`).join(' · ')}
+            {' '}= <b>{qtyNow} {unit}</b> on the shelf (including expired)
+          </p>
+          <table className="w-full">
+            <tbody>{moves.map(m => (
+              <tr key={m.id} className="border-t">
+                <td className="py-1 text-gray-500">{new Date(m.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                <td>{MOVE_LABEL[m.kind]}</td>
+                <td className={m.qty < 0 ? 'text-red-600' : 'text-green-700'}>{m.qty > 0 ? '+' : ''}{m.qty}</td>
+                <td className="text-gray-500">{m.batch?.batch_no}</td>
+                <td className="text-gray-600">
+                  {m.bill ? `${m.bill.bill_no} · ${m.bill.customer_name}` : m.purchase ? [m.purchase.supplier_name, m.purchase.invoice_no && `inv. ${m.purchase.invoice_no}`].filter(Boolean).join(' · ') : ''}
+                  {m.reason ? ` · ${m.reason}` : ''}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {moves.length === 100 && <p className="text-gray-400">Showing the latest 100.</p>}
+        </>
       )}
     </div>
   )
@@ -779,9 +909,12 @@ function SummarySection({ businessId }: { businessId: string }) {
   const [from, setFrom] = useState(today())
   const [to, setTo] = useState(today())
   const [s, setS] = useState<PharmacySummary | null>(null)
+  const [discounted, setDiscounted] = useState<PharmacyBill[]>([])
   const [err, setErr] = useState('')
   useEffect(() => {
     getSummary(businessId, from, to).then(r => { setS(r); setErr('') }).catch(e => setErr((e as Error).message))
+    getBills(businessId, { from: from + 'T00:00:00+05:30', to: plusDays(to, 1) + 'T00:00:00+05:30' })
+      .then(b => setDiscounted(b.filter(x => x.discount_amount > 0 && x.status === 'issued'))).catch(() => setDiscounted([]))
   }, [businessId, from, to])
 
   const collected = s ? Object.values(s.collected).reduce((a, b) => a + Number(b ?? 0), 0) : 0
@@ -825,6 +958,23 @@ function SummarySection({ businessId }: { businessId: string }) {
                 ))}</tbody>
               </table>
               <p className="text-xs text-gray-400 px-4 py-2">After returns. For your GST return, check against the bills.</p>
+            </div>
+          )}
+          {discounted.length > 0 && (
+            <div className="card shadow-sm p-0 overflow-x-auto">
+              <p className="px-4 pt-3 font-bold text-navy-700 text-sm">Discounts given</p>
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-gray-500 text-xs"><th className="px-4 py-2">Bill</th><th>Patient</th><th>Given by</th><th>Why</th><th className="text-right px-4">Discount</th></tr></thead>
+                <tbody>{discounted.map(b => (
+                  <tr key={b.id} className="border-t">
+                    <td className="px-4 py-2">{b.bill_no}</td>
+                    <td>{b.customer_name}</td>
+                    <td>{b.issued_by_name ?? '—'}</td>
+                    <td>{b.discount_reason}</td>
+                    <td className="text-right px-4">{Number(b.discount_pct)}% · {moneyExact(b.discount_amount)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
             </div>
           )}
         </>

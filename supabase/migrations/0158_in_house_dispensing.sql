@@ -32,8 +32,10 @@
 -- ── WHO DOES WHAT ───────────────────────────────────────────────────────────
 -- Medicines, purchases, stock counts, cancellations, reports: owner, clinic
 -- manager, doctor (and Sehatsandhi admins). Selling, taking payment and
--- returns at the counter: anyone on the staff. Prices come from the batch —
--- the counter cannot type a price, only give a discount with a reason.
+-- returns at the counter: anyone on the staff — the nurse or biller handing
+-- the medicines over included. Prices come from the batch: the counter cannot
+-- type a price, only give a discount with a reason, and the bill keeps the
+-- name of whoever issued it so the manager can see who gave what.
 --
 -- ── STOCK IS A LEDGER ───────────────────────────────────────────────────────
 -- pharmacy_batches.qty_in_hand is the running figure; pharmacy_stock_moves is
@@ -172,6 +174,10 @@ create table if not exists pharmacy_bills (
   unique (business_id, bill_no),
   check (discount_amount = 0 or btrim(coalesce(discount_reason, '')) <> '')
 );
+-- Who billed (and so who gave any discount), as a name: the manager reviewing
+-- discounts and dues reads it, and a uid means nothing to them.
+alter table pharmacy_bills add column if not exists issued_by_name text;
+
 create index if not exists pharmacy_bills_business_idx on pharmacy_bills (business_id, issued_at desc);
 create index if not exists pharmacy_bills_member_idx on pharmacy_bills (patient_member_id);
 create index if not exists pharmacy_bills_rx_idx on pharmacy_bills (prescription_id);
@@ -208,6 +214,8 @@ create table if not exists pharmacy_payments (
   received_by uuid,
   received_at timestamptz not null default now()
 );
+alter table pharmacy_payments add column if not exists received_by_name text;
+
 create index if not exists pharmacy_payments_bill_idx on pharmacy_payments (bill_id);
 create index if not exists pharmacy_payments_business_idx on pharmacy_payments (business_id, received_at desc);
 
@@ -276,6 +284,19 @@ end $$;
 revoke all on function sehat_pharmacy_may_manage(uuid) from public, anon;
 grant execute on function sehat_pharmacy_may_manage(uuid) to authenticated;
 revoke all on function sehat_pharmacy_check(uuid, boolean) from public, anon;
+
+-- The caller's name at this clinic: their practitioner name, else 'Owner' for
+-- the login that signed the clinic up, else the admin's email.
+create or replace function sehat_pharmacy_staff_name(p_business uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select p.full_name from business_practitioners bp join practitioners p on p.id = bp.practitioner_id
+      where bp.business_id = p_business and p.auth_uid = auth.uid() limit 1),
+    (select 'Owner' from businesses b where b.id = p_business and b.auth_uid = auth.uid()),
+    (select 'Sehatsandhi: ' || email from auth.users where id = auth.uid()),
+    'Unknown');
+$$;
+revoke all on function sehat_pharmacy_staff_name(uuid) from public, anon;
 
 
 -- ============================================================================
@@ -577,10 +598,11 @@ begin
 
   insert into pharmacy_bills (business_id, bill_no, patient_member_id, prescription_id, customer_name, customer_phone,
                               clinic_name, clinic_address, clinic_phone, gstin, drug_licence, gst_applied,
-                              subtotal, discount_pct, discount_reason, net_payable, issued_by)
+                              subtotal, discount_pct, discount_reason, net_payable, issued_by, issued_by_name)
   values (p_business, sehat_next_pharmacy_bill_number(p_business), p_patient_member_id, p_prescription_id, v_name, v_phone,
           biz.name, biz.address, biz.phone, biz.pharmacy_gstin, biz.pharmacy_drug_licence, v_gst,
-          0, v_pct, case when v_pct > 0 then btrim(p_discount_reason) end, 0, auth.uid())
+          0, v_pct, case when v_pct > 0 then btrim(p_discount_reason) end, 0, auth.uid(),
+          sehat_pharmacy_staff_name(p_business))
   returning id into v_bill;
 
   for l in select * from jsonb_array_elements(p_lines) loop
@@ -640,9 +662,9 @@ begin
   v_pay := coalesce(nullif(p_payment->>'amount', '')::numeric, 0);
   if v_pay > 0 then
     if v_pay > v_net then raise exception 'That is more than the bill (₹%).', v_net using errcode = '22023'; end if;
-    insert into pharmacy_payments (business_id, bill_id, amount, method, reference, received_by)
+    insert into pharmacy_payments (business_id, bill_id, amount, method, reference, received_by, received_by_name)
     values (p_business, v_bill, v_pay, coalesce(nullif(p_payment->>'method', ''), 'cash'),
-            nullif(btrim(coalesce(p_payment->>'reference', '')), ''), auth.uid());
+            nullif(btrim(coalesce(p_payment->>'reference', '')), ''), auth.uid(), sehat_pharmacy_staff_name(p_business));
   end if;
 
   return v_bill;
@@ -680,9 +702,9 @@ begin
   if coalesce(p_amount, 0) <= 0 then raise exception 'Give the amount received.' using errcode = '22023'; end if;
   v_due := sehat_pharmacy_bill_balance(p_bill);
   if p_amount > v_due then raise exception 'Only ₹% is due on this bill.', v_due using errcode = '22023'; end if;
-  insert into pharmacy_payments (business_id, bill_id, amount, method, reference, received_by)
+  insert into pharmacy_payments (business_id, bill_id, amount, method, reference, received_by, received_by_name)
   values (b.business_id, p_bill, round(p_amount, 2), coalesce(nullif(p_method, ''), 'cash'),
-          nullif(btrim(coalesce(p_reference, '')), ''), auth.uid());
+          nullif(btrim(coalesce(p_reference, '')), ''), auth.uid(), sehat_pharmacy_staff_name(b.business_id));
 end $$;
 
 revoke all on function sehat_pharmacy_record_payment(uuid, numeric, text, text) from public, anon;
@@ -817,6 +839,9 @@ create or replace view pharmacy_stock with (security_invoker = true) as
     left join pharmacy_batches b on b.item_id = i.id
    group by i.id;
 
+-- Dropped first: columns were added to it before production had it, and
+-- create or replace cannot insert a column in the middle of a view.
+drop view if exists pharmacy_bill_detail;
 create or replace view pharmacy_bill_detail with (security_invoker = true) as
   select b.*,
          coalesce(p.paid, 0) as paid,
@@ -824,9 +849,15 @@ create or replace view pharmacy_bill_detail with (security_invoker = true) as
          coalesce(r.refunded, 0) as refunded,
          case when b.status = 'cancelled' then 0
               else b.net_payable - coalesce(r.credited, 0) - coalesce(p.paid, 0) + coalesce(r.refunded, 0) end as balance_due,
+         -- paid | partly_paid | unpaid | cancelled — what the counter and the
+         -- manager filter on.
+         case when b.status = 'cancelled' then 'cancelled'
+              when b.net_payable - coalesce(r.credited, 0) - coalesce(p.paid, 0) + coalesce(r.refunded, 0) <= 0 then 'paid'
+              when coalesce(p.paid, 0) - coalesce(r.refunded, 0) > 0 then 'partly_paid'
+              else 'unpaid' end as payment_status,
          coalesce((select jsonb_agg(to_jsonb(bi) order by bi.sort_order) from pharmacy_bill_items bi where bi.bill_id = b.id), '[]'::jsonb) as items,
          coalesce((select jsonb_agg(jsonb_build_object('amount', pp.amount, 'method', pp.method, 'reference', pp.reference,
-                                                       'received_at', pp.received_at) order by pp.received_at)
+                                                       'received_at', pp.received_at, 'received_by_name', pp.received_by_name) order by pp.received_at)
                      from pharmacy_payments pp where pp.bill_id = b.id), '[]'::jsonb) as payments,
          coalesce((select jsonb_agg(to_jsonb(pr) - 'business_id' order by pr.created_at)
                      from pharmacy_returns pr where pr.bill_id = b.id), '[]'::jsonb) as returns
@@ -906,6 +937,31 @@ end $$;
 
 revoke all on function sehat_pharmacy_summary(uuid, date, date) from public, anon;
 grant execute on function sehat_pharmacy_summary(uuid, date, date) to authenticated;
+
+
+-- Who owes the counter money, one row per patient (or walk-in by name and
+-- phone): total due, how many bills, the oldest unpaid bill and the last time
+-- they paid anything. The manager's collection list.
+create or replace function sehat_pharmacy_dues(p_business uuid)
+returns table (patient_member_id uuid, customer_name text, customer_phone text, total_due numeric,
+               bills integer, oldest_bill_at timestamptz, last_paid_at timestamptz, bill_ids uuid[])
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform sehat_pharmacy_check(p_business, false);
+  return query
+    select d.patient_member_id, max(d.customer_name), max(d.customer_phone), sum(d.balance_due),
+           count(*)::integer, min(d.issued_at),
+           (select max(pp.received_at) from pharmacy_payments pp where pp.bill_id = any(array_agg(d.id))),
+           array_agg(d.id order by d.issued_at)
+      from pharmacy_bill_detail d
+     where d.business_id = p_business and d.status = 'issued' and d.balance_due > 0
+     group by d.patient_member_id,
+              case when d.patient_member_id is null then lower(d.customer_name) || '|' || coalesce(d.customer_phone, '') end
+     order by sum(d.balance_due) desc;
+end $$;
+
+revoke all on function sehat_pharmacy_dues(uuid) from public, anon;
+grant execute on function sehat_pharmacy_dues(uuid) to authenticated;
 
 
 -- ============================================================================
