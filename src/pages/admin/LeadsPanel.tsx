@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Phone, MessageCircle, Mail, Plus, ChevronDown, ChevronUp } from 'lucide-react'
 import { StatTile } from '../../components/Charts'
+import { supabase } from '../../lib/supabase'
 import { shortDate, dateTime, isoDate } from '../../lib/format'
 import {
   Lead, LeadNote, LeadStage, LEAD_STAGES, STAGE_LABEL, LEAD_SOURCES, CONSENT_TYPES,
@@ -117,6 +118,8 @@ export default function LeadsPanel({ isAdmin, myUid }: { isAdmin: boolean; myUid
 
       {isAdmin && summary.length > 0 && <TeamTable rows={summary} onPick={uid => { setOwner(uid); setStatus('open') }} />}
 
+      <AreaInterest />
+
       {showAdd && (
         <AddLeadForm isAdmin={isAdmin} team={team} myUid={myUid}
           onCreated={l => { setLeads(ls => [l, ...ls]); setShowAdd(false); setOpenId(l.id); reloadSummary() }}
@@ -174,6 +177,91 @@ export default function LeadsPanel({ isAdmin, myUid }: { isAdmin: boolean; myUid
               onSaved={replace} onError={setError} />
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── Area interest (0170) ────────────────────────────────────────────────────
+// What visitors search on the business page's coverage card: where demand is
+// coming from, so calls and launches go there first. Ranked by visitors (one
+// person searching five times is one), with how they searched: typed it,
+// "Use my location" (they are physically there), a quick city button, or an
+// ?area= link from a campaign. Not-found rows are what people typed that did
+// not resolve — a missing alias, or a place outside the directory.
+
+interface AreaRow {
+  label: string; state: string | null; kind: string | null; live: boolean; found: boolean
+  searches: number; visitors: number; typed: number; by_location: number; chip: number; link: number; last_at: string
+}
+
+function AreaInterest() {
+  const [days, setDays] = useState(30)
+  const [rows, setRows] = useState<AreaRow[] | null>(null)
+  const [err, setErr] = useState('')
+  const [all, setAll] = useState(false)
+  useEffect(() => {
+    setRows(null); setErr('')
+    supabase.rpc('sehat_admin_area_interest', { p_days: days })
+      .then(({ data, error }) => { if (error) { setErr(error.message); setRows([]) } else setRows((data ?? []) as AreaRow[]) })
+  }, [days])
+  const n = (v: number | string) => Number(v)
+  const visitors = (rows ?? []).reduce((t, r) => t + n(r.visitors), 0)
+  const notLive = (rows ?? []).filter(r => r.found && !r.live)
+  const shown = all ? rows ?? [] : (rows ?? []).slice(0, 10)
+  return (
+    <div className="card space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 className="font-bold text-navy-700">Area interest</h3>
+          <p className="text-xs text-gray-500">Places searched on the business page's coverage card — where businesses are looking at us from.</p>
+        </div>
+        <div className="flex gap-1">
+          {[7, 30, 90].map(d => (
+            <button key={d} onClick={() => setDays(d)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${days === d ? 'bg-teal-50 border-teal-500 text-teal-700' : 'bg-white border-gray-200 text-gray-500'}`}>
+              {d} days</button>
+          ))}
+        </div>
+      </div>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {rows === null ? <p className="text-sm text-gray-400">Loading…</p> : rows.length === 0 ? (
+        <p className="text-sm text-gray-500">No searches in the last {days} days yet.</p>
+      ) : (
+        <>
+          <p className="text-sm text-gray-600">
+            {rows.filter(r => r.found).length} places · {visitors} visitor searches
+            {notLive[0] && <> · most wanted where we are not live: <b>{notLive[0].label}</b>{notLive[0].state && notLive[0].state !== notLive[0].label ? `, ${notLive[0].state}` : ''}</>}
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs text-gray-500 border-b">
+                <th className="py-2 pr-3">Place</th><th className="pr-3 text-right">Visitors</th><th className="pr-3 text-right">Searches</th>
+                <th className="pr-3">How</th><th className="pr-3">Status</th><th>Last</th>
+              </tr></thead>
+              <tbody>
+                {shown.map(r => (
+                  <tr key={`${r.label}|${r.state}|${r.found}`} className="border-b border-gray-50">
+                    <td className="py-2 pr-3"><b className={r.found ? '' : 'text-gray-400'}>{r.label}</b>
+                      {r.state && r.state !== r.label && <span className="text-gray-500">, {r.state}</span>}
+                      {r.kind && r.kind !== 'district' && <span className="text-xs text-gray-400"> · {r.kind}</span>}</td>
+                    <td className="pr-3 text-right font-semibold">{n(r.visitors)}</td>
+                    <td className="pr-3 text-right">{n(r.searches)}</td>
+                    <td className="pr-3 text-xs text-gray-500 whitespace-nowrap">
+                      {[n(r.typed) ? `⌨️ ${n(r.typed)}` : '', n(r.by_location) ? `📍 ${n(r.by_location)}` : '', n(r.chip) ? `👆 ${n(r.chip)}` : '', n(r.link) ? `🔗 ${n(r.link)}` : ''].filter(Boolean).join('  ')}
+                    </td>
+                    <td className="pr-3 text-xs whitespace-nowrap">
+                      {!r.found ? <span className="text-gray-400">not found</span> : r.live ? <span className="text-emerald-700 font-semibold">live</span> : <span className="text-amber-700">not live</span>}
+                    </td>
+                    <td className="text-xs text-gray-500 whitespace-nowrap">{dateTime(r.last_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {rows.length > 10 && <button onClick={() => setAll(!all)} className="text-xs font-semibold text-teal-700">{all ? 'Show top 10' : `Show all ${rows.length}`}</button>}
+          <p className="text-xs text-gray-400">⌨️ typed · 📍 used their location (they are there) · 👆 quick city button · 🔗 opened an ?area= link. One visitor = one browser tab session. Do Not Track browsers are not counted.</p>
+        </>
       )}
     </div>
   )
