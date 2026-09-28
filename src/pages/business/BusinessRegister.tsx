@@ -3,7 +3,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER, SPECIALITIES } from '../../types'
-import { BIZ, VERTICALS, VerticalKey, verticalFor, hasPractitioners } from './shared'
+import { BIZ, VERTICALS, VerticalKey, verticalFor, hasPractitioners, PARTNER_OFFER } from './shared'
 import { RegistrySearch } from './RegistrySearch'
 import { PlacesSearch } from './PlacesSearch'
 import { placesConfigured, guessSpeciality } from '../../lib/placesLookup'
@@ -560,7 +560,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
     // On the commission plan nothing is charged, so this click is the only place
     // the business assents to the 10% term — don't let it through without it.
     if (onCommission && !acceptedTerms) {
-      setError(`Please accept the ${commissionPct}% commission terms to continue.`)
+      setError('Please tick the box to confirm the partner terms.')
       return
     }
     setSubmitting(true); setError('')
@@ -1160,7 +1160,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             before they pay for it. */}
                         <ReviewRow label="Total reach" value={`${num(price.residents)} residents`} />
                         {onCommission
-                          ? <ReviewRow label="Plan" value={`${commissionPct}% of ${commissionBasis}`} />
+                          ? <ReviewRow label="Plan" value="Free — launch offer" />
                           : <ReviewRow label="Plan" value={flatPlan ? plan.label : (price.topTier?.tier_name ?? '—')} />}
                         {typePriced && (price.lineItems ?? []).map(li => (
                           <ReviewRow key={li.label} label={li.label} value={li.amount < 0 ? `− ${money(-li.amount)}` : money(li.amount)} />
@@ -1466,25 +1466,27 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               are where the commission term is stated and accepted. */}
                           <div style={{ marginTop: 20, background: BIZ.chipBg, border: `1px solid #cfe8dc`, borderRadius: 18, padding: '20px 22px' }}>
                             <div style={{ fontSize: 17, fontWeight: 800, color: BIZ.ink }}>
-                              No monthly fee · {commissionPct}% of {commissionBasis}
+                              {PARTNER_OFFER.badge}
                             </div>
-                            <p style={{ fontSize: 14, color: BIZ.muted, lineHeight: 1.6, margin: '8px 0 0' }}>{verticalObj.commissionNote}</p>
+                            <p style={{ fontSize: 14, color: BIZ.muted, lineHeight: 1.6, margin: '8px 0 0' }}>
+                              {PARTNER_OFFER.body} No card is needed.
+                            </p>
                             <p style={{ fontSize: 13, color: BIZ.mutedWarm, lineHeight: 1.6, margin: '10px 0 0' }}>
-                              Nothing is charged now and no card is needed. Our team confirms the settlement cycle on WhatsApp once your listing is verified.
+                              {PARTNER_OFFER.later} {verticalObj.commissionNote}
                             </p>
                             <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 16, cursor: 'pointer' }}>
                               <input type="checkbox" checked={acceptedTerms}
                                 onChange={e => { setAcceptedTerms(e.target.checked); if (e.target.checked) setError('') }}
                                 style={{ width: 18, height: 18, accentColor: BIZ.green, marginTop: 1, flex: '0 0 auto', cursor: 'pointer' }} />
                               <span style={{ fontSize: 13.5, color: BIZ.ink, fontWeight: 600, lineHeight: 1.5 }}>
-                                I agree to pay {commissionPct}% of {commissionBasis} on business that comes through Sehatsandhi.
+                                I understand registration is free during the launch offer, and that later a {commissionPct}% commission will apply only to business that comes to me through Sehatsandhi.
                               </span>
                             </label>
                           </div>
                           <div style={{ marginTop: 20 }}>
                             {/* Chose the WhatsApp add-on: that is paid for today. */}
                             {whatsapp && payableToday > 0 ? (
-                              <button onClick={() => { if (!acceptedTerms) { setError(`Please accept the ${commissionPct}% commission terms to continue.`); return } payWithRazorpay() }}
+                              <button onClick={() => { if (!acceptedTerms) { setError('Please tick the box to confirm the partner terms.'); return } payWithRazorpay() }}
                                 disabled={submitting || !acceptedTerms || !backendReady}
                                 style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: submitting || !acceptedTerms ? 0.6 : 1 }}>
                                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Pay {money(payableToday)} with Razorpay
