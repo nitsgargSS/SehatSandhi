@@ -20,6 +20,9 @@ import TypePricingCard from './TypePricingCard'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 import PharmacySwitch from './PharmacySwitch'
+import DisableBusinessModal from './DisableBusinessModal'
+import TeamPanel, { ActivityFeed } from './TeamPanel'
+import ClinicStaffList from './ClinicStaffList'
 
 // A listing as admin sees it: the business, plus the verification note a
 // reviewer leaves on it. organization_id and is_hospital_doctor are gone —
@@ -27,6 +30,13 @@ import PharmacySwitch from './PharmacySwitch'
 interface BusinessRow extends Business {
   verification_notes?: string | null
 }
+
+type Tab = 'pending' | 'all' | 'leads' | 'whatsapp' | 'camps' | 'coupons' | 'billing' | 'reports'
+  | 'insights' | 'gst' | 'team' | 'account' | 'sandbox'
+
+// 0145: what a manager's panel shows. Billing is view-only for them. WhatsApp
+// joins this list in phase 3, with template creation and message approvals.
+const MANAGER_TABS: Tab[] = ['pending', 'all', 'camps', 'leads', 'billing', 'reports', 'account']
 
 // Qualifications actually covered by NMC's Indian Medical
 // Register — dental/homeopathy/ayurveda have their own
@@ -160,7 +170,18 @@ export default function AdminDashboard() {
   const [staffByBiz, setStaffByBiz] = useState<Record<string, Practitioner[]>>({})
   const [camps, setCamps] = useState<CampOfferRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'pending' | 'all' | 'leads' | 'whatsapp' | 'camps' | 'coupons' | 'billing' | 'reports' | 'insights' | 'gst' | 'account' | 'sandbox'>('pending')
+  const [tab, setTab] = useState<Tab>('pending')
+
+  // 0145: 'admin'/'owner' see everything; 'manager' sees MANAGER_TABS.
+  const [myRole, setMyRole] = useState<string | null>(null)
+  const isManager = myRole === 'manager'
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      const { data } = await supabase.from('admin_users').select('role').eq('auth_uid', user.id).maybeSingle()
+      setMyRole((data as { role?: string } | null)?.role ?? null)
+    })
+  }, [])
 
   // ── Platform reporting ──
   interface PlatformRow {
@@ -238,6 +259,8 @@ export default function AdminDashboard() {
   const [notesSavedId, setNotesSavedId] = useState<string | null>(null)
   const [rejectModal, setRejectModal] = useState<{ type: 'doctor' | 'camp'; id: string; name: string } | null>(null)
   const [rejectReasonInput, setRejectReasonInput] = useState('')
+  // 0144: disable, confirmed by a code emailed to the admin. There is no delete.
+  const [disabling, setDisabling] = useState<BusinessRow | null>(null)
 
   const [doctorSearch, setDoctorSearch] = useState('')
 
@@ -732,9 +755,9 @@ export default function AdminDashboard() {
         </button>
       </>}
       {d.status === 'active' && (
-        <button onClick={() => openRejectModal('doctor', d.id, d.name)}
+        <button onClick={() => setDisabling(d)}
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
-          <XCircle className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleSuspend')}
+          <XCircle className="w-3.5 h-3.5" /> Disable
         </button>
       )}
       {d.status === 'suspended' && (
@@ -762,7 +785,9 @@ export default function AdminDashboard() {
 
 
   // One definition, rendered twice — as the desktop rail and as the mobile strip.
-  const NAV_ITEMS = [
+  // 0145: a manager sees only MANAGER_TABS. Hiding is for tidiness; the database
+  // and edge functions are what actually refuse a manager everything else.
+  const NAV_ITEMS = ([
 
               { id: 'pending', label: t('adminDashboardPage.navPendingPrefix'), count: pending.length, badge: pending.length > 0 },
               { id: 'all', label: t('adminDashboardPage.navAllDoctors'), count: 0, badge: false },
@@ -774,11 +799,13 @@ export default function AdminDashboard() {
               { id: 'reports', label: 'Reports', count: 0, badge: false },
               { id: 'insights', label: 'Insights', count: 0, badge: false },
               { id: 'gst', label: 'GST', count: 0, badge: false },
+              { id: 'team', label: 'Team', count: 0, badge: false },
               { id: 'account', label: 'Account', count: 0, badge: false },
               // Only reachable while pointed at the sandbox backend — the purge
               // it exposes must never be one click away from production data.
               ...(IS_STAGING ? [{ id: 'sandbox', label: '🧪 Sandbox', count: 0, badge: false }] : []),
-  ]
+  ] as { id: Tab; label: string; count: number; badge: boolean }[])
+    .filter(n => !isManager || MANAGER_TABS.includes(n.id))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -798,7 +825,7 @@ export default function AdminDashboard() {
           </div>
           <nav className="flex-1 px-3 space-y-1">
             {NAV_ITEMS.map(n => (
-              <button key={n.id} onClick={() => setTab(n.id as any)}
+              <button key={n.id} onClick={() => setTab(n.id)}
                 className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition flex items-center justify-between ${tab === n.id ? 'bg-teal-600 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}>
                 {n.label}
                 {n.badge && <span className="bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">{n.count}</span>}
@@ -816,7 +843,7 @@ export default function AdminDashboard() {
           <div className="md:hidden -mx-4 px-4 mb-5 overflow-x-auto">
             <div className="flex gap-2 w-max pb-1">
               {NAV_ITEMS.map(n => (
-                <button key={n.id} onClick={() => setTab(n.id as any)}
+                <button key={n.id} onClick={() => setTab(n.id)}
                   className={`shrink-0 px-3.5 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1.5 ${
                     tab === n.id ? 'bg-teal-600 text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>
                   {n.label}
@@ -947,7 +974,8 @@ export default function AdminDashboard() {
                             className="btn-teal text-xs py-1.5 px-4">{t('adminDashboardPage.saveNotesButton')}</button>
                           {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                         </div>
-                        <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange
+                        <ClinicStaffList businessId={d.id} />
+                        <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                       </div>
                     )}
@@ -1019,7 +1047,8 @@ export default function AdminDashboard() {
                               </button>
                               {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                             </div>
-                        <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange
+                            <ClinicStaffList businessId={d.id} />
+                            <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                           </div>
                         </td>
@@ -1250,7 +1279,14 @@ export default function AdminDashboard() {
           )}
 
           {tab === 'billing' && (
-            <div className="space-y-6">
+            // 0145: a manager sees the plans with every control switched off.
+            // admin-pricing and sehat_admin_set_type_pricing refuse them anyway.
+            <fieldset disabled={isManager} className="space-y-6 min-w-0 border-0 p-0 m-0">
+              {isManager && (
+                <p className="text-sm rounded-xl p-3 bg-navy-50 text-navy-700">
+                  View only. Billing plans and prices are changed by an admin.
+                </p>
+              )}
               {/* 0117: what each business type pays. Wins over the plan below
                   for every type that has prices here — all six, as seeded. */}
               <TypePricingCard />
@@ -1881,8 +1917,10 @@ export default function AdminDashboard() {
                   )}
                 </>
               )}
-            </div>
+            </fieldset>
           )}
+
+          {tab === 'team' && !isManager && <TeamPanel />}
 
           {tab === 'reports' && (
             <div className="space-y-4">
@@ -2025,6 +2063,9 @@ export default function AdminDashboard() {
                   Sign out everywhere
                 </button>
               </div>
+
+              {/* 0145: a manager sees their own trail; an admin sees everyone's under Team. */}
+              {isManager && <ActivityFeed title="My activity" />}
             </div>
           )}
 
@@ -2034,6 +2075,12 @@ export default function AdminDashboard() {
 
       {/* Styled modal replacing window.prompt() — used for both
           doctor suspend/reject and camp/offer rejection */}
+      {disabling && (
+        <DisableBusinessModal business={disabling}
+          onClose={() => setDisabling(null)}
+          onDone={msg => { setDisabling(null); setActionMsg(msg); load(); setTimeout(() => setActionMsg(''), 6000) }} />
+      )}
+
       {rejectModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setRejectModal(null)}>
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
