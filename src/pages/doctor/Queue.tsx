@@ -336,7 +336,7 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
   const [fee, setFee] = useState<FeeChoice>(emptyFee)
   const [history, setHistory] = useState<HistoryRow[] | null>(null)
   const [adding, setAdding] = useState(false)
-  const [np, setNp] = useState({ name: '', phone: '', age: '', gender: '' })
+  const [np, setNp] = useState({ name: '', phone: '', age: '', gender: '', pin: '' })
   const [issued, setIssued] = useState<{ id: string; token: number } | null>(null)
 
   useEffect(() => {
@@ -358,9 +358,10 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
       const id = await registerPatient(businessId, {
         fullName: np.name.trim(), phone: np.phone.trim(), relation: 'self',
         gender: np.gender || undefined, ageYears: np.age ? Number(np.age) : null,
+        pinCode: np.pin.length === 6 ? np.pin : undefined,
       })
       setPicked({ patient_member_id: id, full_name: np.name.trim(), phone: np.phone.trim(), age_years: np.age ? Number(np.age) : null } as PatientSearchResult)
-      setAdding(false); setNp({ name: '', phone: '', age: '', gender: '' })
+      setAdding(false); setNp({ name: '', phone: '', age: '', gender: '', pin: '' })
     } catch (e) { onError((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -454,7 +455,7 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
               Nobody matches — a new patient.
               <button style={{ ...btn(), fontSize: 12.5 }} onClick={() => {
                 const d = query.replace(/\D/g, '')
-                setNp({ name: d.length >= 10 ? '' : query.trim(), phone: d.length >= 10 ? d.slice(-10) : '', age: '', gender: '' })
+                setNp({ name: d.length >= 10 ? '' : query.trim(), phone: d.length >= 10 ? d.slice(-10) : '', age: '', gender: '', pin: '' })
                 setAdding(true)
               }}>
                 <UserPlus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 5 }} />Register new patient
@@ -470,6 +471,9 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
                 <select style={{ ...input, flex: '0 1 110px' }} value={np.gender} onChange={e => setNp({ ...np, gender: e.target.value })}>
                   <option value="">Gender</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
                 </select>
+                {/* 0161: where patients come from is only as good as the PINs taken here. */}
+                <input style={{ ...input, flex: '0 1 100px' }} placeholder="PIN code" inputMode="numeric" maxLength={6}
+                  value={np.pin} onChange={e => setNp({ ...np, pin: e.target.value.replace(/\D/g, '') })} />
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button style={btn(true)} disabled={busy || np.name.trim().length < 2 || np.phone.replace(/\D/g, '').length < 10} onClick={registerNew}>Register</button>
