@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState, useCallback } from 'react'
+import { SPECIALITIES } from '../../types'
 import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { supabase } from '../../lib/supabase'
@@ -1626,7 +1627,7 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, onAdded }:
           {/* Imported register lines carry notes and nothing else. */}
           {v.notes && <Row k="Notes" v={v.notes} />}
 
-          <Examination visitId={v.id} practitionerId={practitionerId} />
+          <Examination visitId={v.id} practitionerId={practitionerId} doctorId={v.practitioner_id} />
         </div>
       ))}
     </div>
@@ -1644,9 +1645,12 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, onAdded }:
 // which is how a refraction is written on paper, fields down and eyes across.
 // Thirty-two is a chart, laid out in quadrants the way a dentist reads it.
 
-function Examination({ visitId, practitionerId }: {
+function Examination({ visitId, practitionerId, doctorId }: {
   visitId: string
+  /** Who is signed in — recorded as the person who took the findings. */
   practitionerId?: string | null
+  /** 0167: the visit's own doctor, whose speciality decides the form. */
+  doctorId?: string | null
 }) {
   const [open, setOpen] = useState(false)
   const [speciality, setSpeciality] = useState<string | null>(null)
@@ -1674,14 +1678,19 @@ function Examination({ visitId, practitionerId }: {
 
   // The speciality comes from the doctor, not the clinic: a hospital has an eye
   // surgeon and a dentist, and the form has to follow whoever is examining.
+  // 0167: it follows the VISIT's doctor, so the nurse or optometrist who takes
+  // the refraction or the growth measurements before the consultation sees
+  // that doctor's form. The signed-in doctor is the fallback for a visit with
+  // no doctor on it, and a doctor with no speciality set gets the general form.
+  const formDoctor = doctorId ?? practitionerId ?? null
   useEffect(() => {
-    if (!practitionerId) return
+    if (!formDoctor) return
     let off = false
-    getPractitionerSpeciality(practitionerId)
-      .then(sp => { if (!off) setSpeciality(sp) })
+    getPractitionerSpeciality(formDoctor)
+      .then(sp => { if (!off) setSpeciality(sp || (doctorId || practitionerId ? 'GEN' : null)) })
       .catch(() => { /* no speciality, no form — the general case */ })
     return () => { off = true }
-  }, [practitionerId])
+  }, [formDoctor, doctorId, practitionerId])
 
   useEffect(() => {
     if (!speciality) return
@@ -1734,7 +1743,7 @@ function Examination({ visitId, practitionerId }: {
   return (
     <div style={{ marginTop: 10, borderTop: `1px solid ${BIZ.border}`, paddingTop: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-        <div style={label}>Examination{speciality ? ` · ${speciality}` : ''}</div>
+        <div style={label}>Examination{speciality ? ` · ${SPECIALITIES.find(sp => sp.id === speciality)?.en ?? speciality}` : ''}</div>
         {fields.length > 0 && (
           <button style={{ ...btn(), fontSize: 12 }} onClick={() => setOpen(o => !o)}>
             {open ? 'Close' : saved.length ? 'Edit' : 'Record'}
