@@ -48,6 +48,7 @@ import StaffCodeModal from './StaffCodeModal'
 import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from './NurseLinks'
 import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
 import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
+import DeskBooking from './DeskBooking'
 import { listNurseLinks, type NurseLink } from '../../lib/nurseApi'
 import { findPeople, listStaffLog, type PersonMatch, type StaffAction, type StaffChangeDone, type StaffLogRow } from '../../lib/staffApi'
 
@@ -1431,6 +1432,8 @@ export default function DoctorDashboard() {
           <div className="space-y-4">
             {/* 0150: bookings a doctor's new leave now covers — to move, not cancelled. */}
             <LeaveConflicts businessId={doctor.id} />
+            {/* 0152: the desk books into the same free slots the bot offers. */}
+            <DeskBooking businessId={doctor.id} onBooked={reloadAppointments} />
             <div className="card shadow-sm">
               <h3 className="font-bold text-navy-700 mb-1">All appointments</h3>
               <p className="text-sm text-gray-500 mb-4">
