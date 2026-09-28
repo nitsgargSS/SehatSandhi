@@ -1,3 +1,4 @@
+import { prepareUpload } from './shrinkUpload'
 import { supabase } from './supabase'
 import { activeConfig } from './env'
 
@@ -337,4 +338,163 @@ export function rangeText(r: { ref_low: number | null; ref_high: number | null; 
   if (r.ref_low != null) return `≥ ${r.ref_low}${u}`
   if (r.ref_high != null) return `≤ ${r.ref_high}${u}`
   return r.ref_text ?? ''
+}
+
+// ── Repeat tests & follow-ups (0169) ────────────────────────────────────────
+
+export type FollowupStatus = 'due' | 'reminded' | 'booked' | 'done' | 'dismissed'
+
+export interface LabFollowup {
+  id: string
+  patient_member_id: string
+  patient_name: string
+  patient_age: number | null
+  patient_phone: string | null
+  test_id: string | null
+  test_name: string
+  due_on: string
+  days_to_due: number
+  reason: 'routine' | 'abnormal' | 'manual'
+  status: FollowupStatus
+  reminded_at: string | null
+  reminded_count: number
+  from_order_no: string | null
+  last_tested_at: string | null
+  booked_order_no: string | null
+  note: string | null
+}
+
+export async function getFollowups(businessId: string, filter: 'due7' | 'overdue' | 'abnormal' | 'reminded' | 'booked' | 'upcoming'): Promise<LabFollowup[]> {
+  const today = new Date().toISOString().slice(0, 10)
+  const in7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10)
+  let q = supabase.from('lab_followup_detail').select('*').eq('business_id', businessId)
+  if (filter === 'due7') q = q.in('status', ['due', 'reminded']).gte('due_on', today).lte('due_on', in7)
+  else if (filter === 'overdue') q = q.in('status', ['due', 'reminded']).lt('due_on', today)
+  else if (filter === 'abnormal') q = q.in('status', ['due', 'reminded']).eq('reason', 'abnormal')
+  else if (filter === 'reminded') q = q.eq('status', 'reminded')
+  else if (filter === 'booked') q = q.eq('status', 'booked')
+  else q = q.in('status', ['due', 'reminded']).gte('due_on', today)
+  const { data, error } = await q.order('due_on').limit(500)
+  oops(error)
+  return (data ?? []) as LabFollowup[]
+}
+
+export async function followupAction(id: string, action: 'reminded' | 'reschedule' | 'dismiss', due?: string, note?: string) {
+  const { error } = await supabase.rpc('sehat_lab_followup_action', { p_id: id, p_action: action, p_due: due ?? null, p_note: note ?? null })
+  oops(error)
+}
+
+export async function addFollowup(businessId: string, memberId: string, testId: string, due: string, note?: string) {
+  const { error } = await supabase.rpc('sehat_lab_add_followup', { p_business: businessId, p_member: memberId, p_test: testId, p_due: due, p_note: note ?? null })
+  oops(error)
+}
+
+export interface CrmSummary {
+  due_7d: number; overdue: number; abnormal_open: number; reminded: number; came_back: number
+  booked_revenue: number; lapsed_12m: number
+}
+export async function getCrmSummary(businessId: string, days = 30): Promise<CrmSummary> {
+  const { data, error } = await supabase.rpc('sehat_lab_crm_summary', { p_business: businessId, p_days: days })
+  oops(error)
+  return data as CrmSummary
+}
+
+export type Segment = 'overdue' | 'due_7d' | 'due_30d' | 'abnormal' | 'lapsed'
+export async function getSegment(businessId: string, segment: Segment) {
+  const { data, error } = await supabase.rpc('sehat_lab_segment', { p_business: businessId, p_segment: segment })
+  oops(error)
+  return (data ?? []) as { patient_member_id: string; patient_name: string; patient_phone: string | null; detail: string; due_on: string | null; last_tested_at: string | null }[]
+}
+
+export async function setRepeatDays(testId: string, days: number | null) {
+  const { error } = await supabase.rpc('sehat_lab_set_repeat_days', { p_test: testId, p_days: days ?? 0 })
+  oops(error)
+}
+
+/** WhatsApp from the lab's own phone — click to chat, no template needed. */
+export function reminderLink(phone: string | null, patientName: string, testName: string, labName: string, due: string) {
+  const d = new Date(due + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+  const text = `Namaste ${patientName.split(' ')[0]} ji, your ${testName} is due around ${d}. `
+    + `Reply here to book — we can also collect the sample at your home. — ${labName}`
+  const digits = String(phone ?? '').replace(/\D/g, '')
+  return digits ? `https://wa.me/${digits}?text=${encodeURIComponent(text)}` : null
+}
+
+// ── Uploaded report files, sent as they are (0169) ──────────────────────────
+
+export interface UploadedReport {
+  id: string
+  patient_member_id: string
+  patient_name: string
+  patient_phone: string | null
+  order_id: string | null
+  order_no: string | null
+  title: string
+  mime_type: string | null
+  size_bytes: number | null
+  report_date: string | null
+  public_token: string
+  expires_on: string
+  purged_at: string | null
+  sent_at: string | null
+  sent_channels: string[]
+  send_error: string | null
+  uploaded_by_name: string | null
+  created_at: string
+}
+
+export async function getUploads(businessId: string, opts: { memberId?: string; orderId?: string } = {}): Promise<UploadedReport[]> {
+  let q = supabase.from('lab_uploaded_report_detail').select('*').eq('business_id', businessId)
+  if (opts.memberId) q = q.eq('patient_member_id', opts.memberId)
+  if (opts.orderId) q = q.eq('order_id', opts.orderId)
+  const { data, error } = await q.order('created_at', { ascending: false }).limit(200)
+  oops(error)
+  return (data ?? []) as UploadedReport[]
+}
+
+/** Puts the file in the patient's folder, records it (with the lab's retention)
+ *  and returns its id. The file itself is never changed. */
+// Takes one PDF, or one or more photos of the pages: photos are compressed and
+// several are joined into one PDF first (shrinkUpload.ts). Returns the sizes so
+// the screen can say how much was saved.
+export async function uploadReport(files: File[], o: { businessId: string; memberId: string; title: string; orderId?: string | null; reportDate?: string | null }): Promise<{ id: string; token: string; expires_on: string; originalBytes: number; bytes: number; pages: number }> {
+  const prep = await prepareUpload(files)
+  const file = prep.file
+  const clean = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
+  const path = `${o.businessId}/${o.memberId}/lab-${crypto.randomUUID()}-${clean}`
+  const { error: upErr } = await supabase.storage.from('patient-documents').upload(path, file, { contentType: file.type, upsert: false })
+  if (upErr) throw new Error(upErr.message)
+  const { data, error } = await supabase.rpc('sehat_lab_upload_report', {
+    p_business: o.businessId, p_member: o.memberId, p_storage_path: path, p_title: o.title,
+    p_mime: file.type, p_size: file.size, p_report_date: o.reportDate || null, p_order: o.orderId ?? null,
+  })
+  if (error) {
+    await supabase.storage.from('patient-documents').remove([path]).catch(() => undefined)
+    throw new Error(error.message)
+  }
+  return { ...(data as { id: string; token: string; expires_on: string }), originalBytes: prep.originalBytes, bytes: file.size, pages: prep.pages }
+}
+
+export async function sendUpload(uploadId: string): Promise<{ whatsapp: boolean; email: boolean; errors?: string[] }> {
+  const { url, anon } = activeConfig()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Please sign in again to send this.')
+  const res = await fetch(`${url}/functions/v1/lab-report-send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, apikey: anon },
+    body: JSON.stringify({ uploadId }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.error ?? 'Could not send the report.')
+  return body
+}
+
+export async function getUploadedFile(token: string) {
+  const { url, anon } = activeConfig()
+  const res = await fetch(`${url}/functions/v1/lab-file-view?token=${encodeURIComponent(token)}`, { headers: { apikey: anon, Authorization: `Bearer ${anon}` } })
+  const body = await res.json().catch(() => ({}))
+  if (res.status === 410) return { expired: true as const, message: body.message as string }
+  if (!res.ok) return { missing: true as const }
+  return body as { title: string; lab_name: string | null; patient_name: string | null; report_date: string | null
+                   uploaded_at: string; expires_on: string; mime_type: string | null; url: string }
 }

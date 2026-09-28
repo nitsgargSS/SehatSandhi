@@ -23,6 +23,7 @@ const OpdSlipPage = lazy(() => import('./pages/doctor/OpdSlipPage'))
 const QrPosterPage = lazy(() => import('./pages/doctor/QrPosterPage'))
 const PharmacyBillPage = lazy(() => import('./pages/doctor/PharmacyBillPage'))
 const LabReportPage = lazy(() => import('./pages/LabReportPage'))
+const LabFilePage = lazy(() => import('./pages/LabFilePage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
 const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
@@ -212,6 +213,7 @@ export default function App() {
               forwarded into a family group should not open a year later.
               Carries no header or footer at all: what prints is the slip. */}
           <Route path="/rx/:token" element={<PrescriptionPage />} />
+          <Route path="/lab/file/:token" element={<LabFilePage />} />
           <Route path="/lab/:token" element={<LabReportPage />} />
 
           {/* The discharge summary, same no-login token pattern. Its link lasts

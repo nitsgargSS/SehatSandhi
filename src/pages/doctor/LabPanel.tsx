@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { FlaskConical, Home, Plus, Printer, Search, Send, Trash2, Check, MapPin } from 'lucide-react'
+import { FlaskConical, Home, Plus, Printer, Search, Send, Trash2, Check, MapPin, Upload, Phone, MessageCircle, Download, CalendarClock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { moneyExact } from '../../lib/format'
 import { searchPatients, registerPatient, PatientSearchResult } from '../../lib/patientsApi'
@@ -7,8 +7,12 @@ import {
   getLabSettings, saveLabSettings, importCatalogue, getTests, getTestParameters, saveTest, getPackages, savePackage,
   createOrder, getOrders, getOrder, markCollected, assignCollector, cancelOrder, getResults, getPreviousValues,
   saveResults, approveOrder, sendReport, rangeText, STATUS_LABEL,
-  LabTest, LabPackage, LabOrder, LabParameter, OrderStatus, ParamKind,
+  getFollowups, followupAction, getCrmSummary, getSegment, setRepeatDays, reminderLink,
+  getUploads, uploadReport, sendUpload,
+  LabTest, LabPackage, LabOrder, LabParameter, OrderStatus, ParamKind, LabFollowup, CrmSummary, Segment, UploadedReport,
 } from '../../lib/labApi'
+import { downloadCsv } from '../../lib/billingApi'
+import { sizeText } from '../../lib/shrinkUpload'
 
 // The lab (0168) — tests, packages, orders, results, signed reports.
 //
@@ -18,7 +22,7 @@ import {
 // database enforces each of those lines; this screen only hides what a role
 // could not do anyway.
 
-type Section = 'queue' | 'new' | 'home' | 'tests' | 'packages' | 'settings'
+type Section = 'queue' | 'new' | 'home' | 'followups' | 'uploads' | 'tests' | 'packages' | 'settings'
 type QueueFilter = 'active' | 'ordered' | 'enter' | 'approve' | 'reported' | 'all'
 
 const Err = ({ msg }: { msg: string }) => msg ? <p className="text-sm text-red-600 mt-2">{msg}</p> : null
@@ -43,6 +47,10 @@ export default function LabPanel({ businessId, canManage, canResults, canApprove
   const [tests, setTests] = useState<LabTest[]>([])
   const [packages, setPackages] = useState<LabPackage[]>([])
   const [openOrder, setOpenOrder] = useState<string | null>(null)
+  // "Book" on a follow-up opens New order with the patient and test filled in.
+  const [prefill, setPrefill] = useState<{ memberId: string; name: string; phone: string; testId: string | null } | null>(null)
+  const [labName, setLabName] = useState('')
+  useEffect(() => { supabase.from('businesses').select('name').eq('id', businessId).maybeSingle().then(({ data }) => setLabName((data as { name?: string } | null)?.name ?? '')) }, [businessId])
 
   const reloadCatalogue = useCallback(() => {
     getTests(businessId).then(setTests).catch(() => setTests([]))
@@ -51,7 +59,8 @@ export default function LabPanel({ businessId, canManage, canResults, canApprove
   useEffect(reloadCatalogue, [reloadCatalogue])
 
   const sections: [Section, string][] = [
-    ['queue', 'Orders'], ['new', 'New order'], ['home', 'Home collections'],
+    ['queue', 'Orders'], ['new', 'New order'], ['home', 'Home collections'], ['followups', 'Follow-ups'],
+    ...(canResults ? [['uploads', 'Uploaded reports']] as [Section, string][] : []),
     ['tests', 'Tests'], ['packages', 'Packages'],
     ...(canManage ? [['settings', 'Settings']] as [Section, string][] : []),
   ]
@@ -74,8 +83,11 @@ export default function LabPanel({ businessId, canManage, canResults, canApprove
       ) : (
         <>
           {section === 'queue' && <Queue businessId={businessId} onOpen={setOpenOrder} />}
-          {section === 'new' && <NewOrder businessId={businessId} tests={tests} packages={packages}
-            onCreated={id => { setOpenOrder(id); setSection('queue') }} goTests={() => setSection('tests')} canManage={canManage} />}
+          {section === 'new' && <NewOrder key={prefill?.memberId ?? 'blank'} businessId={businessId} tests={tests} packages={packages} prefill={prefill}
+            onCreated={id => { setPrefill(null); setOpenOrder(id); setSection('queue') }} goTests={() => setSection('tests')} canManage={canManage} />}
+          {section === 'followups' && <Followups businessId={businessId} labName={labName}
+            onBook={f => { setPrefill({ memberId: f.patient_member_id, name: f.patient_name, phone: f.patient_phone ?? '', testId: f.test_id }); setSection('new') }} />}
+          {section === 'uploads' && canResults && <Uploads businessId={businessId} />}
           {section === 'home' && <HomeRound businessId={businessId} onOpen={setOpenOrder} />}
           {section === 'tests' && <Tests businessId={businessId} tests={tests} canManage={canManage} reload={reloadCatalogue} />}
           {section === 'packages' && <Packages businessId={businessId} tests={tests} packages={packages} canManage={canManage} reload={reloadCatalogue} />}
@@ -220,14 +232,15 @@ export function TestPicker({ tests, packages, testIds, packageIds, setTestIds, s
   )
 }
 
-function NewOrder({ businessId, tests, packages, onCreated, goTests, canManage }: {
+function NewOrder({ businessId, tests, packages, onCreated, goTests, canManage, prefill }: {
   businessId: string; tests: LabTest[]; packages: LabPackage[]; onCreated: (id: string) => void; goTests: () => void; canManage: boolean
+  prefill?: { memberId: string; name: string; phone: string; testId: string | null } | null
 }) {
   const [q, setQ] = useState('')
   const [found, setFound] = useState<PatientSearchResult[]>([])
-  const [patient, setPatient] = useState<{ id: string; name: string; phone: string } | null>(null)
+  const [patient, setPatient] = useState<{ id: string; name: string; phone: string } | null>(prefill ? { id: prefill.memberId, name: prefill.name, phone: prefill.phone } : null)
   const [reg, setReg] = useState<{ name: string; phone: string; age: string; gender: string } | null>(null)
-  const [testIds, setTestIds] = useState<string[]>([])
+  const [testIds, setTestIds] = useState<string[]>(prefill?.testId ? [prefill.testId] : [])
   const [packageIds, setPackageIds] = useState<string[]>([])
   const [home, setHome] = useState(false)
   const [address, setAddress] = useState('')
@@ -361,7 +374,11 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
   const [msg, setMsg] = useState('')
   const [staff, setStaff] = useState<{ id: string; name: string }[]>([])
   const [cancelWhy, setCancelWhy] = useState<string | null>(null)
-  const load = useCallback(() => { getOrder(orderId).then(setO).catch(e => setErr((e as Error).message)) }, [orderId])
+  const [uploads, setUploads] = useState<UploadedReport[]>([])
+  const load = useCallback(() => {
+    getOrder(orderId).then(setO).catch(e => setErr((e as Error).message))
+    if (canResults) getUploads(businessId, { orderId }).then(setUploads).catch(() => setUploads([]))
+  }, [orderId, businessId, canResults])
   useEffect(load, [load])
   useEffect(() => {
     supabase.from('business_practitioners').select('practitioner_id, practitioners(full_name)').eq('business_id', businessId).neq('status', 'suspended')
@@ -424,8 +441,34 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
           {canApprove && o.entered_count > 0 && <button disabled={busy} onClick={approveAndSend} className="btn-teal text-xs py-2 px-4"><Send className="w-4 h-4" /> Approve & send report</button>}
           {rep && <a href={`/lab/${rep.token}`} target="_blank" rel="noreferrer" className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1"><Printer className="w-3 h-3" /> Report {rep.report_no}</a>}
           {rep && <button disabled={busy} onClick={() => run(async () => { const s = await sendReport(rep.id); return s.whatsapp ? 'Sent on WhatsApp.' : `Not sent${s.errors?.length ? `: ${s.errors[0]}` : ''}.` })} className="btn-outline text-xs py-1.5 px-3">Resend</button>}
-          {canManage && !rep && o.status !== 'cancelled' && <button onClick={() => setCancelWhy('')} className="btn-outline text-xs py-1.5 px-3 text-red-600">Cancel order</button>}
+          {canResults && o.status !== 'cancelled' && o.status !== 'ordered' && (
+            <label className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1 cursor-pointer">
+              <Upload className="w-3 h-3" /> Upload report file
+              <input type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={e => {
+                const files = Array.from(e.target.files ?? []); e.target.value = ''
+                if (!files.length) return
+                run(async () => {
+                  const up = await uploadReport(files, { businessId, memberId: o.patient_member_id, orderId: o.id,
+                    title: `${o.items.map(i => i.name).join(', ').slice(0, 80) || 'Lab report'} — ${o.order_no}` })
+                  try {
+                    const sres = await sendUpload(up.id)
+                    return sres.whatsapp ? `Uploaded (${shrunk(up)}) and sent to the patient on WhatsApp.`
+                      : `Uploaded. Not sent automatically${sres.errors?.length ? ` (${sres.errors[0]})` : ''} — use Resend.`
+                  } catch (e2) { return `Uploaded. Sending failed: ${(e2 as Error).message}` }
+                })
+              }} />
+            </label>
+          )}
+          {canManage && !rep && !uploads.length && o.status !== 'cancelled' && <button onClick={() => setCancelWhy('')} className="btn-outline text-xs py-1.5 px-3 text-red-600">Cancel order</button>}
         </div>
+        {uploads.map(u => (
+          <div key={u.id} className="text-xs text-gray-600 flex flex-wrap gap-2 items-center">
+            <Upload className="w-3 h-3" /> {u.title} · uploaded by {u.uploaded_by_name ?? '—'} · kept until {new Date(u.expires_on).toLocaleDateString('en-IN')}
+            · {u.sent_at ? `sent ${dt(u.sent_at)}` : u.send_error ? `not sent: ${u.send_error}` : 'not sent'}
+            <a href={`/lab/file/${u.public_token}`} target="_blank" rel="noreferrer" className="text-teal-700">Open</a>
+            <button disabled={busy} className="text-teal-700" onClick={() => run(async () => { const r = await sendUpload(u.id); return r.whatsapp ? 'Sent on WhatsApp.' : `Not sent${r.errors?.length ? `: ${r.errors[0]}` : ''}.` })}>Resend</button>
+          </div>
+        ))}
         {rep && <p className="text-xs text-gray-500">Approved by {rep.approved_by_name} · {dt(rep.approved_at)} · {rep.sent_at ? `sent ${dt(rep.sent_at)} by ${rep.sent_channels.join(', ')}` : rep.send_error ? `not sent: ${rep.send_error}` : 'not sent yet'}</p>}
         {cancelWhy !== null && (
           <div className="flex gap-2">
@@ -528,6 +571,226 @@ function ResultForm({ itemId, testId, memberId, orderId, gender, locked, lockRea
   )
 }
 
+// ── Follow-ups: repeat tests, reminders, campaigns (0169) ───────────────────
+//
+// Approving a result schedules the patient's next test (sooner when it was
+// abnormal). Reminders go from the lab's own WhatsApp with one tap — no
+// template — and are recorded; ordering the test again books the follow-up.
+
+function Followups({ businessId, labName, onBook }: { businessId: string; labName: string; onBook: (f: LabFollowup) => void }) {
+  const [filter, setFilter] = useState<'due7' | 'overdue' | 'abnormal' | 'upcoming' | 'reminded' | 'booked' | 'campaigns'>('due7')
+  const [rows, setRows] = useState<LabFollowup[] | null>(null)
+  const [sum, setSum] = useState<CrmSummary | null>(null)
+  const [resched, setResched] = useState<string | null>(null)
+  const [err, setErr] = useState('')
+  const load = useCallback(() => {
+    getCrmSummary(businessId).then(setSum).catch(() => setSum(null))
+    if (filter !== 'campaigns') getFollowups(businessId, filter).then(setRows).catch(e => { setErr((e as Error).message); setRows([]) })
+  }, [businessId, filter])
+  useEffect(load, [load])
+  const act = async (fn: () => Promise<void>) => { setErr(''); try { await fn(); load() } catch (e) { setErr((e as Error).message) } }
+
+  const tile = (label: string, v: string | number, note?: string) => (
+    <div className="card shadow-sm py-3"><p className="text-xs text-gray-500">{label}</p><p className="text-xl font-bold text-navy-700">{v}</p>{note && <p className="text-xs text-gray-400">{note}</p>}</div>
+  )
+  return (
+    <div className="space-y-3">
+      {sum && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {tile('Due this week', sum.due_7d)}
+          {tile('Overdue', sum.overdue, `${sum.abnormal_open} after an abnormal result`)}
+          {tile('Came back (30 days)', `${sum.came_back} of ${sum.reminded}`, 'reminded → booked')}
+          {tile('Repeat business (30 days)', moneyExact(sum.booked_revenue), `${sum.lapsed_12m} patients not seen in a year`)}
+        </div>
+      )}
+      <div className="flex gap-1 flex-wrap">
+        {([['due7', 'Due this week'], ['overdue', 'Overdue'], ['abnormal', 'Abnormal — repeat'], ['upcoming', 'All upcoming'], ['reminded', 'Reminded'], ['booked', 'Booked'], ['campaigns', 'Campaign lists']] as const)
+          .map(([f, l]) => <button key={f} onClick={() => setFilter(f)} className={pill(filter === f)}>{l}</button>)}
+      </div>
+      <Err msg={err} />
+      {filter === 'campaigns' ? <Campaigns businessId={businessId} labName={labName} /> : rows === null ? <div className="card shadow-sm text-sm text-gray-400 py-10 text-center">Loading…</div>
+        : rows.length === 0 ? <div className="card shadow-sm text-sm text-gray-500 py-10 text-center">Nothing here. Follow-ups are scheduled automatically when a result is approved, for tests with a repeat interval.</div>
+        : (
+          <div className="card shadow-sm p-0 divide-y">
+            {rows.map(f => {
+              const wa = reminderLink(f.patient_phone, f.patient_name, f.test_name, labName || 'your lab', f.due_on)
+              return (
+                <div key={f.id} className="px-4 py-3 text-sm flex flex-wrap justify-between gap-3">
+                  <div>
+                    <b>{f.patient_name}</b>{f.patient_age != null ? ` · ${f.patient_age}y` : ''} · {f.test_name}
+                    {f.reason === 'abnormal' && <span className="ml-2 text-xs font-bold text-red-600">ABNORMAL LAST TIME</span>}
+                    <div className="text-xs text-gray-500">
+                      Due {new Date(f.due_on).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {f.days_to_due < 0 ? ` · ${-f.days_to_due} days overdue` : f.days_to_due === 0 ? ' · today' : ` · in ${f.days_to_due} days`}
+                      {f.last_tested_at ? ` · last tested ${new Date(f.last_tested_at).toLocaleDateString('en-IN')}` : ''}
+                      {f.reminded_count ? ` · reminded ${f.reminded_count}×` : ''}{f.booked_order_no ? ` · booked ${f.booked_order_no}` : ''}
+                      {f.note ? ` · ${f.note}` : ''}
+                    </div>
+                  </div>
+                  {f.status !== 'booked' && (
+                    <div className="flex gap-2 items-start flex-wrap">
+                      {wa && <a href={wa} target="_blank" rel="noreferrer" onClick={() => act(() => followupAction(f.id, 'reminded'))}
+                        className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1"><MessageCircle className="w-3 h-3" /> WhatsApp</a>}
+                      {f.patient_phone && <a href={`tel:+${f.patient_phone}`} onClick={() => act(() => followupAction(f.id, 'reminded', undefined, 'Called'))}
+                        className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1"><Phone className="w-3 h-3" /> Call</a>}
+                      <button onClick={() => onBook(f)} className="btn-teal text-xs py-1.5 px-3">Book</button>
+                      {resched === f.id ? (
+                        <input type="date" className="input-field w-auto py-1" autoFocus onChange={e => e.target.value && act(async () => { await followupAction(f.id, 'reschedule', e.target.value); setResched(null) })} />
+                      ) : <button onClick={() => setResched(f.id)} className="text-xs text-teal-700 inline-flex items-center gap-1"><CalendarClock className="w-3 h-3" /> Later</button>}
+                      <button onClick={() => act(() => followupAction(f.id, 'dismiss'))} className="text-xs text-gray-400 hover:text-red-600">Dismiss</button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+    </div>
+  )
+}
+
+function Campaigns({ businessId, labName }: { businessId: string; labName: string }) {
+  const [seg, setSeg] = useState<Segment>('overdue')
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof getSegment>> | null>(null)
+  useEffect(() => { setRows(null); getSegment(businessId, seg).then(setRows).catch(() => setRows([])) }, [businessId, seg])
+  const message: Record<Segment, string> = {
+    overdue: `Namaste! Your repeat blood test is due. Book now — we collect the sample at your home. — ${labName}`,
+    due_7d: `Namaste! Your repeat test is due this week. Reply to book a home collection. — ${labName}`,
+    due_30d: `Namaste! Your repeat test is due this month. Reply to book at a time that suits you. — ${labName}`,
+    abnormal: `Namaste! Your last report needs a repeat test to check progress. Please book this week. — ${labName}`,
+    lapsed: `Namaste! It has been a year since your last check-up. Book a full body checkup — home collection available. — ${labName}`,
+  }
+  return (
+    <div className="space-y-3">
+      <div className="card shadow-sm space-y-3">
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-sm font-semibold text-navy-700">Who</span>
+          <select className="input-field w-auto" value={seg} onChange={e => setSeg(e.target.value as Segment)}>
+            <option value="overdue">Overdue for a repeat test</option>
+            <option value="due_7d">Due this week</option>
+            <option value="due_30d">Due this month</option>
+            <option value="abnormal">Abnormal result, not yet repeated</option>
+            <option value="lapsed">No test in over a year</option>
+          </select>
+          <span className="text-sm text-gray-500">{rows ? `${rows.length} patients` : '…'}</span>
+          {rows && rows.length > 0 && (
+            <button className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1" onClick={() => downloadCsv(`lab-${seg}-${new Date().toISOString().slice(0, 10)}.csv`,
+              [['Patient', 'Phone', 'Tests', 'Due', 'Last tested'], ...rows.map(r => [r.patient_name, r.patient_phone ?? '', r.detail, r.due_on ?? '', r.last_tested_at ? r.last_tested_at.slice(0, 10) : ''])]
+                .map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n'))}>
+              <Download className="w-3 h-3" /> Download list</button>
+          )}
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-gray-500 mb-1">Suggested message</div>
+          <div className="text-sm bg-gray-50 rounded-lg p-3">{message[seg]}</div>
+          <p className="text-xs text-gray-500 mt-1">Send it one by one from your WhatsApp (tap WhatsApp on each row), or as a WhatsApp broadcast to this list from the WhatsApp tab (needs the WhatsApp add-on and Sehatsandhi's approval).</p>
+        </div>
+      </div>
+      {rows && rows.length > 0 && (
+        <div className="card shadow-sm p-0 divide-y max-h-[28rem] overflow-auto">
+          {rows.map(r => {
+            const digits = String(r.patient_phone ?? '').replace(/\D/g, '')
+            return (
+              <div key={r.patient_member_id} className="px-4 py-2.5 text-sm flex justify-between gap-2 flex-wrap">
+                <span><b>{r.patient_name}</b> · <span className="text-gray-500">{r.detail}</span></span>
+                {digits && <a className="text-xs text-teal-700 inline-flex items-center gap-1" target="_blank" rel="noreferrer"
+                  href={`https://wa.me/${digits}?text=${encodeURIComponent(message[seg])}`}><MessageCircle className="w-3 h-3" /> WhatsApp</a>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function shrunk(u: { originalBytes: number; bytes: number; pages: number }) {
+  const pages = u.pages > 1 ? `${u.pages} pages, ` : ''
+  return u.bytes < u.originalBytes * 0.9 ? `${pages}${sizeText(u.originalBytes)} → ${sizeText(u.bytes)}` : `${pages}${sizeText(u.bytes)}`
+}
+
+// ── Uploaded reports (0169): sent exactly as uploaded, kept for the lab's retention
+
+function Uploads({ businessId }: { businessId: string }) {
+  const [rows, setRows] = useState<UploadedReport[] | null>(null)
+  const [q, setQ] = useState('')
+  const [found, setFound] = useState<PatientSearchResult[]>([])
+  const [patient, setPatient] = useState<{ id: string; name: string } | null>(null)
+  const [title, setTitle] = useState('')
+  const [date, setDate] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [msg, setMsg] = useState('')
+  const load = useCallback(() => { getUploads(businessId).then(setRows).catch(() => setRows([])) }, [businessId])
+  useEffect(load, [load])
+  useEffect(() => {
+    if (patient) return
+    const t = setTimeout(() => { searchPatients(q, businessId).then(setFound).catch(() => setFound([])) }, 250)
+    return () => clearTimeout(t)
+  }, [q, patient, businessId])
+
+  const onFile = async (files: File[]) => {
+    if (!patient) { setErr('Choose the patient first.'); return }
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      const up = await uploadReport(files, { businessId, memberId: patient.id, title: title.trim() || files[0].name.replace(/\.[^.]+$/, ''), reportDate: date || null })
+      try {
+        const r = await sendUpload(up.id)
+        setMsg(r.whatsapp ? `Uploaded (${shrunk(up)}) and sent on WhatsApp.` : `Uploaded (${shrunk(up)}). Not sent automatically${r.errors?.length ? ` (${r.errors[0]})` : ''}.`)
+      } catch (e2) { setMsg(`Uploaded. Sending failed: ${(e2 as Error).message}`) }
+      setTitle(''); setDate(''); setPatient(null); setQ(''); load()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="card shadow-sm space-y-3">
+        <h3 className="font-bold text-navy-700">Upload a report</h3>
+        <p className="text-xs text-gray-500">A PDF or photo of the report — from your machine or another lab. Photos of several pages are compressed and joined into one PDF (a 10-page report comes to about 3–5 MB instead of 40+ MB). It goes to the patient on WhatsApp as it is — nothing on the page is changed — and stays here so you can resend it when they ask, until your retention period ends.</p>
+        {patient ? (
+          <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm"><b>{patient.name}</b>
+            <button className="text-teal-700 text-xs" onClick={() => setPatient(null)}>Change</button></div>
+        ) : (
+          <div>
+            <input className="input-field" value={q} onChange={e => setQ(e.target.value)} placeholder="Find the patient — name, phone or file number" />
+            {found.length > 0 && <div className="border border-gray-200 rounded-lg mt-1 divide-y">
+              {found.slice(0, 6).map(p => <button key={p.patient_member_id} onClick={() => { setPatient({ id: p.patient_member_id, name: p.full_name }); setFound([]) }}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-teal-50"><b>{p.full_name}</b> · {p.phone}</button>)}
+            </div>}
+          </div>
+        )}
+        <div className="grid sm:grid-cols-3 gap-2">
+          <input className="input-field sm:col-span-2" placeholder="Title (e.g. Thyroid profile)" value={title} onChange={e => setTitle(e.target.value)} />
+          <input type="date" className="input-field" value={date} onChange={e => setDate(e.target.value)} title="Report date" />
+        </div>
+        <label className={`btn-teal text-sm inline-flex items-center gap-2 cursor-pointer ${busy || !patient ? 'opacity-50 pointer-events-none' : ''}`}>
+          <Upload className="w-4 h-4" /> {busy ? 'Compressing & uploading…' : 'Choose PDF or photos & send'}
+          <input type="file" multiple accept="application/pdf,image/*" className="hidden" onChange={e => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; if (fs.length) onFile(fs) }} />
+        </label>
+        {msg && <p className="text-sm text-green-700">{msg}</p>}
+        <Err msg={err} />
+      </div>
+      {rows === null ? null : rows.length === 0 ? <div className="card shadow-sm text-sm text-gray-500 py-8 text-center">No uploaded reports yet.</div> : (
+        <div className="card shadow-sm p-0 divide-y">
+          {rows.map(u => (
+            <div key={u.id} className="px-4 py-3 text-sm flex flex-wrap justify-between gap-2">
+              <span><b>{u.patient_name}</b> · {u.title}{u.order_no ? ` · ${u.order_no}` : ''}
+                <span className="block text-xs text-gray-500">Uploaded {dt(u.created_at)} by {u.uploaded_by_name ?? '—'} · kept until {new Date(u.expires_on).toLocaleDateString('en-IN')}
+                  · {u.purged_at ? 'removed (retention ended)' : u.sent_at ? `sent ${dt(u.sent_at)}` : u.send_error ? `not sent: ${u.send_error}` : 'not sent'}</span></span>
+              {!u.purged_at && (
+                <span className="flex gap-3 text-xs items-center">
+                  <a href={`/lab/file/${u.public_token}`} target="_blank" rel="noreferrer" className="text-teal-700">Open</a>
+                  <button className="text-teal-700" onClick={async () => { setErr(''); try { const r = await sendUpload(u.id); setMsg(r.whatsapp ? 'Sent on WhatsApp.' : 'Not sent.'); load() } catch (e) { setErr((e as Error).message) } }}>Resend</button>
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 const blankParam = (): LabParameter => ({ name: '', unit: '', kind: 'number', ref_low: null, ref_high: null })
@@ -550,7 +813,11 @@ function Tests({ businessId, tests, canManage, reload }: { businessId: string; t
   const save = async () => {
     if (!edit) return
     setBusy(true); setErr('')
-    try { await saveTest(businessId, edit.test, edit.params.filter(p => p.name.trim())); setEdit(null); reload() }
+    try {
+      const id = await saveTest(businessId, edit.test, edit.params.filter(p => p.name.trim()))
+      await setRepeatDays(id, ((edit.test as { repeat_days?: number | null }).repeat_days) ?? null)
+      setEdit(null); reload()
+    }
     catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -570,6 +837,9 @@ function Tests({ businessId, tests, canManage, reload }: { businessId: string; t
           <input className="input-field" placeholder="Department" value={t.department ?? ''} onChange={e => setT('department', e.target.value)} />
           <input className="input-field" placeholder="Sample (Blood, Urine…)" value={t.sample_type ?? ''} onChange={e => setT('sample_type', e.target.value)} />
           <input className="input-field" type="number" min={0} placeholder="Report in (hours)" value={t.tat_hours ?? ''} onChange={e => setT('tat_hours', e.target.value)} />
+          <label className="text-xs text-gray-500">Repeat after (days) — for follow-up reminders; blank = none
+            <input className="input-field mt-1" type="number" min={7} max={1095} value={(t as { repeat_days?: number | null }).repeat_days ?? ''}
+              onChange={e => setT('repeat_days' as keyof LabTest, e.target.value === '' ? null : Number(e.target.value))} /></label>
           {t.id && <label className="text-sm flex items-center gap-2"><input type="checkbox" checked={t.is_active ?? true} onChange={e => setT('is_active', e.target.checked)} /> Offered</label>}
         </div>
         <div className="text-xs font-semibold text-gray-500">Parameters — what the report shows, with the normal range (female range only where it differs)</div>

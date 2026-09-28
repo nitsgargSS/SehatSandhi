@@ -231,6 +231,12 @@ tables:
   # Results before items before orders; reports and items before orders;
   # package links before packages and tests. All before patient_visits (160)
   # and patient_members (174).
+  lab_followups:
+    class: isolated
+    purgeOrder: 89.705
+  lab_uploaded_reports:
+    class: isolated
+    purgeOrder: 89.706
   lab_results:
     class: isolated
     purgeOrder: 89.71
@@ -774,6 +780,8 @@ tables:
   patient_bill_detail:      { class: view }
   pharmacy_bill_detail:     { class: view }
   lab_order_detail:         { class: view }
+  lab_followup_detail:      { class: view }
+  lab_uploaded_report_detail: { class: view }
   pharmacy_stock:           { class: view }
   patient_documents_to_purge: { class: view }
   practitioner_daily_stats: { class: view }

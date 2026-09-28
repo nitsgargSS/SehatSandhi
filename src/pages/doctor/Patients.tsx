@@ -45,7 +45,7 @@ import {
   clinicalSearch, getSurgeries, recordSurgery, cancelSurgery, SOURCES, ANAESTHESIA,
   ClinicalHit, RecordSource, OtType, Surgery, NewSurgery,
 } from '../../lib/surgeryApi'
-import { getLabSettings, getTests, getPackages, getOrders, createOrder, STATUS_LABEL, LabTest, LabPackage, LabOrder } from '../../lib/labApi'
+import { getLabSettings, getTests, getPackages, getOrders, createOrder, getUploads, STATUS_LABEL, LabTest, LabPackage, LabOrder, UploadedReport } from '../../lib/labApi'
 import { TestPicker } from './LabPanel'
 import { moneyExact, shortDate } from '../../lib/format'
 import { RECORDING_ENABLED } from '../../lib/env'
@@ -923,7 +923,11 @@ function LabTestsPane({ memberId, businessId, visits }: { memberId: string; busi
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const load = useCallback(() => { getOrders(businessId, { memberId }).then(setOrders).catch(() => setOrders([])) }, [businessId, memberId])
+  const [uploads, setUploads] = useState<UploadedReport[]>([])
+  const load = useCallback(() => {
+    getOrders(businessId, { memberId }).then(setOrders).catch(() => setOrders([]))
+    getUploads(businessId, { memberId }).then(setUploads).catch(() => setUploads([]))
+  }, [businessId, memberId])
   useEffect(load, [load])
   useEffect(() => {
     getTests(businessId).then(setTests).catch(() => setTests([]))
@@ -980,9 +984,24 @@ function LabTestsPane({ memberId, businessId, visits }: { memberId: string; busi
             Ordered by {o.ordered_by_name ?? o.created_by_name ?? '—'}
             {o.latest_report && <> · <a href={`/lab/${o.latest_report.token}`} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>View report {o.latest_report.report_no}</a>
               {' '}(signed {o.latest_report.approved_by_name})</>}
+            {uploads.filter(u => u.order_id === o.id && !u.purged_at).map(u => (
+              <span key={u.id}> · <a href={`/lab/file/${u.public_token}`} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>Open report file</a></span>
+            ))}
           </div>
         </div>
       ))}
+      {uploads.some(u => !u.order_id) && (
+        <div style={card}>
+          <div style={{ ...label, marginBottom: 6 }}>Uploaded lab reports</div>
+          {uploads.filter(u => !u.order_id).map(u => (
+            <div key={u.id} style={{ fontSize: 13, padding: '5px 0', borderTop: `1px solid ${BIZ.border}` }}>
+              {u.purged_at ? <span style={{ color: BIZ.muted }}>{u.title} — removed after the retention period</span>
+                : <a href={`/lab/file/${u.public_token}`} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>{u.title}</a>}
+              <span style={{ color: BIZ.muted }}> · {when(u.report_date ?? u.created_at)} · kept until {when(u.expires_on)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -1367,21 +1386,21 @@ function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }:
   practitionerId?: string | null
   onChange: () => void
 }) {
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [kind, setKind] = useState('lab_report')
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
   const upload = async () => {
-    if (!file) return
+    if (!files.length) return
     setBusy(true); setErr('')
     try {
-      await uploadDocument(file, {
+      await uploadDocument(files, {
         businessId, patientMemberId: memberId, kind,
-        title: title.trim() || file.name, uploadedBy: practitionerId ?? null,
+        title: title.trim() || files[0].name.replace(/\.[^.]+$/, ''), uploadedBy: practitionerId ?? null,
       })
-      setFile(null); setTitle(''); onChange()
+      setFiles([]); setTitle(''); onChange()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -1398,7 +1417,7 @@ function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }:
       <div style={card}>
         <div style={{ ...label, marginBottom: 9 }}>Add a document</div>
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input type="file" onChange={e => setFile(e.target.files?.[0] ?? null)}
+          <input type="file" multiple onChange={e => setFiles(Array.from(e.target.files ?? []))}
             accept="image/*,application/pdf"
             style={{ ...input, flex: '1 1 220px', padding: 7 }} />
           <select style={{ ...input, flex: '0 1 170px' }} value={kind} onChange={e => setKind(e.target.value)}>
@@ -1406,9 +1425,12 @@ function DocumentsPane({ docs, memberId, businessId, practitionerId, onChange }:
           </select>
           <input style={{ ...input, flex: '1 1 160px' }} placeholder="Title (optional)"
             value={title} onChange={e => setTitle(e.target.value)} />
-          <button style={btn(true)} disabled={!file || busy} onClick={upload}>
-            <Upload className="w-4 h-4" style={{ display: 'inline', marginRight: 5 }} /> Upload
+          <button style={btn(true)} disabled={!files.length || busy} onClick={upload}>
+            <Upload className="w-4 h-4" style={{ display: 'inline', marginRight: 5 }} /> {busy ? 'Compressing…' : 'Upload'}
           </button>
+        </div>
+        <div style={{ fontSize: 12, color: BIZ.muted, marginTop: 6 }}>
+          A PDF, or photos — pick all pages of a report together and they are compressed into one PDF.
         </div>
         {err && <div style={{ fontSize: 12.5, color: '#8a2b2b', marginTop: 8 }}>{err}</div>}
       </div>
