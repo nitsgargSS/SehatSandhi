@@ -211,7 +211,7 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
                 ? <div className="flex justify-between text-gray-500"><span>IGST {price.tax.rate}%</span><span>{inr(price.tax.igst)}</span></div>
                 : <div className="flex justify-between text-gray-500"><span>CGST + SGST {price.tax.rate}%</span><span>{inr(price.tax.cgst + price.tax.sgst)}</span></div>)}
               <div className="flex justify-between font-bold text-navy-700 pt-1 border-t border-gray-200"><span>Due now</span><span>{inr(due)}</span></div>
-              {price.commissionPercent > 0 && <p className="text-xs text-gray-500">Plus {price.commissionPercent}% commission{price.commissionBasis ? ` on ${price.commissionBasis}` : ''}.</p>}
+              {price.commissionPercent > 0 && <p className="text-xs text-gray-500">Free during the launch offer. Later, a {price.commissionPercent}% commission will apply only to business that comes to you through Sehatsandhi.</p>}
             </>}
           </div>
 

@@ -40,6 +40,20 @@ export interface Vertical {
   commissionBasis?: string
   /** commission plan only — the fine print under the headline */
   commissionNote?: string
+  /** Partner programme (pharmacy, insurance, ambulance): what joining gets
+   *  them, said as a benefit. The commission is not the headline — they join
+   *  free during the launch offer, and the rate is one line of fine print. */
+  partnerHeadline?: string
+  partnerPoints?: string[]
+}
+
+/** The partner offer, said the same way on the landing page and at signup.
+ *  Production bills these verticals commission-only with no monthly fee
+ *  (vertical_billing), so "free to join" is what checkout actually does. */
+export const PARTNER_OFFER = {
+  badge: 'Free to join · launch offer',
+  body: 'Registration is free during our launch — no monthly fee and nothing to pay upfront.',
+  later: 'Later, a simple 10% commission will apply only to business that comes to you through Sehatsandhi. We will tell you before it starts.',
 }
 
 // The six service categories patients can find a business under, matching
@@ -75,14 +89,32 @@ export const VERTICALS: Vertical[] = [
   { key: 'hospital',  label: 'Hospital',                   sub: 'Multi-speciality',       color: '#2563EB', billing: 'pincode_monthly' },
   { key: 'pharmacy',  label: 'Pharmacy / Medical Store',   sub: 'Medicine delivery',      color: '#DB2777', billing: 'commission', commissionPercent: 10,
     commissionBasis: 'order value',
-    commissionNote: 'Applies to prescription orders that reach you through Sehatsandhi. No monthly listing fee, whatever pincodes you pick.' },
+    commissionNote: 'Only on orders that reach you through Sehatsandhi.',
+    partnerHeadline: 'Deliver medicines to patients near you',
+    partnerPoints: [
+      'We are onboarding pharmacies and medical stores that deliver medicines to patients\u2019 homes.',
+      'Prescriptions from patients in your area reach you directly on WhatsApp — fill them in store or deliver to the door.',
+      'Build a base of repeat customers without spending on advertising.',
+    ] },
   { key: 'lab',       label: 'Diagnostic Lab',             sub: 'Tests & sample pickup',  color: '#7C3AED', billing: 'pincode_monthly' },
   { key: 'insurance', label: 'Health Insurance',           sub: 'Plans & agents',         color: '#0891B2', billing: 'commission', commissionPercent: 10,
     commissionBasis: 'your commission',
-    commissionNote: 'We take 10% of the IRDA commission you earn on policies sold through us — you keep 90%. Your commission rate with the insurer is untouched. No monthly listing fee.' },
+    commissionNote: 'Only on policies sold through Sehatsandhi, from your own commission — your rate with the insurer stays exactly as it is.',
+    partnerHeadline: 'Leads for local insurance advisors',
+    partnerPoints: [
+      'Families in your area who are looking for health cover are passed to you as leads.',
+      'Visit them at home or at work, explain the plans in person, and close the policy yourself.',
+      'No cold calling, and your commission with the insurer stays exactly as it is.',
+    ] },
   { key: 'ambulance', label: 'Ambulance Service',          sub: 'Emergency response',     color: '#DC2626', billing: 'commission', commissionPercent: 10,
     commissionBasis: 'non-emergency billing',
-    commissionNote: 'Emergency calls are always commission-free — we take nothing on them. The 10% applies only to scheduled, non-emergency transport. No monthly listing fee.' },
+    commissionNote: 'Only on scheduled, non-emergency trips booked through Sehatsandhi — emergency calls are always free of any charge from us.',
+    partnerHeadline: 'Ambulance requests from your own area',
+    partnerPoints: [
+      'Patients and families near you reach you through Sehatsandhi the moment they need an ambulance.',
+      'Emergencies, hospital transfers, discharges and scheduled trips.',
+      'Emergency calls always stay free of any charge from Sehatsandhi.',
+    ] },
 ]
 
 export const verticalFor = (key: VerticalKey): Vertical =>

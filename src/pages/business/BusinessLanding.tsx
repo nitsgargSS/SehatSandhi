@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, loginIcon, PAGE } from '../../components/SiteHeader'
 import SiteFooter from '../../components/SiteFooter'
-import { BIZ, VERTICALS } from './shared'
+import { BIZ, VERTICALS, PARTNER_OFFER } from './shared'
 import VerticalIcon from './VerticalIcon'
 import WhatsAppBotMock from './WhatsAppBotMock'
 import ReachSnapshot from './ReachSnapshot'
 import CareSystems from './CareSystems'
-import { usePricing, commissionFor, monthlyAppliesTo } from '../../hooks/usePricing'
+import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { useTaxSettings } from '../../hooks/useTaxSettings'
 import { money } from '../../lib/format'
 
@@ -15,8 +15,9 @@ import { money } from '../../lib/format'
 //
 // Pricing is read live from the active plan, never hardcoded — switching plans in
 // admin changes this page with no deploy. Under a flat plan it shows one price
-// card; under tier pricing it shows the population grid. Commission verticals
-// only get a commission block when a commission is actually being charged.
+// card; under tier pricing it shows the population grid. Pharmacies, insurance
+// advisors and ambulance services get a partner-programme section instead of a
+// rate card: free to join during the launch offer.
 
 const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 
@@ -31,10 +32,10 @@ const VERTICAL_TITLES: Record<string, string> = {
 const VERTICAL_BLURBS: Record<string, string> = {
   doctors: 'Patients in your pincodes find you on WhatsApp and book a time — no app for them to install, no call for you to miss.',
   hospital: 'Every consultant gets their own profile and calendar, under one hospital listing and one bill.',
-  pharmacy: 'Prescriptions come straight to you from patients nearby, to fill in store or deliver home.',
+  pharmacy: 'Home-delivery pharmacies: prescriptions come straight to you from patients nearby, to fill in store or deliver to the door.',
   lab: 'Test bookings arrive with the patient details, and you can offer home sample collection.',
-  insurance: 'Warm leads from families already looking for cover — not cold calling.',
-  ambulance: 'Emergency and scheduled transport requests from your own area, the moment they are needed.',
+  insurance: 'Local advisors get leads from families already looking for cover, to meet in person and close — not cold calling.',
+  ambulance: 'Ambulance requests from your own area — emergencies, transfers and scheduled trips — the moment they are needed.',
 }
 
 export default function BusinessLanding() {
@@ -49,11 +50,11 @@ export default function BusinessLanding() {
     : plan.price_includes_gst ? `incl. ${tax.rate}% GST`
     : `+ ${tax.rate}% GST`
 
-  // Verticals actually paying a commission right now (empty while a flat plan
-  // suspends it), and those on the monthly fee.
-  const commissionRows = VERTICALS
-    .map(v => ({ v, c: commissionFor(plan, verticals.find(r => r.vertical === v.key)) }))
-    .filter(x => x.c.percent > 0)
+  // The partner programme: the categories that join free rather than buy
+  // pincodes (pharmacy, insurance, ambulance) — unless a plan has put one on
+  // the monthly fee, in which case the price card above already covers it.
+  const partners = VERTICALS
+    .filter(v => v.partnerHeadline && !monthlyAppliesTo(plan, verticals.find(r => r.vertical === v.key)))
   const monthlyVerticals = VERTICALS
     .filter(v => monthlyAppliesTo(plan, verticals.find(r => r.vertical === v.key)))
 
@@ -155,7 +156,7 @@ export default function BusinessLanding() {
         </div>
       </div>
 
-      {/* pricing — two models: per-pincode monthly, or commission on billing */}
+      {/* pricing — the monthly plan, then the partner programme */}
       <div id="pricing" className="mx-auto pb-14" style={{ maxWidth: PAGE.maxWidth, paddingLeft: PAGE.padX, paddingRight: PAGE.padX }}>
         <h2 style={{ fontSize: 'clamp(23px,5.5vw,28px)', fontWeight: 800, color: BIZ.ink, textAlign: 'center', margin: '0 0 8px', letterSpacing: '-.02em' }}>
           {flatPlan ? plan.label : 'Pay for reach, not clicks'}
@@ -256,49 +257,49 @@ export default function BusinessLanding() {
           </>
         )}
 
-        {/* Commission block — only for verticals actually being charged one, so a
-            flat plan that suspends commission doesn't leave stale terms on the page. */}
-        {commissionRows.length > 0 && (
+        {/* Partner programme — pharmacies, insurance advisors, ambulance
+            services. Said as what joining gets them, not as a rate card: they
+            join free during the launch offer, and the later commission is one
+            line of fine print (PARTNER_OFFER), never the headline. */}
+        {partners.length > 0 && (
           <>
-            <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: '#4f7a68', textAlign: 'center', margin: '48px 0 8px' }}>
-              {commissionRows.map(x => verticalNoun(x.v.key)).join(' · ')}
-              {commissionRows.every(x => !monthlyAppliesTo(plan, verticals.find(r => r.vertical === x.v.key))) && ' — no monthly fee'}
+            <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: '#4f7a68', textAlign: 'center', margin: '56px 0 8px' }}>
+              Partner programme
             </div>
-            <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 0 24px' }}>
-              You pay only when Sehatsandhi brings you business.
+            <h3 style={{ fontSize: 'clamp(21px,5vw,26px)', fontWeight: 800, color: BIZ.ink, textAlign: 'center', margin: '0 0 10px', letterSpacing: '-.02em' }}>
+              Pharmacies, insurance advisors and ambulance services
+            </h3>
+            <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 auto 26px', maxWidth: 640, lineHeight: 1.6 }}>
+              Sehatsandhi brings you patients and families from your own area who need what you offer. {PARTNER_OFFER.body}
             </p>
             <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
-              {commissionRows.map(({ v, c }) => {
-                const alsoMonthly = monthlyAppliesTo(plan, verticals.find(r => r.vertical === v.key))
-                return (
-                  <div key={v.key} style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: 'clamp(22px,5vw,28px)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                      <span style={{ color: v.color, display: 'inline-flex' }}><VerticalIcon vertical={v.key} /></span>
-                      <span style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink }}>{verticalNoun(v.key)}</span>
-                    </div>
-                    <div style={{ fontSize: 34, fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em' }}>
-                      {c.percent}%<span style={{ fontSize: 15, fontWeight: 600, color: BIZ.mutedWarm }}> of {c.basis}</span>
-                    </div>
-                    <div style={{ fontSize: 13, color: BIZ.chipText, fontWeight: 800, background: BIZ.chipBg, display: 'inline-block', padding: '4px 10px', borderRadius: 999, marginTop: 12 }}>
-                      {alsoMonthly
-                        ? (flatPlan ? `Plus ${money(flatPrice)}/mo listing` : 'Plus your monthly listing fee')
-                        : '₹0 monthly listing fee'}
-                    </div>
-                    <div style={{ fontSize: 13.5, color: BIZ.muted, marginTop: 14, lineHeight: 1.6 }}>{v.commissionNote}</div>
+              {partners.map(v => (
+                <div key={v.key} style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: 'clamp(22px,5vw,28px)', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <span style={{ color: v.color, display: 'inline-flex' }}><VerticalIcon vertical={v.key} /></span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: BIZ.mutedWarm }}>{verticalNoun(v.key)}</span>
                   </div>
-                )
-              })}
+                  <div style={{ fontSize: 19, fontWeight: 800, color: BIZ.ink, lineHeight: 1.3, letterSpacing: '-.01em' }}>{v.partnerHeadline}</div>
+                  <ul style={{ margin: '14px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 10, flex: 1 }}>
+                    {(v.partnerPoints ?? []).map(pt => (
+                      <li key={pt} style={{ display: 'flex', gap: 9, fontSize: 14, color: BIZ.muted, lineHeight: 1.55 }}>
+                        <span style={{ color: BIZ.green, fontWeight: 800, flex: '0 0 auto' }}>✓</span><span>{pt}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div style={{ fontSize: 13, color: BIZ.chipText, fontWeight: 800, background: BIZ.chipBg, alignSelf: 'flex-start', padding: '5px 11px', borderRadius: 999, marginTop: 18 }}>
+                    {PARTNER_OFFER.badge}
+                  </div>
+                  <Link to="/business/register" style={{ marginTop: 14, color: BIZ.green, fontWeight: 800, fontSize: 14.5 }}>
+                    Register free →
+                  </Link>
+                </div>
+              ))}
             </div>
+            <p style={{ fontSize: 13, color: BIZ.mutedWarm, textAlign: 'center', marginTop: 22, maxWidth: 680, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
+              {PARTNER_OFFER.later}
+            </p>
           </>
-        )}
-        {/* Worked example only while insurance actually pays a commission. */}
-        {commissionRows.some(x => x.v.key === 'insurance') && (
-          <p style={{ fontSize: 13.5, color: BIZ.mutedWarm, textAlign: 'center', marginTop: 22, maxWidth: 720, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
-            <strong style={{ color: BIZ.ink }}>Insurance example:</strong> at{' '}
-            {commissionRows.find(x => x.v.key === 'insurance')!.c.percent}%, a policy with a ₹1,200 IRDA
-            commission means {money(Math.round(1200 * (commissionRows.find(x => x.v.key === 'insurance')!.c.percent / 100)))} to
-            Sehatsandhi and {money((1200 - Math.round(1200 * (commissionRows.find(x => x.v.key === 'insurance')!.c.percent / 100))))} to you.
-          </p>
         )}
       </div>
 
