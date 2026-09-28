@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Facebook, Instagram } from 'lucide-react'
 import { useLanguage } from '../i18n/LanguageContext'
-import { WA_NUMBER } from '../types'
+import { WA_NUMBER, CALL_NUMBER, prettyPhone } from '../types'
 import { HEADER, PAGE } from './SiteHeader'
 
 // One footer for every public page, and the counterpart to SiteHeader.
@@ -37,11 +37,6 @@ export const SOCIALS = [
   { href: 'https://www.instagram.com/sehatsandhi/', label: 'Instagram', handle: '@sehatsandhi', Icon: Instagram },
 ]
 
-/** Digits to the display form: 917015399355 → +91 70153 99355. */
-const prettyPhone = (digits: string) =>
-  /^91\d{10}$/.test(digits)
-    ? `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`
-    : `+${digits}`
 
 export default function SiteFooter() {
   const { lang } = useLanguage()
@@ -86,6 +81,12 @@ export default function SiteFooter() {
           <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer"
             style={{ color: HEADER.green, fontWeight: 700 }}>
             {prettyPhone(WA_NUMBER)}
+          </a>
+          {' '}<span style={{ opacity: .75 }}>{hi ? '(सिर्फ़ WhatsApp)' : '(WhatsApp only)'}</span>
+          <span style={{ opacity: .5 }}>{'  ·  '}</span>
+          {hi ? 'कॉल: ' : 'Call: '}
+          <a href={`tel:+${CALL_NUMBER}`} style={{ color: HEADER.green, fontWeight: 700 }}>
+            {prettyPhone(CALL_NUMBER)}
           </a>
         </p>
 

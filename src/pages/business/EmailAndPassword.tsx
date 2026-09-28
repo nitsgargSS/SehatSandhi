@@ -57,7 +57,7 @@ export default function EmailAndPassword({ email, onEmail, state, onState, locke
       if (error) {
         setErr(/rate|limit/i.test(error.message)
           ? 'Too many codes asked for. Please wait a minute and try again.'
-          : 'We could not send a code just now. Please try again, or call us.')
+          : 'We could not send a code just now. Please try again, or call us on +91 85708 89188.')
         return
       }
       setCodeSent(true)

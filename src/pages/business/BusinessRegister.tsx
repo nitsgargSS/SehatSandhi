@@ -387,7 +387,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       const taken = data as { email_taken?: boolean; phone_taken?: boolean } | null
       if (taken?.email_taken || taken?.phone_taken) {
         setError(`A business is already registered with this ${taken.email_taken && taken.phone_taken ? 'email and mobile number' : taken.email_taken ? 'email' : 'mobile number'}. `
-          + 'Sign in at sehatsandhi.com/business/login instead, or call us if this is a second branch.')
+          + 'Sign in at sehatsandhi.com/business/login instead, or call us on +91 85708 89188 if this is a second branch.')
         return
       }
     }

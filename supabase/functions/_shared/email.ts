@@ -20,6 +20,10 @@ export interface Email {
   subject: string
   html: string
   text: string
+  /** Where a reply goes. Default: contact@sehatsandhi.com. The contact form
+   *  (contact-submit) sets it to the visitor, so answering is just Reply. */
+  replyTo?: string
+  replyToName?: string
 }
 
 export type SendResult = { ok: true } | { ok: false; error: string; retry: boolean }
@@ -41,7 +45,7 @@ export async function sendEmail(m: Email): Promise<SendResult> {
       body: JSON.stringify({
         from: { address: EMAIL_FROM, name: 'Sehatsandhi' },
         to: [{ email_address: { address: m.to, name: m.toName ?? m.to } }],
-        reply_to: [{ address: EMAIL_REPLY_TO, name: 'Sehatsandhi' }],
+        reply_to: [{ address: m.replyTo ?? EMAIL_REPLY_TO, name: m.replyTo ? (m.replyToName ?? m.replyTo) : 'Sehatsandhi' }],
         subject: m.subject,
         htmlbody: m.html,
         textbody: m.text,
