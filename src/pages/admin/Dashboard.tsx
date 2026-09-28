@@ -947,7 +947,7 @@ export default function AdminDashboard() {
                             className="btn-teal text-xs py-1.5 px-4">{t('adminDashboardPage.saveNotesButton')}</button>
                           {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                         </div>
-                        <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
+                        <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                       </div>
                     )}
@@ -1019,7 +1019,7 @@ export default function AdminDashboard() {
                               </button>
                               {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                             </div>
-                        <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
+                        <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                           </div>
                         </td>
