@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { addManager, listActivity, listTeam, setMemberActive, type StaffActivity, type TeamMember } from '../../lib/teamApi'
+import { addManager, duplicatePhones, listActivity, listTeam, markPhoneVerified, setMemberActive, type StaffActivity, type TeamMember } from '../../lib/teamApi'
 
 // 0145: the Team tab (full admins only) and the activity feed it shares with a
 // manager's Account tab. Who is on the team, adding and switching off managers,
@@ -21,6 +21,8 @@ const ACTION_LABEL: Record<string, string> = {
   speciality_changed: 'Changed speciality',
   lead_created: 'Added lead',
   lead_updated: 'Updated lead',
+  wa_broadcast_approved: 'Approved WhatsApp broadcast',
+  wa_broadcast_rejected: 'Rejected WhatsApp broadcast',
   clinic_staff_removed: 'Removed clinic staff member',
   clinic_staff_restored: 'Brought back clinic staff member',
   manager_added: 'Added manager',
@@ -156,7 +158,13 @@ export default function TeamPanel() {
                   <tr key={m.id} className={`border-b border-gray-50 ${m.is_active ? '' : 'opacity-50'}`}>
                     <td className="py-2 px-2 font-medium text-navy-700">{m.full_name || '—'}</td>
                     <td className="py-2 px-2">{m.email}</td>
-                    <td className="py-2 px-2 whitespace-nowrap">{m.phone ? `+${m.phone}` : '—'}</td>
+                    <td className="py-2 px-2 whitespace-nowrap">
+                      {m.phone ? `+${m.phone}` : '—'}
+                      {m.phone && (m.phone_verified_at
+                        ? <span className="text-teal-700 ml-1" title="Verified">✓</span>
+                        : <button onClick={() => markPhoneVerified('admin_user', m.id).then(load, e => setError(e.message))}
+                            className="ml-1 text-[11px] text-amber-700 underline" title="After you have called them on it">mark verified</button>)}
+                    </td>
                     <td className="py-2 px-2 capitalize">{m.role === 'owner' ? 'admin' : m.role}{m.is_active ? '' : ' (off)'}</td>
                     <td className="py-2 px-2 whitespace-nowrap text-gray-500">{when(m.last_sign_in_at)}</td>
                     <td className="py-2 px-2 text-right">
@@ -202,7 +210,34 @@ export default function TeamPanel() {
         </div>
       </div>
 
+      <DuplicatePhones />
+
       <ActivityFeed members={members} title="What the team did" />
+    </div>
+  )
+}
+
+/** 0156: numbers carried by more than one person, from before one-number-one-person. */
+function DuplicatePhones() {
+  const [rows, setRows] = useState<{ phone: string; people: number; names: string[] }[]>([])
+  useEffect(() => { duplicatePhones().then(setRows).catch(() => setRows([])) }, [])
+  if (!rows.length) return null
+  return (
+    <div className="card shadow-sm border border-amber-200">
+      <h3 className="font-bold text-navy-700 mb-1">Mobile numbers used by more than one person</h3>
+      <p className="text-sm text-gray-500 mb-3">
+        From before the one-number-one-person rule. New numbers are checked; these need someone to call and correct
+        the wrong record (on the clinic's Doctors &amp; staff, or here for the team).
+      </p>
+      <div className="divide-y divide-gray-100 text-sm">
+        {rows.map(r => (
+          <div key={r.phone} className="py-1.5 flex flex-wrap gap-x-3">
+            <span className="font-mono">+91 {r.phone}</span>
+            <span className="text-gray-500">{r.people} people:</span>
+            <span>{r.names.join(', ')}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

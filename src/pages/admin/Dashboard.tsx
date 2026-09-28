@@ -20,6 +20,8 @@ import TypePricingCard from './TypePricingCard'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 import PharmacySwitch from './PharmacySwitch'
+import { listBroadcastsForReview } from '../../lib/marketingApi'
+import { PhoneVerifyCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import DisableBusinessModal from './DisableBusinessModal'
 import TeamPanel, { ActivityFeed } from './TeamPanel'
 import ClinicStaffList from './ClinicStaffList'
@@ -35,8 +37,8 @@ type Tab = 'pending' | 'all' | 'leads' | 'whatsapp' | 'camps' | 'coupons' | 'bil
   | 'insights' | 'gst' | 'team' | 'account' | 'sandbox'
 
 // 0145: what a manager's panel shows. Billing is view-only for them. WhatsApp
-// joins this list in phase 3, with template creation and message approvals.
-const MANAGER_TABS: Tab[] = ['pending', 'all', 'camps', 'leads', 'billing', 'reports', 'account']
+// (0155) is templates and message approvals only — no prices or wallets.
+const MANAGER_TABS: Tab[] = ['pending', 'all', 'camps', 'leads', 'whatsapp', 'billing', 'reports', 'account']
 
 // Qualifications actually covered by NMC's Indian Medical
 // Register — dental/homeopathy/ayurveda have their own
@@ -174,12 +176,23 @@ export default function AdminDashboard() {
 
   // 0145: 'admin'/'owner' see everything; 'manager' sees MANAGER_TABS.
   const [myRole, setMyRole] = useState<string | null>(null)
+  const [myUid, setMyUid] = useState<string | null>(null)
+  // 0156: the signed-in admin's own number, for the Account tab.
+  const [myPhone, setMyPhone] = useState<{ phone: string | null; verifiedAt: string | null }>({ phone: null, verifiedAt: null })
+  // 0155: clinic broadcasts waiting for approval, for the WhatsApp tab's badge.
+  const [waPending, setWaPending] = useState(0)
+  useEffect(() => {
+    listBroadcastsForReview('pending_approval').then(r => setWaPending(r.length)).catch(() => setWaPending(0))
+  }, [tab])
   const isManager = myRole === 'manager'
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
-      const { data } = await supabase.from('admin_users').select('role').eq('auth_uid', user.id).maybeSingle()
-      setMyRole((data as { role?: string } | null)?.role ?? null)
+      setMyUid(user.id)
+      const { data } = await supabase.from('admin_users').select('role, phone, phone_verified_at').eq('auth_uid', user.id).maybeSingle()
+      const row = data as { role?: string; phone?: string | null; phone_verified_at?: string | null } | null
+      setMyRole(row?.role ?? null)
+      setMyPhone({ phone: row?.phone ?? null, verifiedAt: row?.phone_verified_at ?? null })
     })
   }, [])
 
@@ -793,7 +806,7 @@ export default function AdminDashboard() {
               { id: 'all', label: t('adminDashboardPage.navAllDoctors'), count: 0, badge: false },
               { id: 'camps', label: t('adminDashboardPage.navCamps'), count: pendingCamps.length, badge: pendingCamps.length > 0 },
               { id: 'leads', label: 'Leads', count: 0, badge: false },
-              { id: 'whatsapp', label: 'WhatsApp', count: 0, badge: false },
+              { id: 'whatsapp', label: 'WhatsApp', count: waPending, badge: waPending > 0 },
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
               { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
               { id: 'reports', label: 'Reports', count: 0, badge: false },
@@ -974,7 +987,7 @@ export default function AdminDashboard() {
                             className="btn-teal text-xs py-1.5 px-4">{t('adminDashboardPage.saveNotesButton')}</button>
                           {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                         </div>
-                        <ClinicStaffList businessId={d.id} />
+                        <ClinicStaffList businessId={d.id} canVerify={!isManager} />
                         <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                       </div>
@@ -1047,7 +1060,7 @@ export default function AdminDashboard() {
                               </button>
                               {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                             </div>
-                            <ClinicStaffList businessId={d.id} />
+                            <ClinicStaffList businessId={d.id} canVerify={!isManager} />
                             <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                           </div>
@@ -1994,9 +2007,10 @@ export default function AdminDashboard() {
           {/* Filing gets its own tab rather than a section of Reports: Reports is
               read to decide something, this is read to type a return, and the
               two are done by different people at different times of the month. */}
-          {tab === 'leads' && <LeadsPanel />}
+          {/* Once the role is known: a manager's view starts on their own leads. */}
+          {tab === 'leads' && myRole && <LeadsPanel key={myRole} isAdmin={!isManager} myUid={myUid} />}
 
-          {tab === 'whatsapp' && <WhatsAppMarketingPanel businesses={doctors.map(d => ({ id: d.id, name: d.name }))} />}
+          {tab === 'whatsapp' && <WhatsAppMarketingPanel isManager={isManager} businesses={doctors.map(d => ({ id: d.id, name: d.name }))} />}
 
           {tab === 'insights' && <InsightsPanel />}
 
@@ -2063,6 +2077,11 @@ export default function AdminDashboard() {
                   Sign out everywhere
                 </button>
               </div>
+
+              {/* 0156: set a password without the old one, and prove your own number. */}
+              <SetPasswordByCode />
+              <PhoneVerifyCard phone={myPhone.phone} verifiedAt={myPhone.verifiedAt}
+                onVerified={() => setMyPhone(p => ({ ...p, verifiedAt: new Date().toISOString() }))} />
 
               {/* 0145: a manager sees their own trail; an admin sees everyone's under Team. */}
               {isManager && <ActivityFeed title="My activity" />}

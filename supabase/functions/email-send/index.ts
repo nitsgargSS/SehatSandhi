@@ -10,6 +10,7 @@
 //   clinic_new_booking   → the business's address, and the doctor's if different (0136)
 //   doctor_invite        → the new staff member: sign in, set a password; doctors also fill in the profile (0139, 0149)
 //   nurse_unassigned     → the business: a nurse is now linked to no doctor (0149)
+//   wa_broadcast_rejected → the business: why a broadcast was not approved, and the refund (0155)
 //
 // Until ZEPTOMAIL_TOKEN is set nothing is sent and rows wait. A welcome still
 // waiting after two days is skipped rather than sent late; the admin alert is
@@ -86,6 +87,17 @@ Deno.serve(async (req) => {
     if (r.kind === 'doctor_invite') {
       const res = await sendInvite(db, r.business_id, r.practitioner_id, site)
       if (res === 'skip') { await finish({ status: 'skipped', last_error: 'doctor gone or no email' }); continue }
+      if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
+      else {
+        const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
+        await finish({ status: giveUp ? 'failed' : 'pending', last_error: res.error }); failed++
+      }
+      continue
+    }
+
+    if (r.kind === 'wa_broadcast_rejected') {
+      const res = await sendBroadcastRejected(db, r.business_id, r.payload, site)
+      if (res === 'skip') { await finish({ status: 'skipped', last_error: 'business gone or no address' }); continue }
       if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
       else {
         const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
@@ -308,4 +320,23 @@ async function sendNurseUnassigned(db: any, businessId: string | null, nurseId: 
 <p style="margin:0"><a href="${login}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold">Open dashboard</a></p>`)
   const text = `At ${b.name}, nurse ${p.full_name} is no longer linked to any doctor.${last}\nUntil they are linked to a doctor, or made a ward nurse, they cannot see any patients.\nOpen Doctors & staff: ${login}`
   return sendEmail({ to, toName: b.name, subject: `${p.full_name} is not linked to any doctor at ${b.name}`, html, text })
+}
+
+/** 0155: a broadcast Sehatsandhi did not approve — why, and that the money is back. */
+// deno-lint-ignore no-explicit-any
+async function sendBroadcastRejected(db: any, businessId: string | null, payload: any, site: string): Promise<SendResult | 'skip'> {
+  if (!businessId) return 'skip'
+  const { data: b } = await db.from('businesses').select('name, email').eq('id', businessId).maybeSingle()
+  const to = String(b?.email ?? '').trim()
+  if (!b || !to.includes('@') || to.endsWith('@wa.sehatsandhi.in')) return 'skip'
+  const refund = `₹${(Number(payload?.refund_paise ?? 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+  const reason = String(payload?.reason ?? '')
+  const login = `${site}/business/login`
+  const html = layout('Your WhatsApp message was not sent', `
+<p style="margin:0 0 12px">A WhatsApp broadcast from <b>${esc(b.name)}</b> to ${esc(payload?.recipients ?? '')} patients was reviewed and <b>not approved</b>, so it was not sent.</p>
+<p style="margin:0 0 12px"><b>Why:</b> ${esc(reason)}</p>
+<p style="margin:0 0 16px">The ${esc(refund)} it would have cost is back in your WhatsApp wallet. You can send a corrected message from the WhatsApp tab.</p>
+<p style="margin:0"><a href="${login}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold">Open dashboard</a></p>`)
+  const text = `A WhatsApp broadcast from ${b.name} was not approved, so it was not sent.\nWhy: ${reason}\n${refund} is back in your WhatsApp wallet.\n${login}`
+  return sendEmail({ to, toName: b.name, subject: `Your WhatsApp message was not sent — ${b.name}`, html, text })
 }

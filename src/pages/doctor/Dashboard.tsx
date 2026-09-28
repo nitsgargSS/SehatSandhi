@@ -49,6 +49,7 @@ import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from '.
 import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
 import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
 import DeskBooking from './DeskBooking'
+import { PractitionerPhoneCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import { listNurseLinks, type NurseLink } from '../../lib/nurseApi'
 import { findPeople, listStaffLog, type PersonMatch, type StaffAction, type StaffChangeDone, type StaffLogRow } from '../../lib/staffApi'
 
@@ -1800,6 +1801,11 @@ export default function DoctorDashboard() {
             {/* 0150: across every clinic this doctor works at. */}
             <MyWeek />
             <MyLeave practitionerId={myPractitionerId} clinics={listings.map(l => ({ id: l.id, name: l.name }))} />
+            {/* 0156: this login's own number and password. */}
+            <div className="grid md:grid-cols-2 gap-4 mt-6">
+              <PractitionerPhoneCard practitionerId={myPractitionerId} />
+              <SetPasswordByCode />
+            </div>
           </>
         )}
 

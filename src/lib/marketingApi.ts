@@ -63,6 +63,8 @@ export interface Broadcast {
   total_cost_paise: number
   status: string
   created_at: string
+  /** 0155: why it was not approved. */
+  review_note?: string | null
 }
 
 export interface MarketingReportRow {
@@ -294,4 +296,63 @@ export async function adminWalletAdjust(businessId: string, amountPaise: number,
   })
   oops(error)
   return data as { balance_paise: number }
+}
+
+// ── 0155: broadcasts wait for Sehatsandhi's approval ──────────────────────────
+
+export interface BroadcastForReview {
+  id: string
+  business_id: string
+  business_name: string
+  business_city: string | null
+  template_name: string
+  category: string
+  body: string
+  params: string[]
+  recipient_count: number
+  total_cost_paise: number
+  status: string
+  created_at: string
+  review_note: string | null
+  reviewed_by_label: string | null
+  reviewed_at: string | null
+}
+
+/** Admins and managers. status null = every broadcast, newest first. */
+export async function listBroadcastsForReview(status: string | null = 'pending_approval'): Promise<BroadcastForReview[]> {
+  const { data, error } = await supabase.rpc('sehat_wa_broadcasts_for_review', { p_status: status })
+  oops(error)
+  return (data ?? []) as BroadcastForReview[]
+}
+
+/** Reject needs a reason: the clinic is emailed it, and refunded. */
+export async function reviewBroadcast(id: string, approve: boolean, note?: string) {
+  const { error } = await supabase.rpc('sehat_review_wa_broadcast', { p_broadcast: id, p_approve: approve, p_note: note ?? null })
+  oops(error)
+}
+
+export async function createTemplate(t: Pick<WaTemplate, 'name' | 'category' | 'body' | 'placeholders'> & { approved?: boolean }) {
+  const code = t.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'template'
+  const { error } = await supabase.from('wa_message_templates').insert({
+    code: `${code}_${Date.now().toString(36).slice(-4)}`,
+    name: t.name, category: t.category, body: t.body, placeholders: t.placeholders,
+    approved: !!t.approved, is_active: true, sort_order: 200,
+  })
+  oops(error)
+}
+
+// ── 0157: WhatsApp given free ────────────────────────────────────────────────
+
+/** Admins only. On = active, never billed, fee left off every quote. */
+export async function setWaComplimentary(businessId: string, on: boolean, note?: string) {
+  const { error } = await supabase.rpc('sehat_admin_set_wa_complimentary', { p_business: businessId, p_on: on, p_note: note ?? null })
+  oops(error)
+}
+
+/** business_id → complimentary, for the admin's Clinics table. */
+export async function listWaComplimentary(): Promise<Record<string, { on: boolean; note: string | null }>> {
+  const { data, error } = await supabase.from('business_wa_accounts').select('business_id, complimentary, complimentary_note')
+  oops(error)
+  return Object.fromEntries(((data ?? []) as { business_id: string; complimentary: boolean; complimentary_note: string | null }[])
+    .map(r => [r.business_id, { on: r.complimentary, note: r.complimentary_note }]))
 }

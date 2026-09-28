@@ -9,6 +9,8 @@ export interface TeamMember {
   email: string | null
   full_name: string | null
   phone: string | null
+  /** 0156 */
+  phone_verified_at?: string | null
   role: 'admin' | 'owner' | 'manager'
   is_active: boolean
   created_at: string
@@ -52,6 +54,19 @@ export const addManager = (m: { email: string; fullName: string; phone: string }
 
 export const setMemberActive = (id: string, active: boolean) =>
   team<{ member: TeamMember }>({ op: 'setActive', id, active }).then(r => r.member)
+
+/** 0156: an admin who has rung the person marks their number verified. */
+export async function markPhoneVerified(kind: 'admin_user' | 'practitioner', id: string) {
+  const { error } = await supabase.rpc('sehat_admin_mark_phone_verified', { p_kind: kind, p_id: id })
+  if (error) throw new Error(error.message)
+}
+
+/** 0156: numbers that more than one person carries, from before the rule. */
+export async function duplicatePhones(): Promise<{ phone: string; people: number; names: string[] }[]> {
+  const { data, error } = await supabase.rpc('sehat_admin_duplicate_phones')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as { phone: string; people: number; names: string[] }[]
+}
 
 /** Newest first. RLS returns everyone's to an admin and only their own to a manager. */
 export async function listActivity(opts: { actorUid?: string | null; limit?: number } = {}): Promise<StaffActivity[]> {
