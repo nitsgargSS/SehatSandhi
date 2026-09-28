@@ -438,6 +438,12 @@ tables:
     class: isolated
     purgeOrder: 27
 
+  # Admin disable/delete requests and their outcome (0144). No foreign keys —
+  # the record outlives the business — so its order does not matter.
+  admin_business_actions:
+    class: isolated
+    purgeOrder: 29
+
   # WhatsApp-number codes at signup (0130). Test codes are test data.
   phone_verifications:
     class: isolated
