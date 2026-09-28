@@ -388,6 +388,11 @@ tables:
     class: isolated
     purgeOrder: 29
 
+  # What admins and managers did (0145). No foreign keys, like the above.
+  staff_activity:
+    class: isolated
+    purgeOrder: 29
+
   # WhatsApp-number codes at signup (0130). Test codes are test data.
   phone_verifications:
     class: isolated
