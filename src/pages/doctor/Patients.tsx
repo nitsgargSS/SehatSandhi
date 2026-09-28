@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { Fragment, useEffect, useState, useCallback } from 'react'
 import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { supabase } from '../../lib/supabase'
@@ -34,7 +34,7 @@ import {
 } from '../../lib/dischargeApi'
 import {
   getCharges, getPayments, getAccount, addCharge, removeCharge,
-  addPayment, removePayment, postBedCharges,
+  addPayment, removePayment, postBedCharges, refundPayment,
   getBills, issueBill, cancelBill, sendBill,
   Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod, Bill,
   PAYMENT_METHOD_OPTIONS, methodLabel,
@@ -3066,6 +3066,26 @@ function BillingPane({
   const [discPrice, setDiscPrice] = useState('')
   const [discReason, setDiscReason] = useState('')
 
+  // 0160: owner, manager and doctor may give money back; reception hands it
+  // over but does not decide it. The RPC refuses anyone else regardless.
+  const [canRefund, setCanRefund] = useState(false)
+  useEffect(() => {
+    getMyRole(businessId).then(r => setCanRefund(!r.enforced || ['owner', 'manager', 'doctor'].includes(r.role ?? '')))
+  }, [businessId])
+  const [refunding, setRefunding] = useState<string | null>(null)
+  const [rf, setRf] = useState({ amount: '', method: 'cash' as PaymentMethod, reason: '', chargeId: '' })
+  const refundedOf = (id: string) => -payments.filter(x => x.refund_of === id).reduce((s, x) => s + Number(x.amount), 0)
+  // The fee a refund can also take off: an unbilled charge with money on it,
+  // a consultation first.
+  const waivable = charges.filter(x => !x.bill_id && Number(x.amount) > 0)
+    .sort((a, b) => Number(b.category === 'consultation') - Number(a.category === 'consultation') || b.charged_on.localeCompare(a.charged_on))
+  const openRefund = (pay: PatientPayment) => {
+    const left = Number(pay.amount) - refundedOf(pay.id)
+    const fee = waivable[0]
+    setRefunding(pay.id)
+    setRf({ amount: String(fee ? Math.min(left, Number(fee.amount)) : left), method: pay.method === 'card' ? 'cash' : pay.method, reason: '', chargeId: fee?.id ?? '' })
+  }
+
   const balance = account?.balance ?? 0
   const openStay = stays.find(s => s.status === 'admitted')
 
@@ -3249,17 +3269,23 @@ function BillingPane({
         </div>
       ) : (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          {ledger.map((e, i) => (
-            <div key={e.row.id} style={{
+          {ledger.map((e, i) => {
+            const isRefund = e.kind === 'payment' && (e.row as PatientPayment).kind === 'refund'
+            const refundLeft = e.kind === 'payment' && !isRefund ? Number(e.row.amount) - refundedOf(e.row.id) : 0
+            return (
+            <Fragment key={e.row.id}>
+            <div style={{
               display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center',
               padding: '11px 15px', borderTop: i === 0 ? 'none' : `1px solid ${BIZ.border}`,
-              background: e.kind === 'payment' ? '#f8fcfa' : '#fff',
+              background: isRefund ? '#fdf4f2' : e.kind === 'payment' ? '#f8fcfa' : '#fff',
             }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, color: BIZ.ink }}>
                   {e.kind === 'charge'
                     ? (e.row as Charge).description
-                    : `Payment — ${methodLabel((e.row as PatientPayment).method)}`}
+                    : isRefund
+                      ? `Refund — ${methodLabel((e.row as PatientPayment).method)} · ${(e.row as PatientPayment).refund_reason}`
+                      : `Payment — ${methodLabel((e.row as PatientPayment).method)}`}
                 </div>
                 <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
                   {when(e.on)}
@@ -3268,7 +3294,9 @@ function BillingPane({
                   {e.kind === 'payment' && (e.row as PatientPayment).reference &&
                     ` · ${(e.row as PatientPayment).reference}`}
                   {e.kind === 'payment' && (e.row as PatientPayment).received_by_name &&
-                    ` · taken by ${(e.row as PatientPayment).received_by_name}`}
+                    ` · ${isRefund ? 'given back by' : 'taken by'} ${(e.row as PatientPayment).received_by_name}`}
+                  {e.kind === 'payment' && !isRefund && refundLeft < Number(e.row.amount) &&
+                    ` · ${moneyExact(Number(e.row.amount) - refundLeft)} refunded`}
                   {e.kind === 'charge' && Number((e.row as Charge).discount_amount ?? 0) > 0 &&
                     ` · ${(e.row as Charge).discount_kind === 'free' ? 'free' : `${moneyExact(Number((e.row as Charge).discount_amount))} off`}: ${(e.row as Charge).discount_reason}`}
                   {e.row.bill_id && ' · billed'}
@@ -3277,14 +3305,21 @@ function BillingPane({
               <div style={{ display: 'flex', gap: 9, alignItems: 'center', flex: '0 0 auto' }}>
                 <span style={{
                   fontSize: 14, fontWeight: 700,
-                  color: e.kind === 'payment' ? BIZ.green : BIZ.ink,
+                  color: isRefund ? '#b42318' : e.kind === 'payment' ? BIZ.green : BIZ.ink,
                 }}>
-                  {e.kind === 'payment' ? '− ' : ''}{moneyExact(e.row.amount)}
+                  {isRefund ? '+ ' : e.kind === 'payment' ? '− ' : ''}{moneyExact(Math.abs(Number(e.row.amount)))}
                 </span>
+                {canRefund && refundLeft > 0 && (
+                  <button style={{ ...btn(), padding: '4px 9px', fontSize: 12 }} disabled={busy}
+                    onClick={() => refunding === e.row.id ? setRefunding(null) : openRefund(e.row as PatientPayment)}>
+                    Refund
+                  </button>
+                )}
                 {/* A billed line has no delete. The database refuses it too, but
                     a button that always errors is worse than no button — the
-                    way to change it is to cancel the bill. */}
-                {!e.row.bill_id && (
+                    way to change it is to cancel the bill. A refund is undone
+                    by nobody: it is money that left the drawer. */}
+                {!e.row.bill_id && !isRefund && (
                   <button aria-label="Remove line" style={{ ...btn(), padding: 6 }} disabled={busy}
                     onClick={() => guard(async () => {
                       if (!window.confirm('Remove this line?')) return
@@ -3296,7 +3331,45 @@ function BillingPane({
                 )}
               </div>
             </div>
-          ))}
+            {refunding === e.row.id && (
+              <div style={{ padding: '10px 15px', background: '#fdf8f1', borderTop: `1px solid ${BIZ.border}`, display: 'grid', gap: 8 }}>
+                <div style={{ fontSize: 12.5, color: BIZ.ink, fontWeight: 700 }}>
+                  Refund from this payment — up to {moneyExact(refundLeft)}
+                </div>
+                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                  <input style={{ ...input, flex: '0 1 120px' }} inputMode="decimal" placeholder="Amount ₹"
+                    value={rf.amount} onChange={ev => setRf({ ...rf, amount: ev.target.value })} />
+                  <select style={{ ...input, flex: '0 1 160px' }} value={rf.method}
+                    onChange={ev => setRf({ ...rf, method: ev.target.value as PaymentMethod })}>
+                    {PAYMENT_METHODS.map(([v, l]) => <option key={v} value={v}>Given back by {l}</option>)}
+                  </select>
+                  <input style={{ ...input, flex: '1 1 200px' }} placeholder='Why — e.g. "Doctor waived the fee"'
+                    value={rf.reason} onChange={ev => setRf({ ...rf, reason: ev.target.value })} />
+                </div>
+                <select style={input} value={rf.chargeId} onChange={ev => setRf({ ...rf, chargeId: ev.target.value })}>
+                  <option value="">Money back only — keep the charges as they are</option>
+                  {waivable.map(x => (
+                    <option key={x.id} value={x.id}>
+                      Also take it off: {x.description} ({when(x.charged_on)}, {moneyExact(Number(x.amount))})
+                    </option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
+                  Taking it off the fee means the patient does not owe it again; it is recorded as a discount with this reason.
+                  A fee already on an issued bill cannot be changed — cancel that bill first.
+                </div>
+                <div style={{ display: 'flex', gap: 7 }}>
+                  <button style={btn(true)} disabled={busy || !(Number(rf.amount) > 0) || rf.reason.trim().length < 3}
+                    onClick={() => guard(async () => {
+                      await refundPayment(e.row.id, Number(rf.amount), rf.method, rf.reason.trim(), rf.chargeId || null)
+                      setRefunding(null)
+                    })}>Refund {rf.amount ? moneyExact(Number(rf.amount)) : ''}</button>
+                  <button style={btn()} onClick={() => setRefunding(null)}>Cancel</button>
+                </div>
+              </div>
+            )}
+            </Fragment>
+          )})}
         </div>
       )}
     </div>

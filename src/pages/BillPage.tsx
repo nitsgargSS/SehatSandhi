@@ -268,9 +268,10 @@ export default function BillPage() {
                       {fmtDate(p.received_on)}
                     </td>
                     <td style={{ padding: '7px 0', fontSize: 14, color: '#5f6b64' }}>
-                      {METHOD[p.method] ?? p.method}
+                      {/* 0160: a refund is a negative payment. */}
+                      {Number(p.amount) < 0 ? 'Refund — ' : ''}{METHOD[p.method] ?? p.method}
                     </td>
-                    <td style={{ ...numCell, padding: '7px 0' }}>{moneyExact(p.amount)}</td>
+                    <td style={{ ...numCell, padding: '7px 0' }}>{Number(p.amount) < 0 ? `− ${moneyExact(-Number(p.amount))}` : moneyExact(p.amount)}</td>
                   </tr>
                 ))}
               </tbody>
