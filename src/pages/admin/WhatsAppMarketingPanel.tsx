@@ -5,6 +5,7 @@ import {
   MarketingSettings, WaTemplate, MarketingReportRow, BroadcastForReview, rupees, renderTemplate,
   getMarketingSettings, updateMarketingSettings, listTemplates, updateTemplate, createTemplate,
   getMarketingReport, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
+  setWaComplimentary, listWaComplimentary,
 } from '../../lib/marketingApi'
 
 // Admin side of WhatsApp marketing (0116): the prices every clinic pays, the
@@ -284,6 +285,9 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
   const [adjAmount, setAdjAmount] = useState('')
   const [adjNote, setAdjNote] = useState('')
   const monthAgo = Date.now() - 30 * 86400000
+  // 0157: clinics given WhatsApp free.
+  const [comp, setComp] = useState<Record<string, { on: boolean; note: string | null }>>({})
+  useEffect(() => { listWaComplimentary().then(setComp).catch(() => setComp({})) }, [rows])
 
   const candidates = useMemo(() => businesses.filter(b => !rows.some(r => r.business_id === b.id)), [businesses, rows])
 
@@ -320,7 +324,7 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
             <thead><tr className="text-left text-xs text-gray-400 border-b border-gray-100">
               <th className="py-2 pr-3">Clinic</th><th className="pr-3">Number</th><th className="pr-3">Subscription</th>
               <th className="pr-3">Opted in</th><th className="pr-3">Sent (month / all)</th><th className="pr-3">Last send</th>
-              <th className="pr-3">Wallet</th><th className="pr-3">Recharged / spent</th><th></th>
+              <th className="pr-3">Wallet</th><th className="pr-3">Recharged / spent</th><th className="pr-3">Free</th><th></th>
             </tr></thead>
             <tbody>{rows.map(r => {
               const neverSent = r.wa_status === 'live' && r.sent_all_time === 0
@@ -349,6 +353,19 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
                   <td className="pr-3 text-xs text-gray-500">{r.last_sent_at ? shortDate(r.last_sent_at) : '—'}</td>
                   <td className="pr-3 font-semibold">{rupees(r.balance_paise)}</td>
                   <td className="pr-3 text-xs text-gray-500">{rupees(r.recharged_paise)} / {rupees(r.spent_paise)}</td>
+                  <td className="pr-3">
+                    {/* 0157: active forever, the WhatsApp fee never charged. Messages still use the wallet. */}
+                    <label className="text-xs inline-flex items-center gap-1" title={comp[r.business_id]?.note ?? 'WhatsApp free — never billed'}>
+                      <input type="checkbox" checked={!!comp[r.business_id]?.on}
+                        onChange={e => {
+                          const on = e.target.checked
+                          const note = on ? window.prompt('Why is WhatsApp free for this clinic?', 'Complimentary') : null
+                          if (on && note === null) return
+                          act(() => setWaComplimentary(r.business_id, on, note ?? undefined))
+                        }} />
+                      Complimentary
+                    </label>
+                  </td>
                   <td className="text-right">
                     <button className="text-xs text-teal-700 font-semibold" onClick={() => setAdjustFor(adjustFor === r.business_id ? null : r.business_id)}>Adjust wallet</button>
                     {adjustFor === r.business_id && (

@@ -340,3 +340,19 @@ export async function createTemplate(t: Pick<WaTemplate, 'name' | 'category' | '
   })
   oops(error)
 }
+
+// ── 0157: WhatsApp given free ────────────────────────────────────────────────
+
+/** Admins only. On = active, never billed, fee left off every quote. */
+export async function setWaComplimentary(businessId: string, on: boolean, note?: string) {
+  const { error } = await supabase.rpc('sehat_admin_set_wa_complimentary', { p_business: businessId, p_on: on, p_note: note ?? null })
+  oops(error)
+}
+
+/** business_id → complimentary, for the admin's Clinics table. */
+export async function listWaComplimentary(): Promise<Record<string, { on: boolean; note: string | null }>> {
+  const { data, error } = await supabase.from('business_wa_accounts').select('business_id, complimentary, complimentary_note')
+  oops(error)
+  return Object.fromEntries(((data ?? []) as { business_id: string; complimentary: boolean; complimentary_note: string | null }[])
+    .map(r => [r.business_id, { on: r.complimentary, note: r.complimentary_note }]))
+}
