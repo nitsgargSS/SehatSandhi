@@ -470,6 +470,12 @@ tables:
     class: isolated
     purgeOrder: 27
 
+  # A clinic inviting someone already on Sehatsandhi (0151). Cascades from
+  # businesses and practitioners.
+  staff_invitations:
+    class: isolated
+    purgeOrder: 27
+
   # WhatsApp-number codes at signup (0130). Test codes are test data.
   phone_verifications:
     class: isolated
