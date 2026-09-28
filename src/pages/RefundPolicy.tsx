@@ -5,8 +5,8 @@ import SiteFooter from '../components/SiteFooter'
 const content = {
   en: {
     title: 'Refund & Cancellation Policy',
-    updated: 'Last updated: August 2026',
-    intro: 'This policy explains refunds and cancellations for doctors and partners who pay a listing fee on Sehatsandhi. Sehatsandhi is completely free for patients — this policy does not apply to patients, who never pay us directly.',
+    updated: 'Last updated: September 2026',
+    intro: 'This policy explains refunds and cancellations for clinics, hospitals, labs and partners who pay Sehatsandhi — a listing fee, or an optional add-on such as WhatsApp messaging. Sehatsandhi is completely free for patients — this policy does not apply to patients, who never pay us directly.',
     sections: [
       {
         h: '1. Refund Eligibility — 3-Day Window',
@@ -36,12 +36,24 @@ const content = {
         h: '7. Processing Time',
         p: 'Approved refunds are processed within 7 business days to the original payment method.',
       },
+      {
+        h: '8. Partners on the Free Launch Offer',
+        p: 'Pharmacies, insurance advisors and ambulance services register free during our launch offer and pay nothing upfront, so no refund arises. When the 10% commission on business we bring begins, we will tell you before it starts.',
+      },
+      {
+        h: '9. Automatic Renewal',
+        p: 'If you choose automatic renewal, we tell you before we charge for the next term, and you can switch it off at any time from your dashboard before the renewal date. If you do not choose it, we remind you before your plan ends and charge nothing.',
+      },
+      {
+        h: '10. Bills Issued by Your Clinic',
+        p: 'Consultation bills, pharmacy bills and receipts that a clinic issues to its own patients through Sehatsandhi are between the patient and that clinic. A refund of a fee or of medicines is decided and paid by the clinic, which records it in its own books using our software — please ask the clinic directly.',
+      },
     ],
   },
   hi: {
     title: 'रिफंड और कैंसिलेशन पॉलिसी',
-    updated: 'आखिरी अपडेट: अगस्त 2026',
-    intro: 'यह पॉलिसी डॉक्टरों और पार्टनर्स के लिए रिफंड और कैंसिलेशन को बताती है जो Sehatsandhi पर लिस्टिंग फीस पे करते हैं। Sehatsandhi मरीज़ों के लिए बिल्कुल फ्री है — यह पॉलिसी मरीज़ों पर लागू नहीं होती, जो हमें कभी सीधे पे नहीं करते।',
+    updated: 'आखिरी अपडेट: सितंबर 2026',
+    intro: 'यह पॉलिसी उन क्लिनिक, हॉस्पिटल, लैब और पार्टनर्स के लिए रिफंड और कैंसिलेशन को बताती है जो Sehatsandhi को पेमेंट करते हैं — लिस्टिंग फीस, या WhatsApp मैसेजिंग जैसा कोई ऑप्शनल ऐड-ऑन। Sehatsandhi मरीज़ों के लिए बिल्कुल फ्री है — यह पॉलिसी मरीज़ों पर लागू नहीं होती, जो हमें कभी सीधे पे नहीं करते।',
     sections: [
       {
         h: '1. रिफंड एलिजिबिलिटी — 3-दिन की विंडो',
@@ -70,6 +82,18 @@ const content = {
       {
         h: '7. प्रोसेसिंग टाइम',
         p: 'अप्रूव्ड रिफंड्स 7 बिज़नेस दिनों के अंदर ओरिजिनल पेमेंट मेथड में प्रोसेस किए जाते हैं।',
+      },
+      {
+        h: '8. मुफ़्त लॉन्च ऑफर वाले पार्टनर',
+        p: 'फार्मेसी, इंश्योरेंस सलाहकार और एम्बुलेंस सर्विस लॉन्च ऑफर के दौरान मुफ़्त रजिस्टर करते हैं और पहले से कुछ पे नहीं करते, इसलिए रिफंड का सवाल नहीं उठता। जब हमारे लाए बिज़नेस पर 10% कमीशन शुरू होगा, तो शुरू होने से पहले हम आपको बताएंगे।',
+      },
+      {
+        h: '9. ऑटोमैटिक रिन्यूअल',
+        p: 'अगर आप ऑटोमैटिक रिन्यूअल चुनते हैं, तो अगली अवधि का चार्ज करने से पहले हम आपको बताते हैं, और रिन्यूअल की तारीख से पहले आप इसे कभी भी अपने डैशबोर्ड से बंद कर सकते हैं। अगर आप इसे नहीं चुनते, तो आपका प्लान खत्म होने से पहले हम आपको याद दिलाते हैं और कुछ चार्ज नहीं करते।',
+      },
+      {
+        h: '10. आपके क्लिनिक द्वारा दिए गए बिल',
+        p: 'कंसल्टेशन बिल, फार्मेसी बिल और रसीदें जो कोई क्लिनिक Sehatsandhi के ज़रिए अपने मरीज़ों को देता है, वे मरीज़ और उस क्लिनिक के बीच हैं। फीस या दवाइयों का रिफंड क्लिनिक तय करता है और देता है, और उसे हमारे सॉफ्टवेयर से अपने हिसाब में दर्ज करता है — कृपया सीधे क्लिनिक से पूछें।',
       },
     ],
   },

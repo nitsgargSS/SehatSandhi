@@ -6,6 +6,7 @@ import VerticalIcon from './VerticalIcon'
 import WhatsAppBotMock from './WhatsAppBotMock'
 import ReachSnapshot from './ReachSnapshot'
 import CareSystems from './CareSystems'
+import BusinessFeatures from './BusinessFeatures'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { useTaxSettings } from '../../hooks/useTaxSettings'
 import { money } from '../../lib/format'
@@ -72,6 +73,7 @@ export default function BusinessLanding() {
       <SiteHeader sticky>
         <HeaderLink href="#how">How it works</HeaderLink>
         <HeaderLink href="#systems">OPD &amp; IPD</HeaderLink>
+        <HeaderLink href="#features">Features</HeaderLink>
         <HeaderLink href="#pricing">Pricing</HeaderLink>
         <HeaderLink href="#partners">Partners</HeaderLink>
         <HeaderCta to="/business/register" icon={shopIcon}>List your business</HeaderCta>
@@ -133,6 +135,10 @@ export default function BusinessLanding() {
           to the page, but the software is the thing that makes it stay, and it
           should be read before the price rather than after it. */}
       <CareSystems />
+
+      {/* The full feature list: multi-clinic doctors, the doctor's own practice,
+          the pharmacy, billing, reports, the team. */}
+      <BusinessFeatures />
 
       {/* verticals — this is what /partners used to be. That page was a second
           six-card grid of the same categories, one click further from signing
