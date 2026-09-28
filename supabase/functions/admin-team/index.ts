@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 
   if (body.op === 'list') {
     const { data: rows, error } = await db.from('admin_users')
-      .select('id, auth_uid, email, full_name, phone, role, is_active, created_at, created_by, deactivated_at')
+      .select('id, auth_uid, email, full_name, phone, phone_verified_at, role, is_active, created_at, created_by, deactivated_at')
       .order('created_at')
     if (error) return json({ error: error.message }, 500)
     const members = await Promise.all((rows ?? []).map(async (r: Row) => {

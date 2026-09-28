@@ -1,4 +1,6 @@
-// phone-verify — confirm a business's WhatsApp number with a code, at signup.
+// phone-verify — confirm a WhatsApp number with a code: a business's at signup,
+// and (0156) any signed-in person's own — clinic staff, our admins and managers.
+// A verified number is stamped phone_verified_at on that login's own rows.
 //
 // Step 2 of registration verifies the email first (which signs the browser in),
 // then, when this is switched on, the WhatsApp number. The code goes out on
@@ -121,6 +123,9 @@ Deno.serve(async (req) => {
       return json({ error: 'That code is not right.' }, 400)
     }
     await db.from('phone_verifications').update({ verified_at: new Date().toISOString() }).eq('id', row.id)
+    // 0156: every login can prove its number — clinic staff and our own team as
+    // well as a business at signup. Stamp this login's own rows that carry it.
+    await db.rpc('sehat_stamp_phone_verified', { p_auth: user.id, p_phone: phone })
     return json({ ok: true, verified: true })
   }
 

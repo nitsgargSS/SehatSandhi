@@ -21,6 +21,7 @@ import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 import PharmacySwitch from './PharmacySwitch'
 import { listBroadcastsForReview } from '../../lib/marketingApi'
+import { PhoneVerifyCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import DisableBusinessModal from './DisableBusinessModal'
 import TeamPanel, { ActivityFeed } from './TeamPanel'
 import ClinicStaffList from './ClinicStaffList'
@@ -176,6 +177,8 @@ export default function AdminDashboard() {
   // 0145: 'admin'/'owner' see everything; 'manager' sees MANAGER_TABS.
   const [myRole, setMyRole] = useState<string | null>(null)
   const [myUid, setMyUid] = useState<string | null>(null)
+  // 0156: the signed-in admin's own number, for the Account tab.
+  const [myPhone, setMyPhone] = useState<{ phone: string | null; verifiedAt: string | null }>({ phone: null, verifiedAt: null })
   // 0155: clinic broadcasts waiting for approval, for the WhatsApp tab's badge.
   const [waPending, setWaPending] = useState(0)
   useEffect(() => {
@@ -186,8 +189,10 @@ export default function AdminDashboard() {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
       setMyUid(user.id)
-      const { data } = await supabase.from('admin_users').select('role').eq('auth_uid', user.id).maybeSingle()
-      setMyRole((data as { role?: string } | null)?.role ?? null)
+      const { data } = await supabase.from('admin_users').select('role, phone, phone_verified_at').eq('auth_uid', user.id).maybeSingle()
+      const row = data as { role?: string; phone?: string | null; phone_verified_at?: string | null } | null
+      setMyRole(row?.role ?? null)
+      setMyPhone({ phone: row?.phone ?? null, verifiedAt: row?.phone_verified_at ?? null })
     })
   }, [])
 
@@ -982,7 +987,7 @@ export default function AdminDashboard() {
                             className="btn-teal text-xs py-1.5 px-4">{t('adminDashboardPage.saveNotesButton')}</button>
                           {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                         </div>
-                        <ClinicStaffList businessId={d.id} />
+                        <ClinicStaffList businessId={d.id} canVerify={!isManager} />
                         <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                       </div>
@@ -1055,7 +1060,7 @@ export default function AdminDashboard() {
                               </button>
                               {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                             </div>
-                            <ClinicStaffList businessId={d.id} />
+                            <ClinicStaffList businessId={d.id} canVerify={!isManager} />
                             <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                           </div>
@@ -2072,6 +2077,11 @@ export default function AdminDashboard() {
                   Sign out everywhere
                 </button>
               </div>
+
+              {/* 0156: set a password without the old one, and prove your own number. */}
+              <SetPasswordByCode />
+              <PhoneVerifyCard phone={myPhone.phone} verifiedAt={myPhone.verifiedAt}
+                onVerified={() => setMyPhone(p => ({ ...p, verifiedAt: new Date().toISOString() }))} />
 
               {/* 0145: a manager sees their own trail; an admin sees everyone's under Team. */}
               {isManager && <ActivityFeed title="My activity" />}

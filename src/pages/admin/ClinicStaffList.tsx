@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import StaffCodeModal from '../doctor/StaffCodeModal'
+import { markPhoneVerified } from '../../lib/teamApi'
 
 // 0148: a clinic's staff as Sehatsandhi sees it, inside a business's Verify
 // panel. Admins and managers may remove or bring back a staff member — with
@@ -12,17 +13,17 @@ interface Row {
   role: string | null
   status: string
   awaiting_payment?: boolean
-  practitioners: { full_name: string; phone: string | null; email: string | null; auth_uid: string | null } | null
+  practitioners: { full_name: string; phone: string | null; email: string | null; auth_uid: string | null; phone_verified_at: string | null } | null
 }
 
-export default function ClinicStaffList({ businessId }: { businessId: string }) {
+export default function ClinicStaffList({ businessId, canVerify = false }: { businessId: string; canVerify?: boolean }) {
   const [rows, setRows] = useState<Row[]>([])
   const [msg, setMsg] = useState('')
   const [change, setChange] = useState<{ action: 'remove' | 'restore'; row: Row } | null>(null)
 
   const load = () => {
     supabase.from('business_practitioners')
-      .select('practitioner_id, role, status, awaiting_payment, practitioners(full_name, phone, email, auth_uid)')
+      .select('practitioner_id, role, status, awaiting_payment, practitioners(full_name, phone, email, auth_uid, phone_verified_at)')
       .eq('business_id', businessId).order('sort_order')
       .then(({ data }) => setRows((data as unknown as Row[]) ?? []))
   }
@@ -42,7 +43,11 @@ export default function ClinicStaffList({ businessId }: { businessId: string }) 
               <span className="font-medium text-gray-700">{r.practitioners?.full_name}</span>
               <span className="capitalize text-gray-500">{r.role ?? 'doctor'}</span>
               <span className="text-gray-400">{off ? 'removed' : r.awaiting_payment ? 'fee pending' : r.status}</span>
-              {r.practitioners?.phone && <span className="text-gray-400">{r.practitioners.phone}</span>}
+              {r.practitioners?.phone && <span className="text-gray-400">{r.practitioners.phone}
+                {r.practitioners.phone_verified_at ? <span className="text-teal-700"> ✓</span>
+                  : canVerify && <button className="ml-1 underline text-amber-700" title="After you have called them on it"
+                      onClick={() => markPhoneVerified('practitioner', r.practitioner_id).then(load, e => setMsg(e.message))}>mark verified</button>}
+              </span>}
               <span className="text-gray-400">{r.practitioners?.auth_uid ? 'has login' : 'no login yet'}</span>
               <button onClick={() => { setMsg(''); setChange({ action: off ? 'restore' : 'remove', row: r }) }}
                 className={`ml-auto px-2 py-1 rounded-lg font-medium ${off ? 'bg-teal-50 text-teal-700 hover:bg-teal-100' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>
