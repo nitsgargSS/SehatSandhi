@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { getBill, PharmacyBill, PAYMENT_STATUS } from '../../lib/pharmacyApi'
+import { getBill, PharmacyBill, PAYMENT_STATUS, payMethodLabel } from '../../lib/pharmacyApi'
 
 // The pharmacy bill (0158), printed at the counter. A "Tax invoice" with HSN,
 // rates and CGST/SGST when the dispensary has a GSTIN; a plain "Bill" at MRP
@@ -111,7 +111,7 @@ export default function PharmacyBillPage() {
           <div style={{ fontSize: 11.5, color: '#444', flex: 1 }}>
             {gst && <div>Prices include GST. Taxable {rupees(bill.taxable_value)} · CGST {rupees(bill.cgst_amount)} · SGST {rupees(bill.sgst_amount)}</div>}
             {bill.discount_amount > 0 && <div>Discount {Number(bill.discount_pct)}% ({bill.discount_reason})</div>}
-            {bill.payments.length > 0 && <div style={{ marginTop: 4 }}>Paid: {bill.payments.map(p => `${rupees(p.amount)} by ${p.method}`).join(', ')}</div>}
+            {bill.payments.length > 0 && <div style={{ marginTop: 4 }}>Paid: {bill.payments.map(p => `${rupees(p.amount)} by ${payMethodLabel(p.method)}`).join(', ')}</div>}
             {bill.returns.filter(r => r.kind === 'return').map((r, k) => (
               <div key={k}>Returned {new Date(r.created_at).toLocaleDateString('en-IN')}: {rupees(r.credit_amount)}{r.refund_amount ? `, refunded ${rupees(r.refund_amount)}` : ''}</div>
             ))}

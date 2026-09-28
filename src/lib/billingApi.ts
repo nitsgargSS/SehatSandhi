@@ -17,7 +17,16 @@ export type ChargeCategory =
   | 'consultation' | 'bed' | 'procedure' | 'medicine' | 'lab' | 'consumable' | 'other'
 
 export type PaymentMethod =
-  | 'cash' | 'upi' | 'card' | 'netbanking' | 'cheque' | 'insurance' | 'other'
+  | 'cash' | 'upi' | 'credit_card' | 'debit_card' | 'card' | 'netbanking' | 'cheque' | 'insurance' | 'other'
+
+/** 0159: how money came in, as offered when taking it. 'card' is only on rows
+ *  from before credit and debit were told apart, so it is not offered. */
+export const PAYMENT_METHOD_OPTIONS: [PaymentMethod, string][] = [
+  ['cash', 'Cash'], ['upi', 'UPI'], ['credit_card', 'Credit card'], ['debit_card', 'Debit card'],
+  ['netbanking', 'Net banking'], ['cheque', 'Cheque'], ['insurance', 'Insurance / TPA'], ['other', 'Other'],
+]
+export const methodLabel = (m: string) =>
+  m === 'card' ? 'Card' : PAYMENT_METHOD_OPTIONS.find(([v]) => v === m)?.[1] ?? m
 
 export interface Charge {
   id: string
@@ -51,6 +60,9 @@ export interface Payment {
   received_on: string
   notes: string | null
   bill_id: string | null
+  /** 0159: stamped by the database — whoever was signed in when it was taken. */
+  received_by_name?: string | null
+  created_at?: string
 }
 
 export interface Account {
@@ -158,8 +170,11 @@ export async function addPayment(
 }
 
 export async function removePayment(id: string) {
-  const { error } = await supabase.from('patient_payments').delete().eq('id', id)
+  // 0159: only the owner or a manager may; for anyone else RLS removes nothing
+  // rather than erroring, so ask for the row back to know which it was.
+  const { data, error } = await supabase.from('patient_payments').delete().eq('id', id).select('id')
   oops(error)
+  if (!data?.length) throw new Error('Only the owner or a manager can remove a payment.')
 }
 
 /**

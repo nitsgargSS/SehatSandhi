@@ -257,6 +257,12 @@ tables:
     purgeOrder: 103
     pk: business_id
 
+  # ── Changes to clinic payments (0159) ───────────────────────────────────
+  # A log, no FK to the payment (it outlives a deleted one).
+  payment_changes:
+    class: isolated
+    purgeOrder: 94.5
+
   # ── In-house dispensing (0158) ──────────────────────────────────────────
   # A clinic's own medicine counter. Children before parents: bill lines,
   # payments, returns and the stock ledger before bills and batches, batches

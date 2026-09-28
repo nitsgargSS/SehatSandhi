@@ -37,6 +37,7 @@ import {
   addPayment, removePayment, postBedCharges,
   getBills, issueBill, cancelBill, sendBill,
   Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod, Bill,
+  PAYMENT_METHOD_OPTIONS, methodLabel,
 } from '../../lib/billingApi'
 import { getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
 import { moneyExact, shortDate } from '../../lib/format'
@@ -3044,11 +3045,8 @@ function ReferPane({ memberId, businessId, practitionerId, onChange }: {
   )
 }
 
-const PAYMENT_METHODS: [PaymentMethod, string][] = [
-  ['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'],
-  ['netbanking', 'Net banking'], ['cheque', 'Cheque'],
-  ['insurance', 'Insurance / TPA'], ['other', 'Other'],
-]
+// 0159: credit and debit card apart, for checking against the machine slips.
+const PAYMENT_METHODS = PAYMENT_METHOD_OPTIONS
 
 function BillingPane({
   charges, payments, account, stays, memberId, businessId, practitionerId, onChange,
@@ -3270,7 +3268,7 @@ function BillingPane({
                 <div style={{ fontSize: 13.5, color: BIZ.ink }}>
                   {e.kind === 'charge'
                     ? (e.row as Charge).description
-                    : `Payment — ${PAYMENT_METHODS.find(m => m[0] === (e.row as PatientPayment).method)?.[1]}`}
+                    : `Payment — ${methodLabel((e.row as PatientPayment).method)}`}
                 </div>
                 <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
                   {when(e.on)}
@@ -3278,6 +3276,8 @@ function BillingPane({
                     ` · ${(e.row as Charge).quantity} × ${moneyExact((e.row as Charge).unit_price)}`}
                   {e.kind === 'payment' && (e.row as PatientPayment).reference &&
                     ` · ${(e.row as PatientPayment).reference}`}
+                  {e.kind === 'payment' && (e.row as PatientPayment).received_by_name &&
+                    ` · taken by ${(e.row as PatientPayment).received_by_name}`}
                   {e.kind === 'charge' && Number((e.row as Charge).discount_amount ?? 0) > 0 &&
                     ` · ${(e.row as Charge).discount_kind === 'free' ? 'free' : `${moneyExact(Number((e.row as Charge).discount_amount))} off`}: ${(e.row as Charge).discount_reason}`}
                   {e.row.bill_id && ' · billed'}

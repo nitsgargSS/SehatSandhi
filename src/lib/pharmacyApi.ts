@@ -10,10 +10,14 @@ import { supabase } from './supabase'
 // Every write is an RPC. Stock and the ledger behind it move together inside
 // the database, so there is no insert here that could leave them apart.
 
-export type PharmacyPayMethod = 'cash' | 'upi' | 'card' | 'netbanking' | 'cheque' | 'other'
+export type PharmacyPayMethod = 'cash' | 'upi' | 'credit_card' | 'debit_card' | 'card' | 'netbanking' | 'cheque' | 'other'
+// 0159: credit and debit apart. 'card' only exists on bills from before.
 export const PAY_METHODS: [PharmacyPayMethod, string][] = [
-  ['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'], ['netbanking', 'Net banking'], ['cheque', 'Cheque'], ['other', 'Other'],
+  ['cash', 'Cash'], ['upi', 'UPI'], ['credit_card', 'Credit card'], ['debit_card', 'Debit card'],
+  ['netbanking', 'Net banking'], ['cheque', 'Cheque'], ['other', 'Other'],
 ]
+export const payMethodLabel = (m: string) =>
+  m === 'card' ? 'Card' : PAY_METHODS.find(([v]) => v === m)?.[1] ?? m
 export const GST_RATES = [0, 5, 12, 18, 28] as const
 
 export type PaymentStatus = 'paid' | 'partly_paid' | 'unpaid' | 'cancelled'
