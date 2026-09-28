@@ -174,10 +174,12 @@ export default function AdminDashboard() {
 
   // 0145: 'admin'/'owner' see everything; 'manager' sees MANAGER_TABS.
   const [myRole, setMyRole] = useState<string | null>(null)
+  const [myUid, setMyUid] = useState<string | null>(null)
   const isManager = myRole === 'manager'
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
+      setMyUid(user.id)
       const { data } = await supabase.from('admin_users').select('role').eq('auth_uid', user.id).maybeSingle()
       setMyRole((data as { role?: string } | null)?.role ?? null)
     })
@@ -1994,7 +1996,8 @@ export default function AdminDashboard() {
           {/* Filing gets its own tab rather than a section of Reports: Reports is
               read to decide something, this is read to type a return, and the
               two are done by different people at different times of the month. */}
-          {tab === 'leads' && <LeadsPanel />}
+          {/* Once the role is known: a manager's view starts on their own leads. */}
+          {tab === 'leads' && myRole && <LeadsPanel key={myRole} isAdmin={!isManager} myUid={myUid} />}
 
           {tab === 'whatsapp' && <WhatsAppMarketingPanel businesses={doctors.map(d => ({ id: d.id, name: d.name }))} />}
 
