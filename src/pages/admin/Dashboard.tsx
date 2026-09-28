@@ -19,8 +19,7 @@ import WhatsAppMarketingPanel from './WhatsAppMarketingPanel'
 import TypePricingCard from './TypePricingCard'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
-import BusinessActionModal from './BusinessActionModal'
-import type { BusinessAction } from '../../lib/adminBusinessApi'
+import DisableBusinessModal from './DisableBusinessModal'
 
 // A listing as admin sees it: the business, plus the verification note a
 // reviewer leaves on it. organization_id and is_hospital_doctor are gone —
@@ -239,8 +238,8 @@ export default function AdminDashboard() {
   const [notesSavedId, setNotesSavedId] = useState<string | null>(null)
   const [rejectModal, setRejectModal] = useState<{ type: 'doctor' | 'camp'; id: string; name: string } | null>(null)
   const [rejectReasonInput, setRejectReasonInput] = useState('')
-  // 0144: disable/delete, each confirmed by a code emailed to the admin.
-  const [bizAction, setBizAction] = useState<{ action: BusinessAction; business: BusinessRow } | null>(null)
+  // 0144: disable, confirmed by a code emailed to the admin. There is no delete.
+  const [disabling, setDisabling] = useState<BusinessRow | null>(null)
 
   const [doctorSearch, setDoctorSearch] = useState('')
 
@@ -735,7 +734,7 @@ export default function AdminDashboard() {
         </button>
       </>}
       {d.status === 'active' && (
-        <button onClick={() => setBizAction({ action: 'disable', business: d })}
+        <button onClick={() => setDisabling(d)}
           className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition text-xs font-medium">
           <XCircle className="w-3.5 h-3.5" /> Disable
         </button>
@@ -746,10 +745,6 @@ export default function AdminDashboard() {
           <CheckCircle2 className="w-3.5 h-3.5" /> {t('adminDashboardPage.titleReactivate')}
         </button>
       )}
-      <button onClick={() => setBizAction({ action: 'delete', business: d })}
-        className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-600 transition text-xs font-medium">
-        <Trash2 className="w-3.5 h-3.5" /> Delete
-      </button>
     </div>
   )
 
@@ -2037,10 +2032,10 @@ export default function AdminDashboard() {
 
       {/* Styled modal replacing window.prompt() — used for both
           doctor suspend/reject and camp/offer rejection */}
-      {bizAction && (
-        <BusinessActionModal action={bizAction.action} business={bizAction.business}
-          onClose={() => setBizAction(null)}
-          onDone={msg => { setBizAction(null); setActionMsg(msg); load(); setTimeout(() => setActionMsg(''), 6000) }} />
+      {disabling && (
+        <DisableBusinessModal business={disabling}
+          onClose={() => setDisabling(null)}
+          onDone={msg => { setDisabling(null); setActionMsg(msg); load(); setTimeout(() => setActionMsg(''), 6000) }} />
       )}
 
       {rejectModal && (

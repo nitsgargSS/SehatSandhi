@@ -1,17 +1,11 @@
 import { activeConfig } from './env'
 import { supabase } from './supabase'
 
-// 0144: disable or delete a business, confirmed by a code emailed to the admin.
+// 0144: disable a business, confirmed by a code emailed to the admin. No delete.
 // The admin-business-action edge function does both steps; see its header.
 
-export type BusinessAction = 'disable' | 'delete'
-
 export interface ActionRequested { requestId: string; sentTo: string; expiresAt: string }
-export interface ActionDone {
-  ok: true
-  action: BusinessAction
-  result: { removed?: Record<string, number>; doctors_removed?: number; logins_removed?: number; previous_status?: string }
-}
+export interface ActionDone { ok: true; action: 'disable'; result: { previous_status?: string } }
 
 async function call<T>(payload: unknown): Promise<T> {
   const { url, anon } = activeConfig()
@@ -28,8 +22,8 @@ async function call<T>(payload: unknown): Promise<T> {
   return body as T
 }
 
-export const requestBusinessAction = (businessId: string, action: BusinessAction, reason: string) =>
-  call<ActionRequested>({ op: 'request', businessId, action, reason })
+export const requestDisable = (businessId: string, reason: string) =>
+  call<ActionRequested>({ op: 'request', businessId, action: 'disable', reason })
 
-export const confirmBusinessAction = (requestId: string, code: string) =>
+export const confirmDisable = (requestId: string, code: string) =>
   call<ActionDone>({ op: 'confirm', requestId, code })
