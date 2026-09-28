@@ -27,11 +27,11 @@ const font = "'Manrope','Noto Sans Devanagari',system-ui,sans-serif"
 // says it here instead. Keyed by VerticalKey so the cards stay in step with
 // VERTICALS rather than being a second list that can drift from it.
 const VERTICAL_TITLES: Record<string, string> = {
-  doctors: 'Doctors & clinics', hospital: 'Hospitals', pharmacy: 'Pharmacies',
+  clinic: 'Doctors & clinics', hospital: 'Hospitals', pharmacy: 'Pharmacies',
   lab: 'Diagnostic labs', insurance: 'Insurance agents', ambulance: 'Ambulance services',
 }
 const VERTICAL_BLURBS: Record<string, string> = {
-  doctors: 'Patients in your pincodes find you on WhatsApp and book a time — no app for them to install, no call for you to miss.',
+  clinic: 'Patients in your pincodes find you on WhatsApp and book a time — no app for them to install, no call for you to miss.',
   hospital: 'Every consultant gets their own profile and calendar, under one hospital listing and one bill.',
   pharmacy: 'Home-delivery pharmacies: prescriptions come straight to you from patients nearby, to fill in store or deliver to the door.',
   lab: 'Test bookings arrive with the patient details, and you can offer home sample collection.',
@@ -60,7 +60,7 @@ export default function BusinessLanding() {
     .filter(v => monthlyAppliesTo(plan, verticals.find(r => r.vertical === v.key)))
 
   const verticalNoun = (key: string) =>
-    key === 'doctors' ? 'Doctors' : key === 'hospital' ? 'Hospitals'
+    key === 'clinic' ? 'Doctors & clinics' : key === 'hospital' ? 'Hospitals'
       : key === 'pharmacy' ? 'Pharmacies' : key === 'lab' ? 'Labs'
         : key === 'insurance' ? 'Insurance agents' : 'Ambulance services'
 

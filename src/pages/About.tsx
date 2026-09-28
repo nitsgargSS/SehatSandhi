@@ -1,6 +1,6 @@
 import { MapPin, ShieldCheck, Star, MessageCircle } from 'lucide-react'
 import { useLanguage } from '../i18n/LanguageContext'
-import { WA_NUMBER } from '../types'
+import { WA_LINK } from '../types'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 
@@ -89,7 +89,7 @@ export default function About() {
         <div className="bg-navy-700 rounded-2xl p-6 text-white text-center">
           <h3 className="font-bold mb-2">{c.contactTitle}</h3>
           <p className="text-white/70 text-sm mb-4">{c.contactDesc}</p>
-          <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer"
+          <a href={WA_LINK} target="_blank" rel="noreferrer"
              className="bg-white text-navy-700 font-semibold px-6 py-2.5 rounded-full text-sm hover:bg-gray-50 transition inline-block">
             {lang === 'hi' ? 'WhatsApp पर मैसेज करें' : 'Message us on WhatsApp'}
           </a>

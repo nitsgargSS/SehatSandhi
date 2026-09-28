@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Facebook, Instagram } from 'lucide-react'
 import { useLanguage } from '../i18n/LanguageContext'
-import { WA_NUMBER, CALL_NUMBER, prettyPhone } from '../types'
+import { WA_LINK, CALL_NUMBER, prettyPhone } from '../types'
 import { HEADER, PAGE } from './SiteHeader'
 
 // One footer for every public page, and the counterpart to SiteHeader.
@@ -78,11 +78,12 @@ export default function SiteFooter() {
             contact@sehatsandhi.com
           </a>
           <span style={{ opacity: .5 }}>{'  ·  '}</span>
-          <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer"
+          {/* The WhatsApp number is the booking bot's, so it is linked, never
+              shown: a number on the page gets called, and it takes no calls. */}
+          <a href={WA_LINK} target="_blank" rel="noreferrer"
             style={{ color: HEADER.green, fontWeight: 700 }}>
-            {prettyPhone(WA_NUMBER)}
+            {hi ? 'WhatsApp पर चैट करें' : 'Chat on WhatsApp'}
           </a>
-          {' '}<span style={{ opacity: .75 }}>{hi ? '(सिर्फ़ WhatsApp)' : '(WhatsApp only)'}</span>
           <span style={{ opacity: .5 }}>{'  ·  '}</span>
           {hi ? 'कॉल: ' : 'Call: '}
           <a href={`tel:+${CALL_NUMBER}`} style={{ color: HEADER.green, fontWeight: 700 }}>
