@@ -13,7 +13,7 @@ import { OPEN_ANALYTICS_SETTINGS } from '../components/AnalyticsConsent'
 // aspirational: retention comes from the pg_cron purge jobs (0059, 0171, 0172),
 // document retention (0058: 10 years by default, set by the clinic), lab report
 // files (0169: the lab's plan, 1 year by default), and the providers are the
-// ones the code calls. If any of that changes, this page changes with it.
+// ones the code calls. Log retention and STOP/START: 0173. If any of that changes, this page changes with it.
 // Still for a lawyer to review before relying on it.
 
 type Section = { h: string; p?: string; list?: string[]; after?: string }
@@ -40,7 +40,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `Records a clinic keeps with our software (as its processor): visits, vital signs, allergies, diagnoses, examinations, prescriptions, lab tests and results, uploaded reports and documents, operations, admissions and discharge, bills, payments and medicines dispensed. If your clinic turns on voice notes, the audio of the consultation is converted to text so the doctor can check it; see section 4.`,
           `Documents sent to you: when your clinic or lab asks, we send your prescription, bill, discharge summary or lab report as a secure link on WhatsApp, SMS or email.`,
           `Ratings: if you reply to a rating request after a visit, we keep the score and any words you add.`,
-          `Clinic and marketing messages: a clinic may send you health camp, reminder or offer messages only if you agreed — for example by scanning its QR code or telling the clinic — and only that clinic. You can withdraw at any time (section 7).`,
+          `Clinic and marketing messages: a clinic may send you health camp, reminder or offer messages only if you agreed — for example by scanning its QR code or telling the clinic — and only that clinic. To stop them from every clinic at once, send STOP on our WhatsApp; send START to turn them back on. Appointment, prescription, bill and report messages continue either way (section 7).`,
           `Doctors, businesses and their staff: name, phone, email, qualification and registration number (checked against the National Medical Commission's Indian Medical Register), clinic address, GST details if you give them, sign-in details for each staff member, and payments of fees — made through Razorpay; we never see or store your card, UPI PIN or bank password.`,
           `Contact form: your name, phone or email and your message, so we can reply.`,
           `Using our website: anonymous usage events on our own systems — pages opened, what speciality or area was searched, which listings were shown, viewed or tapped, and when the WhatsApp or call button was used — with a temporary per-tab identifier that is discarded when you close the tab, your device type and the website you came from. Search text is removed from page addresses. These are never linked to your name or phone number, and are not recorded at all if your browser sends "Do Not Track".`,
@@ -91,7 +91,10 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `Anonymous website usage events: about 13 months.`,
           `Area searches on the page for businesses: 12 months.`,
           `Contact form messages: 24 months.`,
-          `Used or expired sign-in codes: deleted daily.`,
+          `Used or expired sign-in codes: deleted daily. Phone verification codes: 30 days after use or expiry.`,
+          `Records of messages we sent (number, template and delivery status): 12 months. Queued notifications and emails: 90 days after they were sent or failed.`,
+          `WhatsApp conversation records: 12 months after the conversation closed; the record that a number wrote to us: 24 months after its last message.`,
+          `Search logs of the WhatsApp assistant (no phone number is kept): 24 months.`,
           `Bookings, patient and business accounts, bills and payment records: while the account is in use and afterwards for as long as tax, accounting and medical-record laws require; then deleted or made anonymous. You can ask for earlier erasure where the law allows (section 7).`,
           `Logs of which staff member searched or opened a patient's record: kept with that record, for security and audit, and for at least one year as the DPDP Rules require.`,
         ],
@@ -103,7 +106,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `get a summary of your personal data we process, what we do with it, and who we have shared it with;`,
           `have it corrected, completed or updated;`,
           `have it erased when it is no longer needed, unless the law requires us to keep it;`,
-          `withdraw consent you gave, at any time — for a clinic's marketing messages, tell the clinic or us;`,
+          `withdraw consent you gave, at any time — for promotional messages and rating requests from clinics, simply send STOP on WhatsApp (START turns them back on), or tell the clinic or us;`,
           `have a grievance heard and answered by our Grievance Officer (section 11);`,
           `nominate a person to use these rights for you if you die or cannot act yourself.`,
         ],
@@ -156,7 +159,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `क्लिनिक हमारे सॉफ्टवेयर पर जो रिकॉर्ड रखता है (उसके प्रोसेसर के रूप में): विज़िट, वाइटल्स, एलर्जी, डायग्नोसिस, जांच, पर्चे, लैब टेस्ट और रिज़ल्ट, अपलोड की गई रिपोर्ट और दस्तावेज़, ऑपरेशन, भर्ती और डिस्चार्ज, बिल, पेमेंट और दी गई दवाइयां। अगर आपका क्लिनिक वॉइस नोट्स चालू करता है, तो कंसल्टेशन की ऑडियो को टेक्स्ट में बदला जाता है ताकि डॉक्टर उसे जांच सकें; सेक्शन 4 देखें।`,
           `आपको भेजे जाने वाले दस्तावेज़: जब आपका क्लिनिक या लैब कहता है, हम आपका पर्चा, बिल, डिस्चार्ज समरी या लैब रिपोर्ट WhatsApp, SMS या ईमेल पर एक सुरक्षित लिंक के रूप में भेजते हैं।`,
           `रेटिंग: विज़िट के बाद रेटिंग के मैसेज का जवाब देने पर हम स्कोर और आपके लिखे शब्द रखते हैं।`,
-          `क्लिनिक और मार्केटिंग मैसेज: कोई क्लिनिक आपको हेल्थ कैंप, रिमाइंडर या ऑफ़र के मैसेज सिर्फ तभी भेज सकता है जब आपने सहमति दी हो — जैसे उसका QR कोड स्कैन करके या क्लिनिक को बताकर — और सिर्फ वही क्लिनिक। आप कभी भी सहमति वापस ले सकते हैं (सेक्शन 7)।`,
+          `क्लिनिक और मार्केटिंग मैसेज: कोई क्लिनिक आपको हेल्थ कैंप, रिमाइंडर या ऑफ़र के मैसेज सिर्फ तभी भेज सकता है जब आपने सहमति दी हो — जैसे उसका QR कोड स्कैन करके या क्लिनिक को बताकर — और सिर्फ वही क्लिनिक। सभी क्लिनिक्स के ये मैसेज एक साथ रोकने के लिए हमारे WhatsApp पर STOP भेजें; फिर से शुरू करने के लिए START भेजें। अपॉइंटमेंट, पर्चे, बिल और रिपोर्ट के मैसेज दोनों हालात में आते रहेंगे (सेक्शन 7)।`,
           `डॉक्टर, बिज़नेस और उनका स्टाफ़: नाम, फ़ोन, ईमेल, क्वालिफ़िकेशन और रजिस्ट्रेशन नंबर (राष्ट्रीय चिकित्सा आयोग के इंडियन मेडिकल रजिस्टर से जांचा जाता है), क्लिनिक का पता, दिए जाने पर GST डिटेल्स, हर स्टाफ़ सदस्य की लॉगिन डिटेल्स, और फ़ीस के पेमेंट — जो Razorpay से होते हैं; हम आपका कार्ड, UPI PIN या बैंक पासवर्ड न देखते हैं न रखते हैं।`,
           `संपर्क फ़ॉर्म: आपका नाम, फ़ोन या ईमेल और आपका मैसेज, ताकि हम जवाब दे सकें।`,
           `हमारी वेबसाइट का इस्तेमाल: हमारे अपने सिस्टम पर बिना नाम के इस्तेमाल के इवेंट — कौनसे पेज खुले, कौनसी स्पेशलिटी या इलाका खोजा गया, कौनसी लिस्टिंग दिखी, देखी या टैप हुई, और WhatsApp या कॉल बटन कब दबा — एक टेम्पररी पर-टैब आइडेंटिफायर के साथ जो टैब बंद होते ही खत्म हो जाता है, आपके डिवाइस का प्रकार और आप किस वेबसाइट से आए। पेज एड्रेस से खोज का टेक्स्ट हटा दिया जाता है। ये कभी आपके नाम या फ़ोन से नहीं जोड़े जाते, और अगर आपका ब्राउज़र "Do Not Track" भेजता है तो बिल्कुल रिकॉर्ड नहीं होते।`,
@@ -207,7 +210,10 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `वेबसाइट के बिना नाम वाले इवेंट: लगभग 13 महीने।`,
           `बिज़नेस वाले पेज पर इलाके की खोज: 12 महीने।`,
           `संपर्क फ़ॉर्म के मैसेज: 24 महीने।`,
-          `इस्तेमाल हो चुके या एक्सपायर लॉगिन कोड: रोज़ डिलीट।`,
+          `इस्तेमाल हो चुके या एक्सपायर लॉगिन कोड: रोज़ डिलीट। फ़ोन वेरिफ़िकेशन कोड: इस्तेमाल या एक्सपायर होने के 30 दिन बाद।`,
+          `हमारे भेजे मैसेज का रिकॉर्ड (नंबर, टेम्पलेट और डिलीवरी स्टेटस): 12 महीने। कतार में रखे नोटिफ़िकेशन और ईमेल: भेजे जाने या फ़ेल होने के 90 दिन बाद।`,
+          `WhatsApp बातचीत के रिकॉर्ड: बातचीत बंद होने के 12 महीने बाद; किसी नंबर ने हमें मैसेज किया, इसका रिकॉर्ड: उसके आखिरी मैसेज के 24 महीने बाद।`,
+          `WhatsApp असिस्टेंट के सर्च लॉग (कोई फ़ोन नंबर नहीं रखा जाता): 24 महीने।`,
           `बुकिंग, मरीज़ और बिज़नेस अकाउंट, बिल और पेमेंट रिकॉर्ड: जब तक अकाउंट इस्तेमाल में है, और उसके बाद उतने समय तक जितना टैक्स, अकाउंटिंग और मेडिकल रिकॉर्ड के कानून ज़रूरी करें; फिर डिलीट या बिना पहचान वाले कर दिए जाते हैं। जहां कानून इजाज़त दे, आप पहले डिलीट करने को कह सकते हैं (सेक्शन 7)।`,
           `किस स्टाफ़ ने मरीज़ का रिकॉर्ड खोजा या खोला, इसका लॉग: सुरक्षा और ऑडिट के लिए उसी रिकॉर्ड के साथ रखा जाता है, और DPDP नियमों के अनुसार कम से कम एक साल।`,
         ],
@@ -219,7 +225,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `हमारे पास आपके व्यक्तिगत डेटा का सारांश, हम उसके साथ क्या करते हैं, और किसके साथ शेयर किया है — यह जान सकते हैं;`,
           `उसे सही, पूरा या अपडेट करवा सकते हैं;`,
           `ज़रूरत खत्म होने पर उसे डिलीट करवा सकते हैं, जब तक कानून उसे रखना ज़रूरी न करे;`,
-          `दी हुई सहमति कभी भी वापस ले सकते हैं — क्लिनिक के मार्केटिंग मैसेज के लिए क्लिनिक को या हमें बताएं;`,
+          `दी हुई सहमति कभी भी वापस ले सकते हैं — क्लिनिक्स के प्रचार वाले मैसेज और रेटिंग के अनुरोध के लिए बस WhatsApp पर STOP भेजें (START से फिर शुरू), या क्लिनिक को या हमें बताएं;`,
           `हमारे शिकायत अधिकारी से अपनी शिकायत सुनवा और उसका जवाब पा सकते हैं (सेक्शन 11);`,
           `किसी व्यक्ति को नॉमिनेट कर सकते हैं जो आपकी मृत्यु या असमर्थता पर आपके लिए ये अधिकार इस्तेमाल करे।`,
         ],
