@@ -13,6 +13,12 @@ import {
   getAudiencePins, getAudience, listTemplates, listBroadcasts, createBroadcast, topUpWallet,
 } from '../../lib/marketingApi'
 
+// 0155: what each broadcast status means to the clinic.
+const BROADCAST_STATUS: Record<string, string> = {
+  pending_approval: 'Waiting for approval', rejected: 'Not approved', queued: 'Approved — sending soon',
+  sending: 'Sending', sent: 'Sent', partly_sent: 'Partly sent', failed: 'Failed',
+}
+
 // A clinic's WhatsApp marketing (0116): its wallet, and broadcasts to the
 // patients who agreed to hear from it.
 //
@@ -251,7 +257,7 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner }: {
       )}
 
       <div className="card shadow-sm">
-        <h3 className="font-bold text-navy-700 mb-3">Sent broadcasts</h3>
+        <h3 className="font-bold text-navy-700 mb-3">Your broadcasts</h3>
         {!history.length ? <p className="text-sm text-gray-400">Nothing sent yet.</p> : (
           <div className="divide-y divide-gray-100">
             {history.map(b => (
@@ -262,7 +268,10 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner }: {
                 </div>
                 <div className="text-right text-xs text-gray-500">
                   <div><b>{b.recipient_count}</b> patients · {rupees(b.total_cost_paise)}</div>
-                  <div className="capitalize">{b.status.replace('_', ' ')}</div>
+                  <div className={b.status === 'rejected' ? 'text-red-600 font-medium' : b.status === 'pending_approval' ? 'text-amber-700 font-medium' : ''}>
+                    {BROADCAST_STATUS[b.status] ?? b.status.replace('_', ' ')}
+                  </div>
+                  {b.status === 'rejected' && b.review_note && <div className="text-red-600 max-w-xs">“{b.review_note}” · refunded</div>}
                 </div>
               </div>
             ))}
@@ -396,7 +405,8 @@ function Composer({ businessId, businessName, settings, balance, blocker, templa
     setBusy(true); setErr(''); setMsg('')
     try {
       const r = await createBroadcast({ businessId, templateId, params, memberIds: [...ticked], pins: chosenPins })
-      setMsg(`Queued for ${r.recipients} patients · ${rupees(r.cost_paise)} taken · balance ${rupees(r.balance_paise)}.`)
+      // 0155: every broadcast is reviewed by Sehatsandhi before it goes out.
+      setMsg(`Sent for approval: ${r.recipients} patients · ${rupees(r.cost_paise)} held from your wallet (balance ${rupees(r.balance_paise)}). Sehatsandhi reviews it before it goes out; if it is not approved the money comes back and we email you why.`)
       setConfirming(false); setChosenPins([]); setTemplateId(''); onSent()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }

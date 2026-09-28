@@ -21,6 +21,8 @@ const ACTION_LABEL: Record<string, string> = {
   speciality_changed: 'Changed speciality',
   lead_created: 'Added lead',
   lead_updated: 'Updated lead',
+  wa_broadcast_approved: 'Approved WhatsApp broadcast',
+  wa_broadcast_rejected: 'Rejected WhatsApp broadcast',
   clinic_staff_removed: 'Removed clinic staff member',
   clinic_staff_restored: 'Brought back clinic staff member',
   manager_added: 'Added manager',

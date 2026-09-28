@@ -19,6 +19,7 @@ import WhatsAppMarketingPanel from './WhatsAppMarketingPanel'
 import TypePricingCard from './TypePricingCard'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
+import { listBroadcastsForReview } from '../../lib/marketingApi'
 import DisableBusinessModal from './DisableBusinessModal'
 import TeamPanel, { ActivityFeed } from './TeamPanel'
 import ClinicStaffList from './ClinicStaffList'
@@ -34,8 +35,8 @@ type Tab = 'pending' | 'all' | 'leads' | 'whatsapp' | 'camps' | 'coupons' | 'bil
   | 'insights' | 'gst' | 'team' | 'account' | 'sandbox'
 
 // 0145: what a manager's panel shows. Billing is view-only for them. WhatsApp
-// joins this list in phase 3, with template creation and message approvals.
-const MANAGER_TABS: Tab[] = ['pending', 'all', 'camps', 'leads', 'billing', 'reports', 'account']
+// (0155) is templates and message approvals only — no prices or wallets.
+const MANAGER_TABS: Tab[] = ['pending', 'all', 'camps', 'leads', 'whatsapp', 'billing', 'reports', 'account']
 
 // Qualifications actually covered by NMC's Indian Medical
 // Register — dental/homeopathy/ayurveda have their own
@@ -174,6 +175,11 @@ export default function AdminDashboard() {
   // 0145: 'admin'/'owner' see everything; 'manager' sees MANAGER_TABS.
   const [myRole, setMyRole] = useState<string | null>(null)
   const [myUid, setMyUid] = useState<string | null>(null)
+  // 0155: clinic broadcasts waiting for approval, for the WhatsApp tab's badge.
+  const [waPending, setWaPending] = useState(0)
+  useEffect(() => {
+    listBroadcastsForReview('pending_approval').then(r => setWaPending(r.length)).catch(() => setWaPending(0))
+  }, [tab])
   const isManager = myRole === 'manager'
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -794,7 +800,7 @@ export default function AdminDashboard() {
               { id: 'all', label: t('adminDashboardPage.navAllDoctors'), count: 0, badge: false },
               { id: 'camps', label: t('adminDashboardPage.navCamps'), count: pendingCamps.length, badge: pendingCamps.length > 0 },
               { id: 'leads', label: 'Leads', count: 0, badge: false },
-              { id: 'whatsapp', label: 'WhatsApp', count: 0, badge: false },
+              { id: 'whatsapp', label: 'WhatsApp', count: waPending, badge: waPending > 0 },
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
               { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
               { id: 'reports', label: 'Reports', count: 0, badge: false },
@@ -1994,7 +2000,7 @@ export default function AdminDashboard() {
           {/* Once the role is known: a manager's view starts on their own leads. */}
           {tab === 'leads' && myRole && <LeadsPanel key={myRole} isAdmin={!isManager} myUid={myUid} />}
 
-          {tab === 'whatsapp' && <WhatsAppMarketingPanel businesses={doctors.map(d => ({ id: d.id, name: d.name }))} />}
+          {tab === 'whatsapp' && <WhatsAppMarketingPanel isManager={isManager} businesses={doctors.map(d => ({ id: d.id, name: d.name }))} />}
 
           {tab === 'insights' && <InsightsPanel />}
 
