@@ -19,6 +19,7 @@ import WhatsAppMarketingPanel from './WhatsAppMarketingPanel'
 import TypePricingCard from './TypePricingCard'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
+import PharmacySwitch from './PharmacySwitch'
 
 // A listing as admin sees it: the business, plus the verification note a
 // reviewer leaves on it. organization_id and is_hospital_doctor are gone —
@@ -901,7 +902,7 @@ export default function AdminDashboard() {
                       <div className="min-w-0">
                         <p className="font-medium text-gray-800 leading-snug">
                           {d.name}
-                          {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}
+                          {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}{d.pharmacy_module && <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded ml-1">In-house dispensing</span>}
                         </p>
                         <p className="text-xs text-gray-400 capitalize">{d.vertical} · {d.phone}</p>
                       </div>
@@ -946,6 +947,8 @@ export default function AdminDashboard() {
                             className="btn-teal text-xs py-1.5 px-4">{t('adminDashboardPage.saveNotesButton')}</button>
                           {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                         </div>
+                        <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange
+                          onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                       </div>
                     )}
                   </div>
@@ -967,7 +970,7 @@ export default function AdminDashboard() {
                     <Fragment key={d.id}>
                     <tr className="border-b border-gray-50 hover:bg-gray-50 transition">
                       <td className="py-3 px-2">
-                        <p className="font-medium text-gray-800">{d.name} {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}</p>
+                        <p className="font-medium text-gray-800">{d.name} {d.vertical === 'hospital' && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded ml-1">🏨</span>}{d.pharmacy_module && <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded ml-1">In-house dispensing</span>}</p>
                         <p className="text-xs text-gray-400 capitalize">{d.vertical} · {d.phone}</p>
                         {placeOf(d) && <p className="text-xs text-gray-400">{placeOf(d)}</p>}
                         <p>{phoneBadge(d)}</p>
@@ -1016,6 +1019,8 @@ export default function AdminDashboard() {
                               </button>
                               {notesSavedId === d.id && <span className="text-xs text-teal-600 font-medium">{t('adminDashboardPage.notesSaved')}</span>}
                             </div>
+                        <PharmacySwitch businessId={d.id} on={!!d.pharmacy_module} canChange
+                          onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                           </div>
                         </td>
                       </tr>

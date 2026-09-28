@@ -34,6 +34,10 @@ export interface Business {
   gst_legal_name?: string
   state_code?: string
   billing_address?: string
+  /** 0158: in-house dispensing, switched on by a Sehatsandhi admin. */
+  pharmacy_module?: boolean
+  pharmacy_gstin?: string | null
+  pharmacy_drug_licence?: string | null
 }
 
 /** A person. Exists independently of any business, so one doctor can hold
