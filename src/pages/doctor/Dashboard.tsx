@@ -5,7 +5,7 @@ import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
 import { money, shortDate, isoDate } from '../../lib/format'
 import { BIZ, takesAppointments, verticalFor, hasPractitioners, VerticalKey } from '../business/shared'
-import { registerPractitioner, attachPractitioner, detachPractitioner } from '../../lib/identityApi'
+import { registerPractitioner, attachPractitioner } from '../../lib/identityApi'
 import Patients from './Patients'
 import Wards from './Wards'
 import Queue from './Queue'
@@ -44,6 +44,8 @@ import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '
 import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../components/Charts'
 import { headcountFor, marginalDoctorCost, describeHeadcount } from '../../../supabase/functions/_shared/headcount'
+import StaffCodeModal from './StaffCodeModal'
+import { listStaffLog, type StaffAction, type StaffChangeDone, type StaffLogRow } from '../../lib/staffApi'
 
 
 interface CampOffer {
@@ -262,6 +264,11 @@ export default function DoctorDashboard() {
   const openPatient = (memberId: string) => { setOpenMember(memberId); setTab('patients') }
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
+  // 0147: a staff change waiting for its emailed code, and the record of past ones.
+  const [staffChange, setStaffChange] = useState<{
+    action: StaffAction; person: { id: string; name: string; currentRole?: string | null }; role?: string | null
+  } | null>(null)
+  const [staffLog, setStaffLog] = useState<StaffLogRow[]>([])
   const [showAddDoc, setShowAddDoc] = useState(false)
   const [feeFor, setFeeFor] = useState<string | null>(null)
   // 0139: invite a doctor to log in and set up their profile.
@@ -339,6 +346,8 @@ export default function DoctorDashboard() {
       .eq('business_id', businessId)
       .order('sort_order')
     setRoster((data as RosterRow[]) || [])
+    // 0147: owners and managers only; RLS gives anyone else an empty list.
+    listStaffLog(businessId).then(setStaffLog, () => setStaffLog([]))
   }
 
   /**
@@ -363,18 +372,13 @@ export default function DoctorDashboard() {
         email: docForm.email.trim(),
         role: docForm.role,
       })
-      await attachPractitioner({
-        businessId: doctor.id,
-        practitionerId,
-        role: docForm.role as AffiliationRole,
-        consultationFee: 0,
+      // 0147: the person exists now; joining the staff is confirmed by code.
+      // finishStaffChange sends the login invite once it is done.
+      setStaffChange({
+        action: 'add',
+        person: { id: practitionerId, name: docForm.name.trim() || 'this person' },
+        role: docForm.role,
       })
-      setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
-      setShowAddDoc(false)
-      // Everyone added is asked to set up their own login (0139). Best effort:
-      // the Invite button on their row sends it again.
-      await supabase.rpc('sehat_invite_doctor', { p_business: doctor.id, p_practitioner: practitionerId }).then(() => undefined, () => undefined)
-      await loadRoster(doctor.id)
     } catch (e) {
       setRosterErr((e as Error).message)
     } finally {
@@ -384,21 +388,33 @@ export default function DoctorDashboard() {
 
   /** Removing is suspending the AFFILIATION, not the person: they keep working
    *  wherever else they work, and the appointments made here stay attributable. */
-  const setRosterStatus = async (practitionerId: string, status: 'suspended' | 'active') => {
-    if (!doctor) return
-    setRosterBusy(true); setRosterErr('')
-    try {
-      if (status === 'suspended') {
-        await detachPractitioner(doctor.id, practitionerId)
-      } else {
-        await attachPractitioner({ businessId: doctor.id, practitionerId, role: 'doctor' })
-      }
-      await loadRoster(doctor.id)
-    } catch (e) {
-      setRosterErr((e as Error).message)
-    } finally {
-      setRosterBusy(false)
+  // 0147: both go through an emailed code, with a reason to remove. Bring back
+  // restores the role they had — it used to make everyone a doctor.
+  const setRosterStatus = (d: RosterRow, status: 'suspended' | 'active') => {
+    setRosterErr('')
+    setStaffChange({
+      action: status === 'suspended' ? 'remove' : 'restore',
+      person: { id: d.practitioner_id, name: d.practitioners?.full_name ?? 'this person', currentRole: d.role },
+    })
+  }
+
+  const finishStaffChange = async (done: StaffChangeDone) => {
+    const change = staffChange
+    setStaffChange(null)
+    if (!doctor || !change) return
+    if (change.action === 'add') {
+      setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
+      setShowAddDoc(false)
+      // Everyone added is asked to set up their own login (0139). Best effort:
+      // the Invite button on their row sends it again.
+      await supabase.rpc('sehat_invite_doctor', { p_business: doctor.id, p_practitioner: change.person.id }).then(() => undefined, () => undefined)
     }
+    const r = done.result
+    setRosterErr(r.awaiting_payment
+      ? `✓ ${change.person.name} is added and will go live once the extra-doctor fee is paid (see their row).`
+      : `✓ ${change.person.name}: ${change.action === 'remove' ? 'removed' : change.action === 'restore' ? 'brought back' : change.action === 'add' ? 'added' : 'role changed'}. They have been emailed.`)
+    await loadRoster(doctor.id)
+    listStaffLog(doctor.id).then(setStaffLog, () => undefined)
   }
 
   // Doctors that count towards the bill — suspended ones do not, which is
@@ -2146,6 +2162,14 @@ export default function DoctorDashboard() {
                             disabled={rosterBusy}
                             onChange={async e => {
                               if (!doctor) return
+                              // 0147: becoming a doctor or an owner is confirmed by code.
+                              if (['doctor', 'owner'].includes(e.target.value) && e.target.value !== d.role) {
+                                setStaffChange({
+                                  action: 'role', role: e.target.value,
+                                  person: { id: d.practitioner_id, name: person?.full_name ?? 'this person', currentRole: d.role },
+                                })
+                                return
+                              }
                               setRosterBusy(true); setRosterErr('')
                               try {
                                 // attach upserts and sets the role, so changing it
@@ -2164,7 +2188,7 @@ export default function DoctorDashboard() {
                           </select>
                         )}
                         <button disabled={rosterBusy}
-                          onClick={() => setRosterStatus(d.practitioner_id, suspended ? 'active' : 'suspended')}
+                          onClick={() => setRosterStatus(d, suspended ? 'active' : 'suspended')}
                           className={`text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50 ${
                             suspended ? 'bg-teal-50 hover:bg-teal-100 text-teal-700'
                                       : 'bg-red-50 hover:bg-red-100 text-red-500'}`}>
@@ -2179,9 +2203,34 @@ export default function DoctorDashboard() {
                 <p className="text-xs text-gray-400 mt-3">
                   Removing a doctor takes them off your listing and off your bill, and keeps their
                   past appointments. It does not affect anywhere else they work. You can bring
-                  them back at any time.
+                  them back at any time. Adding, removing and promoting staff is confirmed with a
+                  code we email you.
                 </p>
+
+                {/* 0147: who changed the staff, when, and why. */}
+                {staffLog.length > 0 && (
+                  <div className="mt-5">
+                    <h4 className="text-sm font-semibold text-navy-700 mb-2">Staff changes</h4>
+                    <div className="divide-y divide-gray-100 text-xs">
+                      {staffLog.map(l => (
+                        <div key={l.id} className="py-1.5 flex flex-wrap gap-x-2">
+                          <span className="text-gray-400">{new Date(l.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span>
+                          <span className="font-medium text-gray-700">{l.practitioner_name}</span>
+                          <span>{{ added: 'added', removed: 'removed', restored: 'brought back', role_changed: 'role changed' }[l.action]}
+                            {l.action === 'role_changed' ? ` ${l.role_from} → ${l.role_to}` : l.role_to ? ` (${l.role_to})` : ''}</span>
+                          {l.reason && <span className="text-gray-500">“{l.reason}”</span>}
+                          <span className="text-gray-400">by {l.actor_label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
+            )}
+
+            {staffChange && doctor && (
+              <StaffCodeModal businessId={doctor.id} action={staffChange.action} person={staffChange.person}
+                role={staffChange.role} onClose={() => setStaffChange(null)} onDone={finishStaffChange} />
             )}
 
             {/* GST number — added here as well as in signup, because a business

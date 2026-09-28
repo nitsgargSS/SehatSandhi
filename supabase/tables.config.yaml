@@ -449,6 +449,15 @@ tables:
     class: isolated
     purgeOrder: 29
 
+  # Clinic staff changes confirmed by emailed code, and their log (0147).
+  # Both cascade from businesses, so they go before it.
+  business_staff_requests:
+    class: isolated
+    purgeOrder: 27
+  business_staff_log:
+    class: isolated
+    purgeOrder: 27
+
   # WhatsApp-number codes at signup (0130). Test codes are test data.
   phone_verifications:
     class: isolated
