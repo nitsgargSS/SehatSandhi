@@ -45,6 +45,8 @@ import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../components/Charts'
 import { headcountFor, marginalDoctorCost, describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import StaffCodeModal from './StaffCodeModal'
+import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from './NurseLinks'
+import { listNurseLinks, type NurseLink } from '../../lib/nurseApi'
 import { listStaffLog, type StaffAction, type StaffChangeDone, type StaffLogRow } from '../../lib/staffApi'
 
 
@@ -243,6 +245,8 @@ export default function DoctorDashboard() {
     status: string
     /** 0140: added mid-term past the included doctors; live once paid. */
     awaiting_payment?: boolean
+    /** 0149: sees every admitted patient, whoever the doctor. */
+    ward_nurse?: boolean
     practitioners: {
       id: string; full_name: string; speciality: string | null
       qualification: string | null; reg_number: string | null; status: string
@@ -269,6 +273,8 @@ export default function DoctorDashboard() {
     action: StaffAction; person: { id: string; name: string; currentRole?: string | null }; role?: string | null
   } | null>(null)
   const [staffLog, setStaffLog] = useState<StaffLogRow[]>([])
+  // 0149: which nurse works for which doctor.
+  const [nurseLinks, setNurseLinks] = useState<NurseLink[]>([])
   const [showAddDoc, setShowAddDoc] = useState(false)
   const [feeFor, setFeeFor] = useState<string | null>(null)
   // 0139: invite a doctor to log in and set up their profile.
@@ -348,7 +354,11 @@ export default function DoctorDashboard() {
     setRoster((data as RosterRow[]) || [])
     // 0147: owners and managers only; RLS gives anyone else an empty list.
     listStaffLog(businessId).then(setStaffLog, () => setStaffLog([]))
+    listNurseLinks(businessId).then(setNurseLinks, () => setNurseLinks([]))
   }
+  const staffLite: StaffLite[] = roster.filter(r => r.practitioners).map(r => ({
+    id: r.practitioner_id, name: r.practitioners!.full_name, role: r.role ?? 'doctor', status: r.status, ward_nurse: r.ward_nurse,
+  }))
 
   /**
    * Add a doctor — attaching one who already exists wherever possible.
@@ -1755,7 +1765,11 @@ export default function DoctorDashboard() {
         )}
 
         {tab === 'mypractice' && doctor && myPractitionerId && (
-          <MyPractice businessId={doctor.id} practitionerId={myPractitionerId} onOpenPatient={openPatient} />
+          <>
+            <MyPractice businessId={doctor.id} practitionerId={myPractitionerId} onOpenPatient={openPatient} />
+            {/* 0149: a doctor's own nurses. Owners manage everyone's on Doctors & staff. */}
+            {role.role === 'doctor' && <MyNurses businessId={doctor.id} practitionerId={myPractitionerId} />}
+          </>
         )}
 
         {tab === 'doctors' && doctor && (
@@ -1997,6 +2011,7 @@ export default function DoctorDashboard() {
                   </div>
                 )}
 
+                <UnlinkedNursesAlert staff={staffLite} links={nurseLinks} />
                 {rosterErr && <div className={`${rosterErr.startsWith('✓') ? 'bg-teal-50 text-teal-700' : 'bg-red-50 text-red-600'} text-sm rounded-xl p-3 mb-3`}>{rosterErr}</div>}
 
                 {showAddDoc && (
@@ -2148,6 +2163,11 @@ export default function DoctorDashboard() {
                               )
                             )}
                           </div>
+                          {doctor && (
+                            <NurseLinksLine businessId={doctor.id} canEdit={!suspended}
+                              person={{ id: d.practitioner_id, name: person?.full_name ?? '', role: d.role ?? 'doctor', status: d.status, ward_nurse: d.ward_nurse }}
+                              staff={staffLite} links={nurseLinks} onChanged={() => loadRoster(doctor.id)} />
+                          )}
                           {feeFor === d.practitioner_id && doctor && (
                             <div className="mt-2 space-y-3">
                               <OpdFee businessId={doctor.id} practitionerId={d.practitioner_id} />

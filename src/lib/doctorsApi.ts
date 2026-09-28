@@ -46,17 +46,23 @@ export interface DoctorPatientRow {
 
 const oops = (e: { message: string } | null) => { if (e) throw new Error(e.message) }
 
-/** Doctors (and a doctor-owner) at this business, not suspended, by name. */
+/** Doctors (and a doctor-owner) at this business, not suspended, by name.
+ *  0149: to a nurse, only the doctors they work for — every picker and line
+ *  on the Queue and Patients pages is built from this list. */
 export async function listBusinessDoctors(businessId: string): Promise<BusinessDoctor[]> {
-  const { data, error } = await supabase.from('business_practitioners')
-    .select('practitioner_id, role, status, consultation_fee, discounted_fee, practitioners(full_name, speciality)')
-    .eq('business_id', businessId).in('role', ['doctor', 'owner']).neq('status', 'suspended')
+  const [{ data, error }, mine] = await Promise.all([
+    supabase.from('business_practitioners')
+      .select('practitioner_id, role, status, consultation_fee, discounted_fee, practitioners(full_name, speciality)')
+      .eq('business_id', businessId).in('role', ['doctor', 'owner']).neq('status', 'suspended'),
+    supabase.rpc('sehat_caller_nurse_doctors', { p_business: businessId }),
+  ])
   oops(error)
+  const onlyThese = (mine.data as string[] | null) ?? null
   return ((data ?? []) as unknown as {
     practitioner_id: string; consultation_fee: number | null; discounted_fee: number | null
     practitioners: { full_name: string; speciality: string | null } | null
   }[])
-    .filter(r => r.practitioners)
+    .filter(r => r.practitioners && (!onlyThese || onlyThese.includes(r.practitioner_id)))
     .map(r => ({
       practitioner_id: r.practitioner_id, full_name: r.practitioners!.full_name, speciality: r.practitioners!.speciality,
       consultation_fee: r.consultation_fee, discounted_fee: r.discounted_fee,

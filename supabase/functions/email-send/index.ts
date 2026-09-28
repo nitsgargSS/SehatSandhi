@@ -8,7 +8,8 @@
 //   business_welcome     → the business's own address
 //   admin_new_business   → ADMIN_EMAIL (admin@sehatsandhi.com)
 //   clinic_new_booking   → the business's address, and the doctor's if different (0136)
-//   doctor_invite        → the doctor: sign in, set a password, fill in the profile (0139)
+//   doctor_invite        → the new staff member: sign in, set a password; doctors also fill in the profile (0139, 0149)
+//   nurse_unassigned     → the business: a nurse is now linked to no doctor (0149)
 //
 // Until ZEPTOMAIL_TOKEN is set nothing is sent and rows wait. A welcome still
 // waiting after two days is skipped rather than sent late; the admin alert is
@@ -57,7 +58,7 @@ Deno.serve(async (req) => {
 
   const cutoff = new Date(Date.now() - 60_000).toISOString()
   const { data: rows, error } = await db.from('email_outbox')
-    .select('id, kind, business_id, appointment_id, practitioner_id, attempts, created_at')
+    .select('id, kind, business_id, appointment_id, practitioner_id, payload, attempts, created_at')
     .eq('status', 'pending').lte('created_at', cutoff)
     .order('created_at').limit(BATCH)
   if (error) return json({ error: error.message }, 500)
@@ -85,6 +86,17 @@ Deno.serve(async (req) => {
     if (r.kind === 'doctor_invite') {
       const res = await sendInvite(db, r.business_id, r.practitioner_id, site)
       if (res === 'skip') { await finish({ status: 'skipped', last_error: 'doctor gone or no email' }); continue }
+      if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
+      else {
+        const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
+        await finish({ status: giveUp ? 'failed' : 'pending', last_error: res.error }); failed++
+      }
+      continue
+    }
+
+    if (r.kind === 'nurse_unassigned') {
+      const res = await sendNurseUnassigned(db, r.business_id, r.practitioner_id, r.payload, site)
+      if (res === 'skip') { await finish({ status: 'skipped', last_error: 'nurse re-linked, gone, or no address' }); continue }
       if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
       else {
         const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
@@ -245,20 +257,55 @@ async function sendInvite(db: any, businessId: string | null, practitionerId: st
   if (!businessId || !practitionerId) return 'skip'
   const { data: p } = await db.from('practitioners').select('full_name, email').eq('id', practitionerId).maybeSingle()
   const { data: b } = await db.from('businesses').select('name').eq('id', businessId).maybeSingle()
+  const { data: aff } = await db.from('business_practitioners').select('role').eq('business_id', businessId).eq('practitioner_id', practitionerId).maybeSingle()
   const to = (p?.email ?? '').trim()
   if (!p || !to.includes('@')) return 'skip'
+  // 0149: nurses, reception and managers get this too; only doctors have a public profile.
+  const role = String(aff?.role ?? 'doctor')
+  const isDoctor = role === 'doctor' || role === 'owner'
+  const roleWord = ({ doctor: 'a doctor', owner: 'an owner', nurse: 'a nurse', receptionist: 'a receptionist', manager: 'a manager' } as Record<string, string>)[role] ?? 'staff'
   const login = `${site}/business/login`
   const steps = [
     `Go to <a href="${login}" style="color:#0f6b4a">${login.replace(/^https?:\/\//, '')}</a> and choose <b>Email me a code</b>. Enter <b>${esc(to)}</b> and the 6-digit code we send.`,
     'Set a password for next time: on the login page, <b>Forgot your password?</b> → code → choose a password.',
-    'Open <b>My practice → Public profile</b>: add your photo, qualification, experience, languages and a few lines about you. Patients see this page from the WhatsApp bot and the website.',
-    'Check your <b>OPD fee</b> on the same page, and any discount you offer.',
+    ...(isDoctor ? [
+      'Open <b>My practice → Public profile</b>: add your photo, qualification, experience, languages and a few lines about you. Patients see this page from the WhatsApp bot and the website.',
+      'Check your <b>OPD fee</b> on the same page, and any discount you offer.',
+    ] : []),
   ]
   const html = layout(`${b?.name ?? 'A clinic'} has added you on Sehatsandhi`, `
-<p style="margin:0 0 14px">Hello ${esc(p.full_name)}, <b>${esc(b?.name ?? 'your clinic')}</b> has listed you as a doctor on Sehatsandhi, so patients can find and book you on WhatsApp.</p>
+<p style="margin:0 0 14px">Hello ${esc(p.full_name)}, <b>${esc(b?.name ?? 'your clinic')}</b> has added you as ${roleWord} on Sehatsandhi${isDoctor ? ', so patients can find and book you on WhatsApp' : ''}.</p>
 <ol style="margin:0 0 16px;padding-left:20px">${steps.map(x => `<li style="margin-bottom:8px">${x}</li>`).join('')}</ol>
 <p style="margin:0 0 16px"><a href="${login}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold">Sign in</a></p>
-<p style="margin:0;color:#5b6b63;font-size:13px">One login covers every clinic you work at — switch between them from the dashboard. You see the patients you treat or who are referred to you.</p>`)
+<p style="margin:0;color:#5b6b63;font-size:13px">One login covers every clinic you work at — switch between them from the dashboard.${isDoctor ? ' You see the patients you treat or who are referred to you.' : ''}</p>`)
   const text = [`${b?.name ?? 'A clinic'} has added you on Sehatsandhi`, '', ...steps.map((x, i) => `${i + 1}. ${x.replace(/<[^>]+>/g, '')}`), '', `Sign in: ${login}`].join('\n')
-  return sendEmail({ to, toName: p.full_name, subject: `${b?.name ?? 'A clinic'} has added you on Sehatsandhi — set up your login and profile`, html, text })
+  return sendEmail({ to, toName: p.full_name, subject: `${b?.name ?? 'A clinic'} has added you on Sehatsandhi — set up your login${isDoctor ? ' and profile' : ''}`, html, text })
+}
+
+/**
+ * 0149: a nurse whose last doctor left or was unlinked. To the business's own
+ * address. Skipped if, by the time this runs, they have a doctor again, have
+ * become a ward nurse, or are no longer a nurse there.
+ */
+// deno-lint-ignore no-explicit-any
+async function sendNurseUnassigned(db: any, businessId: string | null, nurseId: string | null, payload: any, site: string): Promise<SendResult | 'skip'> {
+  if (!businessId || !nurseId) return 'skip'
+  const [{ data: b }, { data: p }, { data: aff }, { count: links }] = await Promise.all([
+    db.from('businesses').select('name, email').eq('id', businessId).maybeSingle(),
+    db.from('practitioners').select('full_name').eq('id', nurseId).maybeSingle(),
+    db.from('business_practitioners').select('role, status, ward_nurse').eq('business_id', businessId).eq('practitioner_id', nurseId).maybeSingle(),
+    db.from('nurse_doctor_links').select('doctor_id', { count: 'exact', head: true }).eq('business_id', businessId).eq('nurse_id', nurseId),
+  ])
+  const to = String(b?.email ?? '').trim()
+  if (!b || !p || !to.includes('@') || to.endsWith('@wa.sehatsandhi.in')) return 'skip'
+  if (!aff || aff.role !== 'nurse' || aff.status === 'suspended' || aff.ward_nurse || (links ?? 0) > 0) return 'skip'
+  const last = payload?.last_doctor ? ` Their last doctor was ${payload.last_doctor}.` : ''
+  const login = `${site}/business/login`
+  const html = layout(`${p.full_name} is not linked to any doctor`, `
+<p style="margin:0 0 12px">At <b>${esc(b.name)}</b>, nurse <b>${esc(p.full_name)}</b> is no longer linked to any doctor.${esc(last)}</p>
+<p style="margin:0 0 12px">Until they are linked to a doctor — or made a ward nurse — they cannot see any patients.</p>
+<p style="margin:0 0 16px">Open <b>Doctors &amp; staff</b> on your dashboard to link them, or remove them if they have left.</p>
+<p style="margin:0"><a href="${login}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold">Open dashboard</a></p>`)
+  const text = `At ${b.name}, nurse ${p.full_name} is no longer linked to any doctor.${last}\nUntil they are linked to a doctor, or made a ward nurse, they cannot see any patients.\nOpen Doctors & staff: ${login}`
+  return sendEmail({ to, toName: b.name, subject: `${p.full_name} is not linked to any doctor at ${b.name}`, html, text })
 }

@@ -458,6 +458,12 @@ tables:
     class: isolated
     purgeOrder: 27
 
+  # Which nurse works for which doctor (0149). Cascades from businesses and
+  # practitioners, so it goes before both.
+  nurse_doctor_links:
+    class: isolated
+    purgeOrder: 27
+
   # WhatsApp-number codes at signup (0130). Test codes are test data.
   phone_verifications:
     class: isolated
