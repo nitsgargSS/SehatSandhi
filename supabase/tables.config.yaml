@@ -671,6 +671,11 @@ tables:
   pincode_directory:
     class: never_purge
 
+  # Census 2011 district totals for "check your area" (0166). Reference data.
+  district_population:
+    class: sync
+    key: [district, state]
+
   imr_sync_state:
     class: never_purge
     # Import progress. Purging it would strand a half-finished run.

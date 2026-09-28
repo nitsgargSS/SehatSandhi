@@ -1,157 +1,221 @@
-import { useMemo, useRef, useState } from 'react'
-import { useServiceAreas, ServiceArea } from '../../hooks/useServiceAreas'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { MapPin, MessageCircle, CalendarCheck, Stethoscope, Check, Search, Info } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+import { useServiceAreas } from '../../hooks/useServiceAreas'
+import { usePricing } from '../../hooks/usePricing'
 import { BIZ } from './shared'
-import { money, num } from '../../lib/format'
+import { money } from '../../lib/format'
 import CountUp from '../../components/CountUp'
 import { Skeleton } from '../../components/Loading'
 
-// "Your reach snapshot" — a population-density heat map of every pincode in the
-// active district, driven by Supabase service_areas + pricing_tiers. Tiles carry
-// no text; hovering/tapping a tile reveals its details in a fixed-height panel
-// below the grid, so the layout never shifts.
+// "Live coverage" — the hero card on the business page.
+//
+// It used to be a heat map of the district's 12 largest pincodes, captioned
+// "across 12 pincodes in Yamuna Nagar district". That undersold the offer twice:
+// the plan includes EVERY pincode, and the bot searches the whole district
+// (0110) — so a count of rows in service_areas read as a limit that is not
+// there. The card now says where we are live and what a business gets, and
+// states no pincode count at all.
+//
+// Everything is still read, never asserted:
+//   • the district(s) come from service_areas, so a new district appears here
+//     the day it goes live, with nothing to edit;
+//   • residents is the sum of service_areas.population — worded as "in our live
+//     areas", because that is exactly what it counts;
+//   • the price and "every pincode" come from the active pricing plan, so a tier
+//     plan would say "from ₹X/month" instead.
+// No upcoming districts are named (decided 28 Sep 2026): "expanding to nearby
+// districts" only.
+//
+// "Check your area" (0166): any pincode → area, district, state, whether we are
+// live there, the district's Census 2011 population, and our own patient and
+// business counts once they are big enough to mean something. A disclaimer
+// under the result says where each number comes from and that the population
+// is indicative — the 2011 census is the latest published, and about 90% of
+// pincodes have a figure.
 
-// Indian short form: 6,20,000 → "6.2L", 1,20,00,000 → "1.2Cr".
+// Indian short form: 3,88,200 → "3.9L", 1,20,00,000 → "1.2Cr".
 function inShort(n: number): string {
-  if (n >= 1e7) return `${(n / 1e7).toFixed(n % 1e7 === 0 ? 0 : 1)}Cr`
-  if (n >= 1e5) return `${(n / 1e5).toFixed(n % 1e5 === 0 ? 0 : 1)}L`
-  if (n >= 1e3) return `${(n / 1e3).toFixed(0)}K`
+  if (n >= 1e7) return `${(n / 1e7).toFixed(1)}Cr`
+  if (n >= 1e5) return `${(n / 1e5).toFixed(1)}L`
+  if (n >= 1e3) return `${Math.round(n / 1e3)}K`
   return String(n)
 }
 
-// Shading ramp. Gamma 0.55 keeps small villages visibly distinct instead of all
-// washing out; cap max alpha at 0.78 so the darkest tiles never go solid (which
-// would flatten the ramp and kill any overlaid ink).
-function tileAlpha(population: number, maxPopulation: number): number {
-  if (maxPopulation <= 0) return 0.16
-  const a = 0.16 + 0.62 * Math.pow(population / maxPopulation, 0.55)
-  return Math.min(a, 0.78)
+interface AreaCheck {
+  found: boolean
+  reason?: 'invalid' | 'unknown'
+  pin_code?: string
+  area?: string | null
+  district?: string
+  state?: string
+  live?: boolean
+  live_pincodes?: number
+  live_residents?: number | null
+  census_population?: number | null
+  patients?: number | null
+  businesses?: number | null
 }
 
-// Show a tidy 3×4 grid: the district's top 12 pincodes by population.
-const MAX_TILES = 12
+function AreaChecker() {
+  const [pin, setPin] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [res, setRes] = useState<AreaCheck | null>(null)
+  const [err, setErr] = useState('')
+
+  const check = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErr(''); setRes(null)
+    if (!/^[1-8]\d{5}$/.test(pin)) { setErr('Enter a 6-digit pincode.'); return }
+    setBusy(true)
+    const { data, error } = await supabase.rpc('sehat_area_check', { p_pin: pin })
+    setBusy(false)
+    if (error) { setErr('Could not check that just now — please try again.'); return }
+    setRes(data as AreaCheck)
+  }
+
+  return (
+    <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px dashed ${BIZ.border}` }}>
+      <div style={{ fontSize: 13.5, fontWeight: 800, color: BIZ.ink, marginBottom: 8 }}>Check your area</div>
+      <form onSubmit={check} style={{ display: 'flex', gap: 8 }}>
+        <input value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          inputMode="numeric" placeholder="Your pincode" aria-label="Your pincode"
+          style={{ flex: 1, minWidth: 0, border: `1px solid ${BIZ.border}`, borderRadius: 11, padding: '10px 12px', fontSize: 15, fontFamily: 'inherit', background: BIZ.cream }} />
+        <button type="submit" disabled={busy || pin.length !== 6}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 14, padding: '10px 16px', borderRadius: 11, border: 'none', cursor: 'pointer', opacity: busy || pin.length !== 6 ? 0.6 : 1 }}>
+          <Search className="w-4 h-4" /> {busy ? 'Checking…' : 'Check'}
+        </button>
+      </form>
+      {err && <div style={{ fontSize: 13, color: '#b42318', marginTop: 8 }}>{err}</div>}
+
+      {res && !res.found && (
+        <div style={{ fontSize: 13.5, color: BIZ.muted, marginTop: 10 }}>
+          {res.reason === 'invalid' ? 'That does not look like an Indian pincode.' : 'We could not find that pincode in the India Post directory. Check the number, or register and tell us your area.'}
+        </div>
+      )}
+
+      {res?.found && (
+        <div style={{ marginTop: 12, background: BIZ.cream, border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: '14px 14px 12px' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink }}>
+            {[res.area, res.district].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ')}{res.state ? `, ${res.state}` : ''}
+          </div>
+          {res.census_population ? (
+            <div style={{ fontSize: 14, color: BIZ.muted, marginTop: 4 }}>
+              <b style={{ color: BIZ.green, fontSize: 18 }}>{inShort(res.census_population)}+</b> people in {res.district} district
+              <span style={{ fontSize: 12, color: BIZ.mutedWarm }}> (Census 2011)</span>
+            </div>
+          ) : null}
+          {(res.patients || res.businesses) ? (
+            <div style={{ fontSize: 13, color: BIZ.muted, marginTop: 4 }}>
+              {[res.patients ? `${res.patients.toLocaleString('en-IN')} patients` : null,
+                res.businesses ? `${res.businesses.toLocaleString('en-IN')} clinics & partners` : null].filter(Boolean).join(' · ')} already on Sehatsandhi here
+            </div>
+          ) : null}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 10, fontSize: 13.5, lineHeight: 1.5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 999, marginTop: 6, flex: '0 0 auto', background: res.live ? '#16a34a' : '#d97706' }} />
+            {res.live ? (
+              <span style={{ color: BIZ.ink }}><b>Live now</b> — every pincode in {res.district} district is included. Patients here can already find you on WhatsApp.</span>
+            ) : (
+              <span style={{ color: BIZ.ink }}><b>Not live yet</b> — be among the first clinics in {res.district} district.{' '}
+                <Link to="/business/register" style={{ color: BIZ.green, fontWeight: 800 }}>Register free →</Link></span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {res?.found && (
+        <p style={{ display: 'flex', gap: 6, fontSize: 11.5, color: BIZ.mutedWarm, lineHeight: 1.5, margin: '10px 0 0' }}>
+          <Info className="w-3.5 h-3.5" style={{ flex: '0 0 auto', marginTop: 2 }} />
+          <span>
+            <b>About these figures.</b> Area and district are from India Post's All India Pincode Directory. Population is the
+            district total from the Census of India 2011, the most recent census published, so today's figure is likely higher;
+            about 90% of pincodes have one, and districts formed after 2011 show none. Numbers are indicative and close to
+            accurate, not exact counts. Patient and clinic figures are Sehatsandhi's own, shown once there are enough to be meaningful.
+          </span>
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function ReachSnapshot() {
   const { areas, loading } = useServiceAreas()
-  const [hoveredPin, setHoveredPin] = useState<string | null>(null)
-  // whether the tapped tile was active at pointer-down (see onPointerDown below)
-  const preActiveRef = useRef(false)
+  const { plan, tiers } = usePricing()
 
-  // Real data when available, else the design fallback.
-  //
-  // The fallback is a DIFFERENT district-wide total from the real one — 6.2L
-  // against 3.5L — so rendering it while the query was still in flight made the
-  // headline figure visibly correct itself a moment after load. A number that
-  // changes in front of you is worse than a number that arrives late,
-  // especially this one: it is the reach a business is being asked to pay for.
-  // `loading` below holds the figure until it is true.
-  const pins = useMemo(() => {
-    // The database is the only source. The fallback here used to be eight
-    // Yamuna Nagar rows carrying prices — ₹3,000, ₹2,000 — from a plan that has
-    // not been sold for months, so the one time it was ever reached it showed a
-    // visitor a town we might not operate in at a price we do not charge.
-    // Showing nothing while the areas load is the honest version.
-    const source: ServiceArea[] = areas
-    // one district (the pilot); sort by population desc, keep the top 12
-    return [...source].sort((a, b) => b.population - a.population).slice(0, MAX_TILES)
-  }, [areas])
+  const districts = useMemo(
+    () => [...new Set(areas.map(a => a.district).filter(Boolean))],
+    [areas],
+  )
+  const residents = areas.reduce((s, a) => s + (a.population || 0), 0)
+  const everyPin = plan.mode === 'flat_all_pincodes'
+  const flat = plan.mode !== 'pincode_tiers'
+  const fromPrice = flat ? plan.monthly_price ?? 0
+    : Math.min(...tiers.map(t => t.monthly_price).filter(p => p > 0), Infinity)
 
-  // The district name comes from the service_areas row, so this widens on its
-  // own as new districts go live — nothing here to keep in sync by hand. Only
-  // the no-data fallback needed a word, and it must not name a town: a page
-  // that hardcodes one is wrong the week we open somewhere else.
-  const district = pins[0]?.district
-  const inDistrict = district ? `in ${district} district` : 'in your district'
-  const totalPop = pins.reduce((s, p) => s + p.population, 0)
-  const maxPop = pins.reduce((m, p) => Math.max(m, p.population), 0)
-  const active = pins.find(p => p.pin_code === hoveredPin) || null
+  const where = districts.length === 0 ? ''
+    : districts.length === 1 ? `${districts[0]} district`
+    : districts.length === 2 ? `${districts[0]} & ${districts[1]} districts`
+    : `${districts.length} districts`
+
+  const stat = (big: React.ReactNode, small: string) => (
+    <div style={{ background: BIZ.cream, border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: '12px 12px 11px' }}>
+      <div style={{ fontSize: 'clamp(19px,4.6vw,23px)', fontWeight: 800, color: BIZ.green, letterSpacing: '-.02em', lineHeight: 1.1 }}>{big}</div>
+      <div style={{ fontSize: 11.5, color: BIZ.mutedWarm, marginTop: 5, lineHeight: 1.35 }}>{small}</div>
+    </div>
+  )
 
   return (
     <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 22, padding: 'clamp(18px,5vw,26px)', boxShadow: '0 30px 60px -35px rgba(20,32,28,.35)' }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#8a8172', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 18 }}>Your reach snapshot</div>
-
-      {/* Loading follows the design doc's rule: a skeleton is a block the size
-          and shape of the thing it stands in for, not a marker beside it. So
-          the headline and its caption become two shimmering bars at their own
-          dimensions, and the grid below shimmers as tiles. */}
-      {loading ? (
-        <div style={{ display: 'grid', gap: 8, marginBottom: 20 }}>
-          <Skeleton width={168} height={44} radius={10} />
-          <Skeleton width="72%" height={13} radius={6} delay={0.08} />
-        </div>
-      ) : (
-        <>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 'clamp(34px,9vw,44px)', fontWeight: 800, color: '#0E9F6E', letterSpacing: '-.02em' }}>
-              <CountUp value={totalPop} format={inShort} />
-            </span>
-            <span style={{ fontSize: 15, fontWeight: 700, color: BIZ.muted }}>residents</span>
-          </div>
-          <div style={{ fontSize: 13, color: '#8a8172', marginBottom: 20 }}>
-            across {pins.length} pincodes {inDistrict}
-          </div>
-        </>
-      )}
-
-      {/* heat grid — clearing hover on the container, not per tile, avoids flicker */}
-      <div
-        onMouseLeave={() => setHoveredPin(null)}
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}
-      >
-        {loading && Array.from({ length: MAX_TILES }, (_, i) => (
-          // aspect-ratio:1 and a 0.08s cascade, per the doc's heat-grid state:
-          // the grid keeps its exact footprint, so nothing moves when data lands.
-          <span key={i} aria-hidden className="ss-skeleton"
-            style={{ aspectRatio: '1', minHeight: 44, borderRadius: 10, animationDelay: `${i * 0.08}s` }} />
-        ))}
-        {!loading && pins.map(p => {
-          const on = p.pin_code === hoveredPin
-          const alpha = tileAlpha(p.population, maxPop)
-          return (
-            <button
-              key={p.pin_code}
-              type="button"
-              aria-label={p.pin_code}
-              onMouseEnter={() => setHoveredPin(p.pin_code)}
-              onFocus={() => setHoveredPin(p.pin_code)}
-              // Record whether this tile was already active BEFORE focus/enter
-              // fires on this interaction, so onClick can toggle correctly. On a
-              // touch tap there is no hover: focus sets the pin, then onClick must
-              // KEEP it (pre-state inactive) — not immediately clear it. A second
-              // tap (pre-state active) clears it.
-              onPointerDown={() => { preActiveRef.current = hoveredPin === p.pin_code }}
-              onClick={() => setHoveredPin(preActiveRef.current ? null : p.pin_code)}
-              style={{
-                // min 44px keeps each tile a comfortable touch target on phones
-                aspectRatio: '1', minHeight: 44, borderRadius: 10, border: 'none', padding: 0, cursor: 'pointer',
-                background: `rgba(14, 159, 110, ${alpha})`,
-                transform: on ? 'scale(1.09)' : 'scale(1)',
-                boxShadow: on ? '0 6px 16px -6px rgba(14,159,110,.65)' : 'none',
-                transition: 'transform .12s ease',
-                outlineOffset: 2,
-              }}
-            />
-          )
-        })}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <span style={{ width: 8, height: 8, borderRadius: 999, background: '#16a34a', boxShadow: '0 0 0 4px rgba(22,163,74,.15)' }} />
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: '#8a8172', textTransform: 'uppercase', letterSpacing: '.1em' }}>Live coverage</span>
       </div>
 
-      {/* detail panel — fixed min-height so hover never shifts layout */}
-      <div style={{ background: '#f7f3ea', borderRadius: 14, padding: '13px 15px', marginTop: 16, minHeight: 76, boxSizing: 'border-box' }}>
-        {active ? (
-          <>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: '#14201c' }}>{active.area_name}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#0E9F6E' }}>{active.pin_code}</span>
+      {loading ? (
+        <div style={{ display: 'grid', gap: 10, marginBottom: 18 }}>
+          <Skeleton width="70%" height={30} radius={8} />
+          <Skeleton width="45%" height={14} radius={6} delay={0.08} />
+        </div>
+      ) : (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <MapPin className="w-6 h-6" style={{ color: BIZ.green, flex: '0 0 auto' }} />
+            <div style={{ fontSize: 'clamp(22px,5.4vw,28px)', fontWeight: 800, color: BIZ.ink, letterSpacing: '-.02em', lineHeight: 1.15 }}>
+              {where || 'Your district'}
             </div>
-            <div style={{ fontSize: 12.5, color: '#5f6b64', marginTop: 4 }}>{num(active.population)} residents</div>
-            <div style={{ fontSize: 12, color: '#8a8172', marginTop: 2 }}>{active.tier_name} tier · {money(active.monthly_price)}/mo</div>
-          </>
-        ) : (
-          <>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#14201c' }}>Tap a pincode</div>
-            <div style={{ fontSize: 12.5, color: '#5f6b64', marginTop: 4 }}>Darker = more residents</div>
-            <div style={{ fontSize: 12, color: '#8a8172', marginTop: 2 }}>{pins.length} pincodes live {inDistrict}</div>
-          </>
-        )}
+          </div>
+          <div style={{ fontSize: 14.5, color: BIZ.muted, marginTop: 6, marginLeft: 33 }}>
+            {everyPin ? 'Every pincode included — one flat price' : 'Pick the pincodes you want to reach'}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, marginBottom: 18 }}>
+        {stat(loading ? '—' : <><CountUp value={residents} format={inShort} />+</>, 'residents in our live areas')}
+        {stat(fromPrice && Number.isFinite(fromPrice) ? `${flat ? '' : 'from '}${money(fromPrice)}` : '—',
+              everyPin ? 'a month, all pincodes' : 'a month')}
+        {stat('24×7', 'booking on WhatsApp')}
+      </div>
+
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 10 }}>
+        {[
+          { icon: <MessageCircle className="w-4 h-4" />, t: 'Families nearby find you on WhatsApp, in Hindi or English' },
+          { icon: <CalendarCheck className="w-4 h-4" />, t: 'Bookings arrive straight at your desk — no missed calls' },
+          { icon: <Stethoscope className="w-4 h-4" />, t: 'OPD, IPD and in-house pharmacy software included' },
+        ].map(r => (
+          <li key={r.t} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14, color: '#3f4a44', lineHeight: 1.5 }}>
+            <span style={{ width: 26, height: 26, borderRadius: 8, background: BIZ.chipBg, color: BIZ.chipText, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>{r.icon}</span>
+            <span style={{ paddingTop: 3 }}>{r.t}</span>
+          </li>
+        ))}
+      </ul>
+
+      <AreaChecker />
+
+      <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: BIZ.mutedWarm }}>
+        <Check className="w-4 h-4" style={{ color: BIZ.green }} />
+        Expanding to nearby districts — register now to be first in your area.
       </div>
     </div>
   )
