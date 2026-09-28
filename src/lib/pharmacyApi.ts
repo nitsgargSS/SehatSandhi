@@ -16,6 +16,14 @@ export const PAY_METHODS: [PharmacyPayMethod, string][] = [
 ]
 export const GST_RATES = [0, 5, 12, 18, 28] as const
 
+export type PaymentStatus = 'paid' | 'partly_paid' | 'unpaid' | 'cancelled'
+export const PAYMENT_STATUS: Record<PaymentStatus, { label: string; cls: string }> = {
+  paid: { label: 'Paid in full', cls: 'text-green-700 bg-green-50' },
+  partly_paid: { label: 'Part paid', cls: 'text-amber-800 bg-amber-50' },
+  unpaid: { label: 'Unpaid', cls: 'text-red-700 bg-red-50' },
+  cancelled: { label: 'Cancelled', cls: 'text-gray-500 bg-gray-100' },
+}
+
 export interface PharmacyItem {
   id: string
   business_id: string
@@ -94,12 +102,15 @@ export interface PharmacyBill {
   status: 'issued' | 'cancelled'
   cancelled_reason: string | null
   issued_at: string
+  /** Whoever issued it — and so whoever gave any discount on it. */
+  issued_by_name: string | null
+  payment_status: PaymentStatus
   paid: number
   credited: number
   refunded: number
   balance_due: number
   items: PharmacyBillItem[]
-  payments: { amount: number; method: PharmacyPayMethod; reference: string | null; received_at: string }[]
+  payments: { amount: number; method: PharmacyPayMethod; reference: string | null; received_at: string; received_by_name: string | null }[]
   returns: { kind: 'return' | 'cancel'; credit_amount: number; refund_amount: number; refund_method: string | null
              reason: string | null; created_at: string; items: { name: string; qty: number }[] }[]
 }
@@ -320,6 +331,51 @@ export async function cancelBill(billId: string, reason: string, refundMethod: P
   })
   oops(error)
   return data as { refund: number }
+}
+
+/** One row per patient (or walk-in) who owes the counter money. */
+export interface Due {
+  patient_member_id: string | null
+  customer_name: string
+  customer_phone: string | null
+  total_due: number
+  bills: number
+  oldest_bill_at: string
+  last_paid_at: string | null
+  bill_ids: string[]
+}
+
+export async function getDues(businessId: string): Promise<Due[]> {
+  const { data, error } = await supabase.rpc('sehat_pharmacy_dues', { p_business: businessId })
+  oops(error)
+  return (data ?? []).map((d: Due) => ({ ...d, total_due: Number(d.total_due) }))
+}
+
+export async function getBillsByIds(ids: string[]): Promise<PharmacyBill[]> {
+  if (!ids.length) return []
+  const { data, error } = await supabase.from('pharmacy_bill_detail').select('*').in('id', ids).order('issued_at')
+  oops(error)
+  return (data ?? []).map(toBill)
+}
+
+export interface StockMove {
+  id: string
+  kind: 'purchase' | 'sale' | 'return' | 'cancel' | 'adjust'
+  qty: number
+  reason: string | null
+  created_at: string
+  batch: { batch_no: string } | null
+  bill: { bill_no: string; customer_name: string } | null
+  purchase: { supplier_name: string | null; invoice_no: string | null } | null
+}
+
+/** Every movement of one medicine, newest first — to reconcile a count against. */
+export async function getStockMoves(itemId: string): Promise<StockMove[]> {
+  const { data, error } = await supabase.from('pharmacy_stock_moves')
+    .select('id, kind, qty, reason, created_at, batch:pharmacy_batches(batch_no), bill:pharmacy_bills(bill_no, customer_name), purchase:pharmacy_purchases(supplier_name, invoice_no)')
+    .eq('item_id', itemId).order('created_at', { ascending: false }).limit(100)
+  oops(error)
+  return (data ?? []) as unknown as StockMove[]
 }
 
 export async function getPrescriptionsForDispensing(businessId: string, memberId: string): Promise<RxForDispensing[]> {
