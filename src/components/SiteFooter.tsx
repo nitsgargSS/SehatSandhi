@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { OPEN_ANALYTICS_SETTINGS } from './AnalyticsConsent'
 import { Facebook, Instagram } from 'lucide-react'
 import { useLanguage } from '../i18n/LanguageContext'
 import { WA_LINK, CALL_NUMBER, prettyPhone } from '../types'
@@ -59,6 +60,10 @@ export default function SiteFooter() {
               {hi ? l.hi : l.en}
             </Link>
           ))}
+          <button onClick={() => window.dispatchEvent(new Event(OPEN_ANALYTICS_SETTINGS))}
+            style={{ fontSize: 13.5, fontWeight: 700, color: HEADER.muted, whiteSpace: 'nowrap', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {hi ? 'एनालिटिक्स सेटिंग' : 'Analytics settings'}
+          </button>
         </div>
 
         {/* Legal entity, spelled out because the brand name and the registered

@@ -1,10 +1,12 @@
-// Google Analytics 4 — the typed edge of the snippet in index.html.
+// Google Analytics 4 — loaded only with the visitor's consent.
 //
-// The tag itself is loaded there, in the document head, because GA wants to be
-// running before the app boots. This module exists so the rest of the code can
-// send events without casting window on every call site, and so a build without
-// the tag (a local dev run with an ad blocker on, say) is a no-op rather than a
-// crash.
+// Until 29 Sep 2026 the tag sat in index.html and ran for everyone. Under the
+// DPDP Act 2023 analytics is not needed to provide the service, so it now waits
+// for "Allow" on the consent banner (components/AnalyticsConsent.tsx); the
+// choice is kept in localStorage and can be changed from the footer. Without
+// consent every call here is a no-op, exactly as when the tag is blocked.
+// Our own first-party events (lib/analytics.ts) are anonymous, per-tab and
+// honour Do Not Track; they are described in the Privacy Policy.
 //
 // GA is deliberately the shallower of our two analytics systems. It answers
 // "how much traffic, from where, on what" and it answers it about aggregates.
@@ -21,8 +23,55 @@ interface GtagWindow extends Window {
   gtag?: (...args: GtagArgs) => void
 }
 
-/** The measurement id, matching the snippet in index.html. */
 export const GA_MEASUREMENT_ID = 'G-TDG8G7ZXZ5'
+
+const CONSENT_KEY = 'ss_analytics_consent'
+export type AnalyticsConsent = 'granted' | 'denied' | null
+
+export function getAnalyticsConsent(): AnalyticsConsent {
+  try {
+    const v = localStorage.getItem(CONSENT_KEY)
+    return v === 'granted' || v === 'denied' ? v : null
+  } catch { return null }
+}
+
+let loaded = false
+/** Adds the GA tag to the page. Only ever called after consent. */
+function loadGa(): void {
+  if (loaded || typeof document === 'undefined') return
+  loaded = true
+  const w = window as unknown as { dataLayer: unknown[]; gtag: (...a: unknown[]) => void }
+  w.dataLayer = w.dataLayer || []
+  // eslint-disable-next-line prefer-rest-params
+  w.gtag = function () { w.dataLayer.push(arguments) }
+  w.gtag('js', new Date())
+  w.gtag('config', GA_MEASUREMENT_ID)
+  const s = document.createElement('script')
+  s.async = true
+  s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`
+  document.head.appendChild(s)
+}
+
+/** Record the visitor's choice. Withdrawing stops GA from the next page load
+ *  (a tag already running cannot be unloaded) and removes its cookies now. */
+export function setAnalyticsConsent(v: 'granted' | 'denied'): void {
+  try { localStorage.setItem(CONSENT_KEY, v) } catch { /* private mode: ask again next time */ }
+  if (v === 'granted') { loadGa(); return }
+  for (const c of document.cookie.split(';')) {
+    const name = c.split('=')[0].trim()
+    if (name === '_ga' || name.startsWith('_ga_')) {
+      const host = window.location.hostname
+      for (const domain of ['', host, `.${host.replace(/^www\./, '')}`]) {
+        document.cookie = `${name}=; Max-Age=0; path=/${domain ? `; domain=${domain}` : ''}`
+      }
+    }
+  }
+}
+
+/** Start GA at boot if the visitor allowed it earlier. */
+export function initAnalyticsFromConsent(): void {
+  if (getAnalyticsConsent() === 'granted') loadGa()
+}
 
 function gtag(...args: GtagArgs): void {
   const w = window as GtagWindow
