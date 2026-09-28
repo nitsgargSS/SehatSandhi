@@ -257,6 +257,50 @@ tables:
     purgeOrder: 103
     pk: business_id
 
+  # ── In-house dispensing (0158) ──────────────────────────────────────────
+  # A clinic's own medicine counter. Children before parents: bill lines,
+  # payments, returns and the stock ledger before bills and batches, batches
+  # before purchases and items. All before prescriptions (106).
+  pharmacy_stock_moves:
+    class: isolated
+    purgeOrder: 95.1
+
+  pharmacy_returns:
+    class: isolated
+    purgeOrder: 95.2
+
+  pharmacy_payments:
+    class: isolated
+    purgeOrder: 95.3
+
+  pharmacy_bill_items:
+    class: isolated
+    purgeOrder: 95.4
+
+  pharmacy_bills:
+    class: isolated
+    purgeOrder: 95.5
+
+  pharmacy_bill_counters:
+    class: isolated
+    purgeOrder: 95.6
+
+  pharmacy_batches:
+    class: isolated
+    purgeOrder: 95.7
+
+  pharmacy_purchases:
+    class: isolated
+    purgeOrder: 95.8
+
+  pharmacy_suppliers:
+    class: isolated
+    purgeOrder: 95.85
+
+  pharmacy_items:
+    class: isolated
+    purgeOrder: 95.9
+
   # ── Patient bills (0056) ────────────────────────────────────────────────
   # Numbered after charges (86) and payments (84), which both carry a bill_id
   # pointing here. Every FK on a bill has an ON DELETE clause, so nothing here
@@ -670,6 +714,8 @@ tables:
   admission_bed_history:    { class: view }
   discharge_summary_detail: { class: view }
   patient_bill_detail:      { class: view }
+  pharmacy_bill_detail:     { class: view }
+  pharmacy_stock:           { class: view }
   patient_documents_to_purge: { class: view }
   practitioner_daily_stats: { class: view }
   business_modules:         { class: view }
