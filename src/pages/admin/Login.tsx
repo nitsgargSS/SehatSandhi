@@ -1,4 +1,5 @@
 import { useNavigate, Link } from 'react-router-dom'
+import IdleNotice from '../../components/IdleNotice'
 import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
 import EmailSignIn from '../../components/EmailSignIn'
@@ -31,6 +32,7 @@ export default function AdminLogin() {
         </div>
         <Link to="/" aria-label="Sehatsandhi — home" className="block"><img src="/logo.png" alt="Sehatsandhi" className="h-12 mx-auto mb-6" /></Link>
         <h2 className="text-xl font-bold text-navy-700 text-center mb-6">{t('adminLoginPage.title')}</h2>
+        <IdleNotice />
 
         <EmailSignIn
           submitLabel={t('adminLoginPage.btnLogin')}

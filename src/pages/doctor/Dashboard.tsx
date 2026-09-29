@@ -1278,17 +1278,20 @@ export default function DoctorDashboard() {
           })}
         </nav>
 
-        {/* marginTop:auto pins log-out to the bottom of the full-height rail,
-            where the wizard puts its "need help?" card. */}
-        <button onClick={logout}
-          style={{
-            marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 9, width: '100%',
-            fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            padding: '11px 13px', borderRadius: 11,
-            background: 'rgba(255,255,255,.06)', border: 'none', color: '#c9d6d0',
-          }}>
-          <LogOut className="w-4 h-4" /> {t('dashboardPage.logout')}
-        </button>
+        {/* Pinned to the bottom of the rail and always visible: with a long
+            menu it used to sit below the fold, where nobody found it. */}
+        <div style={{ marginTop: 'auto', position: 'sticky', bottom: -28, background: BIZ.ink, padding: '14px 0 28px' }}>
+          {signedInAs && <div style={{ fontSize: 11.5, color: '#8fa89d', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Signed in as {signedInAs}</div>}
+          <button onClick={logout}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 9, width: '100%',
+              fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              padding: '11px 13px', borderRadius: 11,
+              background: 'rgba(255,255,255,.1)', border: 'none', color: '#fff',
+            }}>
+            <LogOut className="w-4 h-4" /> {t('dashboardPage.logout')}
+          </button>
+        </div>
       </div>
 
       {/* ── tablet/mobile: ink bar with the same nav, scrolled sideways ── */}

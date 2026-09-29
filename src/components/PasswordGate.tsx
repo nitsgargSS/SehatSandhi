@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import IdleLogout, { IDLE_MINUTES } from './IdleLogout'
 import { supabase } from '../lib/supabase'
 import { passwordProblem, checkPassword } from '../lib/credentials'
 import {
@@ -27,7 +28,12 @@ import { Spinner } from './Loading'
 // why, and offer the way out — because with 0081 in place, an expired login
 // without this screen would just look like a clinic whose data had vanished.
 
-export default function PasswordGate({ children }: { children: React.ReactNode }) {
+export default function PasswordGate({ children, idle = 'business', loginPath = '/business/login' }: {
+  children: React.ReactNode
+  /** Which idle sign-out applies (IdleLogout): 30 min for clinics, 15 for Sehatsandhi admin. */
+  idle?: keyof typeof IDLE_MINUTES
+  loginPath?: string
+}) {
   const [state, setState] = useState<PasswordState | null>(null)
   const [loading, setLoading] = useState(true)
   const [dismissed, setDismissed] = useState(false)
@@ -83,6 +89,7 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
           </div>
         )}
         {children}
+        {!loading && <IdleLogout minutes={IDLE_MINUTES[idle]} loginPath={loginPath} />}
       </>
     )
   }

@@ -839,7 +839,7 @@ export default function AdminDashboard() {
             top of the content while ml-56 pushed that content off-screen — on a
             360px phone it left about 70px of usable width, so every panel here
             was unreadable, not only the charts. */}
-        <aside className="hidden md:flex w-56 bg-navy-700 min-h-screen fixed left-0 top-0 flex-col pt-6">
+        <aside className="hidden md:flex w-56 bg-navy-700 h-screen overflow-y-auto fixed left-0 top-0 flex-col pt-6">
           <div className="px-5 mb-4">
             <Link to="/" aria-label="Sehatsandhi — home" className="inline-flex"><img src="/logo.png" alt="Sehatsandhi" className="h-10 brightness-0 invert" /></Link>
             <p className="text-white/40 text-xs mt-2">{t('adminDashboardPage.sidebarLabel')}</p>
@@ -856,7 +856,7 @@ export default function AdminDashboard() {
               </button>
             ))}
           </nav>
-          <button onClick={logout} className="flex items-center gap-2 px-5 py-4 text-white/40 hover:text-white text-sm transition border-t border-white/10 mt-auto">
+          <button onClick={logout} className="sticky bottom-0 bg-navy-700 flex items-center gap-2 px-5 py-4 text-white/80 hover:text-white text-sm font-semibold transition border-t border-white/10 mt-auto">
             <LogOut className="w-4 h-4" /> {t('adminDashboardPage.logout')}
           </button>
         </aside>
