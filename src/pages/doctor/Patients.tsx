@@ -121,9 +121,13 @@ const SOURCE_LABEL: Record<string, string> = {
   prescription: 'Prescription',
 }
 
-export default function Patients({ businessId, practitionerId, openMemberId }: {
+export default function Patients({ businessId, practitionerId, doctorId, openMemberId }: {
   businessId: string
+  /** Who is signed in, when they are staff — the author of what they record. */
   practitionerId?: string | null
+  /** The signed-in person when they are a doctor here; null for nurses,
+   *  reception and managers, who must not be offered as the patient's doctor. */
+  doctorId?: string | null
   openMemberId?: string | null
 }) {
   const [query, setQuery] = useState('')
@@ -294,7 +298,7 @@ export default function Patients({ businessId, practitionerId, openMemberId }: {
 
       {registering && (
         <RegisterPatient
-          practitionerId={practitionerId}
+          practitionerId={doctorId ?? null}
           businessId={businessId}
           // Prefill from whatever they were searching for: reception usually
           // types the name or number, finds nothing, and then registers exactly
