@@ -42,7 +42,7 @@ export async function fulfilPayment(
 
   const { data: existing } = await supabase
     .from('payments')
-    .select('id, type, status, amount, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon, addon_practitioner_id')
+    .select('id, type, status, amount, addon_codes, addon_practitioner_id, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon')
     .eq(paymentRowId ? 'id' : 'razorpay_order_id', paymentRowId ?? orderId)
     .maybeSingle()
 
@@ -140,6 +140,10 @@ export async function fulfilPayment(
     invoiceError = String((e as Error).message ?? e)
   }
 
+  // 0178: in-clinic test add-ons this payment bought — switched on and renewed.
+  // A no-op for a payment that bought none. Idempotent.
+  await supabase.rpc('sehat_grant_paid_addons', { p_payment_id: pay.id }).then(() => undefined, () => undefined)
+
   // 0140: a doctor added mid-term goes live once their pro-rata fee is paid.
   if (pay.addon_practitioner_id && pay.business_id) {
     await supabase.rpc('sehat_release_paid_doctor', { p_business: pay.business_id, p_practitioner: pay.addon_practitioner_id })
@@ -202,10 +206,24 @@ export async function fulfilPayment(
 const PAY_KIND: Record<string, string> = {
   listing: 'Listing plan', wallet_topup: 'WhatsApp wallet top-up',
 }
+const ADDON_NAME: Record<string, string> = { pathology: 'Pathology add-on', radiology: 'Radiology add-on', cardiology: 'Heart tests & X-ray' }
+
+/** What a payment bought, in words: a plan, or an add-on bought mid-term. */
+function paidFor(pay: { type: string; period_months: number | null; whatsapp_addon: boolean | null
+  addon_codes?: string[] | null; addon_practitioner_id?: string | null; subscription_amount?: number | string | null }): string {
+  const addons = (pay.addon_codes ?? []).map(c => ADDON_NAME[c] ?? c)
+  const midTerm = pay.subscription_amount != null && Number(pay.subscription_amount) === 0
+  if (midTerm) {
+    const bits = [...addons, ...(pay.addon_practitioner_id ? ['Extra doctor'] : []), ...(pay.whatsapp_addon ? ['WhatsApp'] : [])]
+    return `${bits.join(' + ') || 'Add-on'} (rest of the current term)`
+  }
+  return `${PAY_KIND[pay.type] ?? pay.type}${pay.period_months && pay.type === 'listing' ? ` · ${pay.period_months} month(s)` : ''}${pay.whatsapp_addon ? ' + WhatsApp' : ''}${addons.length ? ` + ${addons.join(' + ')}` : ''}`
+}
 
 async function alertAdminPaid(
   supabase: SupabaseClient,
-  pay: { id: string; type: string; amount: number | string | null; business_id: string | null; period_months: number | null; whatsapp_addon: boolean | null },
+  pay: { id: string; type: string; amount: number | string | null; business_id: string | null; period_months: number | null; whatsapp_addon: boolean | null
+         addon_codes?: string[] | null; addon_practitioner_id?: string | null; subscription_amount?: number | string | null },
   invoiceNumber: string | null,
 ) {
   const { data } = await supabase.from('businesses')
@@ -220,7 +238,7 @@ async function alertAdminPaid(
     ['Place', [b.own_city, b.own_district].filter(Boolean).join(', ') || '—'],
     ['Phone', b.phone || '—'],
     ['Email', b.email || '—'],
-    ['Paid for', `${PAY_KIND[pay.type] ?? pay.type}${pay.period_months && pay.type === 'listing' ? ` · ${pay.period_months} month(s)` : ''}${pay.whatsapp_addon ? ' + WhatsApp' : ''}`],
+    ['Paid for', paidFor(pay)],
     ['Amount (incl. GST)', amount],
     ['Invoice', invoiceNumber ?? 'not issued — check the payment in admin'],
     ['Listing status', b.status === 'active' ? 'Live' : (b.status ?? '—')],

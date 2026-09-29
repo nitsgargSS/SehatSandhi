@@ -266,6 +266,8 @@ Deno.serve(async (req) => {
       subscription_amount: priced.subscriptionTotal,
       whatsapp_addon: priced.whatsappSelected,
       whatsapp_amount: priced.whatsappTotal,
+      // 0178: the paid add-ons this term renews; fulfilment keeps them on.
+      addon_codes: priced.addonCodes ?? [],
       coupon_code: priced.coupon?.code ?? null,
       coupon_discount: priced.coupon?.discount ?? 0,
       auto_renew: body.autoRenew === false ? false : true,

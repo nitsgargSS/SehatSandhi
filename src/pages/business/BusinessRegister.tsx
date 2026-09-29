@@ -85,6 +85,9 @@ const categoryOptions = (v: VerticalKey): string[] => {
   }
 }
 
+// 0178: more doctors than this is a hospital (enforced by the database too).
+const CLINIC_MAX_DOCTORS = 3
+
 // 0177: a lab's category decides which tests and reports it gets.
 const LAB_KIND_FOR: Record<string, string[]> = {
   'Pathology': ['pathology'],
@@ -1140,9 +1143,20 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               ✓ {practitioners.find(d => d.is_owner)!.name} (owner) is included. Add any other doctors below.
                             </p>
                           )}
+                          {/* 0178: a clinic has at most 3 doctors, owner included — more is a hospital. */}
+                          {vertical === 'clinic' && practitioners.length >= CLINIC_MAX_DOCTORS && (
+                            <p style={{ fontSize: 13, color: '#b45309', margin: '0 0 12px' }}>
+                              A clinic can have up to {CLINIC_MAX_DOCTORS} doctors. For more, go back and register as a Hospital.
+                            </p>
+                          )}
                           <PractitionerPicker
                             added={practitioners.filter(d => !d.is_owner)}
-                            onAdd={d => setPractitioners(list => [...list, d])}
+                            onAdd={d => {
+                              if (vertical === 'clinic' && practitioners.length >= CLINIC_MAX_DOCTORS) {
+                                setError(`A clinic can have up to ${CLINIC_MAX_DOCTORS} doctors. For more, register as a Hospital.`); return
+                              }
+                              setPractitioners(list => [...list, d])
+                            }}
                             onRemove={i => {
                               const target = practitioners.filter(d => !d.is_owner)[i]
                               setPractitioners(list => list.filter(d => d !== target))

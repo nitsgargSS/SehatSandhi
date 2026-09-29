@@ -150,6 +150,9 @@ export interface PriceResult {
   whatsappAvailable: boolean
   whatsappSelected: boolean
   whatsappTotal: number
+  /** 0178: paid in-clinic test add-ons renewed with this term, and their total. */
+  addonCodes: string[]
+  addonTotal: number
   coupon: { code: string; label: string; discount: number } | null
   couponError: string | null
   lineItems: LineItem[]
@@ -585,6 +588,7 @@ export async function computePrice(
       priceIncludesGst: plan.price_includes_gst,
       pricingSource: byType ? 'type' : 'plan',
       subscriptionTotal: 0, whatsappAvailable: byType, whatsappSelected: false, whatsappTotal: 0,
+      addonCodes: [], addonTotal: 0,
       coupon: null, couponError: null, lineItems: [],
       ...planFields,
     }
@@ -726,6 +730,21 @@ export async function computePrice(
   }
   const whatsappSelected = byType && Boolean(extra.whatsapp) && !waComplimentary
 
+  // 0178: the paid in-clinic test add-ons this business keeps renew with the
+  // plan, at today's price per month × the term's months.
+  let addons: { code: string; label: string; monthly: number }[] = []
+  if (byType && businessId) {
+    const { data: bz } = await supabase.from('businesses').select('renewal_addons').eq('id', businessId).maybeSingle()
+    const codes = ((bz as { renewal_addons?: string[] } | null)?.renewal_addons ?? [])
+    if (codes.length) {
+      const { data: ap } = await supabase.from('addon_prices').select('code, label, monthly_price, is_enabled').in('code', codes)
+      addons = ((ap ?? []) as { code: string; label: string; monthly_price: number; is_enabled: boolean }[])
+        .filter(a => a.is_enabled && Number(a.monthly_price) > 0)
+        .map(a => ({ code: a.code, label: a.label, monthly: Number(a.monthly_price) }))
+    }
+  }
+  let addonTotal = 0
+
   if (byType) {
     // Subscription for the term (a negotiated price still wins), the doctor
     // extra, any modules, the WhatsApp add-on if chosen, less the coupon — which
@@ -742,9 +761,13 @@ export async function computePrice(
     if (doctorTotal > 0) lineItems.push({ label: `Additional doctors — ${typeExtraDoctors} × ₹${vb.extraDoctorPrice}/month × ${months}`, amount: doctorTotal })
     if (moduleTermTotal > 0) lineItems.push({ label: `Clinical systems — ${termName}`, amount: moduleTermTotal })
     if (whatsappTotal > 0) lineItems.push({ label: `WhatsApp Business Verification & Activation Fee — ${termName}`, amount: whatsappTotal })
+    for (const a of addons) {
+      lineItems.push({ label: `${a.label} add-on — ₹${a.monthly}/month × ${months}`, amount: a.monthly * months })
+      addonTotal += a.monthly * months
+    }
     if (discount > 0 && couponRes.coupon) lineItems.push({ label: `Coupon ${couponRes.coupon.label}`, amount: -discount })
 
-    termTotal = Math.max(0, subscriptionTotal + doctorTotal + moduleTermTotal + whatsappTotal - discount)
+    termTotal = Math.max(0, subscriptionTotal + doctorTotal + moduleTermTotal + whatsappTotal + addonTotal - discount)
   } else if (term && customMonthly === null && monthlyApplies) {
     const base = term.multiplies_headcount ? applyHeadcount(term.price, hc) : term.price
     termTotal = base + moduleTotal * months
@@ -781,6 +804,8 @@ export async function computePrice(
     whatsappAvailable: byType,
     whatsappSelected,
     whatsappTotal,
+    addonCodes: addons.map(a => a.code),
+    addonTotal,
     coupon: couponRes.coupon,
     couponError: couponRes.error,
     lineItems,

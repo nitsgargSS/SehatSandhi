@@ -235,6 +235,24 @@ export interface WhatsappAddonQuote {
 export const whatsappAddon = (businessId: string, action: 'quote' | 'order', authToken: string) =>
   callFn<WhatsappAddonQuote>('whatsapp-addon-order', { businessId, action }, authToken)
 
+// ── 0178: in-clinic test add-ons ──────────────────────────────────────────
+
+export interface AddonPrice { code: 'pathology' | 'radiology' | 'cardiology'; label: string; monthly_price: number; is_enabled: boolean; sort_order: number }
+
+export async function getAddonPrices(): Promise<AddonPrice[]> {
+  const { data, error } = await supabase.from('addon_prices').select('*').order('sort_order')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as AddonPrice[]
+}
+
+export interface LabAddonQuote extends Omit<WhatsappAddonQuote, 'fullFee'> {
+  code: string; label: string; monthly: number; fullFee: number
+}
+
+/** A paid add-on bought mid-term: its monthly price × the term, pro rata to the plan's end. */
+export const labAddon = (businessId: string, code: string, action: 'quote' | 'order', authToken: string) =>
+  callFn<LabAddonQuote>('lab-addon-order', { businessId, code, action }, authToken)
+
 export const verifyRazorpayPayment = (args: {
   orderId: string
   paymentId: string
