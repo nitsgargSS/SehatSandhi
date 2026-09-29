@@ -101,7 +101,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -268,6 +268,12 @@ export default function DoctorDashboard() {
   // or a receptionist is nobody on the roster, so this stays null and a visit
   // they record simply carries no practitioner rather than inventing one.
   const [myPractitionerId, setMyPractitionerId] = useState<string | null>(null)
+  // The same person, but only when they are a doctor here. Nurses, reception
+  // and managers have a practitioner row too; anywhere that means "the doctor"
+  // (the queue's view, a new token's doctor, a new patient's doctor, My
+  // practice) must use this, or they get treated as the doctor.
+  const myDoctorId = myPractitionerId && (!role.enforced || role.role === 'doctor' || role.role === 'owner')
+    ? myPractitionerId : null
   // A patient another tab asked to open (My practice, Doctors → Patients).
   const [openMember, setOpenMember] = useState<string | null>(null)
   const openPatient = (memberId: string) => { setOpenMember(memberId); setTab('patients') }
@@ -987,7 +993,10 @@ export default function DoctorDashboard() {
 
   const tabs = [
     // 0121: a doctor's own page, first for anyone who is a doctor here.
-    ...(myPractitionerId && emr ? [
+    // A doctor's own page — their patients, public profile, fee, leave. Only
+    // for doctors: every nurse, receptionist and manager also has a
+    // practitioner row, and used to land here on a doctor's page.
+    ...(myDoctorId && emr ? [
       { id: 'mypractice', label: 'My practice', icon: <User className="w-4 h-4" /> },
     ] : []),
     ...(booksAppointments ? [
@@ -1059,6 +1068,10 @@ export default function DoctorDashboard() {
     // hiding the tab is not the only thing stopping them.
     ...(prescriber ? [
       { id: 'reports', label: 'Reports', icon: <TrendingUp className="w-4 h-4" /> },
+    ] : []),
+    // Staff who are not doctors: their own number and password, last.
+    ...(myPractitionerId && !myDoctorId ? [
+      { id: 'myaccount', label: 'My account', icon: <User className="w-4 h-4" /> },
     ] : []),
   ]
 
@@ -1806,7 +1819,7 @@ export default function DoctorDashboard() {
 
         {/* ══════════ QUEUE — today's OPD line ══════════ */}
         {tab === 'queue' && emr && access.opd && doctor && (
-          <Queue businessId={doctor.id} practitionerId={myPractitionerId} />
+          <Queue businessId={doctor.id} practitionerId={myDoctorId} />
         )}
 
         {/* ══════════ BEDS — the ward board ══════════ */}
@@ -1841,7 +1854,7 @@ export default function DoctorDashboard() {
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
         {tab === 'patients' && emr && (access.opd || access.ipd) && doctor && (
-          <Patients businessId={doctor.id} practitionerId={myPractitionerId} openMemberId={openMember} />
+          <Patients businessId={doctor.id} practitionerId={myPractitionerId} doctorId={myDoctorId} openMemberId={openMember} />
         )}
 
         {tab === 'mypractice' && doctor && myPractitionerId && (
@@ -1858,6 +1871,13 @@ export default function DoctorDashboard() {
               <SetPasswordByCode />
             </div>
           </>
+        )}
+
+        {tab === 'myaccount' && myPractitionerId && (
+          <div className="grid md:grid-cols-2 gap-4">
+            <PractitionerPhoneCard practitionerId={myPractitionerId} />
+            <SetPasswordByCode />
+          </div>
         )}
 
         {tab === 'doctors' && doctor && (
