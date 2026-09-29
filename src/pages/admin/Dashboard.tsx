@@ -18,6 +18,7 @@ import InsightsPanel from './InsightsPanel'
 import LeadsPanel from './LeadsPanel'
 import WhatsAppMarketingPanel from './WhatsAppMarketingPanel'
 import TypePricingCard from './TypePricingCard'
+import AddonPricingCard from './AddonPricingCard'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
 import PharmacySwitch from './PharmacySwitch'
@@ -1317,6 +1318,8 @@ export default function AdminDashboard() {
               {/* 0117: what each business type pays. Wins over the plan below
                   for every type that has prices here — all six, as seeded. */}
               <TypePricingCard />
+              {/* 0178: in-clinic test add-ons (pathology, radiology, heart tests & X-ray). */}
+              <AddonPricingCard />
               {/* Which plan new registrations are being quoted right now */}
               <div className="card shadow-sm">
                 <h2 className="font-bold text-navy-700 text-lg mb-1">{t('adminDashboardPage.billingHeading')}</h2>

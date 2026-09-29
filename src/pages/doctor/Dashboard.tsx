@@ -53,6 +53,7 @@ import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../compon
 import { headcountFor, marginalDoctorCost, describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import StaffCodeModal from './StaffCodeModal'
 import LabKindPicker from './LabKindPicker'
+import AddonsPanel from './AddonsPanel'
 import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from './NurseLinks'
 import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
 import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
@@ -1893,7 +1894,15 @@ export default function DoctorDashboard() {
 
         {/* ══════════ CLINIC — doctors on the roster + camps & offers ══════════ */}
         {tab === 'plan' && doctor && (
-          <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />
+          <div className="space-y-4">
+            <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />
+            {/* 0178: in-clinic tests. A lab is its kind instead (Lab & team). */}
+            {hasPractitioners(myVertical) && (
+              <AddonsPanel businessId={doctor.id} businessName={doctor.name} email={doctor.email ?? undefined}
+                current={doctor.lab_categories} canChange={isBusinessRole(role)}
+                onChanged={r => setDoctor(d => d ? { ...d, lab_categories: r.lab_categories, lab_module: r.lab_module } : d)} />
+            )}
+          </div>
         )}
 
         {tab === 'whatsapp' && doctor && (
@@ -2089,7 +2098,7 @@ export default function DoctorDashboard() {
         {tab === 'clinic' && (
           <div className="space-y-4">
             {/* 0177: what kind of lab this is. */}
-            {/* Clinics: in-clinic tests become a paid add-on under Plan (to come); admin switches them on until then. */}
+            {/* Clinics and hospitals: in-clinic tests are add-ons under Plan (0178). */}
             {doctor && myVertical === 'lab' && (
               <LabKindPicker businessId={doctor.id} vertical={myVertical} current={doctor.lab_categories}
                 canChange={isBusinessRole(role)}
@@ -2165,6 +2174,13 @@ export default function DoctorDashboard() {
                           )
                         })}
                       </div>
+                      {/* 0178: a clinic has at most 3 doctors (the database refuses a 4th). */}
+                      {myVertical === 'clinic' && docForm.role === 'doctor'
+                        && roster.filter(d => d.status !== 'suspended' && (d.role === 'doctor' || d.role === 'owner')).length >= 3 && (
+                        <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2 mt-2">
+                          A clinic can have up to 3 doctors, and you have 3. To add more, your listing needs to be a Hospital — message us on WhatsApp and we will move you across.
+                        </p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
