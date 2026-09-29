@@ -306,6 +306,12 @@ tables:
 
   # ── Contact Us form (0165) ─────────────────────────────────────────────
   # Written only by the contact-submit edge function; no foreign keys.
+  privacy_request_events:
+    class: isolated
+    purgeOrder: 94.1
+  privacy_requests:
+    class: isolated
+    purgeOrder: 94.2
   contact_inquiries:
     class: isolated
     purgeOrder: 94.4

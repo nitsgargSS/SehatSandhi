@@ -33,6 +33,9 @@ const TOPICS: Record<string, string> = {
   partner: 'Pharmacy / insurance / ambulance partnership',
   billing: 'Billing, refund or cancellation',
   listing_change: 'Correcting or removing a listing',
+  // 0174: also files a privacy request (trigger on contact_inquiries), which
+  // the admin "Privacy" tab works to the 24-hour / 15-day deadlines.
+  privacy: 'Privacy request — personal data',
   other: 'Something else',
 }
 

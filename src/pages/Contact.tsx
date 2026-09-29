@@ -74,6 +74,7 @@ const content: Record<'en' | 'hi', Copy> = {
         { v: 'partner', l: 'Pharmacy, insurance or ambulance partnership' },
         { v: 'billing', l: 'Billing, refund or cancellation' },
         { v: 'listing_change', l: 'Correcting or removing a listing' },
+        { v: 'privacy', l: 'My personal data — see, correct, delete or stop messages' },
         { v: 'other', l: 'Something else' },
       ],
     },
@@ -136,6 +137,7 @@ const content: Record<'en' | 'hi', Copy> = {
         { v: 'partner', l: 'फ़ार्मेसी, इंश्योरेंस या एम्बुलेंस पार्टनरशिप' },
         { v: 'billing', l: 'बिलिंग, रिफंड या कैंसिलेशन' },
         { v: 'listing_change', l: 'लिस्टिंग ठीक कराना या हटवाना' },
+        { v: 'privacy', l: 'मेरा व्यक्तिगत डेटा — देखना, ठीक कराना, हटवाना या मैसेज बंद कराना' },
         { v: 'other', l: 'कुछ और' },
       ],
     },
@@ -319,8 +321,11 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 // inquiry and emails it to contact@sehatsandhi.com. The mailto: link above does
 // nothing without a mail app, so this is the way in that always works.
 function ContactForm({ c, lang }: { c: Copy['form']; lang: string }) {
-  const { pathname } = useLocation()
-  const [f, setF] = useState({ name: '', phone: '', email: '', topic: 'booking', message: '', website: '' })
+  const { pathname, search } = useLocation()
+  // /contact?topic=privacy (linked from the Privacy Policy) opens on that topic.
+  const initialTopic = new URLSearchParams(search).get('topic')
+  const [f, setF] = useState({ name: '', phone: '', email: '',
+    topic: c.topics.some(t => t.v === initialTopic) ? initialTopic! : 'booking', message: '', website: '' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [sent, setSent] = useState(false)
