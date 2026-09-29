@@ -260,7 +260,7 @@ export default function App() {
 
           {/* Admin — hidden, never linked publicly */}
           <Route path={`/${ADMIN_PATH}`} element={<AdminLogin />} />
-          <Route path={`/${ADMIN_PATH}/dashboard`} element={<AdminGuard><PasswordGate><AdminDashboard /></PasswordGate></AdminGuard>} />
+          <Route path={`/${ADMIN_PATH}/dashboard`} element={<AdminGuard><PasswordGate idle="admin" loginPath={`/${ADMIN_PATH}`}><AdminDashboard /></PasswordGate></AdminGuard>} />
 
           {/* Legacy /admin path — redirect to home, don't reveal new path */}
           <Route path="/admin" element={<Navigate to="/" replace />} />

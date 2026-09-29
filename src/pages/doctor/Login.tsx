@@ -7,6 +7,7 @@ import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
 import SiteFooter from '../../components/SiteFooter'
 import EmailSignIn from '../../components/EmailSignIn'
+import IdleNotice from '../../components/IdleNotice'
 import { fetchPasswordState, mustChangeNow } from '../../lib/passwordState'
 
 // Sign in with email and password, or a code sent to that email.
@@ -155,6 +156,8 @@ export default function DoctorLogin() {
                 : `We sent a 6-digit code to ${phone}`}
           </p>
         </div>
+
+        <IdleNotice />
 
         {showLegacy ? (
           <div className="space-y-4">
