@@ -81,8 +81,11 @@ export default function BusinessLanding() {
       </SiteHeader>
 
       {/* hero */}
-      <div className="mx-auto grid gap-10 items-center lg:grid-cols-[1.15fr_.85fr]" style={{ maxWidth: PAGE.maxWidth, padding: 'clamp(28px,7vw,56px) ' + PAGE.padX }}>
-        <div>
+      {/* items-start, not center: the coverage card grows with a place's pincode
+          list, and centring left the headline sinking below a blank top half. On
+          wide screens the headline stays in view while the card scrolls. */}
+      <div className="mx-auto grid gap-10 items-start lg:grid-cols-[1.15fr_.85fr]" style={{ maxWidth: PAGE.maxWidth, padding: 'clamp(28px,7vw,56px) ' + PAGE.padX }}>
+        <div className="lg:sticky lg:top-28 lg:pt-10">
           <div style={{ display: 'inline-block', background: BIZ.chipBg, color: BIZ.chipText, fontSize: 13, fontWeight: 700, padding: '6px 12px', borderRadius: 999, marginBottom: 18 }}>Live now · rolling out across India, pincode by pincode</div>
           <h1 style={{ fontSize: 'clamp(30px,7.5vw,46px)', lineHeight: 1.1, fontWeight: 800, color: BIZ.ink, margin: '0 0 18px', letterSpacing: '-.03em' }}>Reach every patient in your pincodes.</h1>
           <p style={{ fontSize: 'clamp(16px,4vw,18px)', color: BIZ.muted, lineHeight: 1.55, margin: '0 0 28px', maxWidth: 520 }}>
