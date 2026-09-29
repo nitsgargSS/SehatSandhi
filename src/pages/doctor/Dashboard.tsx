@@ -33,6 +33,11 @@ import { usePublicAreas } from '../../hooks/useServiceAreas'
 //
 // 'owner' is not offered. It is granted by signing the clinic up, and a screen
 // that hands it out is a screen that hands out the ability to change the GSTIN.
+// Who keeps a staff roster here. A lab has no doctors patients book, but it
+// has pathologists and radiologists who approve reports, and technicians
+// (the Nurse role) — the Lab tab tells it to add them — so it gets Your team too.
+const hasTeam = (v: VerticalKey) => hasPractitioners(v) || v === 'lab'
+
 const ROSTER_ROLES: [string, string, string][] = [
   ['doctor',       'Doctor',       'Sees patients, prescribes, reads the full record'],
   ['nurse',        'Nurse',        'Registers OPD patients, runs the queue, records vitals and charts the ward — for their doctors. Cannot prescribe'],
@@ -694,7 +699,7 @@ export default function DoctorDashboard() {
           getModuleAccess(doc.id).then(setAccess).catch(() => setAccess({ opd: false, ipd: false })),
           // Any business that has doctors has a roster now. It used to be
           // hospitals only, because a clinic's doctors had nowhere to live.
-          hasPractitioners(doc.vertical as VerticalKey)
+          hasTeam(doc.vertical as VerticalKey)
             ? Promise.all([
                 loadRoster(doc.id),
                 // The type's own doctor terms (0117) — included doctors, then a
@@ -1049,7 +1054,7 @@ export default function DoctorDashboard() {
       { id: 'schedule', label: booksAppointments ? t('dashboardPage.tabSchedule') : 'Hours & branches', icon: <Clock className="w-4 h-4" /> },
     ] : []),
     ...(businessRole ? [
-      { id: 'clinic', label: booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
+      { id: 'clinic', label: myVertical === 'lab' ? t('dashboardPage.tabLab') : booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
       { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
       // 0121: every doctor side by side, for places that have doctors.
       ...(doctor && hasPractitioners(doctor.vertical as VerticalKey) && emr ? [
@@ -2092,7 +2097,7 @@ export default function DoctorDashboard() {
             )}
             {/* The doctors who work here. Shown for clinics too now: the roster
                 is affiliations, and a clinic has those the same as a hospital. */}
-            {hasPractitioners(myVertical) && (
+            {hasTeam(myVertical) && (
               <div className="card shadow-sm">
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                   <h3 className="font-bold text-navy-700">Your team</h3>
