@@ -96,7 +96,7 @@ export const translations: Tree = {
     tabAvailability: { en: 'Availability', hi: 'अवेलेबिलिटी' },
     tabToday: { en: 'Today', hi: 'आज' },
     tabSchedule: { en: 'Schedule', hi: 'शेड्यूल' },
-    tabClinic: { en: 'Clinic', hi: 'क्लिनिक' },
+    tabClinic: { en: 'Clinic & team', hi: 'क्लिनिक और टीम' },
     todaysScheduleTitle: { en: "Today's Schedule", hi: 'आज का शेड्यूल' },
     availabilityHeading: { en: 'Set Your Weekly Schedule', hi: 'अपना वीकली शेड्यूल सेट करें' },
     availabilityDesc: { en: 'This decides which time slots patients can book — on the app and, later, on WhatsApp too.', hi: 'यह डिसाइड करता है कि मरीज़ कौनसे टाइम स्लॉट बुक कर सकते हैं — ऐप पर और बाद में WhatsApp पर भी।' },
