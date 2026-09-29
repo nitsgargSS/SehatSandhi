@@ -96,7 +96,7 @@ export default function BusinessLanding() {
           </p>
           {/* on phones the CTA goes full-width so it's an easy thumb target */}
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Link to="/business/register" className="max-sm:w-full max-sm:justify-center max-sm:flex" style={{ background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 16, padding: '15px 26px', borderRadius: 14, textAlign: 'center' }}>List your business — free to start</Link>
+            <Link to="/business/register" className="max-sm:w-full max-sm:justify-center max-sm:flex" style={{ background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 16, padding: '15px 26px', borderRadius: 14, textAlign: 'center' }}>List your business</Link>
             <a href="#pricing" style={{ fontSize: 14, fontWeight: 700, color: BIZ.green }}>See pricing →</a>
           </div>
         </div>
