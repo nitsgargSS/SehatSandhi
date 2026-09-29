@@ -35,7 +35,7 @@ import { usePublicAreas } from '../../hooks/useServiceAreas'
 // that hands it out is a screen that hands out the ability to change the GSTIN.
 const ROSTER_ROLES: [string, string, string][] = [
   ['doctor',       'Doctor',       'Sees patients, prescribes, reads the full record'],
-  ['nurse',        'Nurse',        'Charts the ward: gives medicines, records vitals. Cannot prescribe'],
+  ['nurse',        'Nurse',        'Registers OPD patients, runs the queue, records vitals and charts the ward — for their doctors. Cannot prescribe'],
   ['receptionist', 'Reception',    'Queue, beds and billing — no medical record'],
   ['manager',      'Manager',      'Listing, invoices and reports — no medical record'],
 ]
@@ -51,7 +51,7 @@ import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
 import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
 import DeskBooking from './DeskBooking'
 import { PractitionerPhoneCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
-import { listNurseLinks, type NurseLink } from '../../lib/nurseApi'
+import { linkNurse, listNurseLinks, type NurseLink } from '../../lib/nurseApi'
 import { findPeople, listStaffLog, type PersonMatch, type StaffAction, type StaffChangeDone, type StaffLogRow } from '../../lib/staffApi'
 
 
@@ -433,11 +433,27 @@ export default function DoctorDashboard() {
       await supabase.rpc('sehat_invite_doctor', { p_business: doctor.id, p_practitioner: change.person.id }).then(() => undefined, () => undefined)
     }
     const r = done.result
+    // A nurse sees and books only for the doctors they are linked to (0149),
+    // so a new nurse linked to nobody cannot register a single OPD patient.
+    // With one doctor there is only one answer — link them now. With several,
+    // the clinic chooses on the nurse's row.
+    let linkedTo: string | null = null
+    if (change.action === 'add' && change.role === 'nurse' && r.status !== 'invited') {
+      const docs = roster.filter(d => d.status !== 'suspended' && (d.role === 'doctor' || d.role === 'owner') && d.practitioner_id !== change.person.id)
+      if (docs.length === 1) {
+        try {
+          await linkNurse(doctor.id, change.person.id, docs[0].practitioner_id)
+          linkedTo = docs[0].practitioners?.full_name ?? 'the doctor'
+        } catch { /* the Unlinked nurses alert below still prompts for it */ }
+      }
+    }
     setPersonMatches(null)
     setRosterErr(r.status === 'invited'
       ? `✓ Invitation sent to ${change.person.name}. They join once they accept it from their own dashboard.`
       : r.awaiting_payment
       ? `✓ ${change.person.name} is added and will go live once the extra-doctor fee is paid (see their row).`
+      : linkedTo
+      ? `✓ ${change.person.name} is added as a nurse for ${linkedTo} — they can register OPD patients, run the queue and record vitals. They have been emailed.`
       : `✓ ${change.person.name}: ${change.action === 'remove' ? 'removed' : change.action === 'restore' ? 'brought back' : change.action === 'add' ? 'added' : 'role changed'}. They have been emailed.`)
     await loadRoster(doctor.id)
     listStaffLog(doctor.id).then(setStaffLog, () => undefined)
@@ -2118,7 +2134,7 @@ export default function DoctorDashboard() {
                       the first time, then “Forgot your password?” to set their own password. Each person needs their
                       own email. {docForm.role === 'receptionist'
                         ? 'Reception sees Today, Queue, Appointments, Patients (to register and bill) and Beds — no medical notes, no business settings, no reports.'
-                        : docForm.role === 'nurse' ? 'A nurse charts the ward and vitals, and cannot prescribe.'
+                        : docForm.role === 'nurse' ? 'A nurse registers OPD patients, books appointments, runs the queue, records vitals and charts the ward — for the doctors they are linked to. They cannot prescribe.'
                         : docForm.role === 'manager' ? 'A manager handles the listing, invoices and plan — no medical record.' : ''}
                     </p>
                     {marginalCost > 0 && docForm.role === 'doctor' && (
