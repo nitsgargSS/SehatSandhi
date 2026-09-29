@@ -8,7 +8,8 @@ import {
   createOrder, getOrders, getOrder, markCollected, assignCollector, cancelOrder, getResults, getPreviousValues,
   saveResults, approveOrder, sendReport, rangeText, STATUS_LABEL,
   getFollowups, followupAction, getCrmSummary, getSegment, setRepeatDays, reminderLink,
-  getUploads, uploadReport, sendUpload,
+  getUploads, uploadReport, sendUpload, testVisible,
+  type LabCategory,
   LabTest, LabPackage, LabOrder, LabParameter, OrderStatus, ParamKind, LabFollowup, CrmSummary, Segment, UploadedReport,
 } from '../../lib/labApi'
 import { downloadCsv } from '../../lib/billingApi'
@@ -50,7 +51,16 @@ export default function LabPanel({ businessId, canManage, canResults, canApprove
   // "Book" on a follow-up opens New order with the patient and test filled in.
   const [prefill, setPrefill] = useState<{ memberId: string; name: string; phone: string; testId: string | null } | null>(null)
   const [labName, setLabName] = useState('')
-  useEffect(() => { supabase.from('businesses').select('name').eq('id', businessId).maybeSingle().then(({ data }) => setLabName((data as { name?: string } | null)?.name ?? '')) }, [businessId])
+  // 0177: the kinds of tests done here. Null = not chosen (everything shows).
+  const [labCats, setLabCats] = useState<string[] | null>(null)
+  const [isLab, setIsLab] = useState(false)
+  useEffect(() => {
+    supabase.from('businesses').select('name, vertical, lab_categories').eq('id', businessId).maybeSingle().then(({ data }) => {
+      const b = data as { name?: string; vertical?: string; lab_categories?: string[] | null } | null
+      setLabName(b?.name ?? ''); setLabCats(b?.lab_categories ?? null); setIsLab(b?.vertical === 'lab')
+    })
+  }, [businessId])
+  const shown = useMemo(() => tests.filter(t => testVisible(labCats, t.category)), [tests, labCats])
 
   const reloadCatalogue = useCallback(() => {
     getTests(businessId).then(setTests).catch(() => setTests([]))
@@ -77,20 +87,26 @@ export default function LabPanel({ businessId, canManage, canResults, canApprove
         </div>
       </div>
 
+      {isLab && !labCats?.length && canManage && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-3">
+          Tell us what kind of lab this is — pathology, or radiology &amp; imaging — under <b>Lab &amp; team</b>. Your test list and reports then show only those tests.
+        </div>
+      )}
+
       {openOrder ? (
         <OrderDetail orderId={openOrder} businessId={businessId} canManage={canManage} canResults={canResults}
           canApprove={canApprove} onBack={() => setOpenOrder(null)} />
       ) : (
         <>
           {section === 'queue' && <Queue businessId={businessId} onOpen={setOpenOrder} />}
-          {section === 'new' && <NewOrder key={prefill?.memberId ?? 'blank'} businessId={businessId} tests={tests} packages={packages} prefill={prefill}
+          {section === 'new' && <NewOrder key={prefill?.memberId ?? 'blank'} businessId={businessId} tests={shown} packages={packages} prefill={prefill}
             onCreated={id => { setPrefill(null); setOpenOrder(id); setSection('queue') }} goTests={() => setSection('tests')} canManage={canManage} />}
           {section === 'followups' && <Followups businessId={businessId} labName={labName}
             onBook={f => { setPrefill({ memberId: f.patient_member_id, name: f.patient_name, phone: f.patient_phone ?? '', testId: f.test_id }); setSection('new') }} />}
           {section === 'uploads' && canResults && <Uploads businessId={businessId} />}
           {section === 'home' && <HomeRound businessId={businessId} onOpen={setOpenOrder} />}
-          {section === 'tests' && <Tests businessId={businessId} tests={tests} canManage={canManage} reload={reloadCatalogue} />}
-          {section === 'packages' && <Packages businessId={businessId} tests={tests} packages={packages} canManage={canManage} reload={reloadCatalogue} />}
+          {section === 'tests' && <Tests businessId={businessId} tests={shown} cats={labCats} canManage={canManage} reload={reloadCatalogue} />}
+          {section === 'packages' && <Packages businessId={businessId} tests={shown} packages={packages} canManage={canManage} reload={reloadCatalogue} />}
           {section === 'settings' && canManage && <Settings businessId={businessId} />}
         </>
       )}
@@ -817,7 +833,8 @@ function Uploads({ businessId }: { businessId: string }) {
 
 const blankParam = (): LabParameter => ({ name: '', unit: '', kind: 'number', ref_low: null, ref_high: null })
 
-function Tests({ businessId, tests, canManage, reload }: { businessId: string; tests: LabTest[]; canManage: boolean; reload: () => void }) {
+function Tests({ businessId, tests, cats, canManage, reload }: { businessId: string; tests: LabTest[]; cats: string[] | null; canManage: boolean; reload: () => void }) {
+  const firstCat = (cats?.[0] ?? 'pathology') as LabCategory
   const [edit, setEdit] = useState<{ test: Partial<LabTest>; params: LabParameter[] } | null>(null)
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -852,8 +869,10 @@ function Tests({ businessId, tests, canManage, reload }: { businessId: string; t
         <h3 className="font-bold text-navy-700">{t.id ? 'Edit test' : 'New test'}</h3>
         <div className="grid sm:grid-cols-4 gap-2">
           <input className="input-field sm:col-span-2" placeholder="Test name" value={t.name ?? ''} onChange={e => setT('name', e.target.value)} />
-          <select className="input-field" value={t.category ?? 'pathology'} onChange={e => setT('category', e.target.value)}>
-            <option value="pathology">Pathology</option><option value="radiology">Radiology / imaging</option><option value="cardiology">Cardiology</option><option value="other">Other</option>
+          <select className="input-field" value={t.category ?? firstCat} onChange={e => setT('category', e.target.value)}>
+            {([['pathology', 'Pathology'], ['radiology', 'Radiology / imaging'], ['cardiology', 'Cardiology'], ['other', 'Other']] as const)
+              .filter(([v]) => testVisible(cats, v) || t.category === v)
+              .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <input className="input-field" type="number" min={0} placeholder="Price ₹" value={t.price ?? ''} onChange={e => setT('price', e.target.value)} />
           <input className="input-field" placeholder="Department" value={t.department ?? ''} onChange={e => setT('department', e.target.value)} />
@@ -903,7 +922,7 @@ function Tests({ businessId, tests, canManage, reload }: { businessId: string; t
         {canManage && (
           <div className="flex gap-2">
             <button disabled={busy} onClick={doImport} className="btn-outline text-xs py-2 px-3">Load standard tests</button>
-            <button onClick={() => setEdit({ test: { category: 'pathology', price: 0 }, params: [blankParam()] })} className="btn-teal text-xs py-2 px-4"><Plus className="w-4 h-4" /> Test</button>
+            <button onClick={() => setEdit({ test: { category: firstCat, price: 0 }, params: [blankParam()] })} className="btn-teal text-xs py-2 px-4"><Plus className="w-4 h-4" /> Test</button>
           </div>
         )}
       </div>
