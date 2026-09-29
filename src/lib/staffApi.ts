@@ -1,8 +1,9 @@
 import { activeConfig } from './env'
 import { supabase } from './supabase'
 
-// 0147: adding, removing, bringing back or promoting staff on a live business
-// is confirmed with a code emailed to the owner/manager making the change.
+// 0147: removing, bringing back or promoting staff on a live business is
+// confirmed with a code emailed to the owner/manager making the change.
+// Adding is not (29 Sep 2026): see addStaff.
 // The business-staff-action edge function does both steps; see its header.
 
 export type StaffAction = 'add' | 'remove' | 'restore' | 'role'
@@ -44,6 +45,35 @@ export const requestStaffCode = (args: {
 
 export const confirmStaffCode = (requestId: string, code: string) =>
   call<StaffChangeDone>({ op: 'confirm', requestId, code })
+
+/** What went out to a new staff member: the link to set up their login. */
+export interface StaffInvite {
+  link: string
+  /** False when they have signed in before — the link is just the login page. */
+  setUp: boolean
+  name: string
+  clinic: string
+  email: string      // 'sent' | 'no address' | 'not sent' | an error
+  whatsapp: string   // 'sent' | 'not configured' | 'no number' | 'not sent' | an error
+  phone: string | null
+}
+
+/** Adding needs no code (29 Sep 2026): applied at once, and the person is sent
+ *  a link to set up their login. */
+export const addStaff = (args: { businessId: string; practitionerId: string; role: string }) =>
+  call<StaffChangeDone & { invite: StaffInvite | null }>({ op: 'request', action: 'add', ...args })
+
+/** Send the set-up link again (send) or just fetch it for a WhatsApp share. */
+export const staffInvite = (businessId: string, practitionerId: string, send: boolean) =>
+  call<{ invite: StaffInvite }>({ op: 'invite', businessId, practitionerId, send }).then(r => r.invite)
+
+/** The WhatsApp message a clinic forwards by hand until automatic sending is on. */
+export function inviteWhatsAppUrl(i: StaffInvite): string {
+  const text = i.setUp
+    ? `Hello ${i.name}, ${i.clinic} has added you on Sehatsandhi. Set up your login here (choose a password, that's all): ${i.link}`
+    : `Hello ${i.name}, ${i.clinic} has added you on Sehatsandhi. Sign in with your email and password: ${i.link}`
+  return `https://wa.me/${i.phone ?? ''}?text=${encodeURIComponent(text)}`
+}
 
 /** Owners and managers only (RLS). Newest first. */
 export async function listStaffLog(businessId: string, limit = 50): Promise<StaffLogRow[]> {

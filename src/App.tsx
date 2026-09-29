@@ -30,6 +30,7 @@ const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
 const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
 const WhatsAppBookingDemo = lazy(() => import('./pages/business/WhatsAppBookingDemo'))
 const InvoicePage = lazy(() => import('./pages/InvoicePage'))
+const JoinPage = lazy(() => import('./pages/JoinPage'))
 const PrescriptionPage = lazy(() => import('./pages/PrescriptionPage'))
 const DischargeSummaryPage = lazy(() => import('./pages/DischargeSummaryPage'))
 const BillPage = lazy(() => import('./pages/BillPage'))
@@ -193,6 +194,8 @@ export default function App() {
               establishment and attaching whoever works there. */}
           <Route path="/doctor/register" element={<BusinessRegister mode="doctor" />} />
           <Route path="/business/login" element={<DoctorLogin />} />
+          {/* A new staff member sets up their login from the invite link. */}
+          <Route path="/join/:token" element={<JoinPage />} />
           <Route path="/business/dashboard" element={<PasswordGate><DoctorDashboard /></PasswordGate>} />
           <Route path="/business/print/opd/:id" element={<PasswordGate><OpdSlipPage /></PasswordGate>} />
           <Route path="/business/print/qr/:id" element={<PasswordGate><QrPosterPage /></PasswordGate>} />
