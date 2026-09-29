@@ -22,6 +22,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { sendStaffInvite } from '../_shared/staffInvite.ts'
 import { ADMIN_EMAIL, type Email, emailConfigured, esc, layout, sendEmail, type SendResult } from '../_shared/email.ts'
 
 const BATCH = 20
@@ -279,33 +280,13 @@ ${rows.map(([k, v]) => `<tr><td style="padding:6px 10px 6px 0;color:#5b6b63;whit
 
 // The owner's invite to a doctor (0139): one login for every clinic they work at.
 // deno-lint-ignore no-explicit-any
-async function sendInvite(db: any, businessId: string | null, practitionerId: string | null, site: string): Promise<SendResult | 'skip'> {
+async function sendInvite(db: any, businessId: string | null, practitionerId: string | null, _site: string): Promise<SendResult | 'skip'> {
   if (!businessId || !practitionerId) return 'skip'
-  const { data: p } = await db.from('practitioners').select('full_name, email').eq('id', practitionerId).maybeSingle()
-  const { data: b } = await db.from('businesses').select('name').eq('id', businessId).maybeSingle()
-  const { data: aff } = await db.from('business_practitioners').select('role').eq('business_id', businessId).eq('practitioner_id', practitionerId).maybeSingle()
-  const to = (p?.email ?? '').trim()
-  if (!p || !to.includes('@')) return 'skip'
-  // 0149: nurses, reception and managers get this too; only doctors have a public profile.
-  const role = String(aff?.role ?? 'doctor')
-  const isDoctor = role === 'doctor' || role === 'owner'
-  const roleWord = ({ doctor: 'a doctor', owner: 'an owner', nurse: 'a nurse', receptionist: 'a receptionist', manager: 'a manager' } as Record<string, string>)[role] ?? 'staff'
-  const login = `${site}/business/login`
-  const steps = [
-    `Go to <a href="${login}" style="color:#0f6b4a">${login.replace(/^https?:\/\//, '')}</a> and choose <b>Email me a code</b>. Enter <b>${esc(to)}</b> and the 6-digit code we send.`,
-    'Set a password for next time: on the login page, <b>Forgot your password?</b> → code → choose a password.',
-    ...(isDoctor ? [
-      'Open <b>My practice → Public profile</b>: add your photo, qualification, experience, languages and a few lines about you. Patients see this page from the WhatsApp bot and the website.',
-      'Check your <b>OPD fee</b> on the same page, and any discount you offer.',
-    ] : []),
-  ]
-  const html = layout(`${b?.name ?? 'A clinic'} has added you on Sehatsandhi`, `
-<p style="margin:0 0 14px">Hello ${esc(p.full_name)}, <b>${esc(b?.name ?? 'your clinic')}</b> has added you as ${roleWord} on Sehatsandhi${isDoctor ? ', so patients can find and book you on WhatsApp' : ''}.</p>
-<ol style="margin:0 0 16px;padding-left:20px">${steps.map(x => `<li style="margin-bottom:8px">${x}</li>`).join('')}</ol>
-<p style="margin:0 0 16px"><a href="${login}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold">Sign in</a></p>
-<p style="margin:0;color:#5b6b63;font-size:13px">One login covers every clinic you work at — switch between them from the dashboard.${isDoctor ? ' You see the patients you treat or who are referred to you.' : ''}</p>`)
-  const text = [`${b?.name ?? 'A clinic'} has added you on Sehatsandhi`, '', ...steps.map((x, i) => `${i + 1}. ${x.replace(/<[^>]+>/g, '')}`), '', `Sign in: ${login}`].join('\n')
-  return sendEmail({ to, toName: p.full_name, subject: `${b?.name ?? 'A clinic'} has added you on Sehatsandhi — set up your login${isDoctor ? ' and profile' : ''}`, html, text })
+  // 29 Sep 2026: the same invitation the dashboard sends — a link to set up
+  // the login, no codes (_shared/staffInvite.ts). WhatsApp too, when configured.
+  const r = await sendStaffInvite(db, businessId, practitionerId)
+  if (r.email === 'no address') return 'skip'
+  return r.email === 'sent' ? { ok: true } : { ok: false, error: r.email, retry: true }
 }
 
 /**

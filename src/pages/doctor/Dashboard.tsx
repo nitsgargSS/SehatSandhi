@@ -52,7 +52,7 @@ import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
 import DeskBooking from './DeskBooking'
 import { PractitionerPhoneCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import { linkNurse, listNurseLinks, type NurseLink } from '../../lib/nurseApi'
-import { findPeople, listStaffLog, type PersonMatch, type StaffAction, type StaffChangeDone, type StaffLogRow } from '../../lib/staffApi'
+import { addStaff, findPeople, inviteWhatsAppUrl, listStaffLog, staffInvite, type PersonMatch, type StaffAction, type StaffChangeDone, type StaffInvite, type StaffLogRow } from '../../lib/staffApi'
 
 
 interface CampOffer {
@@ -323,12 +323,33 @@ export default function DoctorDashboard() {
     } catch (e) { setRosterErr((e as Error).message); setRosterBusy(false) }
   }
 
+  // What a new staff member was sent, and a WhatsApp button for the clinic to
+  // forward the link by hand while automatic WhatsApp sending is off.
+  const [inviteShare, setInviteShare] = useState<StaffInvite | null>(null)
+  const inviteSentence = (i: StaffInvite) => {
+    const via = [i.email === 'sent' && 'email', i.whatsapp === 'sent' && 'WhatsApp'].filter(Boolean).join(' and ')
+    const what = i.setUp ? 'a link to set up their login' : 'a note to sign in'
+    return via ? `We've sent them ${what} by ${via}.`
+      : `We could not send ${what}${i.email !== 'no address' && i.email !== 'not sent' ? ` (${i.email})` : ''} — use the WhatsApp button below.`
+  }
   const inviteDoctor = async (practitionerId: string, name: string) => {
     if (!doctor) return
-    setRosterErr('')
-    const { data, error } = await supabase.rpc('sehat_invite_doctor', { p_business: doctor.id, p_practitioner: practitionerId })
-    if (error) { setRosterErr(error.message); return }
-    setRosterErr(data === 'already_sent' ? `An invite to ${name} went out in the last hour.` : `✓ Invite emailed to ${name}. It arrives within a few minutes.`)
+    setRosterErr(''); setInviteShare(null)
+    try {
+      const i = await staffInvite(doctor.id, practitionerId, true)
+      setRosterErr(`✓ ${name}: ${inviteSentence(i)}`)
+      if (i.phone && i.whatsapp !== 'sent') setInviteShare(i)
+    } catch (e) { setRosterErr((e as Error).message) }
+  }
+  // Opened before the await so the browser treats it as the click's own window.
+  const shareInviteOnWhatsApp = async (practitionerId: string) => {
+    if (!doctor) return
+    const w = window.open('', '_blank')
+    try {
+      const i = await staffInvite(doctor.id, practitionerId, false)
+      if (!i.phone) { w?.close(); setRosterErr('They have no mobile number on file. Add one, or send the email invite.'); return }
+      if (w) w.location.href = inviteWhatsAppUrl(i); else window.location.href = inviteWhatsAppUrl(i)
+    } catch (e) { w?.close(); setRosterErr((e as Error).message) }
   }
   const saveDoctorEmail = async (practitionerId: string, name: string) => {
     if (!doctor) return
@@ -395,13 +416,14 @@ export default function DoctorDashboard() {
         email: docForm.email.trim(),
         role: docForm.role,
       })
-      // 0147: the person exists now; joining the staff is confirmed by code.
-      // finishStaffChange sends the login invite once it is done.
-      setStaffChange({
+      // No code to add someone (29 Sep 2026): applied now, and the server sends
+      // them the link to set up their login.
+      const done = await addStaff({ businessId: doctor.id, practitionerId, role: docForm.role })
+      await finishStaffChange(done, {
         action: 'add',
         person: { id: practitionerId, name: docForm.name.trim() || 'this person' },
         role: docForm.role,
-      })
+      }, done.invite)
     } catch (e) {
       setRosterErr((e as Error).message)
     } finally {
@@ -411,7 +433,8 @@ export default function DoctorDashboard() {
 
   /** Removing is suspending the AFFILIATION, not the person: they keep working
    *  wherever else they work, and the appointments made here stay attributable. */
-  // 0147: both go through an emailed code, with a reason to remove. Bring back
+  // 0147: both go through an emailed code, with a reason to remove (adding
+  // no longer does — see addRosterDoctor). Bring back
   // restores the role they had — it used to make everyone a doctor.
   const setRosterStatus = (d: RosterRow, status: 'suspended' | 'active') => {
     setRosterErr('')
@@ -421,16 +444,14 @@ export default function DoctorDashboard() {
     })
   }
 
-  const finishStaffChange = async (done: StaffChangeDone) => {
-    const change = staffChange
+  const finishStaffChange = async (done: StaffChangeDone, direct?: typeof staffChange, invite?: StaffInvite | null) => {
+    const change = direct ?? staffChange
     setStaffChange(null)
+    setInviteShare(null)
     if (!doctor || !change) return
     if (change.action === 'add') {
       setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
       setShowAddDoc(false)
-      // Everyone added is asked to set up their own login (0139). Best effort:
-      // the Invite button on their row sends it again.
-      await supabase.rpc('sehat_invite_doctor', { p_business: doctor.id, p_practitioner: change.person.id }).then(() => undefined, () => undefined)
     }
     const r = done.result
     // A nurse sees and books only for the doctors they are linked to (0149),
@@ -452,9 +473,10 @@ export default function DoctorDashboard() {
       ? `✓ Invitation sent to ${change.person.name}. They join once they accept it from their own dashboard.`
       : r.awaiting_payment
       ? `✓ ${change.person.name} is added and will go live once the extra-doctor fee is paid (see their row).`
-      : linkedTo
-      ? `✓ ${change.person.name} is added as a nurse for ${linkedTo} — they can register OPD patients, run the queue and record vitals. They have been emailed.`
+      : invite
+      ? `✓ ${change.person.name} is added${linkedTo ? ` as a nurse for ${linkedTo} — they can register OPD patients, run the queue and record vitals` : ''}. ${inviteSentence(invite)}`
       : `✓ ${change.person.name}: ${change.action === 'remove' ? 'removed' : change.action === 'restore' ? 'brought back' : change.action === 'add' ? 'added' : 'role changed'}. They have been emailed.`)
+    if (invite?.phone && invite.whatsapp !== 'sent') setInviteShare(invite)
     await loadRoster(doctor.id)
     listStaffLog(doctor.id).then(setStaffLog, () => undefined)
   }
@@ -2078,7 +2100,15 @@ export default function DoctorDashboard() {
                 )}
 
                 <UnlinkedNursesAlert staff={staffLite} links={nurseLinks} />
-                {rosterErr && <div className={`${rosterErr.startsWith('✓') ? 'bg-teal-50 text-teal-700' : 'bg-red-50 text-red-600'} text-sm rounded-xl p-3 mb-3`}>{rosterErr}</div>}
+                {rosterErr && <div className={`${rosterErr.startsWith('✓') ? 'bg-teal-50 text-teal-700' : 'bg-red-50 text-red-600'} text-sm rounded-xl p-3 mb-3`}>
+                  {rosterErr}
+                  {inviteShare?.phone && (
+                    <a href={inviteWhatsAppUrl(inviteShare)} target="_blank" rel="noreferrer"
+                      className="block mt-2 w-fit bg-[#25D366] text-white font-semibold rounded-lg px-3 py-1.5">
+                      Send {inviteShare.name.split(' ')[0]} the link on WhatsApp
+                    </a>
+                  )}
+                </div>}
 
                 {showAddDoc && (
                   <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
@@ -2130,8 +2160,8 @@ export default function DoctorDashboard() {
                         never be used, which is what the signup wizard was
                         producing until it was fixed the same way. */}
                     <p className="text-xs text-gray-500">
-                      They sign in at <strong>sehatsandhi.com/business/login</strong> with this email: “Email me a code”
-                      the first time, then “Forgot your password?” to set their own password. Each person needs their
+                      When you save, we email them a link to set up their login — they choose a password and they are in.
+                      Add their mobile number too, so you can send the same link on WhatsApp. Each person needs their
                       own email. {docForm.role === 'receptionist'
                         ? 'Reception sees Today, Queue, Appointments, Patients (to register and bill) and Beds — no medical notes, no business settings, no reports.'
                         : docForm.role === 'nurse' ? 'A nurse registers OPD patients, books appointments, runs the queue, records vitals and charts the ward — for the doctors they are linked to. They cannot prescribe.'
@@ -2223,9 +2253,16 @@ export default function DoctorDashboard() {
                               : person?.email ? ' · not signed in yet' : ' · no email — cannot sign in'}
                             {!person?.auth_uid && !suspended && person && (
                               person.email ? (
-                                <button onClick={() => inviteDoctor(person.id, person.full_name)} className="ml-2 text-teal-700 underline font-medium">
-                                  Invite to log in &amp; set up profile
-                                </button>
+                                <>
+                                  <button onClick={() => inviteDoctor(person.id, person.full_name)} className="ml-2 text-teal-700 underline font-medium">
+                                    Send login invite again
+                                  </button>
+                                  {person.phone && (
+                                    <button onClick={() => shareInviteOnWhatsApp(person.id)} className="ml-2 text-teal-700 underline font-medium">
+                                      Send on WhatsApp
+                                    </button>
+                                  )}
+                                </>
                               ) : emailFor === person.id ? (
                                 <span className="ml-2 inline-flex gap-1 items-center">
                                   <input className="input-field text-xs py-1 px-2 w-48" placeholder="their email" value={emailDraft}
@@ -2297,8 +2334,8 @@ export default function DoctorDashboard() {
                 <p className="text-xs text-gray-400 mt-3">
                   Removing a doctor takes them off your listing and off your bill, and keeps their
                   past appointments. It does not affect anywhere else they work. You can bring
-                  them back at any time. Adding, removing and promoting staff is confirmed with a
-                  code we email you.
+                  them back at any time. Removing, bringing back and making someone a doctor are
+                  confirmed with a code we email you; adding someone is not.
                 </p>
 
                 {/* 0147: who changed the staff, when, and why. */}

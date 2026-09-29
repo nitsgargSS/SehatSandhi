@@ -13,6 +13,18 @@
 //       emails the staff member and the business what happened.
 //       → { ok: true, result: { status, role, awaiting_payment } }
 //
+//   { op: 'request', action: 'add', … }  (29 Sep 2026)
+//       No code: adding someone is applied at once. It is recorded as a
+//       request already verified, so sehat_staff_apply and the trigger work
+//       unchanged. The new person is sent a link to set up their login
+//       (_shared/staffInvite.ts) by email, and WhatsApp when configured.
+//       → { ok: true, result, invite: { link, setUp, email, whatsapp, phone, … } }
+//       Removing, bringing back and promoting still need the code.
+//
+//   { op: 'invite', businessId, practitionerId, send? }
+//       Send the set-up link again (send: true, default), or just return it
+//       for the dashboard's WhatsApp button (send: false). → { invite }
+//
 // 0148: Sehatsandhi admins and managers may also remove or bring back (never
 // add or re-role), from the admin panel. Only an owner removes an owner.
 //
@@ -24,6 +36,7 @@
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { caller } from '../_shared/caller.ts'
 import { esc, layout, sendEmail } from '../_shared/email.ts'
+import { sendStaffInvite } from '../_shared/staffInvite.ts'
 
 const CODE_MINUTES = 10
 const MAX_TRIES = 5
@@ -93,7 +106,8 @@ Deno.serve(async (req) => {
 
   if (body.op === 'request') return await request(who, user, body)
   if (body.op === 'confirm') return await confirm(who, user, body)
-  return json({ error: "op must be 'request' or 'confirm'" }, 400)
+  if (body.op === 'invite') return await invite(who, body)
+  return json({ error: "op must be 'request', 'confirm' or 'invite'" }, 400)
 })
 
 // deno-lint-ignore no-explicit-any
@@ -141,6 +155,21 @@ async function request(who: any, user: Row, body: Row): Promise<Response> {
   if (action === 'restore' && aff?.status !== 'suspended') return json({ error: `${person.full_name} is not removed.` }, 400)
   if (action === 'remove' && aff?.role === 'owner' && myRole !== 'owner' && !platform) {
     return json({ error: 'Only an owner can remove an owner.' }, 403)
+  }
+
+  // Adding needs no code (29 Sep 2026): record it as already verified and
+  // apply it now, as the caller, through the same path a confirmed code takes.
+  if (action === 'add') {
+    const id = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const { error: insErr } = await db.from('business_staff_requests').insert({
+      id, business_id: businessId, practitioner_id: practitionerId, action, role,
+      requested_by: user.id, requested_by_email: user.email || biz.email || 'owner',
+      code_hash: await sha256(crypto.randomUUID()), expires_at: now,
+      status: 'verified', verified_at: now,
+    })
+    if (insErr) return json({ error: insErr.message }, 500)
+    return await apply(who, id)
   }
 
   // Where the code goes: the caller's own address. A phone-OTP owner has none,
@@ -241,6 +270,15 @@ async function confirm(who: any, user: Row, body: Row): Promise<Response> {
     .eq('id', requestId).eq('status', 'pending').select('id')
   if (!claimed?.length) return json({ error: 'This code was already accepted.' }, 400)
 
+  return await apply(who, requestId)
+}
+
+/** Carry out a verified request as the caller, then tell the people concerned. */
+// deno-lint-ignore no-explicit-any
+async function apply(who: any, requestId: string): Promise<Response> {
+  const db = who.asService
+  const { data: r } = await db.from('business_staff_requests').select('*').eq('id', requestId).single()
+
   const { data: prevAff } = await db.from('business_practitioners').select('role')
     .eq('business_id', r.business_id).eq('practitioner_id', r.practitioner_id).maybeSingle()
 
@@ -271,7 +309,17 @@ async function confirm(who: any, user: Row, body: Row): Promise<Response> {
       : res?.awaiting_payment ? 'Waiting for the extra-doctor fee to be paid' : res?.status],
   ])
   const sends: Promise<unknown>[] = []
-  if (deliverable(person?.email)) {
+  // Someone new on the staff gets the set-up link instead of a receipt. It
+  // replaces the doctor_invite email the database queues for a doctor's own
+  // nurse (0151), so they are not told twice.
+  let invite = null
+  const added = r.action === 'add' && !invited
+  if (added) {
+    invite = await sendStaffInvite(db, r.business_id, r.practitioner_id)
+    await db.from('email_outbox').update({ status: 'skipped', last_error: 'sent by business-staff-action' })
+      .eq('kind', 'doctor_invite').eq('practitioner_id', r.practitioner_id).eq('business_id', r.business_id).eq('status', 'pending')
+  }
+  if (!added && deliverable(person?.email)) {
     const login = `${(Deno.env.get('SITE_URL') ?? 'https://sehatsandhi.com').replace(/\/$/, '')}/business/login`
     const toPerson = invited
       ? { subject: `${biz?.name} has invited you to join as ${ROLE_LABEL[r.role ?? 'doctor'] ?? r.role}`,
@@ -294,5 +342,28 @@ async function confirm(who: any, user: Row, body: Row): Promise<Response> {
   }
   await Promise.all(sends)
 
-  return json({ ok: true, result })
+  return json({ ok: true, result, invite })
+}
+
+/** Resend the set-up link, or just hand it back for a WhatsApp share. */
+// deno-lint-ignore no-explicit-any
+async function invite(who: any, body: Row): Promise<Response> {
+  const db = who.asService
+  const businessId = String(body.businessId ?? '')
+  const practitionerId = String(body.practitionerId ?? '')
+  if (!businessId || !practitionerId) return json({ error: 'businessId and practitionerId are required' }, 400)
+
+  const [{ data: myRole }, { data: aff }] = await Promise.all([
+    who.asCaller.rpc('sehat_caller_role', { p_business: businessId }),
+    db.from('business_practitioners').select('role, status').eq('business_id', businessId).eq('practitioner_id', practitionerId).maybeSingle(),
+  ])
+  if (!aff || aff.status === 'suspended') return json({ error: 'That person is not on the staff.' }, 400)
+  if (myRole !== 'owner' && myRole !== 'manager') {
+    // A doctor may reach their own nurses (0149), nobody else.
+    const { data: mine } = await who.asCaller.rpc('sehat_caller_practitioner_id')
+    const { count } = await db.from('nurse_doctor_links').select('nurse_id', { count: 'exact', head: true })
+      .eq('business_id', businessId).eq('nurse_id', practitionerId).eq('doctor_id', mine ?? '')
+    if (myRole !== 'doctor' || !count) return json({ error: 'Only the owner or a manager can send this.' }, 403)
+  }
+  return json({ invite: await sendStaffInvite(db, businessId, practitionerId, { send: body.send !== false }) })
 }
