@@ -57,6 +57,9 @@ export interface LabOrderItem {
   report_kind: 'parameters' | 'narrative'
   test_id: string | null
   category: LabCategory | null
+  /** 0176: who entered the result, as they were named then. */
+  entered_by_name?: string | null
+  entered_at?: string | null
 }
 
 export interface LabReportRef {
@@ -242,8 +245,9 @@ export async function getOrder(orderId: string): Promise<LabOrder | null> {
   return data ? toOrder(data) : null
 }
 
-export async function markCollected(orderId: string) {
-  const { error } = await supabase.rpc('sehat_lab_mark_collected', { p_order: orderId })
+/** 0176: collectorId names who actually took the sample; null = the person clicking. */
+export async function markCollected(orderId: string, collectorId: string | null = null) {
+  const { error } = await supabase.rpc('sehat_lab_mark_collected', { p_order: orderId, p_collector: collectorId })
   oops(error)
 }
 

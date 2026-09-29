@@ -373,6 +373,7 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
   const [staff, setStaff] = useState<{ id: string; name: string }[]>([])
+  const [collectedBy, setCollectedBy] = useState<string | null>(null)
   const [cancelWhy, setCancelWhy] = useState<string | null>(null)
   const [uploads, setUploads] = useState<UploadedReport[]>([])
   const load = useCallback(() => {
@@ -415,6 +416,12 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
               Ordered {dt(o.created_at)} by {o.ordered_by_name ?? o.created_by_name ?? '—'}{o.referred_by ? ` · referred by ${o.referred_by}` : ''}
               {o.priority === 'urgent' ? ' · URGENT' : ''}{o.notes ? ` · ${o.notes}` : ''}
             </div>
+            {(o.collected_at || o.latest_report) && (
+              <div className="text-xs text-gray-500 mt-0.5">
+                {o.collected_at ? `Sample collected ${dt(o.collected_at)} by ${o.collected_by_name ?? '—'}` : ''}
+                {o.latest_report ? `${o.collected_at ? ' · ' : ''}Approved ${dt(o.latest_report.approved_at)} by ${o.latest_report.approved_by_name ?? '—'}` : ''}
+              </div>
+            )}
           </div>
           <span className={`self-start px-2 py-1 rounded-full text-xs font-semibold ${statusCls[o.status]}`}>{STATUS_LABEL[o.status]}</span>
         </div>
@@ -437,7 +444,21 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
         )}
 
         <div className="flex gap-2 flex-wrap">
-          {o.status === 'ordered' && <button disabled={busy} onClick={() => run(async () => { await markCollected(o.id); return 'Sample marked collected.' })} className="btn-teal text-xs py-2 px-4"><Check className="w-4 h-4" /> Sample collected</button>}
+          {o.status === 'ordered' && (
+            // Who actually drew the blood / ran the scan — often not whoever clicks.
+            <span className="inline-flex flex-wrap gap-2 items-center">
+              <select className="input-field w-auto text-xs py-1.5" value={collectedBy ?? o.collector_id ?? ''}
+                onChange={e => setCollectedBy(e.target.value)} aria-label="Collected by">
+                <option value="">Collected by: me</option>
+                {staff.map(s => <option key={s.id} value={s.id}>Collected by: {s.name}</option>)}
+              </select>
+              <button disabled={busy} onClick={() => run(async () => {
+                const by = collectedBy ?? o.collector_id ?? ''
+                await markCollected(o.id, by || null)
+                return `Sample marked collected${by ? ` by ${staff.find(s => s.id === by)?.name ?? 'them'}` : ''}.`
+              })} className="btn-teal text-xs py-2 px-4"><Check className="w-4 h-4" /> Sample collected</button>
+            </span>
+          )}
           {canApprove && o.entered_count > 0 && <button disabled={busy} onClick={approveAndSend} className="btn-teal text-xs py-2 px-4"><Send className="w-4 h-4" /> Approve & send report</button>}
           {rep && <a href={`/lab/${rep.token}`} target="_blank" rel="noreferrer" className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1"><Printer className="w-3 h-3" /> Report {rep.report_no}</a>}
           {rep && <button disabled={busy} onClick={() => run(async () => { const s = await sendReport(rep.id); return s.whatsapp ? 'Sent on WhatsApp.' : `Not sent${s.errors?.length ? `: ${s.errors[0]}` : ''}.` })} className="btn-outline text-xs py-1.5 px-3">Resend</button>}
@@ -484,7 +505,8 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
         {o.items.map(it => (
           <div key={it.id}>
             <button onClick={() => setOpenItem(openItem === it.id ? null : it.id)} className="w-full text-left px-4 py-3 text-sm flex justify-between gap-2 hover:bg-gray-50">
-              <span><b>{it.name}</b>{it.package_name ? <span className="text-gray-400"> · {it.package_name}</span> : null}</span>
+              <span><b>{it.name}</b>{it.package_name ? <span className="text-gray-400"> · {it.package_name}</span> : null}
+                {it.entered_by_name && <span className="block text-xs text-gray-400">Entered by {it.entered_by_name}{it.entered_at ? `, ${dt(it.entered_at)}` : ''}</span>}</span>
               <span className={`text-xs font-semibold ${it.status === 'approved' ? 'text-green-700' : it.status === 'entered' ? 'text-purple-700' : 'text-amber-700'}`}>
                 {it.status === 'approved' ? 'Approved' : it.status === 'entered' ? 'Entered — awaiting approval' : 'Pending'}
               </span>
