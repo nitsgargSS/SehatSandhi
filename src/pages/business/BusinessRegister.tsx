@@ -714,6 +714,10 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
             four fit easily — the current one stretches into a pill and carries
             the only label, so progress reads at a glance without scrolling. */}
         <div className="flex lg:hidden items-center" style={{ background: BIZ.ink, padding: '7px 18px', gap: 7 }}>
+          {/* The way home on a phone, where the rail (and its logo) is hidden. */}
+          <Link to="/" aria-label="Sehatsandhi — home" style={{ flex: '0 0 auto', marginRight: 8, display: 'flex' }}>
+            <img src="/logo-only-symbol.png" alt="" aria-hidden style={{ height: 28, width: 'auto', objectFit: 'contain', background: '#FBF7F0', borderRadius: 8, padding: 3 }} />
+          </Link>
           {RAIL_STEPS.map(s => {
             const current = s.n === step
             const done = s.n < step
@@ -750,7 +754,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 36 }}>
               {/* full logo, centered + large. It's transparent, and its blue elements
                   need a light backing on the dark rail, so it sits on a cream chip. */}
-              <img src="/logo-tight.png" alt="Sehatsandhi" style={{ height: 132, width: 'auto', objectFit: 'contain', borderRadius: 16, background: '#FBF7F0', padding: '16px 20px' }} />
+              <Link to="/" aria-label="Sehatsandhi — home" className="inline-flex"><img src="/logo-tight.png" alt="Sehatsandhi" style={{ height: 132, width: 'auto', objectFit: 'contain', borderRadius: 16, background: '#FBF7F0', padding: '16px 20px' }} /></Link>
             </div>
             {RAIL_STEPS.map(s => (
               <button key={s.n} onClick={() => goStep(s.n)} style={{ display: 'flex', alignItems: 'center', gap: 13, width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '11px 0', fontFamily: 'inherit', textAlign: 'left' }}>

@@ -1,4 +1,5 @@
 import { useEffect, useState, Fragment } from 'react'
+import { Link } from 'react-router-dom'
 import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Plus, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { markPasswordChanged } from '../../lib/passwordState'
@@ -839,7 +840,7 @@ export default function AdminDashboard() {
             was unreadable, not only the charts. */}
         <aside className="hidden md:flex w-56 bg-navy-700 min-h-screen fixed left-0 top-0 flex-col pt-6">
           <div className="px-5 mb-4">
-            <img src="/logo.png" alt="Sehatsandhi" className="h-10 brightness-0 invert" />
+            <Link to="/" aria-label="Sehatsandhi — home" className="inline-flex"><img src="/logo.png" alt="Sehatsandhi" className="h-10 brightness-0 invert" /></Link>
             <p className="text-white/40 text-xs mt-2">{t('adminDashboardPage.sidebarLabel')}</p>
           </div>
           <div className="px-5 mb-4">

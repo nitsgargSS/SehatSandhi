@@ -125,8 +125,8 @@ export default function DoctorLogin() {
       <div className="hidden lg:flex lg:flex-col lg:sticky lg:top-0 lg:h-screen"
         style={{ background: BIZ.ink, padding: '36px 30px' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 36 }}>
-          <img src="/logo-tight.png" alt="Sehatsandhi"
-            style={{ height: 132, width: 'auto', objectFit: 'contain', borderRadius: 16, background: BIZ.cream, padding: '16px 20px' }} />
+          <Link to="/" aria-label="Sehatsandhi — home" className="inline-flex"><img src="/logo-tight.png" alt="Sehatsandhi"
+            style={{ height: 132, width: 'auto', objectFit: 'contain', borderRadius: 16, background: BIZ.cream, padding: '16px 20px' }} /></Link>
         </div>
         <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 10 }}>
           Your clinic dashboard
@@ -145,7 +145,7 @@ export default function DoctorLogin() {
       <div className="flex items-center justify-center" style={{ padding: 'clamp(22px,5.5vw,48px) clamp(18px,5vw,56px)' }}>
       <div className="card max-w-md w-full shadow-xl">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Sehatsandhi" className="h-14 mx-auto mb-4 lg:hidden" />
+          <Link to="/" aria-label="Sehatsandhi — home" className="block"><img src="/logo.png" alt="Sehatsandhi" className="h-14 mx-auto mb-4 lg:hidden" /></Link>
           <h1 className="text-2xl font-bold text-navy-700">{t('loginPage.title')}</h1>
           <p className="text-gray-400 text-sm mt-1">
             {showLegacy

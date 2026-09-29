@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
@@ -1179,7 +1180,7 @@ export default function DoctorDashboard() {
     <div style={{ background: BIZ.cream, minHeight: '100vh' }} className="px-4 py-8">
       <div className="max-w-xl mx-auto space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <img src="/logo-tight.png" alt="Sehatsandhi" style={{ height: 48, width: 'auto' }} />
+          <Link to="/" aria-label="Sehatsandhi — home" className="inline-flex"><img src="/logo-tight.png" alt="Sehatsandhi" style={{ height: 48, width: 'auto' }} /></Link>
           <button onClick={logout} className="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1.5">
             <LogOut className="w-4 h-4" /> Log out
           </button>
@@ -1208,8 +1209,8 @@ export default function DoctorDashboard() {
         {/* The logo is transparent and its blue marks need a light backing on
             the dark rail, so it sits on a cream chip — as on the wizard. */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 26 }}>
-          <img src="/logo-tight.png" alt="Sehatsandhi"
-               style={{ height: 96, width: 'auto', objectFit: 'contain', borderRadius: 16, background: BIZ.cream, padding: '12px 16px' }} />
+          <Link to="/" aria-label="Sehatsandhi — home" className="inline-flex"><img src="/logo-tight.png" alt="Sehatsandhi"
+               style={{ height: 96, width: 'auto', objectFit: 'contain', borderRadius: 16, background: BIZ.cream, padding: '12px 16px' }} /></Link>
         </div>
 
         {/* Who is logged in. This is the header's identity block, moved into the

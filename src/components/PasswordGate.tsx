@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { passwordProblem, checkPassword } from '../lib/credentials'
 import {
@@ -91,7 +92,7 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
   return (
     <div className="min-h-screen bg-navy-700 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm">
-        <img src="/logo.png" alt="Sehatsandhi" className="h-12 mx-auto mb-6" />
+        <Link to="/" aria-label="Sehatsandhi — home" className="block"><img src="/logo.png" alt="Sehatsandhi" className="h-12 mx-auto mb-6" /></Link>
         <h2 className="text-xl font-bold text-navy-700 text-center mb-2">
           Choose a new password
         </h2>
