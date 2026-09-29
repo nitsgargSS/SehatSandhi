@@ -27,6 +27,7 @@ import { ADMIN_EMAIL, type Email, emailConfigured, esc, layout, sendEmail, type 
 const BATCH = 20
 const MAX_ATTEMPTS = 5
 const WELCOME_STALE_MS = 2 * 24 * 60 * 60 * 1000
+const PAY_GRACE_MS = 15 * 60_000
 
 const TYPE_LABEL: Record<string, string> = {
   clinic: 'Clinic', hospital: 'Hospital', lab: 'Diagnostic lab', pharmacy: 'Pharmacy',
@@ -133,6 +134,16 @@ Deno.serve(async (req) => {
       .eq('id', r.business_id).maybeSingle()
     if (!b) { await finish({ status: 'skipped', last_error: 'business no longer exists' }); continue }
 
+    // Registration is written before checkout, so a minute in, a paying clinic
+    // usually still reads as pending. Give payment up to PAY_GRACE_MS so the
+    // welcome says "live" and the alert says "paid" — rather than "our team
+    // checks your details" to someone who has just paid. Released unclaimed,
+    // attempt not counted.
+    if (b.status !== 'active' && Date.now() - Date.parse(r.created_at) < PAY_GRACE_MS) {
+      await finish({ status: 'pending', attempts: r.attempts })
+      continue
+    }
+
     const { data: docs } = await db.from('business_practitioners')
       .select('practitioners(full_name)').eq('business_id', b.id)
     // One practitioner per link, though the client types it as either shape.
@@ -169,7 +180,7 @@ function welcome(b: Biz, site: string): Email | null {
   const live = b.status === 'active'
 
   const steps = [
-    'Our team checks your details, usually within one working day. We may call or WhatsApp you on the number you registered with.',
+    ...(live ? [] : ['Our team checks your details, usually within one working day. We may call or WhatsApp you on the number you registered with.']),
     `Log in any time at <a href="${login}" style="color:#0f6b4a">${login.replace(/^https?:\/\//, '')}</a> with <b>${esc(to)}</b>. Choose "Email me a code" — no password needed.`,
     live
       ? 'Your listing is live. Your invoice is in your dashboard under Plan.'
@@ -210,12 +221,15 @@ function adminAlert(b: Biz, doctors: string[]): Email {
     ['Status', b.status || '—'],
     ['Registered', new Date(b.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })],
   ]
+  const next = b.status === 'active'
+    ? 'Paid and already live — nothing to approve.'
+    : 'Not paid yet. Review it in the admin panel → Pending.'
   const html = layout(`New registration: ${b.name}`, `
 <table cellpadding="0" cellspacing="0" style="width:100%;font-size:14px;border-collapse:collapse">
 ${rows.map(([k, v]) => `<tr><td style="padding:6px 10px 6px 0;color:#5b6b63;vertical-align:top;white-space:nowrap">${esc(k)}</td><td style="padding:6px 0;border-bottom:1px solid #eef2ef">${esc(v)}</td></tr>`).join('')}
 </table>
-<p style="margin:16px 0 0;color:#5b6b63;font-size:13px">Review it in the admin panel → Pending.</p>`)
-  const text = [`New registration: ${b.name}`, '', ...rows.map(([k, v]) => `${k}: ${v}`), '', 'Review it in the admin panel → Pending.'].join('\n')
+<p style="margin:16px 0 0;color:#5b6b63;font-size:13px">${esc(next)}</p>`)
+  const text = [`New registration: ${b.name}`, '', ...rows.map(([k, v]) => `${k}: ${v}`), '', next].join('\n')
   return { to: ADMIN_EMAIL, toName: 'Sehatsandhi Admin', subject: `New ${typeLabel(b.vertical).toLowerCase()} registered: ${b.name}${b.own_city ? `, ${b.own_city}` : ''}`, html, text }
 }
 

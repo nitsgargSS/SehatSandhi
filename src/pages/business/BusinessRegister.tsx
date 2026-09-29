@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Loader2 } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useServiceAreas } from '../../hooks/useServiceAreas'
 import { WA_NUMBER, SPECIALITIES } from '../../types'
@@ -122,6 +123,11 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
+  const navigate = useNavigate()
+  // After a paid registration there is nothing left to do here: count down and
+  // take them to the login page. The invoice opens in its own tab and was also
+  // sent to their WhatsApp, so leaving loses nothing.
+  const [loginIn, setLoginIn] = useState<number | null>(null)
   const [paid, setPaid] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   // The doctors who work here. Each is either a person already on the platform
@@ -143,6 +149,13 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   const phoneVerified = !phoneCheckOn || (!!verifiedPhone && verifiedPhone === phoneKey(form.phone ?? ''))
   const [invoiceToken, setInvoiceToken] = useState<string | null>(null)
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null)
+  useEffect(() => { if (done && paid) setLoginIn(10) }, [done, paid])
+  useEffect(() => {
+    if (loginIn === null) return
+    if (loginIn <= 0) { navigate('/business/login'); return }
+    const t = setTimeout(() => setLoginIn(n => (n ?? 1) - 1), 1000)
+    return () => clearTimeout(t)
+  }, [loginIn, navigate])
 
   // The live pricing plan. Everything below asks the plan how to price rather
   // than assuming per-pincode tiers, so switching plans in admin changes the
@@ -764,6 +777,12 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                       View invoice
                     </a>
                   </div>
+                )}
+                <Link to="/business/login" style={{ background: paid ? BIZ.green : '#fff', color: paid ? '#fff' : BIZ.green, border: `2px solid ${BIZ.green}`, fontWeight: 800, fontSize: 15, padding: '11px 26px', borderRadius: 12, marginBottom: paid ? 8 : 12 }}>
+                  Log in to your dashboard
+                </Link>
+                {paid && loginIn !== null && loginIn > 0 && (
+                  <p style={{ fontSize: 13, color: BIZ.muted, margin: 0 }}>Taking you to the login page in {loginIn}s…</p>
                 )}
                 {!paid && <a href={waLink} target="_blank" rel="noreferrer" style={{ background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 15, padding: '13px 28px', borderRadius: 12 }}>Message us on WhatsApp</a>}
               </div>
