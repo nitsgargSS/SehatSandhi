@@ -69,7 +69,7 @@ export default function JoinPage() {
       <div className="flex-1 flex items-center justify-center" style={{ padding: 'clamp(22px,5.5vw,48px) clamp(16px,5vw,56px)' }}>
         <div className="card max-w-md w-full shadow-xl">
           <div className="text-center mb-6">
-            <img src="/logo.png" alt="Sehatsandhi" className="h-14 mx-auto mb-4" />
+            <Link to="/" aria-label="Sehatsandhi — home" className="block"><img src="/logo.png" alt="Sehatsandhi" className="h-14 mx-auto mb-4" /></Link>
             <h1 className="text-2xl font-bold text-navy-700">Set up your login</h1>
           </div>
 
