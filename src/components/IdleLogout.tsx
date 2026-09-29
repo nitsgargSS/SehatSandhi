@@ -9,9 +9,10 @@ import { supabase } from '../lib/supabase'
 //
 // "Used" = a click, key, scroll, touch or mouse movement in ANY open tab of the
 // site: the last activity time is shared through localStorage, so reading in
-// one tab keeps the others signed in. A minute before the end a box asks
-// "Still there?"; nothing pressed, and the session is signed out everywhere
-// and the login page says why.
+// one tab keeps the others signed in. A minute before the end a bar asks
+// "Still there?" and tells them to save — the page stays usable, so they can.
+// Nothing pressed, and the session is signed out everywhere and the login
+// page says why.
 
 export const IDLE_MINUTES = { business: 30, admin: 15 } as const
 const WARN_SECONDS = 60
@@ -65,17 +66,20 @@ export default function IdleLogout({ minutes, loginPath }: { minutes: number; lo
   }, [minutes, touch, signOut, loginPath])
 
   if (secondsLeft === null) return null
+  // A bar, not a modal: the page underneath stays usable, so there is a full
+  // minute to press Save on whatever is open. Any click — Save included —
+  // counts as activity and keeps the session.
   return (
-    <div role="alertdialog" aria-modal="true" aria-labelledby="idle-title"
-      className="fixed inset-0 z-[1000] bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center">
-        <h2 id="idle-title" className="text-lg font-bold text-navy-700 mb-2">Still there?</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          No activity for a while. For safety you will be signed out in <b>{secondsLeft}s</b>.
-        </p>
-        <div className="flex gap-2 justify-center">
-          <button autoFocus onClick={() => { lastWrite.current = 0; touch() }} className="btn-teal py-2 px-4 text-sm">Stay signed in</button>
-          <button onClick={signOut} className="btn-outline py-2 px-4 text-sm">Log out now</button>
+    <div role="alert" aria-live="assertive"
+      className="fixed bottom-0 inset-x-0 z-[1000] bg-amber-50 border-t-2 border-amber-400 shadow-2xl px-4 py-3">
+      <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-3 justify-between">
+        <div className="text-sm text-amber-900 min-w-0">
+          <b>Still there?</b> No activity for a while — you will be signed out in <b>{secondsLeft}s</b> to keep records safe.
+          {' '}<b>Save anything you are working on now.</b>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button autoFocus onClick={() => { lastWrite.current = 0; touch() }} className="btn-teal py-2 px-4 text-sm">I'm still working</button>
+          <button onClick={signOut} className="btn-outline py-2 px-4 text-sm bg-white">Log out now</button>
         </div>
       </div>
     </div>
