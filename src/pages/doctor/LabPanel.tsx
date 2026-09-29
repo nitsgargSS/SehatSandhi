@@ -8,7 +8,8 @@ import {
   createOrder, getOrders, getOrder, markCollected, assignCollector, cancelOrder, getResults, getPreviousValues,
   saveResults, approveOrder, sendReport, rangeText, STATUS_LABEL,
   getFollowups, followupAction, getCrmSummary, getSegment, setRepeatDays, reminderLink,
-  getUploads, uploadReport, sendUpload,
+  getUploads, uploadReport, sendUpload, testVisible,
+  type LabCategory,
   LabTest, LabPackage, LabOrder, LabParameter, OrderStatus, ParamKind, LabFollowup, CrmSummary, Segment, UploadedReport,
 } from '../../lib/labApi'
 import { downloadCsv } from '../../lib/billingApi'
@@ -50,7 +51,16 @@ export default function LabPanel({ businessId, canManage, canResults, canApprove
   // "Book" on a follow-up opens New order with the patient and test filled in.
   const [prefill, setPrefill] = useState<{ memberId: string; name: string; phone: string; testId: string | null } | null>(null)
   const [labName, setLabName] = useState('')
-  useEffect(() => { supabase.from('businesses').select('name').eq('id', businessId).maybeSingle().then(({ data }) => setLabName((data as { name?: string } | null)?.name ?? '')) }, [businessId])
+  // 0177: the kinds of tests done here. Null = not chosen (everything shows).
+  const [labCats, setLabCats] = useState<string[] | null>(null)
+  const [isLab, setIsLab] = useState(false)
+  useEffect(() => {
+    supabase.from('businesses').select('name, vertical, lab_categories').eq('id', businessId).maybeSingle().then(({ data }) => {
+      const b = data as { name?: string; vertical?: string; lab_categories?: string[] | null } | null
+      setLabName(b?.name ?? ''); setLabCats(b?.lab_categories ?? null); setIsLab(b?.vertical === 'lab')
+    })
+  }, [businessId])
+  const shown = useMemo(() => tests.filter(t => testVisible(labCats, t.category)), [tests, labCats])
 
   const reloadCatalogue = useCallback(() => {
     getTests(businessId).then(setTests).catch(() => setTests([]))
@@ -77,20 +87,26 @@ export default function LabPanel({ businessId, canManage, canResults, canApprove
         </div>
       </div>
 
+      {isLab && !labCats?.length && canManage && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-3">
+          Tell us what kind of lab this is — pathology, or radiology &amp; imaging — under <b>Lab &amp; team</b>. Your test list and reports then show only those tests.
+        </div>
+      )}
+
       {openOrder ? (
         <OrderDetail orderId={openOrder} businessId={businessId} canManage={canManage} canResults={canResults}
           canApprove={canApprove} onBack={() => setOpenOrder(null)} />
       ) : (
         <>
           {section === 'queue' && <Queue businessId={businessId} onOpen={setOpenOrder} />}
-          {section === 'new' && <NewOrder key={prefill?.memberId ?? 'blank'} businessId={businessId} tests={tests} packages={packages} prefill={prefill}
+          {section === 'new' && <NewOrder key={prefill?.memberId ?? 'blank'} businessId={businessId} tests={shown} packages={packages} prefill={prefill}
             onCreated={id => { setPrefill(null); setOpenOrder(id); setSection('queue') }} goTests={() => setSection('tests')} canManage={canManage} />}
           {section === 'followups' && <Followups businessId={businessId} labName={labName}
             onBook={f => { setPrefill({ memberId: f.patient_member_id, name: f.patient_name, phone: f.patient_phone ?? '', testId: f.test_id }); setSection('new') }} />}
           {section === 'uploads' && canResults && <Uploads businessId={businessId} />}
           {section === 'home' && <HomeRound businessId={businessId} onOpen={setOpenOrder} />}
-          {section === 'tests' && <Tests businessId={businessId} tests={tests} canManage={canManage} reload={reloadCatalogue} />}
-          {section === 'packages' && <Packages businessId={businessId} tests={tests} packages={packages} canManage={canManage} reload={reloadCatalogue} />}
+          {section === 'tests' && <Tests businessId={businessId} tests={shown} cats={labCats} canManage={canManage} reload={reloadCatalogue} />}
+          {section === 'packages' && <Packages businessId={businessId} tests={shown} packages={packages} canManage={canManage} reload={reloadCatalogue} />}
           {section === 'settings' && canManage && <Settings businessId={businessId} />}
         </>
       )}
@@ -373,6 +389,7 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
   const [staff, setStaff] = useState<{ id: string; name: string }[]>([])
+  const [collectedBy, setCollectedBy] = useState<string | null>(null)
   const [cancelWhy, setCancelWhy] = useState<string | null>(null)
   const [uploads, setUploads] = useState<UploadedReport[]>([])
   const load = useCallback(() => {
@@ -415,6 +432,12 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
               Ordered {dt(o.created_at)} by {o.ordered_by_name ?? o.created_by_name ?? '—'}{o.referred_by ? ` · referred by ${o.referred_by}` : ''}
               {o.priority === 'urgent' ? ' · URGENT' : ''}{o.notes ? ` · ${o.notes}` : ''}
             </div>
+            {(o.collected_at || o.latest_report) && (
+              <div className="text-xs text-gray-500 mt-0.5">
+                {o.collected_at ? `Sample collected ${dt(o.collected_at)} by ${o.collected_by_name ?? '—'}` : ''}
+                {o.latest_report ? `${o.collected_at ? ' · ' : ''}Approved ${dt(o.latest_report.approved_at)} by ${o.latest_report.approved_by_name ?? '—'}` : ''}
+              </div>
+            )}
           </div>
           <span className={`self-start px-2 py-1 rounded-full text-xs font-semibold ${statusCls[o.status]}`}>{STATUS_LABEL[o.status]}</span>
         </div>
@@ -437,7 +460,21 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
         )}
 
         <div className="flex gap-2 flex-wrap">
-          {o.status === 'ordered' && <button disabled={busy} onClick={() => run(async () => { await markCollected(o.id); return 'Sample marked collected.' })} className="btn-teal text-xs py-2 px-4"><Check className="w-4 h-4" /> Sample collected</button>}
+          {o.status === 'ordered' && (
+            // Who actually drew the blood / ran the scan — often not whoever clicks.
+            <span className="inline-flex flex-wrap gap-2 items-center">
+              <select className="input-field w-auto text-xs py-1.5" value={collectedBy ?? o.collector_id ?? ''}
+                onChange={e => setCollectedBy(e.target.value)} aria-label="Collected by">
+                <option value="">Collected by: me</option>
+                {staff.map(s => <option key={s.id} value={s.id}>Collected by: {s.name}</option>)}
+              </select>
+              <button disabled={busy} onClick={() => run(async () => {
+                const by = collectedBy ?? o.collector_id ?? ''
+                await markCollected(o.id, by || null)
+                return `Sample marked collected${by ? ` by ${staff.find(s => s.id === by)?.name ?? 'them'}` : ''}.`
+              })} className="btn-teal text-xs py-2 px-4"><Check className="w-4 h-4" /> Sample collected</button>
+            </span>
+          )}
           {canApprove && o.entered_count > 0 && <button disabled={busy} onClick={approveAndSend} className="btn-teal text-xs py-2 px-4"><Send className="w-4 h-4" /> Approve & send report</button>}
           {rep && <a href={`/lab/${rep.token}`} target="_blank" rel="noreferrer" className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1"><Printer className="w-3 h-3" /> Report {rep.report_no}</a>}
           {rep && <button disabled={busy} onClick={() => run(async () => { const s = await sendReport(rep.id); return s.whatsapp ? 'Sent on WhatsApp.' : `Not sent${s.errors?.length ? `: ${s.errors[0]}` : ''}.` })} className="btn-outline text-xs py-1.5 px-3">Resend</button>}
@@ -484,7 +521,8 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
         {o.items.map(it => (
           <div key={it.id}>
             <button onClick={() => setOpenItem(openItem === it.id ? null : it.id)} className="w-full text-left px-4 py-3 text-sm flex justify-between gap-2 hover:bg-gray-50">
-              <span><b>{it.name}</b>{it.package_name ? <span className="text-gray-400"> · {it.package_name}</span> : null}</span>
+              <span><b>{it.name}</b>{it.package_name ? <span className="text-gray-400"> · {it.package_name}</span> : null}
+                {it.entered_by_name && <span className="block text-xs text-gray-400">Entered by {it.entered_by_name}{it.entered_at ? `, ${dt(it.entered_at)}` : ''}</span>}</span>
               <span className={`text-xs font-semibold ${it.status === 'approved' ? 'text-green-700' : it.status === 'entered' ? 'text-purple-700' : 'text-amber-700'}`}>
                 {it.status === 'approved' ? 'Approved' : it.status === 'entered' ? 'Entered — awaiting approval' : 'Pending'}
               </span>
@@ -795,7 +833,8 @@ function Uploads({ businessId }: { businessId: string }) {
 
 const blankParam = (): LabParameter => ({ name: '', unit: '', kind: 'number', ref_low: null, ref_high: null })
 
-function Tests({ businessId, tests, canManage, reload }: { businessId: string; tests: LabTest[]; canManage: boolean; reload: () => void }) {
+function Tests({ businessId, tests, cats, canManage, reload }: { businessId: string; tests: LabTest[]; cats: string[] | null; canManage: boolean; reload: () => void }) {
+  const firstCat = (cats?.[0] ?? 'pathology') as LabCategory
   const [edit, setEdit] = useState<{ test: Partial<LabTest>; params: LabParameter[] } | null>(null)
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -830,8 +869,10 @@ function Tests({ businessId, tests, canManage, reload }: { businessId: string; t
         <h3 className="font-bold text-navy-700">{t.id ? 'Edit test' : 'New test'}</h3>
         <div className="grid sm:grid-cols-4 gap-2">
           <input className="input-field sm:col-span-2" placeholder="Test name" value={t.name ?? ''} onChange={e => setT('name', e.target.value)} />
-          <select className="input-field" value={t.category ?? 'pathology'} onChange={e => setT('category', e.target.value)}>
-            <option value="pathology">Pathology</option><option value="radiology">Radiology / imaging</option><option value="cardiology">Cardiology</option><option value="other">Other</option>
+          <select className="input-field" value={t.category ?? firstCat} onChange={e => setT('category', e.target.value)}>
+            {([['pathology', 'Pathology'], ['radiology', 'Radiology / imaging'], ['cardiology', 'Cardiology'], ['other', 'Other']] as const)
+              .filter(([v]) => testVisible(cats, v) || t.category === v)
+              .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <input className="input-field" type="number" min={0} placeholder="Price ₹" value={t.price ?? ''} onChange={e => setT('price', e.target.value)} />
           <input className="input-field" placeholder="Department" value={t.department ?? ''} onChange={e => setT('department', e.target.value)} />
@@ -881,7 +922,7 @@ function Tests({ businessId, tests, canManage, reload }: { businessId: string; t
         {canManage && (
           <div className="flex gap-2">
             <button disabled={busy} onClick={doImport} className="btn-outline text-xs py-2 px-3">Load standard tests</button>
-            <button onClick={() => setEdit({ test: { category: 'pathology', price: 0 }, params: [blankParam()] })} className="btn-teal text-xs py-2 px-4"><Plus className="w-4 h-4" /> Test</button>
+            <button onClick={() => setEdit({ test: { category: firstCat, price: 0 }, params: [blankParam()] })} className="btn-teal text-xs py-2 px-4"><Plus className="w-4 h-4" /> Test</button>
           </div>
         )}
       </div>

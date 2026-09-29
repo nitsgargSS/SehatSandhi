@@ -38,8 +38,10 @@ export interface Business {
   pharmacy_module?: boolean
   pharmacy_gstin?: string | null
   pharmacy_drug_licence?: string | null
-  /** 0168: in-house lab, switched on by an admin (a Diagnostic Lab has it anyway). */
+  /** 0168: in-house lab (a Diagnostic Lab has it anyway). 0177: a clinic's owner switches it on by choosing tests. */
   lab_module?: boolean
+  /** 0177: the kinds of tests done here — pathology / radiology / cardiology. Null = not chosen. */
+  lab_categories?: string[] | null
 }
 
 /** A person. Exists independently of any business, so one doctor can hold

@@ -71,7 +71,9 @@ const categoryOptions = (v: VerticalKey): string[] => {
     case 'hospital':
       return ['Multi-speciality', ...DOCTOR_SPECIALITIES.map(s => s.en)]
     case 'lab':
-      return ['Pathology', 'Radiology & imaging', 'Pathology and imaging', 'Sample collection centre']
+      // 0177: this is also what the lab IS — its tests and reports follow it
+      // (LAB_KIND_FOR below). A lab doing both registers two listings.
+      return ['Pathology', 'Radiology & imaging', 'Sample collection centre']
     case 'pharmacy':
       return ['Retail pharmacy', 'Hospital pharmacy', 'Ayurvedic / Homeopathic', 'Surgical & medical equipment']
     case 'insurance':
@@ -81,6 +83,13 @@ const categoryOptions = (v: VerticalKey): string[] => {
     default:
       return []
   }
+}
+
+// 0177: a lab's category decides which tests and reports it gets.
+const LAB_KIND_FOR: Record<string, string[]> = {
+  'Pathology': ['pathology'],
+  'Sample collection centre': ['pathology'],
+  'Radiology & imaging': ['radiology', 'cardiology'],
 }
 
 // Compact row input for the consultant list — narrower than the main Field so
@@ -361,6 +370,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       && (!soloDoctor || (form.speciality && form.owner_name?.trim()
                           && isValidRegNumber(form.reg_number)))
       && (!ownerIsDoctor || practitioners.some(d => d.is_owner))
+      && (vertical !== 'lab' || !!LAB_KIND_FOR[form.category ?? ''])
       && emailVerified
       && (passwordSaved || !passwordProblem(signIn.password, signIn.confirm))
       && phoneVerified)
@@ -385,6 +395,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                   ? 'Please choose a speciality — it is how patients find you.'
                   : soloDoctor && !form.owner_name?.trim()
                     ? 'Please enter your name — it is what patients see.'
+                    : vertical === 'lab' && !LAB_KIND_FOR[form.category ?? '']
+                    ? 'Choose what kind of lab this is — Pathology or Radiology & imaging. If you do both, register each as its own listing.'
                     : ownerIsDoctor && !practitioners.some(d => d.is_owner)
                       ? 'Find the owner as a doctor and press Add doctor — or untick "The owner is a doctor".'
                       : 'Please enter your council registration number.')
@@ -555,6 +567,10 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       const category = soloDoctor
         ? SPECIALITIES.find(sp => sp.id === form.speciality)?.en
         : form.category === OTHER_CATEGORY ? (form.category_other?.trim() || OTHER_CATEGORY) : form.category
+      if (vertical === 'lab' && LAB_KIND_FOR[form.category ?? '']) {
+        await supabase.rpc('sehat_set_lab_tests', { p_business: businessId, p_categories: LAB_KIND_FOR[form.category ?? ''] })
+          .then(() => undefined, () => undefined)
+      }
       if (category) {
         await supabase.rpc('sehat_signup_set_category', { p_business: businessId, p_category: category })
           .then(() => undefined, () => undefined)
@@ -940,9 +956,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                 border: `1px solid ${BIZ.inputBorder}`, fontFamily: 'inherit',
                                 fontSize: 16, color: form.category ? BIZ.ink : BIZ.mutedWarm, background: '#fdfbf6',
                               }}>
-                              <option value="">Choose a category…</option>
+                              <option value="">{vertical === 'lab' ? 'What kind of lab?' : 'Choose a category…'}</option>
                               {categoryOptions(vertical).map(c => <option key={c} value={c}>{c}</option>)}
-                              <option value={OTHER_CATEGORY}>Other (type it in)</option>
+                              {vertical !== 'lab' && <option value={OTHER_CATEGORY}>Other (type it in)</option>}
                             </select>
                             {form.category === OTHER_CATEGORY && (
                               <input value={form.category_other ?? ''} onChange={e => upd('category_other', e.target.value)}

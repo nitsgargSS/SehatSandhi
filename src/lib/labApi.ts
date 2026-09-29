@@ -57,6 +57,9 @@ export interface LabOrderItem {
   report_kind: 'parameters' | 'narrative'
   test_id: string | null
   category: LabCategory | null
+  /** 0176: who entered the result, as they were named then. */
+  entered_by_name?: string | null
+  entered_at?: string | null
 }
 
 export interface LabReportRef {
@@ -242,8 +245,9 @@ export async function getOrder(orderId: string): Promise<LabOrder | null> {
   return data ? toOrder(data) : null
 }
 
-export async function markCollected(orderId: string) {
-  const { error } = await supabase.rpc('sehat_lab_mark_collected', { p_order: orderId })
+/** 0176: collectorId names who actually took the sample; null = the person clicking. */
+export async function markCollected(orderId: string, collectorId: string | null = null) {
+  const { error } = await supabase.rpc('sehat_lab_mark_collected', { p_order: orderId, p_collector: collectorId })
   oops(error)
 }
 
@@ -498,3 +502,32 @@ export async function getUploadedFile(token: string) {
   return body as { title: string; lab_name: string | null; patient_name: string | null; report_date: string | null
                    uploaded_at: string; expires_on: string; mime_type: string | null; url: string }
 }
+
+// ── 0177: which kinds of tests a business does ─────────────────────────────
+
+/** What a standalone lab is. A radiology & imaging centre also runs ECG / echo / TMT. */
+export const LAB_KIND_OPTIONS: { value: 'pathology' | 'radiology'; label: string; cats: LabCategory[] }[] = [
+  { value: 'pathology', label: 'Pathology lab — blood, urine and stool tests', cats: ['pathology'] },
+  { value: 'radiology', label: 'Radiology & imaging centre — X-ray, ultrasound, CT, MRI, ECG, echo', cats: ['radiology', 'cardiology'] },
+]
+
+/** What a clinic or hospital may do in-house (tick any). */
+export const IN_CLINIC_TESTS: { value: LabCategory; label: string }[] = [
+  { value: 'pathology', label: 'Blood & urine tests (sample collection / pathology)' },
+  { value: 'radiology', label: 'X-ray, ultrasound and other imaging' },
+  { value: 'cardiology', label: 'ECG, 2D echo, TMT (heart tests)' },
+]
+
+export const labKindOf = (cats: string[] | null | undefined): 'pathology' | 'radiology' | null =>
+  !cats?.length ? null : cats.includes('pathology') ? 'pathology' : 'radiology'
+
+/** Tests a business sees: its chosen kinds, plus 'other'. Nothing chosen = everything. */
+export const testVisible = (cats: string[] | null | undefined, category: string | null | undefined) =>
+  !cats?.length || !category || category === 'other' || cats.includes(category)
+
+export async function setLabTests(businessId: string, categories: string[]): Promise<{ lab_categories: string[]; lab_module: boolean }> {
+  const { data, error } = await supabase.rpc('sehat_set_lab_tests', { p_business: businessId, p_categories: categories })
+  oops(error)
+  return data as { lab_categories: string[]; lab_module: boolean }
+}
+

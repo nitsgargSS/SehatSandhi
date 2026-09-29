@@ -51,6 +51,7 @@ import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../components/Charts'
 import { headcountFor, marginalDoctorCost, describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import StaffCodeModal from './StaffCodeModal'
+import LabKindPicker from './LabKindPicker'
 import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from './NurseLinks'
 import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
 import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
@@ -2086,6 +2087,13 @@ export default function DoctorDashboard() {
 
         {tab === 'clinic' && (
           <div className="space-y-4">
+            {/* 0177: what kind of lab this is. */}
+            {/* Clinics: in-clinic tests become a paid add-on under Plan (to come); admin switches them on until then. */}
+            {doctor && myVertical === 'lab' && (
+              <LabKindPicker businessId={doctor.id} vertical={myVertical} current={doctor.lab_categories}
+                canChange={isBusinessRole(role)}
+                onSaved={r => setDoctor(d => d ? { ...d, lab_categories: r.lab_categories, lab_module: r.lab_module } : d)} />
+            )}
             {doctor && (
               <ClinicQrCard businessId={doctor.id} name={doctor.name}
                 code={(doctor as typeof doctor & { qr_code?: string | null }).qr_code ?? null} />
