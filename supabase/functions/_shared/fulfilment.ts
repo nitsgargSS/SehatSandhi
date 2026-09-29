@@ -13,6 +13,7 @@
 // delivery costs one redundant write, never a second invoice or a second charge.
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { ADMIN_EMAIL, esc, layout, sendEmail } from './email.ts'
 
 export interface FulfilResult {
   ok: boolean
@@ -41,7 +42,7 @@ export async function fulfilPayment(
 
   const { data: existing } = await supabase
     .from('payments')
-    .select('id, type, status, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon, addon_practitioner_id')
+    .select('id, type, status, amount, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon, addon_practitioner_id')
     .eq(paymentRowId ? 'id' : 'razorpay_order_id', paymentRowId ?? orderId)
     .maybeSingle()
 
@@ -54,9 +55,9 @@ export async function fulfilPayment(
   }
 
   const pay = existing as {
-    id: string; type: string; status: string; business_id: string | null
+    id: string; type: string; status: string; amount: number | string | null; business_id: string | null
     pricing_plan_code: string | null; pricing_mode: string | null
-    monthly_price: number | null; period_months: number | null
+    monthly_price: number | string | null; period_months: number | null
     term_start: string | null; term_end: string | null; modules: string[] | null
     subscription_amount: number | string | null; whatsapp_addon: boolean | null
     addon_practitioner_id?: string | null
@@ -101,7 +102,9 @@ export async function fulfilPayment(
     const patch: Record<string, any> = {
       status: 'active',
       pricing_plan_code: pay.pricing_plan_code,
-      locked_monthly_price: pay.monthly_price,
+      // Whole rupees: this column is integer (views depend on it) while
+      // payments.monthly_price carries paise since 0175.
+      locked_monthly_price: pay.monthly_price == null ? null : Math.round(Number(pay.monthly_price)),
       locked_mode: pay.pricing_mode,
       months_paid: pay.period_months,
       term_start: pay.term_start,
@@ -117,7 +120,10 @@ export async function fulfilPayment(
     if (bought.includes('opd')) patch.opd_module = true
     if (bought.includes('ipd')) patch.ipd_module = true
 
-    await supabase.from('businesses').update(patch).eq('id', pay.business_id)
+    // Checked: a failed write here leaves a paid listing sitting in Pending,
+    // which is exactly what payment is meant to skip.
+    const { error: bErr } = await supabase.from('businesses').update(patch).eq('id', pay.business_id)
+    if (bErr) console.error(`fulfilment: listing ${pay.business_id} not activated: ${bErr.message}`)
   }
 
   // After the payment is marked paid and the listing activated, deliberately: if
@@ -178,6 +184,11 @@ export async function fulfilPayment(
     } catch { /* logged on the invoice row by invoice-send */ }
   }
 
+  // Tell admin money arrived — once, like the invoice send above. Best-effort.
+  if (!alreadyPaid && pay.business_id) {
+    try { await alertAdminPaid(supabase, pay, invoice?.invoice_number ?? null) } catch { /* never fails the payment */ }
+  }
+
   return {
     ok: true,
     alreadyPaid,
@@ -186,4 +197,39 @@ export async function fulfilPayment(
     invoiceToken: invoice?.public_token ?? null,
     invoiceError,
   }
+}
+
+const PAY_KIND: Record<string, string> = {
+  listing: 'Listing plan', wallet_topup: 'WhatsApp wallet top-up',
+}
+
+async function alertAdminPaid(
+  supabase: SupabaseClient,
+  pay: { id: string; type: string; amount: number | string | null; business_id: string | null; period_months: number | null; whatsapp_addon: boolean | null },
+  invoiceNumber: string | null,
+) {
+  const { data } = await supabase.from('businesses')
+    .select('name, vertical, phone, email, own_city, own_district, status')
+    .eq('id', pay.business_id).maybeSingle()
+  const b = (data ?? {}) as { name?: string; vertical?: string; phone?: string; email?: string; own_city?: string; own_district?: string; status?: string }
+  const name = b.name ?? 'A business'
+  const amount = `₹${Number(pay.amount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const rows: [string, string][] = [
+    ['Business', name],
+    ['Type', b.vertical ?? '—'],
+    ['Place', [b.own_city, b.own_district].filter(Boolean).join(', ') || '—'],
+    ['Phone', b.phone || '—'],
+    ['Email', b.email || '—'],
+    ['Paid for', `${PAY_KIND[pay.type] ?? pay.type}${pay.period_months && pay.type === 'listing' ? ` · ${pay.period_months} month(s)` : ''}${pay.whatsapp_addon ? ' + WhatsApp' : ''}`],
+    ['Amount (incl. GST)', amount],
+    ['Invoice', invoiceNumber ?? 'not issued — check the payment in admin'],
+    ['Listing status', b.status === 'active' ? 'Live' : (b.status ?? '—')],
+  ]
+  const html = layout(`Payment received: ${name}`, `
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:14px;border-collapse:collapse">
+${rows.map(([k, v]) => `<tr><td style="padding:6px 10px 6px 0;color:#5b6b63;vertical-align:top;white-space:nowrap">${esc(k)}</td><td style="padding:6px 0;border-bottom:1px solid #eef2ef">${esc(v)}</td></tr>`).join('')}
+</table>`)
+  const text = [`Payment received: ${name}`, '', ...rows.map(([k, v]) => `${k}: ${v}`)].join('\n')
+  const res = await sendEmail({ to: ADMIN_EMAIL, toName: 'Sehatsandhi Admin', subject: `Payment received ${amount}: ${name}${b.own_city ? `, ${b.own_city}` : ''}`, html, text })
+  if (!res.ok) console.error(`fulfilment: admin payment email failed: ${res.error}`)
 }
