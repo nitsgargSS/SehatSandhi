@@ -13,7 +13,7 @@
 //             daysInTerm, monthly, fullFee, amount, tax, lineItems }
 //   order → the quote plus { orderId, amountPaise, currency, keyId, paymentRowId }
 //
-// Signed-in owner or manager only; clinics and hospitals (a lab is its kind).
+// Signed-in owner only; clinics and hospitals (a lab is its kind).
 // Fulfilment is the shared one: subscription_amount 0 leaves the plan alone,
 // and addon_codes switches the add-on on (sehat_grant_paid_addons).
 //
@@ -51,8 +51,8 @@ Deno.serve(async (req) => {
   if (!who.isServiceRole) {
     const { data: role, error } = await who.asCaller.rpc('sehat_caller_role', { p_business: businessId })
     if (error) return json({ error: error.message }, 500)
-    if (role !== 'owner' && role !== 'manager') {
-      return json({ error: 'Only the business’s owner or manager can buy add-ons.' }, 403)
+    if (role !== 'owner') {
+      return json({ error: 'Only the business’s owner can buy add-ons.' }, 403)
     }
   }
 

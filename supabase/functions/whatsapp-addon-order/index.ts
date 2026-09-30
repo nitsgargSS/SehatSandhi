@@ -14,7 +14,7 @@
 //             fullFee, amount, tax, lineItems }
 //   order → the quote plus { orderId, amount (paise), currency, keyId, paymentRowId }
 //
-// Signed-in owner or manager only. Fulfilment is the shared one: the payment
+// Signed-in owner only. Fulfilment is the shared one: the payment
 // has subscription_amount 0 and whatsapp_addon true, which leaves the plan alone,
 // switches WhatsApp on until term_end, and invoices the line below.
 //
@@ -50,8 +50,8 @@ Deno.serve(async (req) => {
   if (!who.isServiceRole) {
     const { data: role, error } = await who.asCaller.rpc('sehat_caller_role', { p_business: businessId })
     if (error) return json({ error: error.message }, 500)
-    if (role !== 'owner' && role !== 'manager') {
-      return json({ error: 'Only the business’s owner or manager can add WhatsApp.' }, 403)
+    if (role !== 'owner') {
+      return json({ error: 'Only the business’s owner can add WhatsApp.' }, 403)
     }
   }
 

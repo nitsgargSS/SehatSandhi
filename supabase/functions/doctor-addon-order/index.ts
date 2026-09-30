@@ -9,7 +9,7 @@
 //   Hospital, monthly term, 20 of 30 days left, ₹1,000 a doctor  →  ₹667 + GST
 //
 // Request:  { businessId, practitionerId, action: 'quote' | 'order' }
-// Owner or manager only.
+// Owner only.
 //
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY,
 //      RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
@@ -41,8 +41,8 @@ Deno.serve(async (req) => {
   if (!who || who.isServiceRole) return json({ error: 'Please sign in.' }, 401)
   const { data: role, error: rErr } = await who.asCaller.rpc('sehat_caller_role', { p_business: businessId })
   if (rErr) return json({ error: rErr.message }, 500)
-  if (role !== 'owner' && role !== 'manager') {
-    return json({ error: 'Only the owner or a manager can pay for a doctor.' }, 403)
+  if (role !== 'owner') {
+    return json({ error: 'Only the owner can pay for a doctor.' }, 403)
   }
   const db = who.asService
 

@@ -18,7 +18,7 @@
 // launch; the ledger keeps every recharge and every send, so either can be
 // invoiced from it later.
 //
-// Request:  { businessId, amountRupees }        — signed-in owner or manager
+// Request:  { businessId, amountRupees }        — signed-in owner
 // Response: { orderId, amount (paise), currency, keyId, paymentRowId }
 // Env: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, SUPABASE_URL,
 //      SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
@@ -53,8 +53,8 @@ Deno.serve(async (req) => {
   const { data: role, error: roleErr } = await who.asCaller
     .rpc('sehat_caller_role', { p_business: businessId })
   if (roleErr) return json({ error: roleErr.message }, 500)
-  if (role !== 'owner' && role !== 'manager') {
-    return json({ error: 'Only the clinic’s owner or manager can top up the wallet.' }, 403)
+  if (role !== 'owner') {
+    return json({ error: 'Only the clinic’s owner can top up the wallet.' }, 403)
   }
 
   const keyId = Deno.env.get('RAZORPAY_KEY_ID')
