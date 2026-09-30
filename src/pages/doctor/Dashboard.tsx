@@ -2225,7 +2225,7 @@ export default function DoctorDashboard() {
                       own email. {docForm.role === 'receptionist'
                         ? 'Reception sees Today, Queue, Appointments, Patients (to register and bill) and Beds — no medical notes, no business settings, no reports.'
                         : docForm.role === 'nurse' ? 'A nurse registers OPD patients, books appointments, runs the queue, records vitals and charts the ward — for the doctors they are linked to. They cannot prescribe.'
-                        : docForm.role === 'manager' ? 'A manager can do everything reception and nurses do — queue, registration, patient billing, vitals, the ward — for every patient, and also manages staff and the in-house pharmacy stock. They read the medical record but cannot prescribe or approve lab reports. Your plan, Sehatsandhi bills, WhatsApp and doctors' leave stay with you, the owner. Right for a small clinic where one person does it all.' : ''}
+                        : docForm.role === 'manager' ? 'A manager can do everything reception and nurses do — queue, registration, patient billing, vitals, the ward — for every patient, and also manages staff and the in-house pharmacy stock. They read the medical record but cannot prescribe or approve lab reports. Your plan, Sehatsandhi bills, WhatsApp and doctors’ leave stay with you, the owner. Right for a small clinic where one person does it all.' : ''}
                     </p>
                     {marginalCost > 0 && docForm.role === 'doctor' && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
