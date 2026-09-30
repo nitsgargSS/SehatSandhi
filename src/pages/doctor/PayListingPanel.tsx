@@ -5,7 +5,6 @@ import {
 } from '../../lib/businessApi'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
 import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
-import { shortDate } from '../../lib/format'
 import { BIZ } from '../business/shared'
 import { Business } from '../../types'
 
@@ -21,7 +20,12 @@ import { Business } from '../../types'
 
 const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
 
+/** dd/mm/yyyy — the format a clinic reads its dates in. */
+const dmy = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' })
+const TERM_NAME: Record<number, string> = { 1: 'Monthly', 3: 'Quarterly', 6: 'Half-yearly', 12: 'Yearly' }
+
 type Biz = Business & {
+  term_start?: string | null
   term_end?: string | null
   auto_renew?: boolean | null
   renewal_term_months?: number | null
@@ -31,7 +35,7 @@ type Biz = Business & {
 
 export default function PayListingPanel({ business, canPay, onPaid }: {
   business: Business
-  /** Owner or manager. Others are told to ask them — the server refuses them anyway. */
+  /** The owner (0181). Others are told to ask them — the server refuses them anyway. */
   canPay: boolean
   onPaid: () => void
 }) {
@@ -74,7 +78,13 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
   const gstState = !g ? 'empty' : g.length < 15 ? 'partial' : isValidGstin(g) ? 'ok' : 'bad'
   const due = price?.tax.grandTotal ?? 0
   const active = b.status === 'active'
-  const termEnd = b.term_end ? new Date(b.term_end) : null
+  // term_end is the first day NOT covered (razorpay-order: start + months),
+  // so the plan is active until the day before, and the next payment is due on it.
+  const termEnd = b.term_end ? new Date(`${String(b.term_end).slice(0, 10)}T00:00:00+05:30`) : null
+  const termStart = b.term_start ? new Date(`${String(b.term_start).slice(0, 10)}T00:00:00+05:30`) : null
+  const lastDay = termEnd ? new Date(termEnd.getTime() - 86_400_000) : null
+  const daysLeft = termEnd ? Math.ceil((termEnd.getTime() - Date.now()) / 86_400_000) : null
+  const paidUp = active && daysLeft !== null && daysLeft > 0
   const terms = price?.terms ?? []
 
   const saveChoice = async () => {
@@ -130,18 +140,42 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
     <div className="card shadow-sm max-w-2xl space-y-4">
       <div>
         <h3 className="font-bold text-navy-700">Plan &amp; billing</h3>
-        <p className="text-sm text-gray-500 mt-1">
-          {active && termEnd
-            ? <>Your plan runs until <b>{shortDate(termEnd)}</b>. Paying now adds the new term after that date.</>
-            : active ? 'Your listing is active.'
-            : 'Your listing goes live, and the dashboard opens fully, as soon as the payment goes through.'}
-          {' '}Autopay is <b>{b.auto_renew === false ? 'off' : 'on'}</b>{b.renewal_whatsapp ? ' · WhatsApp included' : ''}.
-        </p>
+        {paidUp && termEnd && lastDay ? (
+          <div className="mt-2 grid sm:grid-cols-3 gap-2 text-sm">
+            <div className="bg-teal-50 rounded-lg px-3 py-2">
+              <div className="text-xs text-gray-500">Current plan</div>
+              <div className="font-bold text-navy-700">{TERM_NAME[Number(b.months_paid)] ?? `${b.months_paid} months`}{b.renewal_whatsapp ? ' + WhatsApp' : ''}</div>
+            </div>
+            <div className="bg-teal-50 rounded-lg px-3 py-2">
+              <div className="text-xs text-gray-500">Active</div>
+              <div className="font-bold text-navy-700">{termStart ? dmy(termStart) : '—'} to {dmy(lastDay)}</div>
+            </div>
+            <div className="bg-teal-50 rounded-lg px-3 py-2">
+              <div className="text-xs text-gray-500">Next payment due</div>
+              <div className="font-bold text-navy-700">{dmy(termEnd)}</div>
+              <div className="text-xs text-gray-500">{daysLeft} day{daysLeft === 1 ? '' : 's'} left · autopay {b.auto_renew === false ? 'off' : 'on'}</div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 mt-1">
+            {active && termEnd
+              ? <>Your plan ended on <b>{dmy(lastDay ?? termEnd)}</b>. Renew to keep your listing and dashboard open.</>
+              : active ? 'Your listing is active.'
+              : 'Your listing goes live, and the dashboard opens fully, as soon as the payment goes through.'}
+            {' '}Autopay is <b>{b.auto_renew === false ? 'off' : 'on'}</b>{b.renewal_whatsapp ? ' · WhatsApp included' : ''}.
+          </p>
+        )}
       </div>
+
+      {paidUp && termEnd && (
+        <p className="text-sm text-gray-600">
+          <b>Nothing is due now.</b> Below you can choose your next plan, or renew early — a renewal starts on {dmy(termEnd)}, after your current plan, so no days are lost.
+        </p>
+      )}
 
       {!canPay ? (
         <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">
-          Only the owner or manager of {b.name} can pay or change the plan. Please ask them to log in.
+          Only the owner of {b.name} can pay or change the plan. Please ask them to log in.
         </p>
       ) : (
         <>
@@ -210,14 +244,14 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
               {price.tax.applied && due > 0 && (price.tax.igst > 0
                 ? <div className="flex justify-between text-gray-500"><span>IGST {price.tax.rate}%</span><span>{inr(price.tax.igst)}</span></div>
                 : <div className="flex justify-between text-gray-500"><span>CGST + SGST {price.tax.rate}%</span><span>{inr(price.tax.cgst + price.tax.sgst)}</span></div>)}
-              <div className="flex justify-between font-bold text-navy-700 pt-1 border-t border-gray-200"><span>Due now</span><span>{inr(due)}</span></div>
+              <div className="flex justify-between font-bold text-navy-700 pt-1 border-t border-gray-200"><span>{paidUp && termEnd ? `Renewal from ${dmy(termEnd)}` : 'Due now'}</span><span>{inr(due)}</span></div>
               {price.commissionPercent > 0 && <p className="text-xs text-gray-500">Free during the launch offer. Later, a {price.commissionPercent}% commission will apply only to business that comes to you through Sehatsandhi.</p>}
             </>}
           </div>
 
           <div className="flex gap-2 flex-wrap">
             <button onClick={pay} disabled={busy || pricing || due <= 0} className="btn-teal disabled:opacity-50">
-              {busy ? 'Opening payment…' : `${active ? 'Renew' : 'Pay'} ${inr(due)} with Razorpay`}
+              {busy ? 'Opening payment…' : `${paidUp ? 'Renew early —' : active ? 'Renew' : 'Pay'} ${inr(due)} with Razorpay`}
             </button>
             {active && (
               <button onClick={saveChoice} disabled={busy} className="btn-outline disabled:opacity-50">Save for next renewal</button>
