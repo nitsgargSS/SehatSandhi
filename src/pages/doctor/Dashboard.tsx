@@ -43,7 +43,7 @@ const ROSTER_ROLES: [string, string, string][] = [
   ['doctor',       'Doctor',       'Sees patients, prescribes, reads the full record'],
   ['nurse',        'Nurse',        'Registers OPD patients, runs the queue, records vitals and charts the ward — for their doctors. Cannot prescribe'],
   ['receptionist', 'Reception',    'Queue, beds and billing — no medical record'],
-  ['manager',      'Manager',      'Everything reception and nurses do, for every patient, plus listing, invoices and reports. Cannot prescribe'],
+  ['manager',      'Manager',      'Everything reception and nurses do, for every patient, plus staff and the pharmacy. Not the plan, bills or WhatsApp'],
 ]
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -992,6 +992,9 @@ export default function DoctorDashboard() {
   // Without it this deploy would take Clinic, Bills and Reports away from every
   // owner on a database that has no roles to check them against.
   const businessRole = isBusinessRole(role)
+  // 0181: the account — plan, payments, Bills, WhatsApp, add-ons, doctors'
+  // leave — is the owner's. A manager runs the floor (0180), not the account.
+  const isOwner = !role.enforced || role.role === 'owner'
   const isClinician = isClinicalRole(role)
   // Both tabs below meant "owner or doctor" when they were written, back when
   // isClinicalRole meant only that. It now includes nurses, so they point at
@@ -1058,16 +1061,18 @@ export default function DoctorDashboard() {
     ] : []),
     ...(businessRole ? [
       { id: 'clinic', label: myVertical === 'lab' ? t('dashboardPage.tabLab') : booksAppointments ? t('dashboardPage.tabClinic') : 'Business', icon: <Users className="w-4 h-4" /> },
-      { id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
+      ...(isOwner ? [{ id: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> }] : []),
       // 0121: every doctor side by side, for places that have doctors.
       ...(doctor && hasPractitioners(doctor.vertical as VerticalKey) && emr ? [
         { id: 'doctors', label: 'Doctors', icon: <Users className="w-4 h-4" /> },
       ] : []),
-      // Plan & billing (0117): pay, renew, change term, WhatsApp, autopay.
-      { id: 'plan', label: 'Plan', icon: <Star className="w-4 h-4" /> },
-      // WhatsApp marketing (0116): the wallet and broadcasts are the business's
-      // money, so owner and manager only — the RPCs refuse anyone else.
-      { id: 'whatsapp', label: 'WhatsApp', icon: <MessageCircle className="w-4 h-4" /> },
+      // Plan & billing (0117) and WhatsApp marketing (0116): the business's
+      // money, so the owner's alone since 0181 — the RPCs and payment
+      // functions refuse anyone else.
+      ...(isOwner ? [
+        { id: 'plan', label: 'Plan', icon: <Star className="w-4 h-4" /> },
+        { id: 'whatsapp', label: 'WhatsApp', icon: <MessageCircle className="w-4 h-4" /> },
+      ] : []),
     ] : []),
     // Reports sits with the clinicians, not the business cluster. How the
     // practice is actually doing — reach, bookings, conversion — is for the
@@ -1190,7 +1195,7 @@ export default function DoctorDashboard() {
           <b>{doctor.name}</b> has not been paid for. The {PAY_WINDOW_DAYS}-day window after registering has ended,
           so the dashboard is paused until the listing is paid. Everything you entered is kept.
         </div>
-        <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />
+        <PayListingPanel business={doctor} canPay={isOwner} onPaid={() => window.location.reload()} />
       </div>
     </div>
   )
@@ -1386,7 +1391,7 @@ export default function DoctorDashboard() {
               </span>
               <button onClick={() => setShowPay(v => !v)} className="btn-teal text-sm">{showPay ? 'Hide' : 'Pay now'}</button>
             </div>
-            {showPay && <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />}
+            {showPay && <PayListingPanel business={doctor} canPay={isOwner} onPaid={() => window.location.reload()} />}
           </div>
         )}
 
@@ -1616,7 +1621,7 @@ export default function DoctorDashboard() {
         {tab === 'schedule' && (
           <div className="space-y-4">
             {/* 0150: doctors' leave here, and marking one unavailable at this clinic. */}
-            {businessRole && (
+            {isOwner && (
               <ClinicLeave businessId={doctor.id}
                 doctors={rosterDoctors.map(r => ({ id: r.practitioner_id, name: r.practitioners!.full_name }))} />
             )}
@@ -1898,11 +1903,13 @@ export default function DoctorDashboard() {
         {/* ══════════ CLINIC — doctors on the roster + camps & offers ══════════ */}
         {tab === 'plan' && doctor && (
           <div className="space-y-4">
-            <PayListingPanel business={doctor} canPay={isBusinessRole(role)} onPaid={() => window.location.reload()} />
+            <PayListingPanel business={doctor} canPay={isOwner} onPaid={() => window.location.reload()} />
             {/* 0178: in-clinic tests. A lab is its kind instead (Lab & team). */}
             {hasPractitioners(myVertical) && (
               <AddonsPanel businessId={doctor.id} businessName={doctor.name} email={doctor.email ?? undefined}
-                current={doctor.lab_categories} canChange={isBusinessRole(role)}
+                current={doctor.lab_categories} canChange={isOwner}
+                pharmacyOn={!!doctor.pharmacy_module}
+                onPharmacy={on => setDoctor(d => d ? { ...d, pharmacy_module: on } : d)}
                 onChanged={r => setDoctor(d => d ? { ...d, lab_categories: r.lab_categories, lab_module: r.lab_module } : d)} />
             )}
           </div>
@@ -2104,7 +2111,7 @@ export default function DoctorDashboard() {
             {/* Clinics and hospitals: in-clinic tests are add-ons under Plan (0178). */}
             {doctor && myVertical === 'lab' && (
               <LabKindPicker businessId={doctor.id} vertical={myVertical} current={doctor.lab_categories}
-                canChange={isBusinessRole(role)}
+                canChange={isOwner}
                 onSaved={r => setDoctor(d => d ? { ...d, lab_categories: r.lab_categories, lab_module: r.lab_module } : d)} />
             )}
             {doctor && (
@@ -2218,7 +2225,7 @@ export default function DoctorDashboard() {
                       own email. {docForm.role === 'receptionist'
                         ? 'Reception sees Today, Queue, Appointments, Patients (to register and bill) and Beds — no medical notes, no business settings, no reports.'
                         : docForm.role === 'nurse' ? 'A nurse registers OPD patients, books appointments, runs the queue, records vitals and charts the ward — for the doctors they are linked to. They cannot prescribe.'
-                        : docForm.role === 'manager' ? 'A manager can do everything reception and nurses do — queue, registration, billing, vitals, the ward — for every patient, and also runs the listing, invoices, plan and reports. They read the medical record but cannot prescribe or approve lab reports. Right for a small clinic where one person does it all.' : ''}
+                        : docForm.role === 'manager' ? 'A manager can do everything reception and nurses do — queue, registration, patient billing, vitals, the ward — for every patient, and also manages staff and the in-house pharmacy stock. They read the medical record but cannot prescribe or approve lab reports. Your plan, Sehatsandhi bills, WhatsApp and doctors’ leave stay with you, the owner. Right for a small clinic where one person does it all.' : ''}
                     </p>
                     {marginalCost > 0 && docForm.role === 'doctor' && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">

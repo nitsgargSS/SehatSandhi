@@ -1,3 +1,4 @@
+// 30 Sep 2026 (0181): paying is the owner's alone; a manager runs the floor, not the account.
 // razorpay-order — create a Razorpay order for a business's chosen coverage.
 //
 // The amount is computed HERE from the active pricing plan (via the shared
@@ -28,7 +29,7 @@
 // before pricing) and pay to switch a suspended listing back on, because
 // fulfilment sets status 'active'. Now, before anything is written:
 //
-//   • signed in       → must be the business's owner or manager
+//   • signed in       → must be the business's owner
 //   • anonymous       → only a brand-new signup: status 'pending', created in
 //                       the last SIGNUP_WINDOW_DAYS, never paid. Signup has no
 //                       login yet — registration sets no password — so this is
@@ -124,8 +125,8 @@ Deno.serve(async (req) => {
     const { data: role, error: roleErr } = await who.asCaller
       .rpc('sehat_caller_role', { p_business: businessId })
     if (roleErr) return json({ error: roleErr.message }, 500)
-    if (role !== 'owner' && role !== 'manager') {
-      return json({ error: 'Only the business\u2019s owner or manager can pay for this listing.' }, 403)
+    if (role !== 'owner') {
+      return json({ error: 'Only the business\u2019s owner can pay for this listing.' }, 403)
     }
   } else if (!who) {
     const ageDays = (Date.now() - new Date(biz.created_at).getTime()) / 86_400_000

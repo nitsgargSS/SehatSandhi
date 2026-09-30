@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FlaskConical, HeartPulse, ScanLine, Check } from 'lucide-react'
+import { FlaskConical, HeartPulse, ScanLine, Check, Pill } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { AddonPrice, LabAddonQuote, getAddonPrices, labAddon, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
 import { setLabTests } from '../../lib/labApi'
@@ -19,13 +19,16 @@ const ICON: Record<string, JSX.Element> = {
 }
 const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
 
-export default function AddonsPanel({ businessId, businessName, email, current, canChange, onChanged }: {
+export default function AddonsPanel({ businessId, businessName, email, current, canChange, onChanged, pharmacyOn, onPharmacy }: {
   businessId: string
   businessName: string
   email?: string
   current: string[] | null | undefined
   canChange: boolean
   onChanged: (r: { lab_categories: string[]; lab_module: boolean }) => void
+  /** 0181: the in-house pharmacy (0158) — free; the owner switches it. */
+  pharmacyOn: boolean
+  onPharmacy: (on: boolean) => void
 }) {
   const [prices, setPrices] = useState<AddonPrice[]>([])
   const [quote, setQuote] = useState<LabAddonQuote | null>(null)
@@ -45,6 +48,14 @@ export default function AddonsPanel({ businessId, businessName, email, current, 
   const setKinds = async (next: string[], done: string) => {
     setErr(''); setMsg('')
     try { const r = await setLabTests(businessId, next); onChanged(r); setMsg(done) } catch (e) { setErr((e as Error).message) }
+  }
+
+  const setPharmacy = async (on: boolean) => {
+    setErr(''); setMsg('')
+    const { error } = await supabase.rpc('sehat_set_pharmacy_module', { p_business: businessId, p_on: on })
+    if (error) { setErr(error.message); return }
+    onPharmacy(on)
+    setMsg(on ? '✓ In-house pharmacy is on. Open the Pharmacy tab to add medicines and items.' : 'In-house pharmacy switched off.')
   }
 
   const getQuote = async (code: string) => {
@@ -127,6 +138,30 @@ export default function AddonsPanel({ businessId, businessName, email, current, 
         )
       })}
 
+      {/* 0181: in-house pharmacy — sell medicines and consumables from the clinic's own counter. */}
+      <div className="border border-gray-100 rounded-xl p-3 flex flex-wrap items-center gap-3 justify-between">
+        <div className="flex items-start gap-3 min-w-0">
+          <Pill className="w-5 h-5 text-teal-600" />
+          <div className="min-w-0">
+            <div className="font-semibold text-navy-700">In-house pharmacy (medicines &amp; consumables)</div>
+            <div className="text-xs text-gray-500">Free{pharmacyOn ? ' · on — the Pharmacy tab is where you add stock and bill it' : ' · keep stock of medicines and items, and bill them to patients'}</div>
+          </div>
+        </div>
+        {canChange && (
+          pharmacyOn ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-teal-700 font-semibold inline-flex items-center gap-1"><Check className="w-4 h-4" /> On</span>
+              <button className="text-xs text-gray-500 underline" onClick={() => {
+                if (!window.confirm('Switch off the in-house pharmacy? The Pharmacy tab disappears; stock and past bills are kept.')) return
+                setPharmacy(false)
+              }}>Switch off</button>
+            </div>
+          ) : (
+            <button className="btn-teal text-xs py-2 px-4" onClick={() => setPharmacy(true)}>Switch on — free</button>
+          )
+        )}
+      </div>
+
       {quote && (
         <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 text-sm space-y-2">
           <div className="font-semibold text-navy-700">{quote.label}</div>
@@ -142,7 +177,7 @@ export default function AddonsPanel({ businessId, businessName, email, current, 
         </div>
       )}
 
-      {!canChange && <p className="text-xs text-gray-400">Only the owner or a manager can change add-ons.</p>}
+      {!canChange && <p className="text-xs text-gray-400">Only the owner can change add-ons.</p>}
       {msg && <p className="text-sm text-teal-700">{msg}</p>}
       {err && <p className="text-sm text-red-600">{err}</p>}
     </div>
