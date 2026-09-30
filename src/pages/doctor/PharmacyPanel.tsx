@@ -5,7 +5,7 @@ import { searchPatients, PatientSearchResult } from '../../lib/patientsApi'
 import {
   getStock, saveItem, getBatches, adjustStock, recordPurchase, getPurchases, getSuppliers,
   issueBill, getBills, recordPayment, returnItems, cancelBill, getPrescriptionsForDispensing,
-  getSummary, getPharmacySettings, savePharmacySettings, itemLabel, matchItem,
+  getSummary, getPharmacySettings, savePharmacySettings, itemLabel, matchItem, ITEM_FORMS,
   getDues, getBillsByIds, getStockMoves, Due, StockMove, PAYMENT_STATUS, payMethodLabel,
   StockRow, Batch, PharmacyBill, Purchase, RxForDispensing, PharmacySummary, PharmacySettings,
   PharmacyItem, PharmacyPayMethod, PurchaseLine, PAY_METHODS, GST_RATES,
@@ -119,7 +119,7 @@ function MedicinePicker({ stock, onPick, placeholder = 'Add a medicine — type 
           {hits.map(s => (
             <button key={s.id} type="button" onClick={() => { onPick(s); setQ('') }}
               className="w-full text-left px-3 py-2 text-sm hover:bg-teal-50 flex justify-between gap-2">
-              <span>{itemLabel(s)}{s.generic_name ? <span className="text-gray-400"> · {s.generic_name}</span> : null}</span>
+              <span>{itemLabel(s)}</span>
               <span className={s.qty_available > 0 ? 'text-gray-500' : 'text-red-500'}>
                 {s.qty_available} {s.unit}{s.unit_mrp ? ` · ${moneyExact(s.unit_mrp)}` : ''}
               </span>
@@ -612,8 +612,13 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
   const set = (k: keyof PharmacyItem) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF(x => ({ ...x, [k]: e.target.value }))
   const save = async () => {
+    const generic = (f.generic_name ?? '').trim()
+    const brand = (f.name ?? '').trim()
+    if (!generic && !brand) { setErr('Enter the medicine name.'); return }
     setBusy(true); setErr('')
-    try { await saveItem(businessId, f); onSaved() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+    // The stored name is the brand, or the medicine itself when sold without one.
+    try { await saveItem(businessId, { ...f, name: brand || generic, generic_name: generic || null }); onSaved() }
+    catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
   const field = (k: keyof PharmacyItem, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <label className="text-xs text-gray-500">{label}
@@ -624,10 +629,18 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
     <div className="card shadow-sm space-y-3">
       <h3 className="font-bold text-navy-700">{f.id ? 'Edit medicine' : 'Add a medicine'}</h3>
       <div className="grid sm:grid-cols-3 gap-2">
-        {field('name', 'Brand name *', { placeholder: 'Dolo' })}
-        {field('strength', 'Strength', { placeholder: '650mg' })}
-        {field('form', 'Form', { placeholder: 'tablet, syrup, injection' })}
-        {field('generic_name', 'Generic name', { placeholder: 'Paracetamol' })}
+        {field('generic_name', 'Medicine / item name *', { placeholder: 'Paracetamol, Moxifloxacin, Syringe 5ml' })}
+        {field('name', 'Brand (company name)', { placeholder: 'Dolo, Vigamox — leave blank if none' })}
+        <label className="text-xs text-gray-500">Type
+          <select className="input-field mt-1" value={f.form ?? ''} onChange={e => {
+            const t = ITEM_FORMS.find(x => x.value === e.target.value)
+            setF(x => ({ ...x, form: e.target.value, unit: t?.unit ?? x.unit }))
+          }}>
+            {!ITEM_FORMS.some(t => t.value === f.form) && f.form && <option value={f.form}>{f.form}</option>}
+            {ITEM_FORMS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </label>
+        {field('strength', 'Strength', { placeholder: '650mg, 0.5%, 5ml' })}
         {field('unit', 'Sold per', { placeholder: 'tablet, bottle, tube' })}
         {field('pack_size', 'Units in a pack', { type: 'number', min: 1 })}
         {field('hsn_code', 'HSN code', { placeholder: '3004' })}
@@ -691,7 +704,7 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
             <div key={s.id}>
               <button onClick={() => setOpen(open === s.id ? null : s.id)} className="w-full text-left px-4 py-3 text-sm flex flex-wrap justify-between gap-2 hover:bg-gray-50">
                 <span className={s.is_active ? '' : 'text-gray-400'}>
-                  <b>{itemLabel(s)}</b>{s.generic_name ? <span className="text-gray-400"> · {s.generic_name}</span> : null}
+                  <b>{itemLabel(s)}</b>
                   {!s.is_active && ' · not stocked'}
                 </span>
                 <span className="flex gap-3 text-xs items-center">

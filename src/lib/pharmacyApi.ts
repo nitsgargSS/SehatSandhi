@@ -395,8 +395,44 @@ export async function getSummary(businessId: string, from: string, to: string): 
 }
 
 /** "Paracetamol 500mg tablet" — how a medicine is named on screen and on the bill. */
-export const itemLabel = (i: Pick<PharmacyItem, 'name' | 'strength' | 'form'>) =>
-  [i.name, i.strength, i.form].filter(Boolean).join(' ')
+/** Every kind of thing a clinic counter sells, with the unit it is usually sold in. */
+export const ITEM_FORMS: { value: string; label: string; unit: string }[] = [
+  { value: 'tablet', label: 'Tablet', unit: 'tablet' },
+  { value: 'capsule', label: 'Capsule', unit: 'capsule' },
+  { value: 'syrup', label: 'Syrup', unit: 'bottle' },
+  { value: 'suspension', label: 'Suspension', unit: 'bottle' },
+  { value: 'oral drops', label: 'Oral drops', unit: 'bottle' },
+  { value: 'eye drops', label: 'Eye drops', unit: 'bottle' },
+  { value: 'eye ointment', label: 'Eye ointment', unit: 'tube' },
+  { value: 'ear drops', label: 'Ear drops', unit: 'bottle' },
+  { value: 'nasal spray', label: 'Nasal drops / spray', unit: 'bottle' },
+  { value: 'injection', label: 'Injection (vial / ampoule)', unit: 'vial' },
+  { value: 'iv fluid', label: 'IV fluid', unit: 'bottle' },
+  { value: 'ointment', label: 'Ointment', unit: 'tube' },
+  { value: 'cream', label: 'Cream', unit: 'tube' },
+  { value: 'gel', label: 'Gel', unit: 'tube' },
+  { value: 'lotion', label: 'Lotion', unit: 'bottle' },
+  { value: 'powder', label: 'Powder / sachet', unit: 'sachet' },
+  { value: 'inhaler', label: 'Inhaler / rotacap', unit: 'inhaler' },
+  { value: 'spray', label: 'Spray', unit: 'bottle' },
+  { value: 'suppository', label: 'Suppository / pessary', unit: 'piece' },
+  { value: 'lozenge', label: 'Lozenge', unit: 'piece' },
+  { value: 'mouthwash', label: 'Mouthwash / gargle', unit: 'bottle' },
+  { value: 'patch', label: 'Patch', unit: 'piece' },
+  { value: 'lens solution', label: 'Contact lens solution', unit: 'bottle' },
+  { value: 'surgical', label: 'Surgical & consumables (syringe, bandage, gloves)', unit: 'piece' },
+  { value: 'device', label: 'Device (glucometer, spectacles, etc.)', unit: 'piece' },
+  { value: 'other', label: 'Other', unit: 'piece' },
+]
+
+/** "Paracetamol 650mg Tablet (Dolo)" — the medicine first, the brand after (30 Sep 2026). */
+export const itemLabel = (i: Pick<PharmacyItem, 'name' | 'strength' | 'form'> & { generic_name?: string | null }) => {
+  const generic = (i.generic_name ?? '').trim()
+  const brand = (i.name ?? '').trim()
+  const form = ITEM_FORMS.find(f => f.value === i.form)?.label.split(' (')[0] ?? i.form
+  const head = [generic || brand, i.strength, form].filter(Boolean).join(' ')
+  return generic && brand && generic.toLowerCase() !== brand.toLowerCase() ? `${head} (${brand})` : head
+}
 
 /**
  * The clinic's medicine that best matches a prescription line, by name.

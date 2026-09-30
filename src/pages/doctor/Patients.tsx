@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { Spinner } from '../../components/Loading'
 import {
   searchPatients, getPatientSummary, getVisits, getVitals, getAllergies,
-  getConditions, getMedications, addVisit, updateVisit, staffNames, addVital, addAllergy, addCondition,
+  getConditions, getMedications, addVisit, updateVisit, staffNames, setPatientAddress, addVital, addAllergy, addCondition,
   addMedication, stopMedication, registerPatient, grantRecordingConsent, withdrawRecordingConsent,
   getSpecialityFields, getFindings, saveFindings, getPractitionerSpeciality,
   SpecialityField, Finding,
@@ -470,6 +470,8 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
     bloodGroup: '',
     mrn: '',
     pinCode: '',
+    address: '',
+    city: '',
   })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -505,6 +507,10 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
         mrn: form.mrn.trim() || undefined,
         pinCode: form.pinCode.trim() || undefined,
       })
+      // 0183: the address lives on the family's account; set right after.
+      if (form.address.trim() || form.city.trim()) {
+        await setPatientAddress(businessId, id, form.address, form.city, form.pinCode)
+      }
       const doc = underDoctor ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)
       if (doc) await setPatientDoctor(businessId, id, doc)
       if (!toOpd) { onDone(id); return }
@@ -593,9 +599,16 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
           <div style={{ flex: '1 1 140px' }}><div style={label}>File number (optional)</div>
             <input style={input} value={form.mrn} placeholder="your own numbering"
               onChange={e => setForm({ ...form, mrn: e.target.value })} /></div>
-          <div style={{ flex: '0 1 130px' }}><div style={label}>PIN code (optional)</div>
+          <div style={{ flex: '1 1 100%' }}><div style={label}>Address</div>
+            <input style={input} value={form.address} maxLength={300}
+              placeholder="House / street / village"
+              onChange={e => setForm({ ...form, address: e.target.value })} /></div>
+          <div style={{ flex: '1 1 160px' }}><div style={label}>City / town</div>
+            <input style={input} value={form.city} maxLength={80}
+              onChange={e => setForm({ ...form, city: e.target.value })} /></div>
+          <div style={{ flex: '0 1 130px' }}><div style={label}>PIN code</div>
             <input style={input} inputMode="numeric" maxLength={6} value={form.pinCode}
-              placeholder="where they live"
+              placeholder="6 digits"
               onChange={e => setForm({ ...form, pinCode: e.target.value.replace(/\D/g, '') })} /></div>
           {doctors.length > 1 && (
             <div style={{ flex: '1 1 200px' }}><div style={label}>Came to see</div>
@@ -750,6 +763,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
               {summary.blood_group && ` · ${summary.blood_group}`}
               {summary.mrn && ` · file ${summary.mrn}`}
             </div>
+            <PatientAddress businessId={businessId} memberId={memberId} />
             <div style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 3 }}>
               {summary.visits_here} visit{summary.visits_here === 1 ? '' : 's'} here
               {summary.last_seen_at && ` · last seen ${when(summary.last_seen_at)}`}
@@ -1661,6 +1675,46 @@ function RecordingConsent({ summary, businessId, onChange }: {
         </div>
       )}
       {err && <div style={{ marginTop: 9, fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
+    </div>
+  )
+}
+
+// ── Address (0183) ──────────────────────────────────────────────────────────
+// On the family's account (patients), shown and edited from any record.
+function PatientAddress({ businessId, memberId }: { businessId: string; memberId: string }) {
+  const [a, setA] = useState<{ address: string; city: string; pin: string } | null>(null)
+  const [edit, setEdit] = useState<{ address: string; city: string; pin: string } | null>(null)
+  const [err, setErr] = useState('')
+  const load = useCallback(() => {
+    supabase.from('patient_members').select('patients(address, city, pin_code)').eq('id', memberId).maybeSingle()
+      .then(({ data }) => {
+        const p = (data as { patients?: { address?: string | null; city?: string | null; pin_code?: string | null } | null } | null)?.patients
+        setA({ address: p?.address ?? '', city: p?.city ?? '', pin: p?.pin_code ?? '' })
+      })
+  }, [memberId])
+  useEffect(load, [load])
+  if (!a) return null
+  if (edit) return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+      <input style={{ ...input, flex: '1 1 260px' }} placeholder="Address" value={edit.address} maxLength={300} onChange={e => setEdit({ ...edit, address: e.target.value })} />
+      <input style={{ ...input, flex: '1 1 120px' }} placeholder="City / town" value={edit.city} maxLength={80} onChange={e => setEdit({ ...edit, city: e.target.value })} />
+      <input style={{ ...input, flex: '0 1 100px' }} placeholder="PIN" inputMode="numeric" maxLength={6} value={edit.pin} onChange={e => setEdit({ ...edit, pin: e.target.value.replace(/\D/g, '') })} />
+      <button style={btn(true)} onClick={async () => {
+        setErr('')
+        try { await setPatientAddress(businessId, memberId, edit.address, edit.city, edit.pin); setEdit(null); load() }
+        catch (e) { setErr((e as Error).message) }
+      }}>Save</button>
+      <button style={btn()} onClick={() => setEdit(null)}>Cancel</button>
+      {err && <div style={{ fontSize: 12, color: '#8a2b2b', width: '100%' }}>{err}</div>}
+    </div>
+  )
+  const line = [a.address, a.city, a.pin].filter(Boolean).join(', ')
+  return (
+    <div style={{ fontSize: 13, color: BIZ.muted, marginTop: 3 }}>
+      {line || <span style={{ color: BIZ.mutedWarm }}>No address</span>}
+      <button onClick={() => setEdit(a)} style={{ marginLeft: 8, fontSize: 12, color: '#0f6b4a', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+        {line ? 'Edit' : 'Add address'}
+      </button>
     </div>
   )
 }

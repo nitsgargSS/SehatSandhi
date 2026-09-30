@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { clinicWaLink, qrDataUrl } from '../../lib/qr'
+import { getSpecialityFields, SpecialityField } from '../../lib/patientsApi'
+import { SPECIALITIES } from '../../types'
 
 // The OPD slip (0135), printed at the desk or by the nurse before the patient
 // goes in: the hospital's banner, the token, the doctor, what was charged, and
@@ -52,6 +54,15 @@ export default function OpdSlipPage() {
   useEffect(() => {
     const c = slip?.clinic
     if (c?.qr_code) qrDataUrl(clinicWaLink(c.wa_number ?? '917015399355', c.qr_code, c.name), 240).then(setQr)
+  }, [slip])
+
+  // 30 Sep 2026: the slip carries the treating doctor's own examination as
+  // blanks to fill by hand — an eye doctor's slip has the refraction grid, a
+  // dentist's the tooth chart — from the same speciality_fields the record uses.
+  const [fields, setFields] = useState<SpecialityField[]>([])
+  useEffect(() => {
+    const sp = slip?.doctor?.speciality
+    if (sp) getSpecialityFields(sp).then(setFields).catch(() => setFields([]))
   }, [slip])
 
   useEffect(() => {
@@ -113,7 +124,7 @@ export default function OpdSlipPage() {
             </tr>
             <tr>
               <td style={cell} colSpan={2}>
-                <b>Doctor</b> {slip.doctor ? [slip.doctor.name, slip.doctor.qualification, slip.doctor.speciality].filter(Boolean).join(', ') : '—'}
+                <b>Doctor</b> {slip.doctor ? [slip.doctor.name, slip.doctor.qualification, SPECIALITIES.find(sp => sp.id === slip.doctor!.speciality)?.en ?? slip.doctor.speciality].filter(Boolean).join(', ') : '—'}
               </td>
               <td style={cell}>
                 <b>OPD fee</b>{' '}
@@ -159,8 +170,10 @@ export default function OpdSlipPage() {
           </div>
         </div>
 
-        <div style={{ marginTop: 14, border: '1px solid #bbb', minHeight: 430, padding: '8px 10px' }}>
-          <div style={{ fontSize: 13, fontWeight: 800 }}>Clinical notes / Rx</div>
+        {fields.length > 0 && <ExamBlanks fields={fields} />}
+
+        <div style={{ marginTop: 14, border: '1px solid #bbb', minHeight: fields.length ? 260 : 430, padding: '8px 10px' }}>
+          <div style={{ fontSize: 13, fontWeight: 800 }}>{fields.length ? 'Diagnosis / notes / Rx' : 'Clinical notes / Rx'}</div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 28, fontSize: 12.5, gap: 12 }}>
@@ -177,3 +190,62 @@ export default function OpdSlipPage() {
     </div>
   )
 }
+
+/** The speciality's examination as blanks: a site table (R / L), a numbered
+ *  chart when there are many sites (teeth), tick-boxes for choices. */
+function ExamBlanks({ fields }: { fields: SpecialityField[] }) {
+  const sections: [string, SpecialityField[]][] = []
+  for (const f of fields) {
+    const k = f.section ?? 'Examination'
+    const hit = sections.find(x => x[0] === k)
+    if (hit) hit[1].push(f); else sections.push([k, [f]])
+  }
+  const cell: React.CSSProperties = { border: '1px solid #bbb', padding: '4px 6px', fontSize: 12 }
+  const head = (f: SpecialityField) => `${f.label}${f.unit ? ` (${f.unit})` : ''}`
+  return (
+    <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
+      {sections.map(([name, fs]) => {
+        const sited = fs.filter(f => f.sites && f.sites.length > 0 && f.sites.length <= 4)
+        const chart = fs.filter(f => f.sites && f.sites.length > 4)
+        const plain = fs.filter(f => !f.sites || f.sites.length === 0)
+        const sites = sited[0]?.sites ?? []
+        return (
+          <div key={name}>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 4 }}>{name}</div>
+            {sited.length > 0 && (
+              <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                <thead><tr><th style={{ ...cell, textAlign: 'left', width: '34%' }}></th>
+                  {sites.map(st => <th key={st} style={cell}>{st === 'R' ? 'Right (OD)' : st === 'L' ? 'Left (OS)' : st}</th>)}</tr></thead>
+                <tbody>{sited.map(f => (
+                  <tr key={f.id}><td style={cell}>{head(f)}</td>{sites.map(st => <td key={st} style={{ ...cell, height: 22 }}></td>)}</tr>
+                ))}</tbody>
+              </table>
+            )}
+            {chart.map(f => (
+              <div key={f.id} style={{ marginTop: 4 }}>
+                <div style={{ fontSize: 12, marginBottom: 3 }}>{head(f)}{f.options?.length ? ` — ${f.options.join(' / ')}` : ''}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(16, 1fr)', gap: 2 }}>
+                  {(f.sites ?? []).map(st => <div key={st} style={{ ...cell, padding: '2px 0', textAlign: 'center', height: 30, fontSize: 10 }}>{st}</div>)}
+                </div>
+              </div>
+            ))}
+            {plain.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', marginTop: sited.length || chart.length ? 6 : 0 }}>
+                {plain.map(f => (
+                  <div key={f.id} style={{ fontSize: 12 }}>
+                    {head(f)}:{' '}
+                    {f.kind === 'select' && f.options?.length
+                      ? f.options.map(o => <span key={o} style={{ marginRight: 8 }}>☐ {o}</span>)
+                      : f.kind === 'boolean' ? <span>☐ Yes ☐ No</span>
+                      : '______________________'}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+

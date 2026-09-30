@@ -700,6 +700,14 @@ export async function registerPatient(businessId: string, p: NewPatient): Promis
   return data as string
 }
 
+/** 0183: the patient's address (on the family's account). */
+export async function setPatientAddress(businessId: string, memberId: string, address: string, city?: string, pinCode?: string) {
+  const { error } = await supabase.rpc('sehat_set_patient_address', {
+    p_business: businessId, p_member: memberId, p_address: address, p_city: city || null, p_pin_code: pinCode || null,
+  })
+  if (error) throw new Error(error.message)
+}
+
 // ── What this speciality actually examines ──────────────────────────────────
 //
 // A visit carries chief_complaint, diagnosis and advice, all free text, and
