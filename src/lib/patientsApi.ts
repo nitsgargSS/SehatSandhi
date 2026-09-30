@@ -73,6 +73,8 @@ export interface Visit {
   appointment_id: string | null
   notes: string | null
   created_at: string
+  /** 0182: who recorded it (stamped by the database). */
+  created_by?: string | null
 }
 
 export interface Vital {
@@ -208,7 +210,7 @@ export async function getPatientSummary(memberId: string, businessId: string): P
 export async function getVisits(memberId: string, businessId: string): Promise<Visit[]> {
   const { data, error } = await supabase
     .from('patient_visits')
-    .select('id,visit_date,visit_type,chief_complaint,diagnosis,icd10_code,advice,follow_up_due,practitioner_id,appointment_id,notes,created_at')
+    .select('id,visit_date,visit_type,chief_complaint,diagnosis,icd10_code,advice,follow_up_due,practitioner_id,appointment_id,notes,created_at,created_by')
     .eq('patient_member_id', memberId).eq('business_id', businessId)
     .order('visit_date', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
@@ -281,6 +283,29 @@ export async function addVisit(memberId: string, businessId: string, v: NewVisit
   }).select('id').single()
   oops(error)
   return (data as { id: string }).id
+}
+
+/** 0182: complete a visit already made — from the queue's Consult, or a correction. */
+export async function updateVisit(visitId: string, v: { chiefComplaint?: string; diagnosis?: string; advice?: string; followUpDue?: string | null }) {
+  const { error } = await supabase.from('patient_visits').update({
+    chief_complaint: v.chiefComplaint?.trim() || null,
+    diagnosis: v.diagnosis?.trim() || null,
+    advice: v.advice?.trim() || null,
+    follow_up_due: v.followUpDue || null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', visitId)
+  oops(error)
+}
+
+/** Names of everyone on this clinic's staff, for "by whom" lines. */
+export async function staffNames(businessId: string): Promise<Record<string, string>> {
+  const { data } = await supabase.from('business_practitioners')
+    .select('practitioner_id, practitioners(full_name)').eq('business_id', businessId)
+  const out: Record<string, string> = {}
+  for (const r of (data ?? []) as unknown as { practitioner_id: string; practitioners: { full_name: string | null } | null }[]) {
+    if (r.practitioners?.full_name) out[r.practitioner_id] = r.practitioners.full_name
+  }
+  return out
 }
 
 export async function addVital(memberId: string, businessId: string, v: Partial<Vital> & { visit_id?: string }) {
