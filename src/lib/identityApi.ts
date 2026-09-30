@@ -304,7 +304,8 @@ export async function getMyRole(businessId: string): Promise<RoleLookup> {
  * which is the pre-0057 behaviour rather than a hole being punched.
  */
 export const isClinicalRole = (r: RoleLookup): boolean =>
-  !r.enforced || r.role === 'owner' || r.role === 'doctor' || r.role === 'nurse'
+  // 0180: a manager too — in a small clinic they are reception and nurse as well.
+  !r.enforced || r.role === 'owner' || r.role === 'manager' || r.role === 'doctor' || r.role === 'nurse'
 
 /**
  * May this login WRITE a drug order, a prescription or a discharge summary,

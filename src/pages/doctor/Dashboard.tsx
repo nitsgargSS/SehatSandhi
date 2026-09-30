@@ -43,7 +43,7 @@ const ROSTER_ROLES: [string, string, string][] = [
   ['doctor',       'Doctor',       'Sees patients, prescribes, reads the full record'],
   ['nurse',        'Nurse',        'Registers OPD patients, runs the queue, records vitals and charts the ward — for their doctors. Cannot prescribe'],
   ['receptionist', 'Reception',    'Queue, beds and billing — no medical record'],
-  ['manager',      'Manager',      'Listing, invoices and reports — no medical record'],
+  ['manager',      'Manager',      'Everything reception and nurses do, for every patient, plus listing, invoices and reports. Cannot prescribe'],
 ]
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
@@ -1849,7 +1849,7 @@ export default function DoctorDashboard() {
         {tab === 'lab' && doctor && (doctor.vertical === 'lab' || doctor.lab_module) && (
           <LabPanel businessId={doctor.id}
             canManage={!role.enforced || ['owner', 'manager', 'doctor'].includes(role.role ?? '')}
-            canResults={!role.enforced || ['owner', 'doctor', 'nurse'].includes(role.role ?? '')}
+            canResults={!role.enforced || ['owner', 'manager', 'doctor', 'nurse'].includes(role.role ?? '')}
             canApprove={!role.enforced || ['owner', 'doctor'].includes(role.role ?? '')} />
         )}
 
@@ -2218,7 +2218,7 @@ export default function DoctorDashboard() {
                       own email. {docForm.role === 'receptionist'
                         ? 'Reception sees Today, Queue, Appointments, Patients (to register and bill) and Beds — no medical notes, no business settings, no reports.'
                         : docForm.role === 'nurse' ? 'A nurse registers OPD patients, books appointments, runs the queue, records vitals and charts the ward — for the doctors they are linked to. They cannot prescribe.'
-                        : docForm.role === 'manager' ? 'A manager handles the listing, invoices and plan — no medical record.' : ''}
+                        : docForm.role === 'manager' ? 'A manager can do everything reception and nurses do — queue, registration, billing, vitals, the ward — for every patient, and also runs the listing, invoices, plan and reports. They read the medical record but cannot prescribe or approve lab reports. Right for a small clinic where one person does it all.' : ''}
                     </p>
                     {marginalCost > 0 && docForm.role === 'doctor' && (
                       <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
