@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Search, Plus, BellRing, Check, X, UserPlus, Printer } from 'lucide-react'
+import { Search, Plus, BellRing, Check, X, UserPlus, Printer, Stethoscope } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { Spinner } from '../../components/Loading'
 import {
   getBoard, callNext, setTokenStatus, opdVisit, patientHistory, opdSlipUrl, HistoryRow,
   stillWaiting, inProgress, finished,
-  QueueEntry, getVitalsDone, getTodaysVitals, vitalsLine,
+  QueueEntry, getVitalsDone, getTodaysVitals, vitalsLine, tokenVisit, reopenToken, visitHasDiagnosis,
 } from '../../lib/queueApi'
 import { searchPatients, PatientSearchResult, registerPatient, addVital, Vital } from '../../lib/patientsApi'
 import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
@@ -43,9 +43,12 @@ const btn = (primary = false): React.CSSProperties => ({
 const clock = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''
 
-export default function Queue({ businessId, practitionerId }: {
+export default function Queue({ businessId, practitionerId, onConsult }: {
   businessId: string
   practitionerId?: string | null
+  /** 0182: open the patient's record at this token's visit. Clinical staff only;
+   *  absent for reception, who have no consultation to open. */
+  onConsult?: (memberId: string, visitId: string) => void
 }) {
   const [board, setBoard] = useState<QueueEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -102,6 +105,23 @@ export default function Queue({ businessId, practitionerId }: {
     catch (e) { setErr((e as Error).message) }
     finally { setBusy(false) }
   }
+
+  // 0182: into the consultation — the visit is the token's doctor's, so the
+  // right speciality form opens (an eye doctor's patient gets the eye form).
+  const consult = onConsult ? (e: QueueEntry) => act(async () => {
+    const v = await tokenVisit(e.id)
+    if (e.status === 'called' || e.status === 'waiting') await setTokenStatus(e.id, 'in_consultation', v.visit_id)
+    onConsult(v.patient_member_id, v.visit_id)
+  }) : undefined
+
+  // Done without a diagnosis is almost always a slip of the finger.
+  const finish = (e: QueueEntry) => act(async () => {
+    const ok = e.visit_id ? await visitHasDiagnosis(e.visit_id) : false
+    if (!ok && !window.confirm(e.visit_id
+      ? `No diagnosis is recorded for ${e.patient_name} yet. Mark the consultation done anyway?`
+      : `The consultation for ${e.patient_name} was never opened, so nothing is recorded. Mark done anyway?`)) return
+    await setTokenStatus(e.id, 'completed')
+  })
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
@@ -174,7 +194,7 @@ export default function Queue({ businessId, practitionerId }: {
           <div style={{ ...label, marginBottom: 10 }}>Now</div>
           <div style={{ display: 'grid', gap: 9 }}>
             {active.map(e => (
-              <Row key={e.id} e={e} busy={busy} act={act} emphasis
+              <Row key={e.id} e={e} busy={busy} act={act} emphasis onConsult={consult} onDone={finish}
                 vitalsAt={vitalsDone[e.id]} vitals={vitals[e.patient_member_id]} onRecord={() => setRecordFor(e)} />
             ))}
           </div>
@@ -189,7 +209,7 @@ export default function Queue({ businessId, practitionerId }: {
           <div style={{ fontSize: 13.5, color: BIZ.muted }}>Nobody is waiting.</div>
         ) : (
           <div style={{ display: 'grid', gap: 9 }}>
-            {waiting.map(e => <Row key={e.id} e={e} busy={busy} act={act}
+            {waiting.map(e => <Row key={e.id} e={e} busy={busy} act={act} onConsult={consult} onDone={finish}
               vitalsAt={vitalsDone[e.id]} vitals={vitals[e.patient_member_id]} onRecord={() => setRecordFor(e)} />)}
           </div>
         )}
@@ -200,10 +220,21 @@ export default function Queue({ businessId, practitionerId }: {
           <div style={{ ...label, marginBottom: 10 }}>Finished ({done.length})</div>
           <div style={{ display: 'grid', gap: 6 }}>
             {done.map(e => (
-              <div key={e.id} style={{ fontSize: 13, color: BIZ.muted }}>
-                <strong style={{ color: BIZ.ink }}>#{e.token_number}</strong> {e.patient_name}
-                {' · '}{e.status === 'completed' ? `seen ${clock(e.completed_at)}`
-                  : e.status === 'skipped' ? 'did not answer' : 'left'}
+              <div key={e.id} style={{ fontSize: 13, color: BIZ.muted, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <span>
+                  <strong style={{ color: BIZ.ink }}>#{e.token_number}</strong> {e.patient_name}
+                  {' · '}{e.status === 'completed' ? `seen ${clock(e.completed_at)}`
+                    : e.status === 'skipped' ? 'did not answer' : `left ${clock(e.completed_at)}`}
+                  {e.practitioner_name ? ` · ${e.practitioner_name}` : ''}
+                </span>
+                {/* 0182: nothing finished is lost — open it, print it, or bring it back. */}
+                {consult && (
+                  <button style={{ ...btn(), fontSize: 11.5, padding: '4px 9px' }} disabled={busy} onClick={() => consult(e)}>Open</button>
+                )}
+                <a href={opdSlipUrl(e.id)} target="_blank" rel="noreferrer"
+                  style={{ ...btn(), fontSize: 11.5, padding: '4px 9px', textDecoration: 'none' }}>Slip</a>
+                <button style={{ ...btn(), fontSize: 11.5, padding: '4px 9px' }} disabled={busy}
+                  onClick={() => act(() => reopenToken(e.id))}>Bring back</button>
               </div>
             ))}
           </div>
@@ -213,7 +244,7 @@ export default function Queue({ businessId, practitionerId }: {
   )
 }
 
-function Row({ e, busy, act, emphasis, vitalsAt, vitals, onRecord }: {
+function Row({ e, busy, act, emphasis, vitalsAt, vitals, onRecord, onConsult, onDone }: {
   e: QueueEntry
   busy: boolean
   act: (fn: () => Promise<unknown>) => Promise<void>
@@ -221,6 +252,8 @@ function Row({ e, busy, act, emphasis, vitalsAt, vitals, onRecord }: {
   vitalsAt?: string | null
   vitals?: Vital
   onRecord?: () => void
+  onConsult?: (e: QueueEntry) => void
+  onDone: (e: QueueEntry) => void
 }) {
   return (
     <div style={{
@@ -276,7 +309,13 @@ function Row({ e, busy, act, emphasis, vitalsAt, vitals, onRecord }: {
       </div>
 
       <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
-        {onRecord && (e.status === 'waiting' || e.status === 'called') && (
+        {onConsult && (
+          <button style={{ ...btn(e.status === 'in_consultation' || e.status === 'called'), fontSize: 12 }} disabled={busy} onClick={() => onConsult(e)}
+            title="Open this patient's consultation: examination, diagnosis, prescription">
+            <Stethoscope className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />Consult
+          </button>
+        )}
+        {onRecord && (e.status === 'waiting' || e.status === 'called' || e.status === 'in_consultation') && (
           <button style={{ ...btn(!vitalsAt), fontSize: 12 }} disabled={busy} onClick={onRecord}>
             {vitalsAt ? 'More vitals' : 'Record vitals'}
           </button>
@@ -287,7 +326,10 @@ function Row({ e, busy, act, emphasis, vitalsAt, vitals, onRecord }: {
         </a>
         {e.status === 'waiting' && (
           <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
-            onClick={() => act(() => setTokenStatus(e.id, 'left'))}>Left</button>
+            onClick={() => {
+              if (!window.confirm(`Mark ${e.patient_name} as left without being seen? You can bring them back from Finished.`)) return
+              act(() => setTokenStatus(e.id, 'left'))
+            }}>Left</button>
         )}
         {e.status === 'called' && (
           <>
@@ -301,7 +343,7 @@ function Row({ e, busy, act, emphasis, vitalsAt, vitals, onRecord }: {
         )}
         {e.status === 'in_consultation' && (
           <button style={{ ...btn(true), fontSize: 12 }} disabled={busy}
-            onClick={() => act(() => setTokenStatus(e.id, 'completed'))}>
+            onClick={() => onDone(e)}>
             <Check className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />Done
           </button>
         )}

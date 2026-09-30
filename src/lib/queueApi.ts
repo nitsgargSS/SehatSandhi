@@ -119,6 +119,25 @@ export async function setTokenStatus(
   return data as QueueEntry
 }
 
+/** 0182: the visit for this token — made for the TOKEN's doctor on first use. */
+export async function tokenVisit(tokenId: string): Promise<{ visit_id: string; patient_member_id: string; practitioner_id: string | null }> {
+  const { data, error } = await supabase.rpc('sehat_token_visit', { p_queue: tokenId })
+  oops(error)
+  return data as { visit_id: string; patient_member_id: string; practitioner_id: string | null }
+}
+
+/** 0182: a token marked left / skipped / done by mistake, back in the line (today only). */
+export async function reopenToken(tokenId: string): Promise<void> {
+  const { error } = await supabase.rpc('sehat_reopen_token', { p_queue: tokenId })
+  oops(error)
+}
+
+/** Has this visit a diagnosis yet? Asked before Done. */
+export async function visitHasDiagnosis(visitId: string): Promise<boolean> {
+  const { data } = await supabase.from('patient_visits').select('diagnosis').eq('id', visitId).maybeSingle()
+  return !!(data as { diagnosis?: string | null } | null)?.diagnosis?.trim()
+}
+
 /** Still in the line, in the order they will be seen. */
 export const stillWaiting = (board: QueueEntry[]): QueueEntry[] =>
   board.filter(e => e.status === 'waiting')

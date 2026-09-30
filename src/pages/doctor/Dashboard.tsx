@@ -287,7 +287,9 @@ export default function DoctorDashboard() {
     ? myPractitionerId : null
   // A patient another tab asked to open (My practice, Doctors → Patients).
   const [openMember, setOpenMember] = useState<string | null>(null)
-  const openPatient = (memberId: string) => { setOpenMember(memberId); setTab('patients') }
+  // 0182: a visit to open with the patient — the queue's Consult.
+  const [openVisit, setOpenVisit] = useState<string | null>(null)
+  const openPatient = (memberId: string, visitId: string | null = null) => { setOpenMember(memberId); setOpenVisit(visitId); setTab('patients') }
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
   // 0147: a staff change waiting for its emailed code, and the record of past ones.
@@ -377,7 +379,7 @@ export default function DoctorDashboard() {
     await loadRoster(doctor.id)
     await inviteDoctor(practitionerId, name)
   }
-  const [docForm, setDocForm] = useState({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
+  const [docForm, setDocForm] = useState({ name: '', speciality: '', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
   interface PlanTerms {
     doctor_billing: string
     monthly_price: number | null
@@ -416,6 +418,9 @@ export default function DoctorDashboard() {
    */
   const addRosterDoctor = async (picked?: { practitionerId: string }, skipLookup = false) => {
     if (!doctor || (!picked && !docForm.name.trim())) return
+    // 0182: the speciality decides the examination form every visit opens with —
+    // defaulting to General gave an eye doctor the general form.
+    if (!picked && docForm.role === 'doctor' && !docForm.speciality) { setRosterErr('Choose the doctor’s speciality — it decides their examination form.'); return }
     setRosterBusy(true); setRosterErr('')
     try {
       // 0151: someone already on Sehatsandhi is invited, not registered twice.
@@ -467,7 +472,7 @@ export default function DoctorDashboard() {
     setInviteShare(null)
     if (!doctor || !change) return
     if (change.action === 'add') {
-      setDocForm({ name: '', speciality: 'GEN', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
+      setDocForm({ name: '', speciality: '', qualification: '', phone: '', email: '', regNumber: '', role: 'doctor' })
       setShowAddDoc(false)
     }
     const r = done.result
@@ -1844,7 +1849,8 @@ export default function DoctorDashboard() {
 
         {/* ══════════ QUEUE — today's OPD line ══════════ */}
         {tab === 'queue' && emr && access.opd && doctor && (
-          <Queue businessId={doctor.id} practitionerId={myDoctorId} />
+          <Queue businessId={doctor.id} practitionerId={myDoctorId}
+            onConsult={isClinician ? openPatient : undefined} />
         )}
 
         {/* ══════════ BEDS — the ward board ══════════ */}
@@ -1879,7 +1885,7 @@ export default function DoctorDashboard() {
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
         {tab === 'patients' && emr && (access.opd || access.ipd) && doctor && (
-          <Patients businessId={doctor.id} practitionerId={myPractitionerId} doctorId={myDoctorId} openMemberId={openMember} />
+          <Patients businessId={doctor.id} practitionerId={myPractitionerId} doctorId={myDoctorId} openMemberId={openMember} openVisitId={openVisit} />
         )}
 
         {tab === 'mypractice' && doctor && myPractitionerId && (
@@ -2213,6 +2219,7 @@ export default function DoctorDashboard() {
                         <>
                           <select className="input-field text-sm" value={docForm.speciality}
                             onChange={e => setDocForm(f => ({ ...f, speciality: e.target.value }))}>
+                            <option value="">Speciality *</option>
                             {SPECIALITIES.map(sp => <option key={sp.id} value={sp.id}>{sp.en}</option>)}
                           </select>
                           <input className="input-field text-sm" placeholder="Qualification, e.g. MD"

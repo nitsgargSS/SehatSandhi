@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { Spinner } from '../../components/Loading'
 import {
   searchPatients, getPatientSummary, getVisits, getVitals, getAllergies,
-  getConditions, getMedications, addVisit, addVital, addAllergy, addCondition,
+  getConditions, getMedications, addVisit, updateVisit, staffNames, addVital, addAllergy, addCondition,
   addMedication, stopMedication, registerPatient, grantRecordingConsent, withdrawRecordingConsent,
   getSpecialityFields, getFindings, saveFindings, getPractitionerSpeciality,
   SpecialityField, Finding,
@@ -121,7 +121,7 @@ const SOURCE_LABEL: Record<string, string> = {
   prescription: 'Prescription',
 }
 
-export default function Patients({ businessId, practitionerId, doctorId, openMemberId }: {
+export default function Patients({ businessId, practitionerId, doctorId, openMemberId, openVisitId }: {
   businessId: string
   /** Who is signed in, when they are staff — the author of what they record. */
   practitionerId?: string | null
@@ -129,6 +129,8 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
    *  reception and managers, who must not be offered as the patient's doctor. */
   doctorId?: string | null
   openMemberId?: string | null
+  /** 0182: from the queue's Consult — open this visit, ready to fill in. */
+  openVisitId?: string | null
 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PatientSearchResult[]>([])
@@ -419,9 +421,12 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
 
       {selected && (
         <PatientRecord
+          key={`${selected}:${openVisitId ?? ''}`}
           memberId={selected}
           businessId={businessId}
           practitionerId={practitionerId}
+          doctorId={doctorId ?? null}
+          focusVisitId={selected === openMemberId ? (openVisitId ?? null) : null}
           onClose={() => setSelected(null)}
         />
       )}
@@ -628,10 +633,13 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
 // Mirrors the table list gated in 0057; if one moves, both move.
 const CLINICAL_PANES = new Set(['history', 'clinical', 'rx', 'docs', 'ot', 'lab'])
 
-function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
+function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVisitId, onClose }: {
   memberId: string
   businessId: string
   practitionerId?: string | null
+  /** The signed-in person when they are a doctor here (0178's myDoctorId). */
+  doctorId?: string | null
+  focusVisitId?: string | null
   onClose: () => void
 }) {
   const [summary, setSummary] = useState<PatientSummary | null>(null)
@@ -858,7 +866,7 @@ function PatientRecord({ memberId, businessId, practitionerId, onClose }: {
       {shown === 'history' && (
         <VisitHistory
           visits={visits} memberId={memberId} businessId={businessId}
-          practitionerId={practitionerId} onAdded={reload}
+          practitionerId={practitionerId} doctorId={doctorId ?? null} focusVisitId={focusVisitId ?? null} onAdded={reload}
         />
       )}
       {shown === 'clinical' && (
@@ -1659,25 +1667,57 @@ function RecordingConsent({ summary, businessId, onChange }: {
 
 // ── Visits ──────────────────────────────────────────────────────────────────
 
-function VisitHistory({ visits, memberId, businessId, practitionerId, onAdded }: {
+function VisitHistory({ visits, memberId, businessId, practitionerId, doctorId, focusVisitId, onAdded }: {
   visits: Visit[]
   memberId: string
   businessId: string
+  /** Who is signed in (author of findings). */
   practitionerId?: string | null
+  /** The signed-in person if they are a doctor here — the default doctor. */
+  doctorId?: string | null
+  /** 0182: open this visit for editing (the queue's Consult). */
+  focusVisitId?: string | null
   onAdded: () => void
 }) {
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ chiefComplaint: '', diagnosis: '', advice: '', followUpDue: '', notes: '' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // 0182: a visit belongs to the DOCTOR who saw the patient — it decides the
+  // speciality form. A nurse or manager recording one picks the doctor.
+  const [doctors, setDoctors] = useState<BusinessDoctor[]>([])
+  const [forDoctor, setForDoctor] = useState<string>(doctorId ?? '')
+  const [names, setNames] = useState<Record<string, string>>({})
+  const [editing, setEditing] = useState<string | null>(focusVisitId ?? null)
+  const [ef, setEf] = useState({ chiefComplaint: '', diagnosis: '', advice: '', followUpDue: '' })
+  useEffect(() => {
+    listBusinessDoctors(businessId).then(d => {
+      setDoctors(d)
+      if (!doctorId && d.length === 1) setForDoctor(d[0].practitioner_id)
+    }).catch(() => setDoctors([]))
+    staffNames(businessId).then(setNames).catch(() => setNames({}))
+  }, [businessId, doctorId])
+  useEffect(() => {
+    const v = visits.find(x => x.id === editing)
+    if (v) setEf({ chiefComplaint: v.chief_complaint ?? '', diagnosis: v.diagnosis ?? '', advice: v.advice ?? '', followUpDue: v.follow_up_due ?? '' })
+  }, [editing, visits])
+  useEffect(() => {
+    if (focusVisitId) setTimeout(() => document.getElementById(`visit-${focusVisitId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)
+  }, [focusVisitId])
 
   const save = async () => {
+    if (!forDoctor) { setErr('Choose the doctor who saw the patient.'); return }
     setBusy(true); setErr('')
     try {
-      await addVisit(memberId, businessId, { ...f, followUpDue: f.followUpDue || null, practitionerId })
+      await addVisit(memberId, businessId, { ...f, followUpDue: f.followUpDue || null, practitionerId: forDoctor })
       setF({ chiefComplaint: '', diagnosis: '', advice: '', followUpDue: '', notes: '' })
       setAdding(false); onAdded()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  const saveEdit = async (id: string) => {
+    setBusy(true); setErr('')
+    try { await updateVisit(id, ef); setEditing(null); onAdded() }
+    catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
   return (
@@ -1691,6 +1731,11 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, onAdded }:
       {adding && (
         <div style={card}>
           <div style={{ display: 'grid', gap: 10 }}>
+            <div><div style={label}>Doctor who saw the patient</div>
+              <select style={input} value={forDoctor} onChange={e => setForDoctor(e.target.value)}>
+                <option value="">Choose…</option>
+                {doctors.map(d => <option key={d.practitioner_id} value={d.practitioner_id}>{d.full_name}</option>)}
+              </select></div>
             <div><div style={label}>Complaint</div>
               <input style={input} value={f.chiefComplaint}
                 onChange={e => setF({ ...f, chiefComplaint: e.target.value })}
@@ -1723,7 +1768,7 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, onAdded }:
       )}
 
       {visits.map(v => (
-        <div key={v.id} style={card}>
+        <div key={v.id} id={`visit-${v.id}`} style={{ ...card, ...(v.id === focusVisitId ? { boxShadow: `0 0 0 2px ${BIZ.green}` } : {}) }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: BIZ.ink }}>
               {when(v.visit_date ?? v.created_at)}
@@ -1738,9 +1783,34 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, onAdded }:
               </div>
             )}
           </div>
-          {v.chief_complaint && <Row k="Complaint" v={v.chief_complaint} />}
-          {v.diagnosis && <Row k="Diagnosis" v={v.diagnosis} />}
-          {v.advice && <Row k="Advice" v={v.advice} />}
+          <div style={{ fontSize: 12, color: BIZ.muted, marginTop: 2 }}>
+            {v.practitioner_id ? `Doctor: ${names[v.practitioner_id] ?? '—'}` : 'No doctor recorded'}
+            {v.created_by && v.created_by !== v.practitioner_id ? ` · recorded by ${names[v.created_by] ?? 'staff'}` : ''}
+          </div>
+          {editing === v.id ? (
+            <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+              <div><div style={label}>Complaint</div>
+                <input style={input} value={ef.chiefComplaint} onChange={e => setEf({ ...ef, chiefComplaint: e.target.value })} /></div>
+              <div><div style={label}>Diagnosis</div>
+                <input style={input} value={ef.diagnosis} autoFocus={v.id === focusVisitId} onChange={e => setEf({ ...ef, diagnosis: e.target.value })} /></div>
+              <div><div style={label}>Advice</div>
+                <textarea style={{ ...input, minHeight: 60, resize: 'vertical' }} value={ef.advice} onChange={e => setEf({ ...ef, advice: e.target.value })} /></div>
+              <div><div style={label}>Follow-up due</div>
+                <input type="date" style={input} value={ef.followUpDue} onChange={e => setEf({ ...ef, followUpDue: e.target.value })} /></div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => saveEdit(v.id)} disabled={busy} style={btn(true)}>Save</button>
+                <button onClick={() => setEditing(null)} style={btn()}>Cancel</button>
+              </div>
+              <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>The examination for this doctor’s speciality is below. Prescribe from the Prescriptions tab.</div>
+            </div>
+          ) : (
+            <>
+              {v.chief_complaint && <Row k="Complaint" v={v.chief_complaint} />}
+              {v.diagnosis ? <Row k="Diagnosis" v={v.diagnosis} /> : <div style={{ fontSize: 12.5, color: '#8a5a00', marginTop: 4 }}>No diagnosis yet</div>}
+              {v.advice && <Row k="Advice" v={v.advice} />}
+              <button onClick={() => setEditing(v.id)} style={{ ...btn(), fontSize: 12, marginTop: 6 }}>Edit visit</button>
+            </>
+          )}
           {/* Imported register lines carry notes and nothing else. */}
           {v.notes && <Row k="Notes" v={v.notes} />}
 
@@ -2090,6 +2160,9 @@ function VitalsPane({ memberId, businessId, vitals, onChange }: {
   onChange: () => void
 }) {
   const [v, setV] = useState<Record<string, string>>({})
+  // 0182: who took each reading (stamped by the database).
+  const [names, setNames] = useState<Record<string, string>>({})
+  useEffect(() => { staffNames(businessId).then(setNames).catch(() => setNames({})) }, [businessId])
   const [err, setErr] = useState('')
 
   const num = (k: string) => (v[k] ?? '').trim() === '' ? null : Number(v[k])
@@ -2144,7 +2217,7 @@ function VitalsPane({ memberId, businessId, vitals, onChange }: {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: BIZ.cream }}>
-                {['Date', 'BP', 'Pulse', 'SpO₂', 'Temp', 'Weight', 'Sugar'].map(h => (
+                {['Date', 'BP', 'Pulse', 'SpO₂', 'Temp', 'Weight', 'Sugar', 'By'].map(h => (
                   <th key={h} style={{ textAlign: 'left', padding: '9px 12px', ...label }}>{h}</th>
                 ))}
               </tr>
@@ -2161,6 +2234,7 @@ function VitalsPane({ memberId, businessId, vitals, onChange }: {
                   <td style={{ padding: '9px 12px' }}>{r.temperature_c ?? '—'}</td>
                   <td style={{ padding: '9px 12px' }}>{r.weight_kg ?? '—'}</td>
                   <td style={{ padding: '9px 12px' }}>{r.blood_sugar_mg_dl ?? '—'}</td>
+                  <td style={{ padding: '9px 12px', color: BIZ.muted }}>{(r as Vital & { recorded_by?: string | null }).recorded_by ? (names[(r as Vital & { recorded_by?: string | null }).recorded_by!] ?? 'staff') : '—'}</td>
                 </tr>
               ))}
             </tbody>
