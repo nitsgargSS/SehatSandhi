@@ -276,6 +276,9 @@ export default function DoctorDashboard() {
   // or a receptionist is nobody on the roster, so this stays null and a visit
   // they record simply carries no practitioner rather than inventing one.
   const [myPractitionerId, setMyPractitionerId] = useState<string | null>(null)
+  // Who is signed in, shown beside the clinic's name: on a shared desk PC the
+  // clinic name alone says nothing about whose hands the records are in.
+  const [myName, setMyName] = useState('')
   // The same person, but only when they are a doctor here. Nurses, reception
   // and managers have a practitioner row too; anywhere that means "the doctor"
   // (the queue's view, a new token's doctor, a new patient's doctor, My
@@ -633,8 +636,9 @@ export default function DoctorDashboard() {
       // practitioners_read_own (0038) matches on auth_uid, so this resolves for
       // a doctor and returns nothing for an owner who does not see patients.
       const { data: me } = await supabase.from('practitioners')
-        .select('id').eq('auth_uid', user.id).maybeSingle()
+        .select('id, full_name').eq('auth_uid', user.id).maybeSingle()
       setMyPractitionerId((me as { id: string } | null)?.id ?? null)
+      setMyName((me as { full_name?: string | null } | null)?.full_name ?? '')
 
       // Ask which listings this session may act on, rather than matching an
       // email.
@@ -995,6 +999,8 @@ export default function DoctorDashboard() {
   // 0181: the account — plan, payments, Bills, WhatsApp, add-ons, doctors'
   // leave — is the owner's. A manager runs the floor (0180), not the account.
   const isOwner = !role.enforced || role.role === 'owner'
+  const ROLE_WORD: Record<string, string> = { owner: 'Owner', doctor: 'Doctor', nurse: 'Nurse', receptionist: 'Reception', manager: 'Manager' }
+  const whoIsIn = `${myName || signedInAs || 'Signed in'}${role.role ? ` · ${ROLE_WORD[role.role] ?? role.role}` : ''}`
   const isClinician = isClinicalRole(role)
   // Both tabs below meant "owner or doctor" when they were written, back when
   // isClinicalRole meant only that. It now includes nurses, so they point at
@@ -1228,6 +1234,8 @@ export default function DoctorDashboard() {
               <User className="w-4 h-4 text-white" />
             </div>
             <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                   title={signedInAs}>{whoIsIn}</div>
               <h1 style={{ fontSize: 14, fontWeight: 800, color: '#fff', margin: 0, lineHeight: 1.3 }}>{doctor.name}</h1>
               <p style={{ fontSize: 12, color: '#8fa89d', margin: '2px 0 0', lineHeight: 1.4 }}>
                 {verticalFor(myVertical).label}
@@ -1303,6 +1311,7 @@ export default function DoctorDashboard() {
       <div className="lg:hidden" style={{ background: BIZ.ink }}>
         <div className="flex items-center justify-between gap-3" style={{ padding: '10px 16px 0' }}>
           <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#c9d6d0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{whoIsIn}</div>
             <h1 style={{ fontSize: 15, fontWeight: 800, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doctor.name}</h1>
             <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 3 }}>
               <span style={{
