@@ -119,15 +119,15 @@ export interface PharmacyBill {
              reason: string | null; created_at: string; items: { name: string; qty: number }[] }[]
 }
 
-export interface PurchaseLine {
+/** 0184: either packs (× the item's pack size) or plain units at per-unit prices. */
+export type PurchaseLine = {
   item_id: string
   batch_no: string
   expiry_date: string
-  packs: number
-  free_packs: number
-  pack_cost: number
-  pack_mrp: number
-}
+} & (
+  | { packs: number; free_packs: number; pack_cost: number; pack_mrp: number }
+  | { units: number; free_units: number; unit_cost: number; unit_mrp: number }
+)
 
 export interface Purchase {
   id: string
