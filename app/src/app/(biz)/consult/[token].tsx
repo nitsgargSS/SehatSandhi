@@ -237,6 +237,12 @@ function VisitNotes({ visit, token, prescriber, member, biz, prescriberId }: {
       diagnosis: f.diagnosis, advice: f.advice, followUpDate: toIso(f.follow) })
     setItems([{ drug_name: '', dosage: '', duration: '', instructions: '' }])
     const r = await getPrescriptions(member, biz); setIssued(r.filter(x => x.visit_id === visit && x.status === 'issued'))
+    // Issuing does not close the visit (more notes may follow) — but it is
+    // usually the last step, so offer to finish right here.
+    Alert.alert('Prescription issued', 'Finish this consultation now? The patient moves to Finished in the queue.', [
+      { text: 'Not yet', style: 'cancel' },
+      { text: 'Finish', onPress: () => { setTokenStatus(token, 'completed').then(() => router.back(), e => setMsg((e as Error).message)) } },
+    ])
   }, '✓ Prescription issued')
   const finish = () => run('done', async () => {
     await saveVisit()
