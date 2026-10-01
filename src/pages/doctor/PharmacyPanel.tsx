@@ -601,7 +601,59 @@ function DuesSection({ businessId, canManage, onStockChanged }: { businessId: st
 
 // ── Stock and medicines ─────────────────────────────────────────────────────
 
-const blankItem: Partial<PharmacyItem> = { name: '', generic_name: '', strength: '', form: 'tablet', unit: 'tablet', pack_size: 10, hsn_code: '3004', gst_rate: 12, reorder_level: 0 }
+const blankItem: Partial<PharmacyItem> = { name: '', generic_name: '', strength: '', form: 'tablet', unit: 'tablet', pack_size: 1, hsn_code: '3004', gst_rate: 12, reorder_level: 0 }
+
+// 0184: stock in plain units — "10 bottles, MRP ₹250 each". Used when a
+// medicine is added (opening stock) and from Add stock on any item.
+interface StockIn { units: string; mrp: string; cost: string; batch: string; expiry: string }
+const blankStockIn: StockIn = { units: '', mrp: '', cost: '', batch: '', expiry: '' }
+const addStock = (businessId: string, itemId: string, st: StockIn, supplier = 'Opening stock') =>
+  recordPurchase(businessId, supplier, '', today(), [{
+    item_id: itemId, batch_no: st.batch, expiry_date: st.expiry,
+    units: Number(st.units) || 0, free_units: 0, unit_cost: Number(st.cost) || 0, unit_mrp: Number(st.mrp) || 0,
+  }])
+
+function StockInFields({ unit, st, set }: { unit: string; st: StockIn; set: (s: StockIn) => void }) {
+  const u = unit || 'unit'
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+      <label className="text-xs text-gray-500">Quantity ({u}s)
+        <input className="input-field mt-1" type="number" min={0} value={st.units} onChange={e => set({ ...st, units: e.target.value })} placeholder="e.g. 10" /></label>
+      <label className="text-xs text-gray-500">MRP per {u} (₹)
+        <input className="input-field mt-1" type="number" min={0} step="0.01" value={st.mrp} onChange={e => set({ ...st, mrp: e.target.value })} /></label>
+      <label className="text-xs text-gray-500">Cost per {u} (₹, optional)
+        <input className="input-field mt-1" type="number" min={0} step="0.01" value={st.cost} onChange={e => set({ ...st, cost: e.target.value })} /></label>
+      <label className="text-xs text-gray-500">Batch no.
+        <input className="input-field mt-1" value={st.batch} onChange={e => set({ ...st, batch: e.target.value })} placeholder="on the strip / box" /></label>
+      <label className="text-xs text-gray-500">Expiry
+        <input className="input-field mt-1" type="date" min={plusDays(today(), 1)} value={st.expiry} onChange={e => set({ ...st, expiry: e.target.value })} /></label>
+    </div>
+  )
+}
+
+function AddStockForm({ businessId, item, onDone, onCancel }: { businessId: string; item: StockRow; onDone: () => void; onCancel: () => void }) {
+  const [st, setSt] = useState<StockIn>(blankStockIn)
+  const [supplier, setSupplier] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  return (
+    <div className="border border-teal-200 bg-teal-50/40 rounded-lg p-3 space-y-2">
+      <div className="text-sm font-semibold text-navy-700">Add stock — {itemLabel(item)}</div>
+      <StockInFields unit={item.unit} st={st} set={setSt} />
+      <label className="text-xs text-gray-500 block">Supplier (optional)
+        <input className="input-field mt-1" value={supplier} onChange={e => setSupplier(e.target.value)} /></label>
+      <Err msg={err} />
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancel} className="btn-outline text-xs">Cancel</button>
+        <button disabled={busy} className="btn-teal text-xs disabled:opacity-50" onClick={async () => {
+          setBusy(true); setErr('')
+          try { await addStock(businessId, item.id, st, supplier.trim() || 'Stock added'); onDone() }
+          catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+        }}>{busy ? 'Saving…' : 'Add to stock'}</button>
+      </div>
+    </div>
+  )
+}
 
 function ItemForm({ businessId, item, onSaved, onCancel }: {
   businessId: string; item: Partial<PharmacyItem>; onSaved: () => void; onCancel: () => void
@@ -611,14 +663,22 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
   const [err, setErr] = useState('')
   const set = (k: keyof PharmacyItem) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF(x => ({ ...x, [k]: e.target.value }))
+  const [opening, setOpening] = useState<StockIn>(blankStockIn)
   const save = async () => {
     const generic = (f.generic_name ?? '').trim()
     const brand = (f.name ?? '').trim()
     if (!generic && !brand) { setErr('Enter the medicine name.'); return }
+    const withStock = !f.id && Number(opening.units) > 0
+    if (withStock && (!(Number(opening.mrp) > 0) || !opening.batch.trim() || !opening.expiry)) {
+      setErr('For the stock you have, give the MRP, batch number and expiry — or leave the quantity empty and add stock later.'); return
+    }
     setBusy(true); setErr('')
-    // The stored name is the brand, or the medicine itself when sold without one.
-    try { await saveItem(businessId, { ...f, name: brand || generic, generic_name: generic || null }); onSaved() }
-    catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+    try {
+      // The stored name is the brand, or the medicine itself when sold without one.
+      const id = await saveItem(businessId, { ...f, name: brand || generic, generic_name: generic || null })
+      if (withStock) await addStock(businessId, id, opening)
+      onSaved()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
   const field = (k: keyof PharmacyItem, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <label className="text-xs text-gray-500">{label}
@@ -642,7 +702,6 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
         </label>
         {field('strength', 'Strength', { placeholder: '650mg, 0.5%, 5ml' })}
         {field('unit', 'Sold per', { placeholder: 'tablet, bottle, tube' })}
-        {field('pack_size', 'Units in a pack', { type: 'number', min: 1 })}
         {field('hsn_code', 'HSN code', { placeholder: '3004' })}
         <label className="text-xs text-gray-500">GST rate
           <select className="input-field mt-1" value={String(f.gst_rate ?? 12)} onChange={set('gst_rate')}>
@@ -652,6 +711,12 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
         {field('reorder_level', 'Warn when stock is at or below', { type: 'number', min: 0 })}
       </div>
       <p className="text-xs text-gray-500">GST rate and HSN are used only if your clinic has a GSTIN for the pharmacy (Settings).</p>
+      {!f.id && (
+        <div className="border-t border-gray-100 pt-3 space-y-2">
+          <div className="text-sm font-semibold text-navy-700">Stock you have now <span className="font-normal text-gray-500">— counted in {f.unit || 'unit'}s, not boxes</span></div>
+          <StockInFields unit={String(f.unit ?? '')} st={opening} set={setOpening} />
+        </div>
+      )}
       {f.id && (
         <label className="text-sm flex items-center gap-2">
           <input type="checkbox" checked={f.is_active ?? true} onChange={e => setF(x => ({ ...x, is_active: e.target.checked }))} /> Still stocked
@@ -668,6 +733,7 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
 
 function StockSection({ businessId, stock, canManage, reload }: { businessId: string; stock: StockRow[]; canManage: boolean; reload: () => void }) {
   const [editing, setEditing] = useState<Partial<PharmacyItem> | null>(null)
+  const [adding, setAdding] = useState<StockRow | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [batches, setBatches] = useState<Batch[]>([])
   const [filter, setFilter] = useState<'all' | 'low' | 'expiry'>('all')
@@ -708,7 +774,7 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
                   {!s.is_active && ' · not stocked'}
                 </span>
                 <span className="flex gap-3 text-xs items-center">
-                  <span className={s.qty_available <= s.reorder_level ? 'text-red-600 font-semibold' : ''}>{s.qty_available} {s.unit}</span>
+                  <span className={s.qty_available <= s.reorder_level ? 'text-red-600 font-semibold' : ''}>{s.qty_available} {s.unit}{s.qty_available === 0 && canManage ? ' · tap to add stock' : ''}</span>
                   {s.next_expiry && <span className={soon(s.next_expiry, 60) ? 'text-amber-700' : 'text-gray-500'}>exp {shortDate(s.next_expiry)}</span>}
                   {s.qty_expired > 0 && <span className="text-red-600">{s.qty_expired} expired</span>}
                   {s.unit_mrp != null && <span className="text-gray-500">{moneyExact(s.unit_mrp)}/{s.unit}</span>}
@@ -723,7 +789,9 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
                     </table>
                   )}
                   <StockHistory itemId={s.id} unit={s.unit} qtyNow={s.qty_available + s.qty_expired} />
+                  {canManage && <button onClick={() => setAdding(s)} className="btn-teal text-xs py-1.5 px-3 mr-2">Add stock</button>}
                   {canManage && <button onClick={() => setEditing(s)} className="btn-outline text-xs py-1.5 px-3">Edit medicine</button>}
+                  {adding?.id === s.id && <div className="mt-2"><AddStockForm businessId={businessId} item={s} onCancel={() => setAdding(null)} onDone={() => { setAdding(null); reload() }} /></div>}
                 </div>
               )}
             </div>
@@ -816,8 +884,10 @@ function BatchRow({ b, unit, canManage, onDone }: { b: Batch; unit: string; canM
 
 // ── Purchases ───────────────────────────────────────────────────────────────
 
-interface PLine extends Omit<PurchaseLine, 'packs' | 'free_packs' | 'pack_cost' | 'pack_mrp'> {
-  key: string; label: string; pack: number; packs: string; free_packs: string; pack_cost: string; pack_mrp: string
+// 0184: purchases in plain units — "10 bottles at ₹250 each" — not packs.
+interface PLine {
+  key: string; item_id: string; label: string; unit: string
+  batch_no: string; expiry_date: string; units: string; free_units: string; unit_cost: string; unit_mrp: string
 }
 
 function PurchasesSection({ businessId, stock, reload }: { businessId: string; stock: StockRow[]; reload: () => void }) {
@@ -838,19 +908,19 @@ function PurchasesSection({ businessId, stock, reload }: { businessId: string; s
   useEffect(load, [load])
 
   const add = (s: StockRow) => setLines(ls => [...ls, {
-    key: `${s.id}-${Date.now()}`, item_id: s.id, label: `${itemLabel(s)} (pack of ${s.pack_size} ${s.unit})`, pack: s.pack_size,
-    batch_no: '', expiry_date: '', packs: '', free_packs: '', pack_cost: '', pack_mrp: '',
+    key: `${s.id}-${Date.now()}`, item_id: s.id, label: itemLabel(s), unit: s.unit || 'unit',
+    batch_no: '', expiry_date: '', units: '', free_units: '', unit_cost: '', unit_mrp: '',
   }])
   const upd = (key: string, k: keyof PLine, v: string) => setLines(ls => ls.map(l => l.key === key ? { ...l, [k]: v } : l))
-  const total = lines.reduce((s, l) => s + (Number(l.packs) || 0) * (Number(l.pack_cost) || 0), 0)
+  const total = lines.reduce((s, l) => s + (Number(l.units) || 0) * (Number(l.unit_cost) || 0), 0)
 
   const save = async () => {
     setBusy(true); setErr('')
     try {
       await recordPurchase(businessId, supplier, invoice, date, lines.map(l => ({
         item_id: l.item_id, batch_no: l.batch_no, expiry_date: l.expiry_date,
-        packs: Number(l.packs) || 0, free_packs: Number(l.free_packs) || 0,
-        pack_cost: Number(l.pack_cost) || 0, pack_mrp: Number(l.pack_mrp) || 0,
+        units: Number(l.units) || 0, free_units: Number(l.free_units) || 0,
+        unit_cost: Number(l.unit_cost) || 0, unit_mrp: Number(l.unit_mrp) || 0,
       })))
       setAdding(false); setLines([]); setSupplier(''); setInvoice(''); setDate(today())
       load(); reload()
@@ -898,12 +968,12 @@ function PurchasesSection({ businessId, stock, reload }: { businessId: string; s
           <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
             <input className="input-field" placeholder="Batch no." value={l.batch_no} onChange={e => upd(l.key, 'batch_no', e.target.value)} />
             <input className="input-field" type="date" min={plusDays(today(), 1)} value={l.expiry_date} onChange={e => upd(l.key, 'expiry_date', e.target.value)} title="Expiry" />
-            <input className="input-field" type="number" min={0} placeholder="Packs" value={l.packs} onChange={e => upd(l.key, 'packs', e.target.value)} />
-            <input className="input-field" type="number" min={0} placeholder="Free packs" value={l.free_packs} onChange={e => upd(l.key, 'free_packs', e.target.value)} />
-            <input className="input-field" type="number" min={0} step="0.01" placeholder="Cost / pack" value={l.pack_cost} onChange={e => upd(l.key, 'pack_cost', e.target.value)} />
-            <input className="input-field" type="number" min={0} step="0.01" placeholder="MRP / pack" value={l.pack_mrp} onChange={e => upd(l.key, 'pack_mrp', e.target.value)} />
+            <input className="input-field" type="number" min={0} placeholder={`Quantity (${l.unit}s)`} value={l.units} onChange={e => upd(l.key, 'units', e.target.value)} />
+            <input className="input-field" type="number" min={0} placeholder="Free" value={l.free_units} onChange={e => upd(l.key, 'free_units', e.target.value)} />
+            <input className="input-field" type="number" min={0} step="0.01" placeholder={`Cost per ${l.unit}`} value={l.unit_cost} onChange={e => upd(l.key, 'unit_cost', e.target.value)} />
+            <input className="input-field" type="number" min={0} step="0.01" placeholder={`MRP per ${l.unit}`} value={l.unit_mrp} onChange={e => upd(l.key, 'unit_mrp', e.target.value)} />
           </div>
-          {Number(l.pack_mrp) > 0 && <p className="text-xs text-gray-500">Sells at {moneyExact(Number(l.pack_mrp) / l.pack)} each · {((Number(l.packs) || 0) + (Number(l.free_packs) || 0)) * l.pack} into stock</p>}
+          {Number(l.units) > 0 && <p className="text-xs text-gray-500">{(Number(l.units) || 0) + (Number(l.free_units) || 0)} {l.unit}{(Number(l.units) || 0) + (Number(l.free_units) || 0) === 1 ? '' : 's'} into stock{Number(l.unit_mrp) > 0 ? `, sold at ${moneyExact(Number(l.unit_mrp))} each` : ''}</p>}
         </div>
       ))}
       <p className="text-sm text-right">Total cost {moneyExact(total)}</p>

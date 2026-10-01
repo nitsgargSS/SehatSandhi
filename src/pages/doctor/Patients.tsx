@@ -901,7 +901,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
       {shown === 'ipd' && (
         <AdmissionsPane
           stays={stays} memberId={memberId} businessId={businessId}
-          practitionerId={practitionerId} onChange={reload}
+          practitionerId={practitionerId} doctorId={doctorId ?? null} onChange={reload}
           clinical={clinical} prescriber={prescriber}
         />
       )}
@@ -918,7 +918,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
         <BillingPane
           charges={charges} payments={payments} account={account} stays={stays}
           memberId={memberId} businessId={businessId}
-          practitionerId={practitionerId} onChange={reload}
+          practitionerId={practitionerId} doctorId={doctorId ?? null} onChange={reload}
         />
       )}
       {shown === 'docs' && (
@@ -2306,11 +2306,13 @@ function VitalsPane({ memberId, businessId, vitals, onChange }: {
 // a stay is part of one person's story, so it belongs here beside their visits
 // and prescriptions rather than somewhere a doctor has to go looking.
 
-function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange, clinical, prescriber }: {
+function AdmissionsPane({ stays, memberId, businessId, practitionerId, doctorId, onChange, clinical, prescriber }: {
   stays: Admission[]
   memberId: string
   businessId: string
   practitionerId?: string | null
+  /** The signed-in person only if a doctor here — the attending default. */
+  doctorId?: string | null
   onChange: () => void
   clinical: boolean
   prescriber: boolean
@@ -2326,7 +2328,9 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange,
   const doctors = useDoctors(businessId)
   // Whose patient this admission is (0121). A doctor admitting defaults to
   // themselves; reception picks. Charges during the stay are credited to them.
-  const [attending, setAttendingDoc] = useState<string | null>(practitionerId ?? null)
+  // Only a doctor defaults to themselves (0184): a manager or nurse admitting
+  // picks the doctor, or the clinic's only doctor is used.
+  const [attending, setAttendingDoc] = useState<string | null>(doctorId ?? null)
 
   const current = stays.find(s => s.status === 'admitted')
 
@@ -2345,7 +2349,7 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, onChange,
       await admitPatient({
         patientMemberId: memberId, businessId,
         bedId: form.bedId || null,
-        attendingPractitionerId: doc ?? practitionerId ?? null,
+        attendingPractitionerId: doc ?? doctorId ?? null,
         reason: form.reason, admittingDiagnosis: form.diagnosis,
         expectedDischarge: form.expected || null,
       })
@@ -3506,7 +3510,7 @@ function ReferPane({ memberId, businessId, practitionerId, onChange }: {
 const PAYMENT_METHODS = PAYMENT_METHOD_OPTIONS
 
 function BillingPane({
-  charges, payments, account, stays, memberId, businessId, practitionerId, onChange,
+  charges, payments, account, stays, memberId, businessId, practitionerId, doctorId, onChange,
 }: {
   charges: Charge[]
   payments: PatientPayment[]
@@ -3514,7 +3518,12 @@ function BillingPane({
   stays: Admission[]
   memberId: string
   businessId: string
+  /** Who is signed in — recorded as who took the charge / payment. */
   practitionerId?: string | null
+  /** The signed-in person only if they are a doctor here. A manager or nurse
+   *  billing is never credited as the doctor (that raised "That doctor does
+   *  not work at this hospital"). */
+  doctorId?: string | null
   onChange: () => void
 }) {
   const [c, setC] = useState({ category: 'consultation' as ChargeCategory, description: '', quantity: '1', unitPrice: '' })
@@ -3643,7 +3652,7 @@ function BillingPane({
           </>}
           {doctors.length > 1 && (
             <DoctorSelect doctors={doctors} value={creditTo} onChange={setCreditTo}
-              allLabel={openStay ? 'Credit: attending doctor' : 'Credit: me / no doctor'}
+              allLabel={openStay ? 'Credit: attending doctor' : doctorId ? 'Credit: me' : 'Credit: no doctor'}
               style={{ ...input, flex: '1 1 170px' }} />
           )}
           <button style={btn(true)}
@@ -3664,7 +3673,7 @@ function BillingPane({
                 quantity: Number(c.quantity) || 1,
                 unitPrice: Number(c.unitPrice) || 0,
                 admissionId: openStay?.id ?? null,
-                practitionerId: creditTo ?? (openStay ? null : practitionerId ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)),
+                practitionerId: creditTo ?? (openStay ? null : doctorId ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)),
               }, practitionerId)
               setC({ category: 'consultation', description: '', quantity: '1', unitPrice: '' })
               setFeeMode('full'); setDiscPrice(''); setDiscReason('')
