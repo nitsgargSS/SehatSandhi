@@ -83,5 +83,5 @@ export const useSession = () => useContext(Ctx)
 
 export const ROLE_WORD: Record<string, string> = {
   owner: 'Owner', doctor: 'Doctor', nurse: 'Nurse', receptionist: 'Reception', manager: 'Manager',
-  pharmacist: 'Pharmacist', delivery: 'Delivery',
+  pharmacist: 'Pharmacist', delivery: 'Delivery', driver: 'Driver',
 }

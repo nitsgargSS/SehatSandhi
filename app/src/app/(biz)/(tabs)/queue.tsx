@@ -55,6 +55,7 @@ export default function QueueScreen() {
   if (!biz) return <View style={st.center}><Note>No clinic is linked to this login.</Note></View>
   // 0189: sign-in lands here; a pharmacy's home is its orders.
   if (s?.clinic?.vertical === 'pharmacy') return <Redirect href="/orders" />
+  if (s?.clinic?.vertical === 'ambulance') return <Redirect href="/trips" />
 
   const shown = board.filter(e => !onlyMine || e.practitioner_id === s?.doctorId)
   const now = shown.filter(e => e.status === 'called' || e.status === 'in_consultation')

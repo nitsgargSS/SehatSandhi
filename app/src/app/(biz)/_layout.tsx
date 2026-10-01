@@ -25,6 +25,7 @@ export default function BizLayout() {
         <Stack.Screen name="patient/[member]" options={{ title: 'Patient' }} />
         <Stack.Screen name="stay/[admission]" options={{ title: 'In-patient' }} />
         <Stack.Screen name="order/[id]" options={{ title: 'Medicine order' }} />
+        <Stack.Screen name="trip/[id]" options={{ title: 'Ambulance trip' }} />
       </Stack>
     </SessionProvider>
   )

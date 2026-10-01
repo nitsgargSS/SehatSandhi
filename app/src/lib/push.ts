@@ -58,5 +58,6 @@ export async function unregisterPush() {
 export function routeFor(data: Record<string, unknown> | undefined): string | null {
   const kind = data?.kind
   if (kind === 'medicine_order' && typeof data?.order_id === 'string') return `/order/${data.order_id}`
+  if (kind === 'ambulance' && typeof data?.request_id === 'string') return `/trip/${data.request_id}`
   return kind === 'queue' || kind === 'appointment' ? '/queue' : null
 }

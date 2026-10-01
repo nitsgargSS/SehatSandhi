@@ -22,7 +22,7 @@ import { ensureLoginFor, linkRowsFor } from '../_shared/loginAccount.ts'
 import { emailMatches, hasUsedLogin, readJoinToken } from '../_shared/staffInvite.ts'
 
 const ROLE_LABEL: Record<string, string> = {
-  doctor: 'Doctor', owner: 'Owner', nurse: 'Nurse', receptionist: 'Reception', manager: 'Manager', pharmacist: 'Pharmacist', delivery: 'Delivery',
+  doctor: 'Doctor', owner: 'Owner', nurse: 'Nurse', receptionist: 'Reception', manager: 'Manager', pharmacist: 'Pharmacist', delivery: 'Delivery', driver: 'Driver',
 }
 
 // Mirrors src/lib/credentials.ts checkPassword, so an API call cannot skip the form's rules.
