@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package, Ambulance } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -14,6 +14,7 @@ import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientReco
 import RevenuePanel from './RevenuePanel'
 import PharmacyPanel from './PharmacyPanel'
 import OrdersPanel from './OrdersPanel'
+import TripsPanel from './TripsPanel'
 import CollectionsPanel from './CollectionsPanel'
 import PatientReportPanel from './PatientReportPanel'
 import LabPanel from './LabPanel'
@@ -38,7 +39,7 @@ import { usePublicAreas } from '../../hooks/useServiceAreas'
 // Who keeps a staff roster here. A lab has no doctors patients book, but it
 // has pathologists and radiologists who approve reports, and technicians
 // (the Nurse role) — the Lab tab tells it to add them — so it gets Your team too.
-const hasTeam = (v: VerticalKey) => hasPractitioners(v) || v === 'lab' || v === 'pharmacy'
+const hasTeam = (v: VerticalKey) => hasPractitioners(v) || v === 'lab' || v === 'pharmacy' || v === 'ambulance'
 
 const ROSTER_ROLES: [string, string, string][] = [
   ['doctor',       'Doctor',       'Sees patients, prescribes, reads the full record'],
@@ -53,7 +54,12 @@ const PHARMACY_ROLES: [string, string, string][] = [
   ['delivery',   'Delivery',            'Sees only the orders handed to them; marks each delivered with the amount collected'],
   ['manager',    'Manager',             'Everything the pharmacist does, plus the team. Not the plan, bills or WhatsApp'],
 ]
-const rosterRoles = (v: VerticalKey) => v === 'pharmacy' ? PHARMACY_ROLES : ROSTER_ROLES
+// 0191: an ambulance service's crew.
+const AMBULANCE_ROLES: [string, string, string][] = [
+  ['driver',  'Driver',  'Gets every request in your areas on their phone, accepts, and runs their own trips'],
+  ['manager', 'Manager', 'Assigns drivers and runs every trip, plus the team. Not the plan, bills or WhatsApp'],
+]
+const rosterRoles = (v: VerticalKey) => v === 'pharmacy' ? PHARMACY_ROLES : v === 'ambulance' ? AMBULANCE_ROLES : ROSTER_ROLES
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
@@ -118,7 +124,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -956,7 +962,7 @@ export default function DoctorDashboard() {
     .map(a => a.slot_datetime)
   const todaysSlots = generateSlotsForDate(availability, new Date(), todaysBookedTimes)
 
-  const roleLabel = (r: string) => r === 'pharmacist' ? 'Pharmacist / helper' : r === 'delivery' ? 'Delivery' : r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
+  const roleLabel = (r: string) => r === 'pharmacist' ? 'Pharmacist / helper' : r === 'delivery' ? 'Delivery' : r === 'driver' ? 'Driver' : r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
 
   // ── Everything below runs BEFORE the early returns, and must ──────────────
   //
@@ -1027,8 +1033,14 @@ export default function DoctorDashboard() {
   const isPharmacy = myVertical === 'pharmacy'
   const deliveryOnly = role.enforced && role.role === 'delivery'
   const handlesOrders = isPharmacy && (!role.enforced || ['owner', 'manager', 'pharmacist', 'delivery'].includes(role.role ?? ''))
+  // 0191: an ambulance service's requests and trips.
+  const isAmbulance = myVertical === 'ambulance'
+  const handlesTrips = isAmbulance && (!role.enforced || ['owner', 'manager', 'driver'].includes(role.role ?? ''))
 
   const tabs = [
+    ...(handlesTrips ? [
+      { id: 'trips', label: 'Trips', icon: <Ambulance className="w-4 h-4" /> },
+    ] : []),
     ...(handlesOrders ? [
       { id: 'orders', label: deliveryOnly ? 'My deliveries' : 'Orders', icon: <Package className="w-4 h-4" /> },
     ] : []),
@@ -1131,7 +1143,7 @@ export default function DoctorDashboard() {
   useEffect(() => {
     if (loading || tabs.length === 0) return
     if (tabs.some(tb => tb.id === tab)) return
-    const fallback = tabs.find(tb => tb.id === 'orders') ?? tabs.find(tb => tb.id === 'reports') ?? tabs[0]
+    const fallback = tabs.find(tb => tb.id === 'trips') ?? tabs.find(tb => tb.id === 'orders') ?? tabs.find(tb => tb.id === 'reports') ?? tabs[0]
     setTab(fallback.id as typeof tab)
     // tabIds rather than tabs: the array is rebuilt every render and would
     // otherwise re-run this forever.
@@ -1877,6 +1889,9 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ PHARMACY — in-house dispensing (0158) ══════════ */}
+        {tab === 'trips' && doctor && handlesTrips && (
+          <TripsPanel businessId={doctor.id} role={role.enforced ? role.role : 'owner'} />
+        )}
         {tab === 'orders' && doctor && handlesOrders && (
           <OrdersPanel businessId={doctor.id} role={role.enforced ? role.role : 'owner'} />
         )}
@@ -2166,12 +2181,17 @@ export default function DoctorDashboard() {
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                   <h3 className="font-bold text-navy-700">Your team</h3>
                   {!showAddDoc && (
-                    <button onClick={() => { setShowAddDoc(true); if (myVertical === 'pharmacy') setDocForm(f => ({ ...f, role: f.role === 'doctor' ? 'pharmacist' : f.role })) }} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
+                    <button onClick={() => { setShowAddDoc(true); if (myVertical === 'pharmacy' || myVertical === 'ambulance') setDocForm(f => ({ ...f, role: f.role === 'doctor' ? (myVertical === 'pharmacy' ? 'pharmacist' : 'driver') : f.role })) }} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
                       <Plus className="w-4 h-4" /> Add person
                     </button>
                   )}
                 </div>
-                {myVertical === 'pharmacy' ? (
+                {myVertical === 'ambulance' ? (
+                <p className="text-sm text-gray-500 mb-3">
+                  Add your drivers and managers so each can sign in to the Sehatsandhi app. Drivers get every request in your
+                  areas as an alert, accept it, and update the trip — on the way, picked up, completed.
+                </p>
+                ) : myVertical === 'pharmacy' ? (
                 <p className="text-sm text-gray-500 mb-3">
                   Add the people who work in your store so each can sign in to the Sehatsandhi app with their own login.
                   Every order records who accepted, priced, packed and delivered it. A helper can deliver too — send
@@ -2328,7 +2348,7 @@ export default function DoctorDashboard() {
                           <div className="text-xs text-gray-500">
                             {d.role === 'doctor'
                               ? (SPECIALITIES.find(sp => sp.id === person?.speciality)?.en ?? person?.speciality ?? 'Doctor')
-                              : ([...ROSTER_ROLES, ...PHARMACY_ROLES].find(r => r[0] === d.role)?.[1] ?? d.role)}
+                              : ([...ROSTER_ROLES, ...PHARMACY_ROLES, ...AMBULANCE_ROLES].find(r => r[0] === d.role)?.[1] ?? d.role)}
                             {d.role === 'doctor' && person?.qualification ? ` · ${person.qualification}` : ''}
                             {d.role === 'doctor' && d.consultation_fee > 0 ? ` · ₹${d.consultation_fee} here` : ''}
                             {d.awaiting_payment && !suspended && (

@@ -100,15 +100,9 @@ export const VERTICALS: Vertical[] = [
       'Visit them at home or at work, explain the plans in person, and close the policy yourself.',
       'No cold calling, and your commission with the insurer stays exactly as it is.',
     ] },
-  { key: 'ambulance', label: 'Ambulance Service',          sub: 'Emergency response',     color: '#DC2626', billing: 'commission', commissionPercent: 10,
-    commissionBasis: 'non-emergency billing',
-    commissionNote: 'Only on scheduled, non-emergency trips booked through Sehatsandhi — emergency calls are always free of any charge from us.',
-    partnerHeadline: 'Ambulance requests from your own area',
-    partnerPoints: [
-      'Patients and families near you reach you through Sehatsandhi the moment they need an ambulance.',
-      'Emergencies, hospital transfers, discharges and scheduled trips.',
-      'Emergency calls always stay free of any charge from Sehatsandhi.',
-    ] },
+  // 0191: a listing fee, no commission. Requests come only from the PIN codes
+  // the service says it serves; the patient is never kept waiting for an accept.
+  { key: 'ambulance', label: 'Ambulance Service',          sub: 'Emergency response',     color: '#DC2626', billing: 'pincode_monthly' },
 ]
 
 export const verticalFor = (key: VerticalKey): Vertical =>

@@ -108,6 +108,13 @@ export default function Find() {
           [{ label: 'Order medicines on WhatsApp', say: `__wa__Order medicines${ctx.current.area ? ` — ${ctx.current.area}` : ''}` }])
         return
       }
+      // 0191: an ambulance — 108 first, then the WhatsApp request that alerts
+      // every ambulance nearby. Nobody is asked to wait.
+      if (u.other === 'ambulance') {
+        bot('In an emergency call 108 now — it is free. You can also send your pickup address on WhatsApp: we alert every ambulance near you and the first to accept calls you.',
+          [{ label: 'Call 108', say: '__tel__108' }, { label: 'Ambulance on WhatsApp', say: `__wa__Ambulance${ctx.current.area ? ` — ${ctx.current.area}` : ''}` }])
+        return
+      }
       if (u.other) {
         const what = u.other === 'lab' ? 'a lab test' : 'an ambulance'
         bot(`For ${what}, our WhatsApp assistant finds the nearest one for you right away.`,
@@ -142,6 +149,7 @@ export default function Find() {
   }
 
   const tapChip = (say: string) => {
+    if (say.startsWith('__tel__')) { Linking.openURL(`tel:${say.slice(7)}`); return }
     if (say.startsWith('__wa__')) { Linking.openURL(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(say.slice(6))}`); return }
     handle(say)
   }

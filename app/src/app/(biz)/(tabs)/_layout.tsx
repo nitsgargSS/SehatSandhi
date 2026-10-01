@@ -7,6 +7,9 @@ export default function TabsLayout() {
   const { s } = useSession()
   // 0189: a pharmacy works orders — no queue, no patient records.
   const pharmacy = s?.clinic?.vertical === 'pharmacy'
+  // 0191: an ambulance service works trips.
+  const ambulance = s?.clinic?.vertical === 'ambulance'
+  const noClinic = pharmacy || ambulance
   const sub = s ? `${s.name || s.email}${s.role.role ? ` · ${ROLE_WORD[s.role.role] ?? s.role.role}` : ''}` : ''
   return (
     <Tabs screenOptions={{
@@ -14,13 +17,18 @@ export default function TabsLayout() {
       headerTitleStyle: { fontWeight: '800' },
       sceneStyle: { backgroundColor: C.cream },
     }}>
+      <Tabs.Screen name="trips" options={{
+        title: s?.clinic?.name ?? 'Trips', tabBarLabel: 'Trips', headerTitleAlign: 'left',
+        href: ambulance ? undefined : null,
+        tabBarIcon: ({ color, size }) => <Ionicons name="medkit" color={color} size={size} />,
+      }} />
       <Tabs.Screen name="orders" options={{
         title: s?.clinic?.name ?? 'Orders', tabBarLabel: s?.role.role === 'delivery' ? 'Deliveries' : 'Orders', headerTitleAlign: 'left',
         href: pharmacy ? undefined : null,
         tabBarIcon: ({ color, size }) => <Ionicons name="bag-handle" color={color} size={size} />,
       }} />
       <Tabs.Screen name="queue" options={{
-        title: s?.clinic?.name ?? 'Queue', tabBarLabel: 'Queue', headerTitleAlign: 'left', href: pharmacy ? null : undefined,
+        title: s?.clinic?.name ?? 'Queue', tabBarLabel: 'Queue', headerTitleAlign: 'left', href: noClinic ? null : undefined,
         tabBarIcon: ({ color, size }) => <Ionicons name="list" color={color} size={size} />,
       }} />
       <Tabs.Screen name="beds" options={{
@@ -28,7 +36,7 @@ export default function TabsLayout() {
         tabBarIcon: ({ color, size }) => <Ionicons name="bed" color={color} size={size} />,
       }} />
       <Tabs.Screen name="patients" options={{
-        title: 'Patients', href: pharmacy ? null : undefined,
+        title: 'Patients', href: noClinic ? null : undefined,
         tabBarIcon: ({ color, size }) => <Ionicons name="people" color={color} size={size} />,
       }} />
       <Tabs.Screen name="me" options={{

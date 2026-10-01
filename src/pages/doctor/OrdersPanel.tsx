@@ -266,7 +266,9 @@ function OrderCard({ o, businessId, role, people, busy, run }: {
 
 // Where this store delivers. Starts empty on purpose: a pharmacy is only sent
 // orders for PIN codes it has said it can reach.
-function DeliveryAreaCard({ businessId, canEdit }: { businessId: string; canEdit: boolean }) {
+export function DeliveryAreaCard({ businessId, canEdit, title = 'Where you deliver', what = 'deliver medicines to', none = 'orders' }: {
+  businessId: string; canEdit: boolean; title?: string; what?: string; none?: string
+}) {
   const [areas, setAreas] = useState<DeliveryArea[] | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [editing, setEditing] = useState(false)
@@ -289,16 +291,16 @@ function DeliveryAreaCard({ businessId, canEdit }: { businessId: string; canEdit
   return (
     <div className={`card shadow-sm ${chosen.length === 0 ? 'border-2 border-amber-300' : ''}`}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="font-bold text-navy-700 flex items-center gap-1"><MapPin className="w-4 h-4" /> Where you deliver</h3>
+        <h3 className="font-bold text-navy-700 flex items-center gap-1"><MapPin className="w-4 h-4" /> {title}</h3>
         {!editing && canEdit && <button onClick={() => setEditing(true)} className="text-sm text-teal-700 font-semibold">Change</button>}
       </div>
-      {chosen.length === 0 && !editing && <p className="text-sm text-amber-700 mt-1">No delivery areas yet, so no orders reach you. {canEdit ? '' : 'Ask the owner to choose them.'}</p>}
+      {chosen.length === 0 && !editing && <p className="text-sm text-amber-700 mt-1">No areas chosen yet, so no {none} reach you. {canEdit ? '' : 'Ask the owner to choose them.'}</p>}
       {!editing && chosen.length > 0 && (
         <p className="text-sm text-gray-600 mt-1">{chosen.map(a => `${a.pin_code}${a.area_name ? ` ${a.area_name}` : ''}`).join(' · ')}</p>
       )}
       {editing && canEdit && (
         <div className="mt-2 space-y-3">
-          <p className="text-sm text-gray-500">Tick the PIN codes you can deliver medicines to. Orders from these areas reach you; the first pharmacy to accept gets the order.</p>
+          <p className="text-sm text-gray-500">Tick the PIN codes you can {what}. Requests from these areas reach you; the first to accept gets them.</p>
           <div className="flex gap-2 flex-wrap max-h-60 overflow-auto">
             {areas.map(a => {
               const on = picked.includes(a.pin_code)
