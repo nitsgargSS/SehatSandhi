@@ -54,6 +54,15 @@ update vertical_billing
        commission_basis = 'listing fee — no commission on orders'
  where vertical = 'pharmacy';
 
+-- The same listing fee as a clinic, term by term — only where the pharmacy
+-- price is still ₹0, so a price an admin has set is never overwritten.
+-- Editable afterwards in Admin → Pricing, like every other type.
+update vertical_term_prices p
+   set subscription_price = c.subscription_price
+  from vertical_term_prices c
+ where p.vertical = 'pharmacy' and c.vertical = 'clinic' and c.months = p.months
+   and coalesce(p.subscription_price, 0) = 0;
+
 -- A pharmacy always has the counter and never OPD or IPD.
 create or replace function sehat_pharmacy_shape()
 returns trigger language plpgsql as $$
