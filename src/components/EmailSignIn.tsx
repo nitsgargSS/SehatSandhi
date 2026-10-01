@@ -132,7 +132,7 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
       })
       if (err || !data.session) { setError('That code is not right, or it has expired. Ask for another.'); return }
       // A code is proof of the address, which is all a password reset needs.
-      if (mode === 'reset') { setStep('newPassword'); setNotice('Address confirmed. Choose a new password.'); return }
+      if (mode === 'reset') { setStep('newPassword'); setNotice('Address confirmed. Choose your password.'); return }
       await finish(data.user!.id, data.user!.email ?? normEmail(email)!)
     } finally { setBusy(false) }
   }
@@ -162,10 +162,12 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
     <div className="space-y-4">
       {intro && <p className="text-sm text-gray-500">{intro}</p>}
 
-      {/* Code first: it is the everyday route. Password stays as the other option. */}
+      {/* Code first: it is the everyday route. Password stays as the other option.
+          "Set a password" is its own tab (1 Oct 2026): someone who never had one
+          — a manager who signed in by code — would not look under "Forgot". */}
       {step === 'enter' && (
-        <div className="flex gap-2">
-          {([['code', 'Email me a code'], ['password', 'Password']] as [Mode, string][]).map(([m, label]) => (
+        <div className="flex gap-2 flex-wrap">
+          {([['code', 'Email me a code'], ['password', 'Password'], ['reset', 'Set a password']] as [Mode, string][]).map(([m, label]) => (
             <button key={m} type="button" onClick={() => reset(m)}
               className={`text-sm font-semibold px-4 py-2 rounded-xl transition ${
                 mode === m ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
@@ -193,7 +195,7 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
           </button>
           <button type="button" onClick={() => reset('reset')}
             className="text-sm text-teal-700 hover:underline">
-            Forgot your password?
+            Forgot it, or never set one? Set a password
           </button>
         </form>
       )}
@@ -203,8 +205,11 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
           <input className="input-field" type="email" inputMode="email" autoComplete="email"
             placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
           <button className="btn-teal w-full disabled:opacity-60" disabled={busy}>
-            {busy ? <Spinner /> : mode === 'reset' ? 'Send a code to reset it' : 'Send me a code'}
+            {busy ? <Spinner /> : mode === 'reset' ? 'Send me a code to set my password' : 'Send me a code'}
           </button>
+          {mode === 'reset' && (
+            <p className="text-xs text-gray-500">We email you a 6-digit code to prove the address is yours, then you choose a password. Works for a new password or a forgotten one.</p>
+          )}
           {mode === 'reset' && (
             <button type="button" onClick={() => reset('password')}
               className="text-sm text-gray-500 hover:underline">
