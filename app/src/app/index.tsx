@@ -4,8 +4,8 @@ import { router } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { C } from '../ui/theme'
 
-// Two doors: patients find a doctor (no login, like the WhatsApp bot — a later
-// step), businesses sign in with their website login. A saved session skips in.
+// Two doors: patients find a doctor (no login, like the WhatsApp bot), and
+// businesses sign in with their website login. A saved session skips in.
 export default function Start() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { if (data.session) router.replace('/queue') })
@@ -15,10 +15,10 @@ export default function Start() {
       <Image source={require('../../assets/icon.png')} style={s.logo} />
       <Text style={s.title}>Sehatsandhi</Text>
       <Text style={s.sub}>स्वास्थ्य की नई साझेदारी</Text>
-      <View style={[s.btn, s.ghost]}>
+      <Pressable style={[s.btn, s.ghost]} onPress={() => router.push('/find')}>
         <Text style={[s.btnText, { color: C.ink }]}>Find a doctor</Text>
-        <Text style={s.soon}>coming next</Text>
-      </View>
+        <Text style={s.soon}>no login · book on WhatsApp</Text>
+      </Pressable>
       <Pressable style={s.btn} onPress={() => router.push('/login')}>
         <Text style={s.btnText}>Business login</Text>
       </Pressable>
