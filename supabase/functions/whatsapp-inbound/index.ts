@@ -73,6 +73,15 @@ function extract(p: Any): { phone: string | null; name: string | null; text: str
   return { phone, name: name ?? null, text, id: id ?? null, outbound }
 }
 
+/** The opt-in button: "✅ Yes, send me health tips" / "✅ हाँ, हेल्थ टिप्स भेजें" (and close variants). */
+export function isOptIn(text: unknown): boolean {
+  const t = String(text ?? '').toLowerCase().replace(/[✅✔️☑️]/g, '').trim()
+  // \b does not see Devanagari letters, so Hindi is matched on its own.
+  const yes = /^(yes|haan|haa|ha)\b/.test(t) || /^(हाँ|हां|जी हाँ|जी हां)/.test(t)
+  const tips = /(tips|टिप्स|offers|ऑफ़र|ऑफर)/.test(t)
+  return yes && tips && t.length <= 60
+}
+
 /** The payload as logged: whole if small, else its first 8,000 characters as text. */
 function small(p: Any): Any {
   const s = JSON.stringify(p) ?? 'null'
@@ -105,6 +114,12 @@ Deno.serve(async (req) => {
     p_raw_phone: e.phone, p_profile_name: e.name, p_message_id: e.id,
     p_message_text: e.text ? String(e.text).slice(0, 500) : null, p_entry_code: null, p_referral_source_url: null,
   })
-  await log(!error, error ? `handle_inbound: ${error.message}` : `saved${e.name ? ` (${e.name})` : ''}`)
-  return json({ ok: true, saved: !error })
+  // 0187: the opt-in button's own text — never a bare "yes" to another question.
+  let optedIn = false
+  if (!error && isOptIn(e.text)) {
+    const { error: oErr } = await db.rpc('sehat_wa_platform_optin', { p_phone: e.phone, p_text: e.text, p_message_id: e.id })
+    optedIn = !oErr
+  }
+  await log(!error, error ? `handle_inbound: ${error.message}` : `saved${e.name ? ` (${e.name})` : ''}${optedIn ? ' · opted in to tips' : ''}`)
+  return json({ ok: true, saved: !error, optedIn })
 })

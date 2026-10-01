@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import OptInContactsCard from './OptInContactsCard'
 import { StatTile } from '../../components/Charts'
 import { shortDate, dateTime } from '../../lib/format'
 import {
@@ -52,6 +53,8 @@ export default function WhatsAppMarketingPanel({ businesses, isManager = false }
     <div className="space-y-5">
       <h2 className="text-lg font-bold text-navy-700">WhatsApp marketing</h2>
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>}
+      {/* 0187: Sehatsandhi's own opted-in audience (tips & offers). */}
+      <OptInContactsCard />
 
       <ReviewCard />
 
