@@ -50,6 +50,13 @@
     "scheme": "sehatsandhi",
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "117c9d8b-828b-487d-9db9-758ffe12d8b5"
+      }
+    },
+    "owner": "ng-technologies"
   }
 }
