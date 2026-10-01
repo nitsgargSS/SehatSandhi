@@ -41,9 +41,10 @@ import { sendStaffInvite } from '../_shared/staffInvite.ts'
 const CODE_MINUTES = 10
 const MAX_TRIES = 5
 const MAX_REQUESTS = 8          // per person per 15 minutes; each sends an email
-const ROLES = ['owner', 'doctor', 'nurse', 'receptionist', 'manager']
+const ROLES = ['owner', 'doctor', 'nurse', 'receptionist', 'manager', 'pharmacist', 'delivery']
 const ROLE_LABEL: Record<string, string> = {
   owner: 'Owner', doctor: 'Doctor', nurse: 'Nurse', receptionist: 'Receptionist', manager: 'Manager',
+  pharmacist: 'Pharmacist', delivery: 'Delivery',
 }
 
 type Action = 'add' | 'remove' | 'restore' | 'role'

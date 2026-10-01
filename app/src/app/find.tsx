@@ -101,8 +101,15 @@ export default function Find() {
     setBusy(true)
     try {
       const u = understand(said)
+      // 0189: medicines are delivered — the order itself is taken on WhatsApp,
+      // where the bot asks for the address and a photo of the prescription.
+      if (u.other === 'pharmacy') {
+        bot('Medicines can be delivered home from a pharmacy near you. Send your prescription photo or the medicine names on WhatsApp — a pharmacy will tell you the total, and nothing is sent until you approve it.',
+          [{ label: 'Order medicines on WhatsApp', say: `__wa__Order medicines${ctx.current.area ? ` — ${ctx.current.area}` : ''}` }])
+        return
+      }
       if (u.other) {
-        const what = u.other === 'lab' ? 'a lab test' : u.other === 'pharmacy' ? 'a pharmacy' : 'an ambulance'
+        const what = u.other === 'lab' ? 'a lab test' : 'an ambulance'
         bot(`For ${what}, our WhatsApp assistant finds the nearest one for you right away.`,
           [{ label: 'Open WhatsApp', say: `__wa__Hi, I need ${what}${ctx.current.area ? ` near ${ctx.current.area}` : ''}` }])
         return

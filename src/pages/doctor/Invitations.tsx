@@ -8,7 +8,7 @@ import { cancelInvitation, listClinicInvitations, listMyInvitations, respondInvi
 //   ClinicInvitations   Doctors & staff — invitations this clinic sent, still open
 //   PersonMatches       the add-staff forms — "already on Sehatsandhi: invite them?"
 
-const ROLE: Record<string, string> = { doctor: 'doctor', nurse: 'nurse', receptionist: 'receptionist', manager: 'manager', owner: 'owner' }
+const ROLE: Record<string, string> = { doctor: 'doctor', nurse: 'nurse', receptionist: 'receptionist', manager: 'manager', owner: 'owner', pharmacist: 'pharmacist', delivery: 'delivery staff' }
 
 export function MyInvitations({ onJoined }: { onJoined: () => void }) {
   const [rows, setRows] = useState<MyInvitation[]>([])

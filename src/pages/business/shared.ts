@@ -87,15 +87,9 @@ export const DOCTOR_QUALIFICATIONS: { value: string; label: string; nmc: boolean
 export const VERTICALS: Vertical[] = [
   { key: 'clinic',    label: 'Clinic',                     sub: 'One or more doctors',    color: '#0E9F6E', billing: 'pincode_monthly' },
   { key: 'hospital',  label: 'Hospital',                   sub: 'Multi-speciality',       color: '#2563EB', billing: 'pincode_monthly' },
-  { key: 'pharmacy',  label: 'Pharmacy / Medical Store',   sub: 'Medicine delivery',      color: '#DB2777', billing: 'commission', commissionPercent: 10,
-    commissionBasis: 'order value',
-    commissionNote: 'Only on orders that reach you through Sehatsandhi.',
-    partnerHeadline: 'Deliver medicines to patients near you',
-    partnerPoints: [
-      'We are onboarding pharmacies and medical stores that deliver medicines to patients\u2019 homes.',
-      'Prescriptions from patients in your area reach you directly on WhatsApp — fill them in store or deliver to the door.',
-      'Build a base of repeat customers without spending on advertising.',
-    ] },
+  // 0189: a listing fee like a clinic's, no commission. The PIN codes a
+  // pharmacy lists in are the areas it delivers medicine orders to.
+  { key: 'pharmacy',  label: 'Pharmacy / Medical Store',   sub: 'Medicine delivery',      color: '#DB2777', billing: 'pincode_monthly' },
   { key: 'lab',       label: 'Diagnostic Lab',             sub: 'Tests & sample pickup',  color: '#7C3AED', billing: 'pincode_monthly' },
   { key: 'insurance', label: 'Health Insurance',           sub: 'Plans & agents',         color: '#0891B2', billing: 'commission', commissionPercent: 10,
     commissionBasis: 'your commission',

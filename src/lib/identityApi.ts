@@ -12,7 +12,7 @@ export type Vertical = 'clinic' | 'hospital' | 'pharmacy' | 'lab' | 'insurance' 
 // Mirrors business_practitioners_role_check. 'nurse' arrived in 0067 and was
 // never added here, which is why the frontend could not tell a nurse from a
 // receptionist and showed them neither the record nor the drug chart.
-export type AffiliationRole = 'owner' | 'doctor' | 'nurse' | 'receptionist' | 'manager'
+export type AffiliationRole = 'owner' | 'doctor' | 'nurse' | 'receptionist' | 'manager' | 'pharmacist' | 'delivery'
 
 export interface PractitionerMatch {
   id: string
@@ -251,7 +251,7 @@ export async function loadPosts(practitionerId: string) {
 //
 // The database is still the authority. This only decides what to draw.
 
-export type ClinicRole = 'owner' | 'doctor' | 'nurse' | 'receptionist' | 'manager'
+export type ClinicRole = 'owner' | 'doctor' | 'nurse' | 'receptionist' | 'manager' | 'pharmacist' | 'delivery'
 
 export interface RoleLookup {
   role: ClinicRole | null

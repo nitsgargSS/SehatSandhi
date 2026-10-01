@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { router, useFocusEffect } from 'expo-router'
+import { Redirect, router, useFocusEffect } from 'expo-router'
 import { useSession } from '../../../lib/session'
 import {
   getBoard, callNext, setTokenStatus, tokenVisit, reopenToken, visitHasDiagnosis, type QueueEntry,
@@ -53,6 +53,8 @@ export default function QueueScreen() {
   if (sLoading && !s) return <View style={st.center}><Note>Loading…</Note></View>
   if (sErr) return <View style={st.center}><Err msg={sErr} /></View>
   if (!biz) return <View style={st.center}><Note>No clinic is linked to this login.</Note></View>
+  // 0189: sign-in lands here; a pharmacy's home is its orders.
+  if (s?.clinic?.vertical === 'pharmacy') return <Redirect href="/orders" />
 
   const shown = board.filter(e => !onlyMine || e.practitioner_id === s?.doctorId)
   const now = shown.filter(e => e.status === 'called' || e.status === 'in_consultation')

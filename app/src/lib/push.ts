@@ -55,7 +55,8 @@ export async function unregisterPush() {
 }
 
 /** Where a tapped notification should take the user. */
-export function routeFor(data: Record<string, unknown> | undefined): '/queue' | null {
+export function routeFor(data: Record<string, unknown> | undefined): string | null {
   const kind = data?.kind
+  if (kind === 'medicine_order' && typeof data?.order_id === 'string') return `/order/${data.order_id}`
   return kind === 'queue' || kind === 'appointment' ? '/queue' : null
 }

@@ -1421,7 +1421,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                           switched on the moment the payment clears — 0060.
                           NOT multiplied by consultant headcount: a ward system
                           is one system whoever is using it. */}
-                      {!onCommission && careModules.length > 0 && (
+                      {!onCommission && vertical !== 'pharmacy' && careModules.length > 0 && (
                         <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
                           <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
                             Which systems do you want? <span style={{ color: BIZ.green }}>Free</span>

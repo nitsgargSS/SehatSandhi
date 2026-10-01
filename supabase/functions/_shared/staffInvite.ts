@@ -78,6 +78,7 @@ export async function hasUsedLogin(db: SupabaseClient, email: string): Promise<b
 
 const ROLE_WORD: Record<string, string> = {
   doctor: 'a doctor', owner: 'an owner', nurse: 'a nurse', receptionist: 'reception', manager: 'a manager',
+  pharmacist: 'a pharmacist', delivery: 'delivery staff',
 }
 
 export interface InviteSent {

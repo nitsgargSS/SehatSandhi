@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -13,6 +13,7 @@ import Queue from './Queue'
 import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess, AffiliationRole } from '../../lib/identityApi'
 import RevenuePanel from './RevenuePanel'
 import PharmacyPanel from './PharmacyPanel'
+import OrdersPanel from './OrdersPanel'
 import CollectionsPanel from './CollectionsPanel'
 import PatientReportPanel from './PatientReportPanel'
 import LabPanel from './LabPanel'
@@ -37,7 +38,7 @@ import { usePublicAreas } from '../../hooks/useServiceAreas'
 // Who keeps a staff roster here. A lab has no doctors patients book, but it
 // has pathologists and radiologists who approve reports, and technicians
 // (the Nurse role) — the Lab tab tells it to add them — so it gets Your team too.
-const hasTeam = (v: VerticalKey) => hasPractitioners(v) || v === 'lab'
+const hasTeam = (v: VerticalKey) => hasPractitioners(v) || v === 'lab' || v === 'pharmacy'
 
 const ROSTER_ROLES: [string, string, string][] = [
   ['doctor',       'Doctor',       'Sees patients, prescribes, reads the full record'],
@@ -45,6 +46,14 @@ const ROSTER_ROLES: [string, string, string][] = [
   ['receptionist', 'Reception',    'Queue, beds and billing — no medical record'],
   ['manager',      'Manager',      'Everything reception and nurses do, for every patient, plus staff and the pharmacy. Not the plan, bills or WhatsApp'],
 ]
+// 0189: a medical store's own people. A helper often delivers too — anyone
+// here can be sent out with an order; the delivery role sees only that.
+const PHARMACY_ROLES: [string, string, string][] = [
+  ['pharmacist', 'Pharmacist / helper', 'Accepts, prices and packs orders, keeps stock and bills — and can deliver'],
+  ['delivery',   'Delivery',            'Sees only the orders handed to them; marks each delivered with the amount collected'],
+  ['manager',    'Manager',             'Everything the pharmacist does, plus the team. Not the plan, bills or WhatsApp'],
+]
+const rosterRoles = (v: VerticalKey) => v === 'pharmacy' ? PHARMACY_ROLES : ROSTER_ROLES
 import { useLanguage } from '../../i18n/LanguageContext'
 import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
@@ -109,7 +118,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -947,7 +956,7 @@ export default function DoctorDashboard() {
     .map(a => a.slot_datetime)
   const todaysSlots = generateSlotsForDate(availability, new Date(), todaysBookedTimes)
 
-  const roleLabel = (r: string) => r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
+  const roleLabel = (r: string) => r === 'pharmacist' ? 'Pharmacist / helper' : r === 'delivery' ? 'Delivery' : r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
 
   // ── Everything below runs BEFORE the early returns, and must ──────────────
   //
@@ -1013,7 +1022,16 @@ export default function DoctorDashboard() {
   // 0067 did to sehat_business_report on the database side.
   const prescriber = mayPrescribe(role)
 
+  // 0189: a medical store's orders — for its owner, manager, pharmacists and
+  // delivery people. A delivery person sees nothing else but their account.
+  const isPharmacy = myVertical === 'pharmacy'
+  const deliveryOnly = role.enforced && role.role === 'delivery'
+  const handlesOrders = isPharmacy && (!role.enforced || ['owner', 'manager', 'pharmacist', 'delivery'].includes(role.role ?? ''))
+
   const tabs = [
+    ...(handlesOrders ? [
+      { id: 'orders', label: deliveryOnly ? 'My deliveries' : 'Orders', icon: <Package className="w-4 h-4" /> },
+    ] : []),
     // 0121: a doctor's own page, first for anyone who is a doctor here.
     // A doctor's own page — their patients, public profile, fee, leave. Only
     // for doctors: every nurse, receptionist and manager also has a
@@ -1047,8 +1065,8 @@ export default function DoctorDashboard() {
     // 0158: the clinic's own medicine counter, switched on by a Sehatsandhi
     // admin. Every staff role sells; the panel hides stock and money controls
     // from those the database would refuse anyway.
-    ...(doctor?.pharmacy_module ? [
-      { id: 'pharmacy', label: 'Pharmacy', icon: <Pill className="w-4 h-4" /> },
+    ...(doctor?.pharmacy_module && !deliveryOnly ? [
+      { id: 'pharmacy', label: isPharmacy ? 'Stock & bills' : 'Pharmacy', icon: <Pill className="w-4 h-4" /> },
     ] : []),
     // 0168: the lab — every Diagnostic Lab, and clinics an admin switches it on for.
     ...(doctor && (doctor.vertical === 'lab' || doctor.lab_module) ? [
@@ -1056,7 +1074,7 @@ export default function DoctorDashboard() {
     ] : []),
     // 0159: the tally — for anyone who takes money. The RPC shows owner and
     // manager everybody's payments and everyone else only their own.
-    ...((emr && (access.opd || access.ipd)) || doctor?.pharmacy_module ? [
+    ...(((emr && (access.opd || access.ipd)) || doctor?.pharmacy_module) && !deliveryOnly ? [
       { id: 'collections', label: 'Collections', icon: <IndianRupee className="w-4 h-4" /> },
     ] : []),
     // 0161: how many patients, from where, who to bring back — for the people
@@ -1113,7 +1131,7 @@ export default function DoctorDashboard() {
   useEffect(() => {
     if (loading || tabs.length === 0) return
     if (tabs.some(tb => tb.id === tab)) return
-    const fallback = tabs.find(tb => tb.id === 'reports') ?? tabs[0]
+    const fallback = tabs.find(tb => tb.id === 'orders') ?? tabs.find(tb => tb.id === 'reports') ?? tabs[0]
     setTab(fallback.id as typeof tab)
     // tabIds rather than tabs: the array is rebuilt every render and would
     // otherwise re-run this forever.
@@ -1859,9 +1877,12 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ PHARMACY — in-house dispensing (0158) ══════════ */}
-        {tab === 'pharmacy' && doctor?.pharmacy_module && (
+        {tab === 'orders' && doctor && handlesOrders && (
+          <OrdersPanel businessId={doctor.id} role={role.enforced ? role.role : 'owner'} />
+        )}
+        {tab === 'pharmacy' && doctor?.pharmacy_module && !deliveryOnly && (
           <PharmacyPanel businessId={doctor.id}
-            canManage={!role.enforced || role.role === 'owner' || role.role === 'manager' || role.role === 'doctor'}
+            canManage={!role.enforced || role.role === 'owner' || role.role === 'manager' || role.role === 'doctor' || role.role === 'pharmacist'}
             canSettings={businessRole} />
         )}
 
@@ -2145,17 +2166,25 @@ export default function DoctorDashboard() {
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                   <h3 className="font-bold text-navy-700">Your team</h3>
                   {!showAddDoc && (
-                    <button onClick={() => setShowAddDoc(true)} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
+                    <button onClick={() => { setShowAddDoc(true); if (myVertical === 'pharmacy') setDocForm(f => ({ ...f, role: f.role === 'doctor' ? 'pharmacist' : f.role })) }} className="btn-teal text-sm py-2 px-4 flex items-center gap-1.5">
                       <Plus className="w-4 h-4" /> Add person
                     </button>
                   )}
                 </div>
+                {myVertical === 'pharmacy' ? (
+                <p className="text-sm text-gray-500 mb-3">
+                  Add the people who work in your store so each can sign in to the Sehatsandhi app with their own login.
+                  Every order records who accepted, priced, packed and delivered it. A helper can deliver too — send
+                  anyone out with an order from the Orders tab.
+                </p>
+                ) : (
                 <p className="text-sm text-gray-500 mb-3">
                   Doctors get their own profile and appointment calendar, and appear in the WhatsApp bot
                   and on the website as soon as they are added to a live listing. Set each doctor's OPD fee
                   (and any discount) here. Reception and managers do not appear publicly — they are here so
                   they can sign in, and what they can see is set by the role you give them.
                 </p>
+                )}
 
                 {/* What the roster costs, stated where it is changed rather than
                     discovered on the next invoice. */}
@@ -2187,7 +2216,7 @@ export default function DoctorDashboard() {
                     <div>
                       <label className="text-xs font-medium text-gray-600 mb-1 block">What do they do here?</label>
                       <div className="flex gap-2 flex-wrap">
-                        {ROSTER_ROLES.map(([value, label, blurb]) => {
+                        {rosterRoles(myVertical).map(([value, label, blurb]) => {
                           const on = docForm.role === value
                           return (
                             <button key={value} type="button"
@@ -2299,7 +2328,7 @@ export default function DoctorDashboard() {
                           <div className="text-xs text-gray-500">
                             {d.role === 'doctor'
                               ? (SPECIALITIES.find(sp => sp.id === person?.speciality)?.en ?? person?.speciality ?? 'Doctor')
-                              : (ROSTER_ROLES.find(r => r[0] === d.role)?.[1] ?? d.role)}
+                              : ([...ROSTER_ROLES, ...PHARMACY_ROLES].find(r => r[0] === d.role)?.[1] ?? d.role)}
                             {d.role === 'doctor' && person?.qualification ? ` · ${person.qualification}` : ''}
                             {d.role === 'doctor' && d.consultation_fee > 0 ? ` · ₹${d.consultation_fee} here` : ''}
                             {d.awaiting_payment && !suspended && (
@@ -2391,7 +2420,7 @@ export default function DoctorDashboard() {
                               } catch (err) { setRosterErr((err as Error).message) }
                               finally { setRosterBusy(false) }
                             }}>
-                            {ROSTER_ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                            {rosterRoles(myVertical).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                           </select>
                         )}
                         <button disabled={rosterBusy}

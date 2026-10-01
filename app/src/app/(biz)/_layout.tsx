@@ -11,7 +11,7 @@ export default function BizLayout() {
   useEffect(() => {
     const go = (r: Notifications.NotificationResponse | null) => {
       const to = routeFor(r?.notification.request.content.data as Record<string, unknown> | undefined)
-      if (to) router.push(to)
+      if (to) router.push(to as never)
     }
     Notifications.getLastNotificationResponseAsync().then(go).catch(() => {})
     const sub = Notifications.addNotificationResponseReceivedListener(go)
@@ -24,6 +24,7 @@ export default function BizLayout() {
         <Stack.Screen name="consult/[token]" options={{ title: 'Consultation' }} />
         <Stack.Screen name="patient/[member]" options={{ title: 'Patient' }} />
         <Stack.Screen name="stay/[admission]" options={{ title: 'In-patient' }} />
+        <Stack.Screen name="order/[id]" options={{ title: 'Medicine order' }} />
       </Stack>
     </SessionProvider>
   )

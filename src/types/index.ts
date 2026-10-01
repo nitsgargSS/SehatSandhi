@@ -70,7 +70,7 @@ export interface BusinessPractitioner {
   id: string
   business_id: string
   practitioner_id: string
-  role: 'owner' | 'doctor' | 'receptionist' | 'manager'
+  role: 'owner' | 'doctor' | 'receptionist' | 'manager' | 'nurse' | 'pharmacist' | 'delivery'
   is_primary: boolean
   consultation_fee: number
   status: DoctorStatus
