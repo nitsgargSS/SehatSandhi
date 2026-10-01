@@ -18,7 +18,6 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.sehatsandhi.app",
-      "versionCode": 1,
       "permissions": [
         "NOTIFICATIONS"
       ]
