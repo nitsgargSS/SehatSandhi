@@ -11,6 +11,10 @@ const WEB_LIB = path.join(WEB_SRC, 'lib')
 const APP_LIB = path.resolve(__dirname, 'src/lib')
 
 config.watchFolders = [...(config.watchFolders ?? []), WEB_SRC]
+// The website's files sit outside this folder, and on EAS's build servers the
+// website's own node_modules is never installed — so their imports
+// (@supabase/supabase-js) must resolve from the app's node_modules.
+config.resolver.nodeModulesPaths = [path.resolve(__dirname, 'node_modules')]
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   const from = context.originModulePath ?? ''
