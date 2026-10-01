@@ -3,6 +3,7 @@ import { router } from 'expo-router'
 import { supabase } from './supabase'
 import { getMyRole, isClinicalRole, mayPrescribe, type RoleLookup } from '@web/lib/identityApi'
 import { getWards } from '@web/lib/admissionsApi'
+import { registerPush, type PushState } from './push'
 
 // Who is signed in and where — loaded once after login, used by every screen.
 // The same rules as the website's dashboard (src/pages/doctor/Dashboard.tsx):
@@ -26,8 +27,10 @@ export interface Session {
   hasWards: boolean
 }
 
-const Ctx = createContext<{ s: Session | null; loading: boolean; error: string; reload: () => void; pick: (id: string) => void }>({
-  s: null, loading: true, error: '', reload: () => {}, pick: () => {},
+export interface PushStatus { state: PushState | 'checking'; why?: string }
+
+const Ctx = createContext<{ s: Session | null; loading: boolean; error: string; reload: () => void; pick: (id: string) => void; push: PushStatus }>({
+  s: null, loading: true, error: '', reload: () => {}, pick: () => {}, push: { state: 'checking' },
 })
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -35,6 +38,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [picked, setPicked] = useState<string | null>(null)
+  const [push, setPush] = useState<PushStatus>({ state: 'checking' })
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -65,12 +69,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [picked])
 
   useEffect(() => { load() }, [load])
+  // Register this phone for alerts once per sign-in.
+  useEffect(() => { if (s?.userId) registerPush().then(setPush) }, [s?.userId])
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT') router.replace('/') })
     return () => data.subscription.unsubscribe()
   }, [])
 
-  return <Ctx.Provider value={{ s, loading, error, reload: load, pick: setPicked }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ s, loading, error, reload: load, pick: setPicked, push }}>{children}</Ctx.Provider>
 }
 
 export const useSession = () => useContext(Ctx)

@@ -2,12 +2,13 @@ import { ScrollView, StyleSheet, Text } from 'react-native'
 import { router } from 'expo-router'
 import { useSession, ROLE_WORD } from '../../../lib/session'
 import { supabase } from '../../../lib/supabase'
+import { unregisterPush } from '../../../lib/push'
 import { Btn, Card, Chip, Label, Note } from '../../../ui/kit'
 import { C } from '../../../ui/theme'
 
 // Who is signed in, which clinic (switch if more than one), log out.
 export default function Me() {
-  const { s, pick } = useSession()
+  const { s, pick, push } = useSession()
   return (
     <ScrollView contentContainerStyle={st.wrap}>
       <Card>
@@ -21,8 +22,15 @@ export default function Me() {
           {s!.clinics.map(c => <Chip key={c.id} label={c.name} on={c.id === s!.clinic?.id} onPress={() => pick(c.id)} />)}
         </Card>
       )}
+      <Card>
+        <Label>Alerts on this phone</Label>
+        <Text style={st.meta}>{push.state === 'on' ? '✓ On — new patients in your queue and new appointments.'
+          : push.state === 'checking' ? 'Checking…'
+          : push.state === 'denied' ? 'Off — allow notifications for Sehatsandhi in your phone settings.'
+          : `Not available here${push.why ? ` (${push.why})` : ''}.`}</Text>
+      </Card>
       <Note>Billing, pharmacy, staff, plan and reports are on the computer at sehatsandhi.com.</Note>
-      <Btn kind="ghost" label="Log out" onPress={async () => { await supabase.auth.signOut(); router.replace('/') }} />
+      <Btn kind="ghost" label="Log out" onPress={async () => { await unregisterPush(); await supabase.auth.signOut(); router.replace('/') }} />
     </ScrollView>
   )
 }
