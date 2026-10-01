@@ -8,7 +8,7 @@ import { C } from '../ui/theme'
 // step), businesses sign in with their website login. A saved session skips in.
 export default function Start() {
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { if (data.session) router.replace('/home') })
+    supabase.auth.getSession().then(({ data }) => { if (data.session) router.replace('/queue') })
   }, [])
   return (
     <View style={s.wrap}>

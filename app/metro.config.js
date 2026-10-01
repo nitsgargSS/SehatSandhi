@@ -14,7 +14,8 @@ config.watchFolders = [...(config.watchFolders ?? []), WEB_SRC]
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   const from = context.originModulePath ?? ''
-  if (from.startsWith(WEB_LIB + path.sep) && (moduleName === './supabase' || moduleName === './env')) {
+  // ./shrinkUpload builds PDFs in the browser (jspdf, canvas); the app has a stand-in.
+  if (from.startsWith(WEB_LIB + path.sep) && ['./supabase', './env', './shrinkUpload'].includes(moduleName)) {
     return { type: 'sourceFile', filePath: path.join(APP_LIB, moduleName.slice(2) + '.ts') }
   }
   // '@web/…' → the website's src/…

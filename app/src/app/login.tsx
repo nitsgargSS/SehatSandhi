@@ -21,7 +21,7 @@ export default function Login() {
   const [err, setErr] = useState('')
   const addr = email.trim().toLowerCase()
 
-  const done = async () => { await linkMyLogin(); router.replace('/home') }
+  const done = async () => { await linkMyLogin(); router.replace('/queue') }
 
   const sendCode = async () => {
     setBusy(true); setErr('')
