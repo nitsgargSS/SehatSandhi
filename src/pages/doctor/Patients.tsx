@@ -51,9 +51,10 @@ import { moneyExact, shortDate } from '../../lib/format'
 import { RECORDING_ENABLED } from '../../lib/env'
 import { getMarketingConsent, setMarketingConsent } from '../../lib/marketingApi'
 import { listBusinessDoctors, BusinessDoctor, setPatientDoctor, getPatientDoctor, setAttending } from '../../lib/doctorsApi'
+import { inStockMedicines, suggestMedicines, rxFromStock, itemLabel, type StockRow } from '../../lib/pharmacyApi'
 import DoctorSelect from '../../components/DoctorSelect'
 import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
-import { opdVisit, opdSlipUrl, patientHistory, HistoryRow, vitalsLine } from '../../lib/queueApi'
+import { opdVisit, opdSlipUrl, patientHistory, HistoryRow, vitalsLine, setTokenStatus } from '../../lib/queueApi'
 
 // A hospital's doctors, for the "which doctor" pickers below (0121). Empty on
 // a failure, which simply hides the pickers.
@@ -1212,6 +1213,10 @@ function PrescriptionsPane({ scripts, summary, memberId, businessId, practitione
 
   const setItem = (i: number, patch: Partial<PrescriptionItem>) =>
     setItems(list => list.map((it, j) => j === i ? { ...it, ...patch } : it))
+  // 1 Oct 2026: suggestions from the clinic's own pharmacy — in stock only.
+  const [stock, setStock] = useState<StockRow[]>([])
+  const [suggestAt, setSuggestAt] = useState<number | null>(null)
+  useEffect(() => { if (writing) inStockMedicines(businessId).then(setStock) }, [writing, businessId])
 
   const issue = async () => {
     if (!practitionerId) {
@@ -1271,8 +1276,22 @@ function PrescriptionsPane({ scripts, summary, memberId, businessId, practitione
               <div style={label}>Medicines</div>
               {items.map((it, i) => (
                 <div key={i} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
-                  <input style={{ ...input, flex: '2 1 160px' }} placeholder="Medicine"
-                    value={it.drug_name} onChange={e => setItem(i, { drug_name: e.target.value })} />
+                  <div style={{ flex: '2 1 160px', position: 'relative' }}>
+                    <input style={{ ...input, width: '100%' }} placeholder={stock.length ? 'Medicine — type to pick from stock' : 'Medicine'}
+                      value={it.drug_name} onFocus={() => setSuggestAt(i)} onBlur={() => setTimeout(() => setSuggestAt(x => x === i ? null : x), 150)}
+                      onChange={e => { setItem(i, { drug_name: e.target.value }); setSuggestAt(i) }} />
+                    {suggestAt === i && suggestMedicines(stock, it.drug_name).length > 0 && (
+                      <div style={{ position: 'absolute', zIndex: 20, top: '100%', left: 0, right: 0, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 10, boxShadow: '0 6px 18px rgba(0,0,0,.08)', marginTop: 2 }}>
+                        {suggestMedicines(stock, it.drug_name).map(sv => (
+                          <button key={sv.id} type="button" onMouseDown={e => e.preventDefault()}
+                            onClick={() => { const r = rxFromStock(sv); setItem(i, { drug_name: r.drug_name, strength: r.strength ?? it.strength, form: r.form }); setSuggestAt(null) }}
+                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13.5 }}>
+                            {itemLabel(sv)} <span style={{ color: BIZ.muted }}>· {sv.qty_available} {sv.unit} in stock</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <input style={{ ...input, flex: '0 1 92px' }} placeholder="500 mg"
                     value={it.strength ?? ''} onChange={e => setItem(i, { strength: e.target.value })} />
                   <input style={{ ...input, flex: '0 1 88px' }} placeholder="1-0-1"
@@ -1768,6 +1787,24 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, doctorId, 
       setAdding(false); onAdded()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
+  // A visit whose patient is still with the doctor can be finished from here.
+  const [openTokens, setOpenTokens] = useState<Record<string, string>>({})
+  const loadTokens = useCallback(() => {
+    const ids = visits.map(v => v.id)
+    if (!ids.length) { setOpenTokens({}); return }
+    supabase.from('opd_queue').select('id, visit_id').in('visit_id', ids).in('status', ['called', 'in_consultation'])
+      .then(({ data }) => setOpenTokens(Object.fromEntries(((data ?? []) as { id: string; visit_id: string }[]).map(r => [r.visit_id, r.id]))))
+  }, [visits])
+  useEffect(loadTokens, [loadTokens])
+  const finishVisit = async (v: Visit) => {
+    const tok = openTokens[v.id]
+    if (!tok) return
+    if (!(v.diagnosis ?? '').trim() && !window.confirm('No diagnosis is recorded for this visit. Finish the consultation anyway?')) return
+    setBusy(true); setErr('')
+    try { await setTokenStatus(tok, 'completed'); loadTokens(); onAdded() }
+    catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
   const saveEdit = async (id: string) => {
     setBusy(true); setErr('')
     try { await updateVisit(id, ef); setEditing(null); onAdded() }
@@ -1776,11 +1813,13 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, doctorId, 
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      {!adding && (
-        <button onClick={() => setAdding(true)} style={{ ...btn(true), justifySelf: 'start' }}>
-          <Plus className="w-4 h-4" style={{ display: 'inline', marginRight: 5 }} /> Record a visit
-        </button>
-      )}
+      {/* 1 Oct 2026: no "Record a visit" here. A visit made from the record
+          skipped the token, the queue and the consultation charge. Visits now
+          start only from the queue (Consult), which makes one for the token's
+          doctor; existing visits are completed and edited below. */}
+      <div style={{ fontSize: 12.5, color: BIZ.mutedWarm }}>
+        A visit starts from the queue: give the patient a token, then press <b>Consult</b>.
+      </div>
 
       {adding && (
         <div style={card}>
@@ -1854,6 +1893,9 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, doctorId, 
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => saveEdit(v.id)} disabled={busy} style={btn(true)}>Save</button>
                 <button onClick={() => setEditing(null)} style={btn()}>Cancel</button>
+                {openTokens[v.id] && (
+                  <button onClick={async () => { await saveEdit(v.id); await finishVisit({ ...v, diagnosis: ef.diagnosis }) }} disabled={busy} style={btn(true)}>Save &amp; finish consultation</button>
+                )}
               </div>
               <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>The examination for this doctor’s speciality is below. Prescribe from the Prescriptions tab.</div>
             </div>
@@ -1862,7 +1904,12 @@ function VisitHistory({ visits, memberId, businessId, practitionerId, doctorId, 
               {v.chief_complaint && <Row k="Complaint" v={v.chief_complaint} />}
               {v.diagnosis ? <Row k="Diagnosis" v={v.diagnosis} /> : <div style={{ fontSize: 12.5, color: '#8a5a00', marginTop: 4 }}>No diagnosis yet</div>}
               {v.advice && <Row k="Advice" v={v.advice} />}
-              <button onClick={() => setEditing(v.id)} style={{ ...btn(), fontSize: 12, marginTop: 6 }}>Edit visit</button>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <button onClick={() => setEditing(v.id)} style={{ ...btn(), fontSize: 12 }}>Edit visit</button>
+                {openTokens[v.id] && (
+                  <button onClick={() => finishVisit(v)} disabled={busy} style={{ ...btn(true), fontSize: 12 }}>✓ Finish consultation</button>
+                )}
+              </div>
             </>
           )}
           {/* Imported register lines carry notes and nothing else. */}
