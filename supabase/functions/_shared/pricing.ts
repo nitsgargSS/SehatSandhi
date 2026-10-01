@@ -175,7 +175,7 @@ const FALLBACK_VERTICALS: Record<string, VerticalBilling> = {
   clinic:    { vertical: 'clinic',    monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
   hospital:  { vertical: 'hospital',  monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
   lab:       { vertical: 'lab',       monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
-  pharmacy:  { vertical: 'pharmacy',  monthlyEnabled: false, commissionEnabled: true,  commissionPercent: 10, commissionBasis: 'order value' },
+  pharmacy:  { vertical: 'pharmacy',  monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
   insurance: { vertical: 'insurance', monthlyEnabled: false, commissionEnabled: true,  commissionPercent: 10, commissionBasis: 'your IRDA commission' },
   ambulance: { vertical: 'ambulance', monthlyEnabled: false, commissionEnabled: true,  commissionPercent: 10, commissionBasis: 'non-emergency transport billing' },
 }
@@ -493,7 +493,7 @@ export async function computePrice(
   /** 0117: the WhatsApp add-on and a coupon code. */
   extra: { whatsapp?: boolean | null; couponCode?: string | null } = {},
 ): Promise<PriceResult> {
-  const [plan, vb, taxSettings, recipientState, resolvedCount, moduleLines] = await Promise.all([
+  const [plan, vb, taxSettings, recipientState, resolvedCount, tickedModules] = await Promise.all([
     resolveActivePlan(supabase),
     resolveVerticalBilling(supabase, businessId, verticalHint),
     resolveTaxSettings(supabase),
@@ -501,6 +501,9 @@ export async function computePrice(
     resolveDoctorCount(supabase, businessId),
     resolveModules(supabase, requestedModules),
   ])
+  // 0189: a pharmacy has no OPD or IPD to buy — whatever was ticked is dropped,
+  // and the businesses trigger keeps both switched off regardless.
+  const moduleLines = vb.vertical === 'pharmacy' ? [] : tickedModules
 
   // With a listing, the headcount comes from the database and the client cannot
   // influence it — that is the number charged. Without one, a hospital is still
