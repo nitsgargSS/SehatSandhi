@@ -16,6 +16,10 @@ export default function TabsLayout() {
         title: s?.clinic?.name ?? 'Queue', tabBarLabel: 'Queue', headerTitleAlign: 'left',
         tabBarIcon: ({ color, size }) => <Ionicons name="list" color={color} size={size} />,
       }} />
+      <Tabs.Screen name="beds" options={{
+        title: 'Beds', href: s?.hasWards ? undefined : null,
+        tabBarIcon: ({ color, size }) => <Ionicons name="bed" color={color} size={size} />,
+      }} />
       <Tabs.Screen name="patients" options={{
         title: 'Patients',
         tabBarIcon: ({ color, size }) => <Ionicons name="people" color={color} size={size} />,

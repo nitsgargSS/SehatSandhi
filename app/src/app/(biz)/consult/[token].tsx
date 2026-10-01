@@ -4,22 +4,21 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { useSession } from '../../../lib/session'
 import { supabase } from '../../../lib/supabase'
 import {
-  getPatientSummary, getVitals, addVital, updateVisit, getSpecialityFields, getFindings, saveFindings,
-  getPractitionerSpeciality, type PatientSummary, type Vital, type SpecialityField, type Visit,
+  getPatientSummary, updateVisit, getSpecialityFields, getFindings, saveFindings,
+  getPractitionerSpeciality, type PatientSummary, type SpecialityField, type Visit,
 } from '@web/lib/patientsApi'
 import { issuePrescription, getPrescriptions, type Prescription, type PrescriptionItem } from '@web/lib/prescriptionsApi'
 import { setTokenStatus, visitHasDiagnosis } from '@web/lib/queueApi'
 import { inStockMedicines, suggestMedicines, rxFromStock, itemLabel, type StockRow } from '@web/lib/pharmacyApi'
 import { SPECIALITIES } from '@web/types'
 import { Btn, Card, Chip, Err, Field, Label, Note, toDmy, toIso } from '../../../ui/kit'
+import VitalsCard from '../../../ui/VitalsCard'
 import { C } from '../../../ui/theme'
 
 // One patient's consultation, opened from the queue (sehat_token_visit made the
 // visit for the TOKEN's doctor, so the speciality form is that doctor's — an eye
 // doctor's patient gets refraction, VA, IOP). Same calls as the website's
 // patient record; who recorded what is stamped by the database (0182).
-const today = () => new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
-
 export default function Consult() {
   const { token, visit, member, doctor } = useLocalSearchParams<{ token: string; visit: string; member: string; doctor: string }>()
   const { s } = useSession()
@@ -43,59 +42,11 @@ export default function Consult() {
           {!!p?.conditions?.length && <Text style={st.meta}>Conditions: {p.conditions.join(', ')}</Text>}
         </Card>
         <Err msg={err} />
-        <Vitals biz={biz} member={member} visit={visit} />
+        <VitalsCard biz={biz} member={member} visitId={visit} />
         <Exam visit={visit} doctor={doctor || s.doctorId || ''} recordedBy={s.practitionerId} />
         <VisitNotes visit={visit} token={token} prescriber={s.prescriber} member={member} biz={biz} prescriberId={s.practitionerId} />
       </ScrollView>
     </KeyboardAvoidingView>
-  )
-}
-
-// ── Vitals ──────────────────────────────────────────────────────────────────
-function Vitals({ biz, member, visit }: { biz: string; member: string; visit: string }) {
-  const [list, setList] = useState<Vital[]>([])
-  const [open, setOpen] = useState(false)
-  const [f, setF] = useState({ sys: '', dia: '', pulse: '', temp: '', spo2: '', weight: '', sugar: '' })
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-  const load = useCallback(() => { getVitals(member, biz).then(setList).catch(() => setList([])) }, [biz, member])
-  useEffect(load, [load])
-  const todays = list.filter(v => v.recorded_at.slice(0, 10) === today())
-  const n = (x: string) => (x.trim() ? Number(x) : null)
-  const save = async () => {
-    setBusy(true); setErr('')
-    try {
-      await addVital(member, biz, {
-        bp_systolic: n(f.sys), bp_diastolic: n(f.dia), pulse: n(f.pulse), temperature_c: n(f.temp),
-        spo2: n(f.spo2), weight_kg: n(f.weight), blood_sugar_mg_dl: n(f.sugar), visit_id: visit,
-      })
-      setF({ sys: '', dia: '', pulse: '', temp: '', spo2: '', weight: '', sugar: '' }); setOpen(false); load()
-    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
-  }
-  const line = (v: Vital) => [
-    v.bp_systolic && v.bp_diastolic ? `BP ${v.bp_systolic}/${v.bp_diastolic}` : null, v.pulse ? `Pulse ${v.pulse}` : null,
-    v.temperature_c ? `${v.temperature_c}°C` : null, v.spo2 ? `SpO₂ ${v.spo2}%` : null, v.weight_kg ? `${v.weight_kg} kg` : null,
-    v.blood_sugar_mg_dl ? `Sugar ${v.blood_sugar_mg_dl}` : null].filter(Boolean).join(' · ')
-  return (
-    <Card>
-      <Label>Vitals today</Label>
-      {todays.length === 0 ? <Note>None recorded yet.</Note> : todays.map(v => <Text key={v.id} style={st.body}>{line(v)}</Text>)}
-      {open ? (
-        <>
-          <View style={st.grid}>
-            <Field label="BP systolic" keyboardType="number-pad" value={f.sys} onChangeText={t => setF({ ...f, sys: t })} style={st.half} />
-            <Field label="diastolic" keyboardType="number-pad" value={f.dia} onChangeText={t => setF({ ...f, dia: t })} style={st.half} />
-            <Field label="Pulse" keyboardType="number-pad" value={f.pulse} onChangeText={t => setF({ ...f, pulse: t })} style={st.half} />
-            <Field label="Temp °C" keyboardType="decimal-pad" value={f.temp} onChangeText={t => setF({ ...f, temp: t })} style={st.half} />
-            <Field label="SpO₂ %" keyboardType="number-pad" value={f.spo2} onChangeText={t => setF({ ...f, spo2: t })} style={st.half} />
-            <Field label="Weight kg" keyboardType="decimal-pad" value={f.weight} onChangeText={t => setF({ ...f, weight: t })} style={st.half} />
-            <Field label="Sugar mg/dl" keyboardType="number-pad" value={f.sugar} onChangeText={t => setF({ ...f, sugar: t })} style={st.half} />
-          </View>
-          <Err msg={err} />
-          <View style={st.row}><Btn small label="Save vitals" busy={busy} onPress={save} /><Btn small kind="ghost" label="Cancel" onPress={() => setOpen(false)} /></View>
-        </>
-      ) : <Btn small kind="ghost" label="Record vitals" onPress={() => setOpen(true)} />}
-    </Card>
   )
 }
 

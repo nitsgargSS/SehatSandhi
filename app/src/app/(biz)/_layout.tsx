@@ -10,6 +10,7 @@ export default function BizLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="consult/[token]" options={{ title: 'Consultation' }} />
         <Stack.Screen name="patient/[member]" options={{ title: 'Patient' }} />
+        <Stack.Screen name="stay/[admission]" options={{ title: 'In-patient' }} />
       </Stack>
     </SessionProvider>
   )

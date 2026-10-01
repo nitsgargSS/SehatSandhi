@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { router } from 'expo-router'
 import { supabase } from './supabase'
 import { getMyRole, isClinicalRole, mayPrescribe, type RoleLookup } from '@web/lib/identityApi'
+import { getWards } from '@web/lib/admissionsApi'
 
 // Who is signed in and where — loaded once after login, used by every screen.
 // The same rules as the website's dashboard (src/pages/doctor/Dashboard.tsx):
@@ -21,6 +22,8 @@ export interface Session {
   role: RoleLookup
   clinical: boolean
   prescriber: boolean
+  /** The clinic has wards — the Beds tab shows. */
+  hasWards: boolean
 }
 
 const Ctx = createContext<{ s: Session | null; loading: boolean; error: string; reload: () => void; pick: (id: string) => void }>({
@@ -48,6 +51,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const clinic = clinics.find(c => c.id === picked) ?? clinics[0] ?? null
       const role: RoleLookup = clinic ? await getMyRole(clinic.id) : { role: null, enforced: true }
       const isDoctor = !role.enforced || role.role === 'doctor' || role.role === 'owner'
+      const wards = clinic ? await getWards(clinic.id).catch(() => []) : []
       setS({
         userId: user.id, email: user.email ?? '', name: me?.full_name ?? '',
         practitionerId: me?.id ?? null,
@@ -55,6 +59,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         clinic, clinics, role,
         clinical: isClinicalRole(role),
         prescriber: mayPrescribe(role) && !!me?.id,
+        hasWards: wards.length > 0,
       })
     } catch (err) { setError((err as Error).message) } finally { setLoading(false) }
   }, [picked])
