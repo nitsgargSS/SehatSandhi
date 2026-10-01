@@ -435,6 +435,32 @@ export const itemLabel = (i: Pick<PharmacyItem, 'name' | 'strength' | 'form'> & 
 }
 
 /**
+ * 1 Oct 2026: what a doctor may pick while writing a prescription — the clinic's
+ * own pharmacy items that are stocked AND have unexpired units on hand. Empty
+ * (never an error) for a clinic without the pharmacy.
+ */
+export async function inStockMedicines(businessId: string): Promise<StockRow[]> {
+  try { return (await getStock(businessId)).filter(s => s.is_active !== false && s.qty_available > 0) }
+  catch { return [] }
+}
+
+/** Up to `limit` in-stock items matching what is typed (medicine, brand or strength). */
+export function suggestMedicines(stock: StockRow[], typed: string, limit = 6): StockRow[] {
+  const t = typed.trim().toLowerCase()
+  if (t.length < 2) return []
+  return stock.filter(s => [s.generic_name, s.name, s.strength].some(x => (x ?? '').toLowerCase().includes(t))).slice(0, limit)
+}
+
+/** A prescription line from a stocked item: medicine (form, brand) + strength. */
+export function rxFromStock(s: StockRow): { drug_name: string; strength: string | null; form: string | null } {
+  const generic = (s.generic_name ?? '').trim()
+  const brand = (s.name ?? '').trim()
+  const form = ITEM_FORMS.find(f => f.value === s.form)?.label.split(' (')[0] ?? s.form ?? ''
+  const head = [generic || brand, form].filter(Boolean).join(' ')
+  return { drug_name: generic && brand && generic.toLowerCase() !== brand.toLowerCase() ? `${head} (${brand})` : head, strength: s.strength || null, form: s.form || null }
+}
+
+/**
  * The clinic's medicine that best matches a prescription line, by name.
  * A prescription is free text ("Tab. Dolo 650"), so this is a suggestion the
  * counter confirms, never a silent substitution.

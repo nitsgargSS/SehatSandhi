@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSession } from '../../../lib/session'
 import { supabase } from '../../../lib/supabase'
@@ -9,6 +9,7 @@ import {
 } from '@web/lib/patientsApi'
 import { issuePrescription, getPrescriptions, type Prescription, type PrescriptionItem } from '@web/lib/prescriptionsApi'
 import { setTokenStatus, visitHasDiagnosis } from '@web/lib/queueApi'
+import { inStockMedicines, suggestMedicines, rxFromStock, itemLabel, type StockRow } from '@web/lib/pharmacyApi'
 import { SPECIALITIES } from '@web/types'
 import { Btn, Card, Chip, Err, Field, Label, Note, toDmy, toIso } from '../../../ui/kit'
 import { C } from '../../../ui/theme'
@@ -206,6 +207,10 @@ function VisitNotes({ visit, token, prescriber, member, biz, prescriberId }: {
   const [f, setF] = useState({ complaint: '', diagnosis: '', advice: '', follow: '' })
   const [items, setItems] = useState<PrescriptionItem[]>([{ drug_name: '', dosage: '', duration: '', instructions: '' }])
   const [issued, setIssued] = useState<Prescription[]>([])
+  // Medicines the clinic's pharmacy has in stock — suggested while typing.
+  const [stock, setStock] = useState<StockRow[]>([])
+  const [typingAt, setTypingAt] = useState<number | null>(null)
+  useEffect(() => { if (prescriber) inStockMedicines(biz).then(setStock) }, [prescriber, biz])
   const [busy, setBusy] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
   useEffect(() => {
@@ -263,7 +268,19 @@ function VisitNotes({ visit, token, prescriber, member, biz, prescriberId }: {
           ))}
           {items.map((it, i) => (
             <View key={i} style={st.rx}>
-              <Field placeholder="Medicine, e.g. Moxifloxacin 0.5% eye drops" value={it.drug_name} onChangeText={t => setItems(x => x.map((y, j) => j === i ? { ...y, drug_name: t } : y))} />
+              <Field placeholder={stock.length ? 'Medicine — type to pick from stock' : 'Medicine, e.g. Moxifloxacin 0.5% eye drops'} value={it.drug_name}
+                onFocus={() => setTypingAt(i)}
+                onChangeText={t => { setTypingAt(i); setItems(x => x.map((y, j) => j === i ? { ...y, drug_name: t } : y)) }} />
+              {typingAt === i && suggestMedicines(stock, it.drug_name, 5).map(sv => (
+                <Pressable key={sv.id} style={st.sugg} onPress={() => {
+                  const r = rxFromStock(sv)
+                  setItems(x => x.map((y, j) => j === i ? { ...y, drug_name: [r.drug_name, r.strength].filter(Boolean).join(' '), form: r.form } : y))
+                  setTypingAt(null)
+                }}>
+                  <Text style={st.body}>{itemLabel(sv)}</Text>
+                  <Text style={st.meta}>{sv.qty_available} {sv.unit} in stock</Text>
+                </Pressable>
+              ))}
               <View style={st.row}>
                 <Field placeholder="Dose, e.g. 1 drop 4×/day" value={it.dosage ?? ''} onChangeText={t => setItems(x => x.map((y, j) => j === i ? { ...y, dosage: t } : y))} style={{ flex: 1 }} />
                 <Field placeholder="For, e.g. 7 days" value={it.duration ?? ''} onChangeText={t => setItems(x => x.map((y, j) => j === i ? { ...y, duration: t } : y))} style={{ flex: 1 }} />
@@ -298,4 +315,5 @@ const st = StyleSheet.create({
   flabel: { fontSize: 13, color: C.muted, fontWeight: '600' },
   site: { fontSize: 11.5, color: C.muted, fontWeight: '700' },
   rx: { gap: 6, borderTopWidth: 1, borderTopColor: '#f0ebe1', paddingTop: 8 },
+  sugg: { backgroundColor: '#f3faf6', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10 },
 })
