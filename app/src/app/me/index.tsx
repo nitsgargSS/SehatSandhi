@@ -99,6 +99,11 @@ export default function MyHome() {
         </Card>
       )}
 
+      <Pressable onPress={() => router.push('/me/records')} style={st.health}>
+        <Text style={st.healthT}>📋 मेरा स्वास्थ्य रिकॉर्ड / My health records</Text>
+        <Text style={st.healthS}>Visits, prescriptions, reports, bills — and message your clinic ›</Text>
+      </Pressable>
+
       <View style={st.grid}>
         <Pressable style={[st.tile, { borderColor: '#f3c2d6' }]} onPress={() => router.push('/me/order')}><Text style={st.tileIcon}>💊</Text><Text style={st.tileT}>दवाई घर पर{'\n'}Medicines</Text></Pressable>
         <Pressable style={[st.tile, { borderColor: '#f5b5ae' }]} onPress={() => router.push('/me/ambulance')}><Text style={st.tileIcon}>🚑</Text><Text style={st.tileT}>एम्बुलेंस{'\n'}Ambulance</Text></Pressable>
@@ -150,4 +155,7 @@ const st = StyleSheet.create({
   tile: { width: '47%', backgroundColor: C.card, borderWidth: 1.5, borderRadius: 16, paddingVertical: 16, alignItems: 'center', gap: 4 },
   tileIcon: { fontSize: 28 },
   tileT: { textAlign: 'center', fontWeight: '700', color: C.ink },
+  health: { backgroundColor: C.green, borderRadius: 16, padding: 16, gap: 4 },
+  healthT: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  healthS: { color: '#d6efe4', fontSize: 13 },
 })

@@ -10,6 +10,8 @@ export default function MeLayout() {
       <Stack.Screen name="ambulance" options={{ title: 'Ambulance' }} />
       <Stack.Screen name="insurance" options={{ title: 'Health insurance' }} />
       <Stack.Screen name="rate" options={{ title: 'Rate' }} />
+      <Stack.Screen name="records" options={{ title: 'My health' }} />
+      <Stack.Screen name="chat" options={{ title: 'Message' }} />
     </Stack>
   )
 }

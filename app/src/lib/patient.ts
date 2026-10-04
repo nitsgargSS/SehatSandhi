@@ -117,3 +117,22 @@ export async function uploadPrescription(p: Picked): Promise<string> {
   if (sErr || !data) throw new Error(sErr?.message ?? 'Could not share the photo.')
   return data.signedUrl
 }
+
+// ── 0197: my health records, and messages with my clinics ───────────────────
+export interface Records {
+  members: { id: string; name: string; relation: string; age: number | null; gender: string | null }[]
+  visits: { id: string; member_id: string; date: string | null; clinic: string; business_id: string; doctor: string | null; complaint: string | null; diagnosis: string | null; advice: string | null; follow_up: string | null }[]
+  prescriptions: { id: string; member_id: string; no: string; clinic: string; doctor: string; date: string; diagnosis: string | null }[]
+  lab_reports: { id: string; member_id: string; no: string; clinic: string; by: string | null; date: string }[]
+  bills: { id: string; member_id: string; no: string; clinic: string; date: string; amount: number; type: string }[]
+  discharges: { id: string; member_id: string; no: string; clinic: string; doctor: string | null; date: string; diagnosis: string | null }[]
+  clinics: { business_id: string; name: string; phone: string | null; address: string | null; last_seen: string | null; unread: number }[]
+}
+export const myRecords = () => rpc<Records>('sehat_my_records')
+export const openRecord = (kind: 'rx' | 'lab' | 'bill' | 'ds', id: string) => rpc<string>('sehat_my_open', { p_kind: kind, p_id: id })
+
+export interface ChatMessage { id: number; from: 'patient' | 'clinic'; by: string | null; body: string; photo_url: string | null; at: string; read: boolean }
+export const myThread = (businessId: string) =>
+  rpc<{ clinic: { name: string; phone: string | null; address: string | null }; messages: ChatMessage[] }>('sehat_my_thread', { p_business: businessId })
+export const sendToClinic = (businessId: string, body: string, photoUrl: string | null) =>
+  rpc<ChatMessage>('sehat_my_send', { p_business: businessId, p_body: body, p_photo_url: photoUrl })
