@@ -5,8 +5,8 @@ import SiteFooter from '../components/SiteFooter'
 const content = {
   en: {
     title: 'Refund & Cancellation Policy',
-    updated: 'Last updated: September 2026',
-    intro: 'This policy explains refunds and cancellations for clinics, hospitals, labs and partners who pay Sehatsandhi — a listing fee, or an optional add-on such as WhatsApp messaging. Sehatsandhi is completely free for patients — this policy does not apply to patients, who never pay us directly.',
+    updated: 'Last updated: 4 October 2026',
+    intro: 'This policy explains refunds and cancellations for clinics, hospitals, labs, pharmacies, ambulance services and insurance advisors who pay Sehatsandhi — a listing fee, a lead fee, money added to a wallet, or an optional add-on such as WhatsApp messaging. Sehatsandhi is completely free for patients — they never pay us; section 11 explains who to ask about money paid to a clinic, pharmacy or ambulance.',
     sections: [
       {
         h: '1. Refund Eligibility — 3-Day Window',
@@ -37,23 +37,35 @@ const content = {
         p: 'Approved refunds are processed within 7 business days to the original payment method.',
       },
       {
-        h: '8. Partners on the Free Launch Offer',
-        p: 'Pharmacies, insurance advisors and ambulance services register free during our launch offer and pay nothing upfront, so no refund arises. When the 10% commission on business we bring begins, we will tell you before it starts.',
+        h: '8. Pharmacies and Ambulance Services',
+        p: 'Pharmacies and ambulance services pay a listing fee like clinics, and sections 1 to 7 apply to it in the same way. Sehatsandhi takes no commission on medicine orders or trips, so there is nothing else to refund.',
       },
       {
-        h: '9. Automatic Renewal',
+        h: '9. Insurance Advisors — Lead Fees',
+        p: 'Insurance advisors list free. The lead fee is taken from your wallet only when you choose to accept a lead, and the amount is shown before you accept. If a lead is not genuine — for example the number is wrong or the person never asked for insurance — report it from the lead within 7 days of accepting. If we find the report is right, the fee goes back into your wallet, usually within 2 business days; the lead\'s history shows the decision. A lead that was genuine but did not end in a policy is not refunded.',
+      },
+      {
+        h: '10. Money in Your Wallet',
+        p: 'Money you add to your Sehatsandhi wallet is credit for lead fees and WhatsApp messages. It is not refunded for a change of mind. Any unused balance is refunded to the original payment method within 7 business days when you close your account, or if we remove your listing for any reason other than a breach of our Terms — ask us through the Contact page.',
+      },
+      {
+        h: '11. Money Patients Pay to a Clinic, Pharmacy or Ambulance',
+        p: 'Patients pay clinics, pharmacies and ambulance services directly, never Sehatsandhi. A refund of a consultation fee, of medicines delivered through a medicine order, or of an ambulance fare is decided and paid by that business. If you cannot reach them, or something went wrong, tell us through the Contact page ("A medicine order, ambulance or insurance request") and we will take it up with them.',
+      },
+      {
+        h: '12. Automatic Renewal',
         p: 'If you choose automatic renewal, we tell you before we charge for the next term, and you can switch it off at any time from your dashboard before the renewal date. If you do not choose it, we remind you before your plan ends and charge nothing.',
       },
       {
-        h: '10. Bills Issued by Your Clinic',
+        h: '13. Bills Issued by Your Clinic',
         p: 'Consultation bills, pharmacy bills and receipts that a clinic issues to its own patients through Sehatsandhi are between the patient and that clinic. A refund of a fee or of medicines is decided and paid by the clinic, which records it in its own books using our software — please ask the clinic directly.',
       },
     ],
   },
   hi: {
     title: 'रिफंड और कैंसिलेशन पॉलिसी',
-    updated: 'आखिरी अपडेट: सितंबर 2026',
-    intro: 'यह पॉलिसी उन क्लिनिक, हॉस्पिटल, लैब और पार्टनर्स के लिए रिफंड और कैंसिलेशन को बताती है जो Sehatsandhi को पेमेंट करते हैं — लिस्टिंग फीस, या WhatsApp मैसेजिंग जैसा कोई ऑप्शनल ऐड-ऑन। Sehatsandhi मरीज़ों के लिए बिल्कुल फ्री है — यह पॉलिसी मरीज़ों पर लागू नहीं होती, जो हमें कभी सीधे पे नहीं करते।',
+    updated: 'आखिरी अपडेट: 4 अक्टूबर 2026',
+    intro: 'यह पॉलिसी उन क्लिनिक, हॉस्पिटल, लैब, फार्मेसी, एम्बुलेंस सेवाओं और बीमा सलाहकारों के लिए रिफंड और कैंसिलेशन को बताती है जो Sehatsandhi को पेमेंट करते हैं — लिस्टिंग फीस, लीड फीस, वॉलेट में डाला पैसा, या WhatsApp मैसेजिंग जैसा कोई ऑप्शनल ऐड-ऑन। Sehatsandhi मरीज़ों के लिए बिल्कुल फ्री है — वे हमें कभी पेमेंट नहीं करते; क्लिनिक, फार्मेसी या एम्बुलेंस को दिए पैसे के बारे में किससे पूछें, यह सेक्शन 11 में है।',
     sections: [
       {
         h: '1. रिफंड एलिजिबिलिटी — 3-दिन की विंडो',
@@ -84,15 +96,27 @@ const content = {
         p: 'अप्रूव्ड रिफंड्स 7 बिज़नेस दिनों के अंदर ओरिजिनल पेमेंट मेथड में प्रोसेस किए जाते हैं।',
       },
       {
-        h: '8. मुफ़्त लॉन्च ऑफर वाले पार्टनर',
-        p: 'फार्मेसी, इंश्योरेंस सलाहकार और एम्बुलेंस सर्विस लॉन्च ऑफर के दौरान मुफ़्त रजिस्टर करते हैं और पहले से कुछ पे नहीं करते, इसलिए रिफंड का सवाल नहीं उठता। जब हमारे लाए बिज़नेस पर 10% कमीशन शुरू होगा, तो शुरू होने से पहले हम आपको बताएंगे।',
+        h: '8. फार्मेसी और एम्बुलेंस सेवाएँ',
+        p: 'फार्मेसी और एम्बुलेंस सेवाएँ क्लिनिक की तरह लिस्टिंग फीस देती हैं, और उस पर सेक्शन 1 से 7 वैसे ही लागू होते हैं। Sehatsandhi दवाई के ऑर्डर या यात्राओं पर कोई कमीशन नहीं लेता, इसलिए और कुछ रिफंड करने को नहीं है।',
       },
       {
-        h: '9. ऑटोमैटिक रिन्यूअल',
+        h: '9. बीमा सलाहकार — लीड फीस',
+        p: 'बीमा सलाहकार मुफ़्त लिस्ट होते हैं। लीड फीस आपके वॉलेट से सिर्फ तब कटती है जब आप कोई लीड स्वीकार करना चुनते हैं, और रकम स्वीकार करने से पहले दिखती है। अगर लीड असली नहीं है — जैसे नंबर गलत है या व्यक्ति ने कभी बीमा के बारे में पूछा ही नहीं — तो स्वीकार करने के 7 दिन के अंदर उसी लीड से रिपोर्ट करें। जाँच में रिपोर्ट सही निकली तो फीस आपके वॉलेट में वापस आ जाती है, आमतौर पर 2 बिज़नेस दिनों में; लीड की हिस्ट्री में फ़ैसला दिखता है। जो लीड असली थी पर पॉलिसी में नहीं बदली, उसका रिफंड नहीं होता।',
+      },
+      {
+        h: '10. आपके वॉलेट का पैसा',
+        p: 'Sehatsandhi वॉलेट में डाला गया पैसा लीड फीस और WhatsApp मैसेज के लिए क्रेडिट है। मन बदलने पर इसका रिफंड नहीं होता। बचा हुआ बैलेंस 7 बिज़नेस दिनों में ओरिजिनल पेमेंट मेथड में लौटाया जाता है, जब आप अपना अकाउंट बंद करते हैं, या हम हमारी शर्तों के उल्लंघन के अलावा किसी और कारण से आपकी लिस्टिंग हटाते हैं — संपर्क पेज से हमसे कहें।',
+      },
+      {
+        h: '11. मरीज़ क्लिनिक, फार्मेसी या एम्बुलेंस को जो पैसा देते हैं',
+        p: 'मरीज़ क्लिनिक, फार्मेसी और एम्बुलेंस सेवाओं को सीधे पेमेंट करते हैं, Sehatsandhi को कभी नहीं। कंसल्टेशन फीस, दवाई के ऑर्डर से आई दवाइयों, या एम्बुलेंस किराए का रिफंड वही बिज़नेस तय करता है और देता है। अगर आप उनसे संपर्क नहीं कर पा रहे, या कुछ गलत हुआ, तो संपर्क पेज पर ("दवाई का ऑर्डर, एम्बुलेंस या बीमा का अनुरोध") हमें बताइए — हम उनसे बात करेंगे।',
+      },
+      {
+        h: '12. ऑटोमैटिक रिन्यूअल',
         p: 'अगर आप ऑटोमैटिक रिन्यूअल चुनते हैं, तो अगली अवधि का चार्ज करने से पहले हम आपको बताते हैं, और रिन्यूअल की तारीख से पहले आप इसे कभी भी अपने डैशबोर्ड से बंद कर सकते हैं। अगर आप इसे नहीं चुनते, तो आपका प्लान खत्म होने से पहले हम आपको याद दिलाते हैं और कुछ चार्ज नहीं करते।',
       },
       {
-        h: '10. आपके क्लिनिक द्वारा दिए गए बिल',
+        h: '13. आपके क्लिनिक द्वारा दिए गए बिल',
         p: 'कंसल्टेशन बिल, फार्मेसी बिल और रसीदें जो कोई क्लिनिक Sehatsandhi के ज़रिए अपने मरीज़ों को देता है, वे मरीज़ और उस क्लिनिक के बीच हैं। फीस या दवाइयों का रिफंड क्लिनिक तय करता है और देता है, और उसे हमारे सॉफ्टवेयर से अपने हिसाब में दर्ज करता है — कृपया सीधे क्लिनिक से पूछें।',
       },
     ],

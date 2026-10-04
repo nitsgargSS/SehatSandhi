@@ -6,6 +6,8 @@ import { WA_LINK, CALL_NUMBER, prettyPhone } from '../types'
 import { activeConfig } from '../lib/env'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter, { SOCIALS } from '../components/SiteFooter'
+import { phoneProblem } from '../lib/credentials'
+import PhoneError from '../components/PhoneError'
 
 // A contact page with an address on it, because the footer alone is not what
 // gets checked.
@@ -50,7 +52,7 @@ const content: Record<'en' | 'hi', Copy> = {
     title: 'Contact Us',
     subtitle: "We're a small team, and a person reads every message.",
     waTitle: 'WhatsApp',
-    waDesc: 'Book an appointment, find a doctor, pharmacy or ambulance nearby — our WhatsApp assistant answers straight away, any time.',
+    waDesc: 'Book an appointment, order medicines for home delivery, ask for an ambulance or for a health-insurance advisor — our WhatsApp assistant answers straight away, any time. In an emergency, call 108 first.',
     waCta: 'Message us on WhatsApp',
     waOnly: 'Just send "Hi" to start. To speak to someone, call us or use the form below.',
     callTitle: 'Call us',
@@ -71,7 +73,8 @@ const content: Record<'en' | 'hi', Copy> = {
       topics: [
         { v: 'booking', l: 'Booking an appointment' },
         { v: 'listing', l: 'Listing my clinic or business' },
-        { v: 'partner', l: 'Pharmacy, insurance or ambulance partnership' },
+        { v: 'request', l: 'A medicine order, ambulance or insurance request' },
+        { v: 'partner', l: 'Joining as a pharmacy, ambulance service or insurance advisor' },
         { v: 'billing', l: 'Billing, refund or cancellation' },
         { v: 'listing_change', l: 'Correcting or removing a listing' },
         { v: 'privacy', l: 'My personal data — see, correct, delete or stop messages' },
@@ -91,8 +94,12 @@ const content: Record<'en' | 'hi', Copy> = {
         p: 'Message us on WhatsApp. Sehatsandhi is completely free for patients — we never ask a patient for payment.',
       },
       {
+        h: 'A medicine order, ambulance or insurance request',
+        p: 'Something wrong with a pharmacy, an ambulance or an insurance advisor you were connected to — no reply, a different price, or a problem with the service? Use the form below with your order or request number (it starts MO-, AM- or IN-), or call us. We take it up with them. In an emergency, call 108.',
+      },
+      {
         h: 'Listing your clinic or business',
-        p: 'Message us on WhatsApp and we can register you over a call in Hindi, or register yourself from the business page.',
+        p: 'Message us on WhatsApp and we can register you over a call in Hindi, or register yourself from the business page. Pharmacies, ambulance services and insurance advisors register the same way.',
       },
       {
         h: 'Billing, refunds and cancellations',
@@ -115,7 +122,7 @@ const content: Record<'en' | 'hi', Copy> = {
     title: 'संपर्क करें',
     subtitle: 'हम एक छोटी टीम हैं, और हर मैसेज एक इंसान पढ़ता है।',
     waTitle: 'WhatsApp',
-    waDesc: 'अपॉइंटमेंट बुक करें, पास में डॉक्टर, फार्मेसी या एम्बुलेंस ढूंढें — हमारा WhatsApp असिस्टेंट तुरंत जवाब देता है, किसी भी समय।',
+    waDesc: 'अपॉइंटमेंट बुक करें, घर पर दवाई मंगाएँ, एम्बुलेंस या स्वास्थ्य बीमा सलाहकार के लिए पूछें — हमारा WhatsApp असिस्टेंट तुरंत जवाब देता है, किसी भी समय। इमरजेंसी में पहले 108 पर कॉल करें।',
     waCta: 'WhatsApp पर मैसेज करें',
     waOnly: 'शुरू करने के लिए बस "Hi" भेजें। किसी से बात करने के लिए कॉल करें या नीचे का फ़ॉर्म भरें।',
     callTitle: 'कॉल करें',
@@ -134,7 +141,8 @@ const content: Record<'en' | 'hi', Copy> = {
       topics: [
         { v: 'booking', l: 'अपॉइंटमेंट बुक करना' },
         { v: 'listing', l: 'अपनी क्लिनिक या बिज़नेस लिस्ट करना' },
-        { v: 'partner', l: 'फ़ार्मेसी, इंश्योरेंस या एम्बुलेंस पार्टनरशिप' },
+        { v: 'request', l: 'दवाई का ऑर्डर, एम्बुलेंस या बीमा का अनुरोध' },
+        { v: 'partner', l: 'फ़ार्मेसी, एम्बुलेंस सेवा या बीमा सलाहकार के रूप में जुड़ना' },
         { v: 'billing', l: 'बिलिंग, रिफंड या कैंसिलेशन' },
         { v: 'listing_change', l: 'लिस्टिंग ठीक कराना या हटवाना' },
         { v: 'privacy', l: 'मेरा व्यक्तिगत डेटा — देखना, ठीक कराना, हटवाना या मैसेज बंद कराना' },
@@ -156,8 +164,12 @@ const content: Record<'en' | 'hi', Copy> = {
         p: 'हमें WhatsApp पर मैसेज करें। Sehatsandhi मरीज़ों के लिए बिल्कुल फ्री है — हम कभी किसी मरीज़ से पेमेंट नहीं मांगते।',
       },
       {
+        h: 'दवाई का ऑर्डर, एम्बुलेंस या बीमा का अनुरोध',
+        p: 'जिस फ़ार्मेसी, एम्बुलेंस या बीमा सलाहकार से आपको जोड़ा गया, उसमें कुछ गलत हुआ — जवाब नहीं आया, कीमत अलग निकली, या सेवा में दिक्कत? नीचे का फ़ॉर्म अपने ऑर्डर या अनुरोध नंबर (MO-, AM- या IN- से शुरू) के साथ भरें, या हमें कॉल करें। हम उनसे बात करेंगे। इमरजेंसी में 108 पर कॉल करें।',
+      },
+      {
         h: 'अपनी क्लिनिक या बिज़नेस लिस्ट करना',
-        p: 'हमें WhatsApp पर मैसेज करें, हम आपको हिंदी में कॉल पर रजिस्टर कर सकते हैं — या बिज़नेस पेज से खुद रजिस्टर करें।',
+        p: 'हमें WhatsApp पर मैसेज करें, हम आपको हिंदी में कॉल पर रजिस्टर कर सकते हैं — या बिज़नेस पेज से खुद रजिस्टर करें। फ़ार्मेसी, एम्बुलेंस सेवाएँ और बीमा सलाहकार भी ऐसे ही रजिस्टर करते हैं।',
       },
       {
         h: 'बिलिंग, रिफंड और कैंसिलेशन',
@@ -336,6 +348,7 @@ function ContactForm({ c, lang }: { c: Copy['form']; lang: string }) {
     e.preventDefault()
     setErr('')
     if (!f.phone.trim() && !f.email.trim()) { setErr(c.needContact); return }
+    { const bad = phoneProblem(f.phone, false); if (bad) { setErr(bad); return } }
     setBusy(true)
     try {
       const { url, anon } = activeConfig()
@@ -375,7 +388,8 @@ function ContactForm({ c, lang }: { c: Copy['form']; lang: string }) {
         <label className="block"><span className={label}>{c.name} *</span>
           <input className="input-field" value={f.name} onChange={set('name')} required maxLength={100} autoComplete="name" /></label>
         <label className="block"><span className={label}>{c.phone}</span>
-          <input className="input-field" value={f.phone} onChange={set('phone')} inputMode="tel" maxLength={15} autoComplete="tel" placeholder="98765 43210" /></label>
+          <input className="input-field" value={f.phone} onChange={set('phone')} inputMode="tel" maxLength={15} autoComplete="tel" placeholder="98765 43210" />
+          <PhoneError value={f.phone} /></label>
         <label className="block"><span className={label}>{c.email}</span>
           <input className="input-field" type="email" value={f.email} onChange={set('email')} maxLength={200} autoComplete="email" /></label>
         <label className="block"><span className={label}>{c.topic}</span>

@@ -35,10 +35,10 @@ const VERTICAL_TITLES: Record<string, string> = {
 const VERTICAL_BLURBS: Record<string, string> = {
   clinic: 'Patients in your pincodes find you on WhatsApp and book a time — no app for them to install, no call for you to miss.',
   hospital: 'Every consultant gets their own profile and calendar, under one hospital listing and one bill.',
-  pharmacy: 'Home-delivery pharmacies: prescriptions come straight to you from patients nearby, to fill in store or deliver to the door.',
+  pharmacy: 'Medicine orders from patients in the PIN codes you deliver to: accept, send your price with any delivery fee, and deliver once they approve. Stock, bills and your team included — no commission on orders.',
   lab: 'Test bookings arrive with the patient details, and you can offer home sample collection.',
-  insurance: 'Local advisors get leads from families already looking for cover, to meet in person and close — not cold calling.',
-  ambulance: 'Ambulance requests from your own area — emergencies, transfers and scheduled trips — the moment they are needed.',
+  insurance: 'Families near you who are looking for health cover, as leads. List free and pay a flat fee only for the leads you accept — each one yours alone. No cut of your commission.',
+  ambulance: 'Requests from the PIN codes you serve, on your drivers\' phones the moment they come in — emergencies, transfers and scheduled trips. Listing fee only, no commission on trips.',
 }
 
 export default function BusinessLanding() {
@@ -271,22 +271,22 @@ export default function BusinessLanding() {
           </>
         )}
 
-        {/* Partner programme — pharmacies, insurance advisors, ambulance
-            services. Said as what joining gets them, not as a rate card: they
-            join free during the launch offer, and the later commission is one
-            line of fine print (PARTNER_OFFER), never the headline. */}
+        {/* Partner programme — insurance advisors since 0189/0191 moved
+            pharmacies and ambulance services to the listing fee (any vertical
+            the plan does not bill monthly shows here). Free to list; the flat
+            lead fee is one line of fine print (PARTNER_OFFER), never the headline. */}
         {partners.length > 0 && (
           <>
             <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: '#4f7a68', textAlign: 'center', margin: '56px 0 8px' }}>
               Partner programme
             </div>
             <h3 style={{ fontSize: 'clamp(21px,5vw,26px)', fontWeight: 800, color: BIZ.ink, textAlign: 'center', margin: '0 0 10px', letterSpacing: '-.02em' }}>
-              Pharmacies, insurance advisors and ambulance services
+              {partners.map(p => verticalNoun(p.key)).join(', ')}
             </h3>
             <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 auto 26px', maxWidth: 640, lineHeight: 1.6 }}>
               Sehatsandhi brings you patients and families from your own area who need what you offer. {PARTNER_OFFER.body}
             </p>
-            <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
+            <div className={`grid gap-5 grid-cols-1 ${partners.length === 1 ? 'max-w-md mx-auto' : partners.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
               {partners.map(v => (
                 <div key={v.key} style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: 'clamp(22px,5vw,28px)', display: 'flex', flexDirection: 'column' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>

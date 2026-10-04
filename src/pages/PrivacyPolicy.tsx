@@ -13,7 +13,11 @@ import { OPEN_ANALYTICS_SETTINGS } from '../components/AnalyticsConsent'
 // aspirational: retention comes from the pg_cron purge jobs (0059, 0171, 0172),
 // document retention (0058: 10 years by default, set by the clinic), lab report
 // files (0169: the lab's plan, 1 year by default), and the providers are the
-// ones the code calls. Log retention and STOP/START: 0173. If any of that changes, this page changes with it.
+// ones the code calls. Log retention and STOP/START: 0173. Medicine orders,
+// ambulance requests and insurance leads (what a partner sees, and for how
+// long): 0189, 0191, 0192 — updated 4 Oct 2026, with extra and foreign phone
+// numbers and the correction log (0193), the tips opt-in (0187) and app push
+// notifications (0185). If any of that changes, this page changes with it.
 // Still for a lawyer to review before relying on it.
 
 type Section = { h: string; p?: string; list?: string[]; after?: string }
@@ -21,7 +25,7 @@ type Section = { h: string; p?: string; list?: string[]; after?: string }
 const content: Record<'en' | 'hi', { title: string; updated: string; intro: string; sections: Section[]; settings: string }> = {
   en: {
     title: 'Privacy Policy',
-    updated: 'Last updated: 29 September 2026',
+    updated: 'Last updated: 4 October 2026',
     intro: `Sehatsandhi ("we", "us") is operated by NG Technologies. This notice explains, in plain words, what personal data we process, why, for how long, who else handles it, and how you can use your rights or complain. It is given under the Digital Personal Data Protection Act, 2023 and the Digital Personal Data Protection Rules, 2025, and the Information Technology Act, 2000 and the rules under it where they apply. We treat health information as sensitive personal data.`,
     settings: 'Change your Google Analytics choice',
     sections: [
@@ -40,8 +44,13 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `Records a clinic keeps with our software (as its processor): visits, vital signs, allergies, diagnoses, examinations, prescriptions, lab tests and results, uploaded reports and documents, operations, admissions and discharge, bills, payments and medicines dispensed. If your clinic turns on voice notes, the audio of the consultation is converted to text so the doctor can check it; see section 4.`,
           `Documents sent to you: when your clinic or lab asks, we send your prescription, bill, discharge summary or lab report as a secure link on WhatsApp, SMS or email.`,
           `Ratings: if you reply to a rating request after a visit, we keep the score and any words you add.`,
+          `Ordering medicines (WhatsApp): your name, delivery address and PIN code, the medicines you ask for and, if you send it, a photo of your prescription. Every pharmacy that delivers to your PIN code sees only the area and the medicines. The first pharmacy to accept sees your prescription photo and first name so it can price the order; your full name, phone number and address go to that one pharmacy only after you approve its price on your order link. It can see them for 7 days after delivery. We also keep what the pharmacy charged and, if you tell us, what you paid and your rating.`,
+          `Asking for an ambulance (WhatsApp): your name, phone number, pickup address and PIN code, and what is needed. Because it may be an emergency, every ambulance service covering your PIN code is alerted, and the one that accepts sees your phone number and pickup address straight away, for 7 days after the trip. We always give you 108 and nearby numbers first; you never have to wait for us.`,
+          `Asking about health insurance (WhatsApp): your name, phone number, PIN code, the cover you want, who it is for (with ages) and when to call. Licensed advisors serving your PIN code see what you want but not who you are; only the one advisor who accepts gets your name and number, for 90 days. Your medical records are never shared with an advisor. You can tell us on your request link if they did not call, and say afterwards whether you bought a policy.`,
+          `Health tips from Sehatsandhi: only if you tap "Yes, send me health tips" on our WhatsApp. We keep that consent and the message as proof. Send STOP at any time to stop.`,
+          `Your phone numbers and corrections: a clinic may keep more than one number for you, including a number outside India, and may correct your name, age or gender if it was typed wrong; every correction is recorded with who made it.`,
           `Clinic and marketing messages: a clinic may send you health camp, reminder or offer messages only if you agreed — for example by scanning its QR code or telling the clinic — and only that clinic. To stop them from every clinic at once, send STOP on our WhatsApp; send START to turn them back on. Appointment, prescription, bill and report messages continue either way (section 7).`,
-          `Doctors, businesses and their staff: name, phone, email, qualification and registration number (checked against the National Medical Commission's Indian Medical Register), clinic address, GST details if you give them, sign-in details for each staff member, and payments of fees — made through Razorpay; we never see or store your card, UPI PIN or bank password.`,
+          `Doctors, businesses and their staff: name, phone, email, qualification and registration number (checked against the National Medical Commission's Indian Medical Register), a pharmacy's drug licence and an insurance advisor's IRDAI licence or POSP code, clinic address, GST details if you give them, sign-in details for each staff member, who did each step of an order, trip or lead, wallet top-ups and lead fees, and payments of fees — made through Razorpay; we never see or store your card, UPI PIN or bank password. If staff use the Sehatsandhi app, we keep their phone's notification token so alerts reach them; it is removed when they sign out.`,
           `Contact form: your name, phone or email and your message, so we can reply.`,
           `Using our website: anonymous usage events on our own systems — pages opened, what speciality or area was searched, which listings were shown, viewed or tapped, and when the WhatsApp or call button was used — with a temporary per-tab identifier that is discarded when you close the tab, your device type and the website you came from. Search text is removed from page addresses. These are never linked to your name or phone number, and are not recorded at all if your browser sends "Do Not Track".`,
           `Approximate location of a visit: worked out from your internet address by a lookup service (ipwho.is), accurate at best to a town and often wrong on mobile networks. We keep one location per visit, not a history, never linked to your name, phone or bookings. Not recorded under "Do Not Track".`,
@@ -60,13 +69,14 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
       },
       {
         h: '4. Who else handles your data',
-        p: `We share your booking with the doctor or partner you choose, so they can serve you. To run the service we use these providers, each under contract and only for the purpose shown:`,
+        p: `We share your booking with the doctor or partner you choose, so they can serve you — and a medicine order, ambulance request or insurance request with the pharmacy, ambulance service or advisor as described in section 2. Once a partner has your details, it is responsible for using them only to serve you. To run the service we use these providers, each under contract and only for the purpose shown:`,
         list: [
           `Supabase — secure hosting of our database and files (servers in Singapore).`,
           `Vercel — hosting of this website.`,
           `AiSensy and Meta (WhatsApp Business) — sending and receiving WhatsApp messages. Meta's own terms apply to WhatsApp; its Cloud API keeps message content for up to 30 days.`,
           `MSG91 — SMS and email; Zoho ZeptoMail — email.`,
           `Razorpay — payments.`,
+          `Expo (expo.dev) — delivering notifications to the Sehatsandhi app on staff phones; a notification carries only a short line such as an order number or a patient's first name.`,
           `Sarvam AI — converting a consultation voice note to text, only if your clinic uses voice notes. The audio is deleted as soon as it is converted, and in any case within 7 days.`,
           `Anthropic — reading the doctor-checked text of a voice note to draft medicine suggestions for the doctor to accept or change, only if the clinic uses this. No audio is sent.`,
           `Google — Analytics (only with your consent) and Places (to look up a clinic's address when a business registers).`,
@@ -95,6 +105,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `Records of messages we sent (number, template and delivery status): 12 months. Queued notifications and emails: 90 days after they were sent or failed.`,
           `WhatsApp conversation records: 12 months after the conversation closed; the record that a number wrote to us: 24 months after its last message.`,
           `Search logs of the WhatsApp assistant (no phone number is kept): 24 months.`,
+          `Medicine orders, ambulance requests and insurance requests: kept with business records (below); a partner stops seeing your contact details 7 days after a delivery or trip, and 90 days after accepting an insurance request.`,
           `Bookings, patient and business accounts, bills and payment records: while the account is in use and afterwards for as long as tax, accounting and medical-record laws require; then deleted or made anonymous. You can ask for earlier erasure where the law allows (section 7).`,
           `Logs of which staff member searched or opened a patient's record: kept with that record, for security and audit, and for at least one year as the DPDP Rules require.`,
         ],
@@ -140,7 +151,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
   },
   hi: {
     title: 'गोपनीयता नीति',
-    updated: 'आखिरी अपडेट: 29 सितंबर 2026',
+    updated: 'आखिरी अपडेट: 4 अक्टूबर 2026',
     intro: `Sehatsandhi ("हम") NG Technologies द्वारा संचालित है। यह सूचना आसान शब्दों में बताती है कि हम कौनसा व्यक्तिगत डेटा प्रोसेस करते हैं, क्यों, कितने समय तक, और कौन-कौन उसे संभालता है, और आप अपने अधिकारों का इस्तेमाल या शिकायत कैसे कर सकते हैं। यह डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम, 2023 (DPDP Act) और DPDP नियम, 2025, और जहां लागू हो वहां सूचना प्रौद्योगिकी अधिनियम, 2000 और उसके नियमों के तहत दी गई है। स्वास्थ्य से जुड़ी जानकारी को हम संवेदनशील व्यक्तिगत डेटा मानते हैं।`,
     settings: 'Google Analytics के लिए अपनी पसंद बदलें',
     sections: [
@@ -159,8 +170,13 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `क्लिनिक हमारे सॉफ्टवेयर पर जो रिकॉर्ड रखता है (उसके प्रोसेसर के रूप में): विज़िट, वाइटल्स, एलर्जी, डायग्नोसिस, जांच, पर्चे, लैब टेस्ट और रिज़ल्ट, अपलोड की गई रिपोर्ट और दस्तावेज़, ऑपरेशन, भर्ती और डिस्चार्ज, बिल, पेमेंट और दी गई दवाइयां। अगर आपका क्लिनिक वॉइस नोट्स चालू करता है, तो कंसल्टेशन की ऑडियो को टेक्स्ट में बदला जाता है ताकि डॉक्टर उसे जांच सकें; सेक्शन 4 देखें।`,
           `आपको भेजे जाने वाले दस्तावेज़: जब आपका क्लिनिक या लैब कहता है, हम आपका पर्चा, बिल, डिस्चार्ज समरी या लैब रिपोर्ट WhatsApp, SMS या ईमेल पर एक सुरक्षित लिंक के रूप में भेजते हैं।`,
           `रेटिंग: विज़िट के बाद रेटिंग के मैसेज का जवाब देने पर हम स्कोर और आपके लिखे शब्द रखते हैं।`,
+          `दवाई मंगाना (WhatsApp): आपका नाम, डिलीवरी का पता और PIN कोड, आप कौनसी दवाइयाँ चाहते हैं और, अगर आप भेजें, पर्ची की फ़ोटो। आपके PIN कोड में डिलीवरी करने वाली हर फ़ार्मेसी को सिर्फ इलाका और दवाइयाँ दिखती हैं। जो फ़ार्मेसी पहले स्वीकार करती है, उसे कीमत बताने के लिए पर्ची की फ़ोटो और आपका पहला नाम दिखता है; आपका पूरा नाम, फ़ोन नंबर और पता सिर्फ उसी फ़ार्मेसी को, और सिर्फ तब मिलता है जब आप अपने ऑर्डर लिंक पर उसकी कीमत को हाँ कहते हैं। डिलीवरी के 7 दिन बाद तक वह इन्हें देख सकती है। फ़ार्मेसी ने कितना लिया, और अगर आप बताएँ तो आपने कितना दिया और आपकी रेटिंग, हम यह भी रखते हैं।`,
+          `एम्बुलेंस मंगाना (WhatsApp): आपका नाम, फ़ोन नंबर, जहाँ से लेना है वह पता और PIN कोड, और क्या ज़रूरत है। यह इमरजेंसी हो सकती है, इसलिए आपके PIN कोड की हर एम्बुलेंस सेवा को अलर्ट जाता है, और जो स्वीकार करती है उसे आपका फ़ोन नंबर और पता तुरंत दिखता है — यात्रा के 7 दिन बाद तक। हम हमेशा पहले 108 और पास के नंबर देते हैं; आपको हमारा इंतज़ार कभी नहीं करना पड़ता।`,
+          `स्वास्थ्य बीमा के बारे में पूछना (WhatsApp): आपका नाम, फ़ोन नंबर, PIN कोड, कैसा कवर चाहिए, किसके लिए (उम्र सहित) और कब कॉल करें। आपके PIN कोड के लाइसेंस वाले सलाहकारों को दिखता है कि आप क्या चाहते हैं, पर आप कौन हैं यह नहीं; आपका नाम और नंबर सिर्फ उस एक सलाहकार को मिलता है जो स्वीकार करता है — 90 दिन के लिए। आपके मेडिकल रिकॉर्ड किसी सलाहकार को कभी नहीं दिए जाते। अगर सलाहकार ने कॉल नहीं किया तो आप अपने लिंक पर बता सकते हैं, और बाद में बता सकते हैं कि पॉलिसी ली या नहीं।`,
+          `Sehatsandhi से हेल्थ टिप्स: सिर्फ तब जब आप हमारे WhatsApp पर "हाँ, हेल्थ टिप्स भेजें" दबाएँ। हम वह सहमति और मैसेज सबूत के तौर पर रखते हैं। बंद करने के लिए कभी भी STOP भेजें।`,
+          `आपके फ़ोन नंबर और सुधार: क्लिनिक आपके एक से ज़्यादा नंबर रख सकता है, भारत के बाहर का नंबर भी, और गलत लिखा नाम, उम्र या लिंग सुधार सकता है; हर सुधार किसने किया, यह दर्ज होता है।`,
           `क्लिनिक और मार्केटिंग मैसेज: कोई क्लिनिक आपको हेल्थ कैंप, रिमाइंडर या ऑफ़र के मैसेज सिर्फ तभी भेज सकता है जब आपने सहमति दी हो — जैसे उसका QR कोड स्कैन करके या क्लिनिक को बताकर — और सिर्फ वही क्लिनिक। सभी क्लिनिक्स के ये मैसेज एक साथ रोकने के लिए हमारे WhatsApp पर STOP भेजें; फिर से शुरू करने के लिए START भेजें। अपॉइंटमेंट, पर्चे, बिल और रिपोर्ट के मैसेज दोनों हालात में आते रहेंगे (सेक्शन 7)।`,
-          `डॉक्टर, बिज़नेस और उनका स्टाफ़: नाम, फ़ोन, ईमेल, क्वालिफ़िकेशन और रजिस्ट्रेशन नंबर (राष्ट्रीय चिकित्सा आयोग के इंडियन मेडिकल रजिस्टर से जांचा जाता है), क्लिनिक का पता, दिए जाने पर GST डिटेल्स, हर स्टाफ़ सदस्य की लॉगिन डिटेल्स, और फ़ीस के पेमेंट — जो Razorpay से होते हैं; हम आपका कार्ड, UPI PIN या बैंक पासवर्ड न देखते हैं न रखते हैं।`,
+          `डॉक्टर, बिज़नेस और उनका स्टाफ़: नाम, फ़ोन, ईमेल, क्वालिफ़िकेशन और रजिस्ट्रेशन नंबर (राष्ट्रीय चिकित्सा आयोग के इंडियन मेडिकल रजिस्टर से जांचा जाता है), फ़ार्मेसी का ड्रग लाइसेंस और बीमा सलाहकार का IRDAI लाइसेंस या POSP कोड, क्लिनिक का पता, दिए जाने पर GST डिटेल्स, हर स्टाफ़ सदस्य की लॉगिन डिटेल्स, ऑर्डर, यात्रा या लीड का हर कदम किसने उठाया, वॉलेट टॉप-अप और लीड फ़ीस, और फ़ीस के पेमेंट — जो Razorpay से होते हैं; हम आपका कार्ड, UPI PIN या बैंक पासवर्ड न देखते हैं न रखते हैं। स्टाफ़ Sehatsandhi ऐप इस्तेमाल करे तो अलर्ट पहुँचाने के लिए हम उनके फ़ोन का नोटिफ़िकेशन टोकन रखते हैं; लॉग आउट करने पर वह हट जाता है।`,
           `संपर्क फ़ॉर्म: आपका नाम, फ़ोन या ईमेल और आपका मैसेज, ताकि हम जवाब दे सकें।`,
           `हमारी वेबसाइट का इस्तेमाल: हमारे अपने सिस्टम पर बिना नाम के इस्तेमाल के इवेंट — कौनसे पेज खुले, कौनसी स्पेशलिटी या इलाका खोजा गया, कौनसी लिस्टिंग दिखी, देखी या टैप हुई, और WhatsApp या कॉल बटन कब दबा — एक टेम्पररी पर-टैब आइडेंटिफायर के साथ जो टैब बंद होते ही खत्म हो जाता है, आपके डिवाइस का प्रकार और आप किस वेबसाइट से आए। पेज एड्रेस से खोज का टेक्स्ट हटा दिया जाता है। ये कभी आपके नाम या फ़ोन से नहीं जोड़े जाते, और अगर आपका ब्राउज़र "Do Not Track" भेजता है तो बिल्कुल रिकॉर्ड नहीं होते।`,
           `विज़िट की अनुमानित लोकेशन: आपके इंटरनेट एड्रेस से एक लुकअप सर्विस (ipwho.is) द्वारा निकाली जाती है, ज़्यादा से ज़्यादा कस्बे तक सही और मोबाइल नेटवर्क पर अक्सर गलत। हम हर विज़िट की एक ही लोकेशन रखते हैं, इतिहास नहीं, और यह कभी आपके नाम, फ़ोन या बुकिंग से नहीं जुड़ती। "Do Not Track" पर रिकॉर्ड नहीं होती।`,
@@ -179,13 +195,14 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
       },
       {
         h: '4. आपका डेटा और कौन संभालता है',
-        p: `आपकी बुकिंग हम उसी डॉक्टर या पार्टनर के साथ शेयर करते हैं जिसे आप चुनते हैं, ताकि वे आपकी सेवा कर सकें। सेवा चलाने के लिए हम ये प्रोवाइडर इस्तेमाल करते हैं, हर एक कॉन्ट्रैक्ट के तहत और सिर्फ बताए गए काम के लिए:`,
+        p: `आपकी बुकिंग हम उसी डॉक्टर या पार्टनर के साथ शेयर करते हैं जिसे आप चुनते हैं, ताकि वे आपकी सेवा कर सकें — और दवाई का ऑर्डर, एम्बुलेंस या बीमा का अनुरोध उस फ़ार्मेसी, एम्बुलेंस सेवा या सलाहकार के साथ, जैसा सेक्शन 2 में बताया है। आपकी जानकारी मिलने के बाद पार्टनर की ज़िम्मेदारी है कि वह उसे सिर्फ आपकी सेवा के लिए इस्तेमाल करे। सेवा चलाने के लिए हम ये प्रोवाइडर इस्तेमाल करते हैं, हर एक कॉन्ट्रैक्ट के तहत और सिर्फ बताए गए काम के लिए:`,
         list: [
           `Supabase — हमारे डेटाबेस और फ़ाइलों की सुरक्षित होस्टिंग (सर्वर सिंगापुर में)।`,
           `Vercel — इस वेबसाइट की होस्टिंग।`,
           `AiSensy और Meta (WhatsApp Business) — WhatsApp मैसेज भेजना और पाना। WhatsApp पर Meta की अपनी शर्तें लागू होती हैं; उसका Cloud API मैसेज का कंटेंट 30 दिन तक रखता है।`,
           `MSG91 — SMS और ईमेल; Zoho ZeptoMail — ईमेल।`,
           `Razorpay — पेमेंट।`,
+          `Expo (expo.dev) — स्टाफ़ के फ़ोन पर Sehatsandhi ऐप में नोटिफ़िकेशन पहुँचाना; नोटिफ़िकेशन में सिर्फ छोटी लाइन होती है, जैसे ऑर्डर नंबर या मरीज़ का पहला नाम।`,
           `Sarvam AI — कंसल्टेशन के वॉइस नोट को टेक्स्ट में बदलना, सिर्फ तभी जब आपका क्लिनिक वॉइस नोट्स इस्तेमाल करे। ऑडियो बदलते ही डिलीट हो जाती है, और हर हाल में 7 दिन के अंदर।`,
           `Anthropic — डॉक्टर द्वारा जांचे गए वॉइस नोट के टेक्स्ट को पढ़कर दवाइयों के सुझाव का ड्राफ़्ट बनाना, जिसे डॉक्टर मानें या बदलें — सिर्फ तभी जब क्लिनिक इसे इस्तेमाल करे। कोई ऑडियो नहीं भेजी जाती।`,
           `Google — Analytics (सिर्फ आपकी सहमति से) और Places (बिज़नेस रजिस्टर होते समय क्लिनिक का पता ढूंढने के लिए)।`,
@@ -214,6 +231,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `हमारे भेजे मैसेज का रिकॉर्ड (नंबर, टेम्पलेट और डिलीवरी स्टेटस): 12 महीने। कतार में रखे नोटिफ़िकेशन और ईमेल: भेजे जाने या फ़ेल होने के 90 दिन बाद।`,
           `WhatsApp बातचीत के रिकॉर्ड: बातचीत बंद होने के 12 महीने बाद; किसी नंबर ने हमें मैसेज किया, इसका रिकॉर्ड: उसके आखिरी मैसेज के 24 महीने बाद।`,
           `WhatsApp असिस्टेंट के सर्च लॉग (कोई फ़ोन नंबर नहीं रखा जाता): 24 महीने।`,
+          `दवाई के ऑर्डर, एम्बुलेंस और बीमा के अनुरोध: बिज़नेस रिकॉर्ड के साथ रखे जाते हैं (नीचे); डिलीवरी या यात्रा के 7 दिन बाद, और बीमा अनुरोध स्वीकार करने के 90 दिन बाद पार्टनर को आपकी संपर्क जानकारी दिखना बंद हो जाती है।`,
           `बुकिंग, मरीज़ और बिज़नेस अकाउंट, बिल और पेमेंट रिकॉर्ड: जब तक अकाउंट इस्तेमाल में है, और उसके बाद उतने समय तक जितना टैक्स, अकाउंटिंग और मेडिकल रिकॉर्ड के कानून ज़रूरी करें; फिर डिलीट या बिना पहचान वाले कर दिए जाते हैं। जहां कानून इजाज़त दे, आप पहले डिलीट करने को कह सकते हैं (सेक्शन 7)।`,
           `किस स्टाफ़ ने मरीज़ का रिकॉर्ड खोजा या खोला, इसका लॉग: सुरक्षा और ऑडिट के लिए उसी रिकॉर्ड के साथ रखा जाता है, और DPDP नियमों के अनुसार कम से कम एक साल।`,
         ],
