@@ -26,6 +26,7 @@ const PharmacyBillPage = lazy(() => import('./pages/doctor/PharmacyBillPage'))
 const LabReportPage = lazy(() => import('./pages/LabReportPage'))
 const OrderTrack = lazy(() => import('./pages/OrderTrack'))
 const AmbulanceTrack = lazy(() => import('./pages/AmbulanceTrack'))
+const InsuranceTrack = lazy(() => import('./pages/InsuranceTrack'))
 const LabFilePage = lazy(() => import('./pages/LabFilePage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
@@ -224,6 +225,7 @@ export default function App() {
           <Route path="/lab/:token" element={<LabReportPage />} />
           <Route path="/o/:token" element={<OrderTrack />} />
           <Route path="/a/:token" element={<AmbulanceTrack />} />
+          <Route path="/i/:token" element={<InsuranceTrack />} />
 
           {/* The discharge summary, same no-login token pattern. Its link lasts
               a year rather than 90 days: this is the document patients are told

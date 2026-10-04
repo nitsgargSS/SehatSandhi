@@ -8,7 +8,7 @@ export interface Understood {
   pin?: string
   place?: string
   day?: 0 | 1 | 2
-  other?: 'pharmacy' | 'lab' | 'ambulance'
+  other?: 'pharmacy' | 'lab' | 'ambulance' | 'insurance'
   /** A word that might be a town — confirmed against the place list before use. */
   guess?: string
 }
@@ -45,6 +45,7 @@ export function understand(raw: string): Understood {
   if (/(pharmacy|medical store|chemist|dawai|dawa|दवा)/.test(t)) u.other = 'pharmacy'
   else if (/(\blab\b|test|blood test|jaanch|janch|x-?ray|ultrasound|जांच)/.test(t)) u.other = 'lab'
   else if (/(ambulance|एम्बुलेंस)/.test(t)) u.other = 'ambulance'
+  else if (/(insurance|bima|beema|बीमा|policy|mediclaim)/.test(t)) u.other = 'insurance'
   for (const [code, words] of WORDS) {
     if (words.some(w => t.includes(w))) { u.speciality = code; break }
   }

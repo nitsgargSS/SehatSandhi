@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package, Ambulance } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package, Ambulance, ShieldCheck } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -15,6 +15,7 @@ import RevenuePanel from './RevenuePanel'
 import PharmacyPanel from './PharmacyPanel'
 import OrdersPanel from './OrdersPanel'
 import TripsPanel from './TripsPanel'
+import LeadsPanel from './LeadsPanel'
 import CollectionsPanel from './CollectionsPanel'
 import PatientReportPanel from './PatientReportPanel'
 import LabPanel from './LabPanel'
@@ -124,7 +125,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -1036,8 +1037,13 @@ export default function DoctorDashboard() {
   // 0191: an ambulance service's requests and trips.
   const isAmbulance = myVertical === 'ambulance'
   const handlesTrips = isAmbulance && (!role.enforced || ['owner', 'manager', 'driver'].includes(role.role ?? ''))
+  // 0192: an insurance advisor's leads.
+  const handlesLeads = myVertical === 'insurance' && (!role.enforced || ['owner', 'manager'].includes(role.role ?? ''))
 
   const tabs = [
+    ...(handlesLeads ? [
+      { id: 'leads', label: 'Leads', icon: <ShieldCheck className="w-4 h-4" /> },
+    ] : []),
     ...(handlesTrips ? [
       { id: 'trips', label: 'Trips', icon: <Ambulance className="w-4 h-4" /> },
     ] : []),
@@ -1143,7 +1149,7 @@ export default function DoctorDashboard() {
   useEffect(() => {
     if (loading || tabs.length === 0) return
     if (tabs.some(tb => tb.id === tab)) return
-    const fallback = tabs.find(tb => tb.id === 'trips') ?? tabs.find(tb => tb.id === 'orders') ?? tabs.find(tb => tb.id === 'reports') ?? tabs[0]
+    const fallback = tabs.find(tb => tb.id === 'leads') ?? tabs.find(tb => tb.id === 'trips') ?? tabs.find(tb => tb.id === 'orders') ?? tabs.find(tb => tb.id === 'reports') ?? tabs[0]
     setTab(fallback.id as typeof tab)
     // tabIds rather than tabs: the array is rebuilt every render and would
     // otherwise re-run this forever.
@@ -1889,6 +1895,9 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ PHARMACY — in-house dispensing (0158) ══════════ */}
+        {tab === 'leads' && doctor && handlesLeads && (
+          <LeadsPanel businessId={doctor.id} role={role.enforced ? role.role : 'owner'} />
+        )}
         {tab === 'trips' && doctor && handlesTrips && (
           <TripsPanel businessId={doctor.id} role={role.enforced ? role.role : 'owner'} />
         )}

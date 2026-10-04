@@ -176,7 +176,7 @@ const FALLBACK_VERTICALS: Record<string, VerticalBilling> = {
   hospital:  { vertical: 'hospital',  monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
   lab:       { vertical: 'lab',       monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
   pharmacy:  { vertical: 'pharmacy',  monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
-  insurance: { vertical: 'insurance', monthlyEnabled: false, commissionEnabled: true,  commissionPercent: 10, commissionBasis: 'your IRDA commission' },
+  insurance: { vertical: 'insurance', monthlyEnabled: false, commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
   ambulance: { vertical: 'ambulance', monthlyEnabled: true,  commissionEnabled: false, commissionPercent: 0,  commissionBasis: null },
 }
 
@@ -501,9 +501,9 @@ export async function computePrice(
     resolveDoctorCount(supabase, businessId),
     resolveModules(supabase, requestedModules),
   ])
-  // 0189/0191: a pharmacy or an ambulance service has no OPD or IPD to buy — whatever was ticked is dropped,
+  // 0189/0191/0192: a pharmacy, ambulance service or insurance advisor has no OPD or IPD to buy — whatever was ticked is dropped,
   // and the businesses trigger keeps both switched off regardless.
-  const moduleLines = vb.vertical === 'pharmacy' || vb.vertical === 'ambulance' ? [] : tickedModules
+  const moduleLines = ['pharmacy', 'ambulance', 'insurance'].includes(vb.vertical) ? [] : tickedModules
 
   // With a listing, the headcount comes from the database and the client cannot
   // influence it — that is the number charged. Without one, a hospital is still

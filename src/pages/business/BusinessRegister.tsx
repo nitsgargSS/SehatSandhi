@@ -31,6 +31,7 @@ import { track } from '../../lib/analytics'
 // cannot describe different models.
 import { headcountFor, applyHeadcount, describeDoctorRate } from '../../../supabase/functions/_shared/headcount'
 import { money, num } from '../../lib/format'
+import { getLeadFee } from '../../lib/insuranceApi'
 
 // Design 2b — 3-step onboarding wizard.
 // Layout: desktop = dark left step-rail + content pane; tablet (<900px) =
@@ -173,6 +174,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // than assuming per-pincode tiers, so switching plans in admin changes the
   // wizard with no deploy.
   const { plan, tiers, verticals: vbRows, terms } = usePricing()
+  // 0192: what an insurance lead costs — said where the partner offer is.
+  const [leadFee, setLeadFee] = useState(100)
+  useEffect(() => { getLeadFee().then(setLeadFee).catch(() => {}) }, [])
   const vb = vbRows.find(v => v.vertical === vertical)
 
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -1421,7 +1425,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                           switched on the moment the payment clears — 0060.
                           NOT multiplied by consultant headcount: a ward system
                           is one system whoever is using it. */}
-                      {!onCommission && vertical !== 'pharmacy' && vertical !== 'ambulance' && careModules.length > 0 && (
+                      {!onCommission && vertical !== 'pharmacy' && vertical !== 'ambulance' && vertical !== 'insurance' && careModules.length > 0 && (
                         <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
                           <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
                             Which systems do you want? <span style={{ color: BIZ.green }}>Free</span>
@@ -1525,14 +1529,14 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               {PARTNER_OFFER.body} No card is needed.
                             </p>
                             <p style={{ fontSize: 13, color: BIZ.mutedWarm, lineHeight: 1.6, margin: '10px 0 0' }}>
-                              {PARTNER_OFFER.later} {verticalObj.commissionNote}
+                              {PARTNER_OFFER.later(leadFee)} {verticalObj.commissionNote}
                             </p>
                             <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 16, cursor: 'pointer' }}>
                               <input type="checkbox" checked={acceptedTerms}
                                 onChange={e => { setAcceptedTerms(e.target.checked); if (e.target.checked) setError('') }}
                                 style={{ width: 18, height: 18, accentColor: BIZ.green, marginTop: 1, flex: '0 0 auto', cursor: 'pointer' }} />
                               <span style={{ fontSize: 13.5, color: BIZ.ink, fontWeight: 600, lineHeight: 1.5 }}>
-                                I understand registration is free during the launch offer, and that later a {commissionPct}% commission will apply only to business that comes to me through Sehatsandhi.
+                                I understand listing is free, and that I pay ₹{leadFee} from my prepaid wallet for each lead I choose to accept.
                               </span>
                             </label>
                           </div>

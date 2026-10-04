@@ -115,6 +115,12 @@ export default function Find() {
           [{ label: 'Call 108', say: '__tel__108' }, { label: 'Ambulance on WhatsApp', say: `__wa__Ambulance${ctx.current.area ? ` — ${ctx.current.area}` : ''}` }])
         return
       }
+      // 0192: health insurance — a licensed advisor near them calls back.
+      if (u.other === 'insurance') {
+        bot('A licensed health insurance advisor near you can call you back. Tell our WhatsApp assistant what cover you want — only the advisor who takes it gets your number.',
+          [{ label: 'Insurance on WhatsApp', say: `__wa__Health insurance${ctx.current.area ? ` — ${ctx.current.area}` : ''}` }])
+        return
+      }
       if (u.other) {
         const what = u.other === 'lab' ? 'a lab test' : 'an ambulance'
         bot(`For ${what}, our WhatsApp assistant finds the nearest one for you right away.`,
