@@ -17,9 +17,7 @@ export default function Start() {
   }, [])
   return (
     <View style={s.wrap}>
-      <Image source={require('../../assets/icon.png')} style={s.logo} />
-      <Text style={s.title}>Sehatsandhi</Text>
-      <Text style={s.sub}>स्वास्थ्य की नई साझेदारी</Text>
+      <Image source={require('../../assets/logo-full.png')} style={s.logo} resizeMode="contain" accessibilityLabel="Sehatsandhi — स्वास्थ्य की नई साझेदारी" />
       <Pressable style={[s.btn, { backgroundColor: '#0b7d57' }]} onPress={() => router.push('/me')}>
         <Text style={s.btnText}>For patients — My Sehatsandhi</Text>
         <Text style={[s.soon, { color: '#d6efe4' }]}>medicines · ambulance · insurance · my requests</Text>
@@ -37,7 +35,7 @@ export default function Start() {
 
 const s = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },
-  logo: { width: 96, height: 96, borderRadius: 20 },
+  logo: { width: 260, height: 208 },
   title: { fontSize: 28, fontWeight: '800', color: C.ink },
   sub: { fontSize: 14, color: C.muted, marginBottom: 24 },
   btn: { width: '100%', backgroundColor: C.green, paddingVertical: 15, borderRadius: 14, alignItems: 'center' },
