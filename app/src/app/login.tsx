@@ -84,7 +84,7 @@ export default function Login() {
         <Btn busy={busy} disabled={!addr.includes('@')} onPress={sendCode} label="Send me a code" />
       )}
 
-      <Text style={s.note}>No password yet? Use a code, or set one on sehatsandhi.com → Business login → Set a password.</Text>
+      <Text style={s.note}>No password yet? Use a code, or set one on sehatsandhi.com → Login → Set a password.</Text>
     </KeyboardAvoidingView>
   )
 }

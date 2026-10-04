@@ -1,35 +1,41 @@
 import { useEffect } from 'react'
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { C } from '../ui/theme'
 
 // Two doors: patients find a doctor (no login, like the WhatsApp bot), and
 // businesses sign in with their website login. A saved session skips in.
 export default function Start() {
+  // ?home=1 — the person chose to come back here, so stay.
+  const { home } = useLocalSearchParams<{ home?: string }>()
   useEffect(() => {
+    if (home) return
     // 0196: a saved patient session opens the patient's side; a business one the queue.
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) return
       const { error } = await supabase.rpc('sehat_me')
       router.replace(error ? '/queue' : '/me')
     })
-  }, [])
+  }, [home])
   return (
     <View style={s.wrap}>
-      <Image source={require('../../assets/icon.png')} style={s.logo} />
-      <Text style={s.title}>Sehatsandhi</Text>
-      <Text style={s.sub}>स्वास्थ्य की नई साझेदारी</Text>
+      <Image source={require('../../assets/logo-full.png')} style={s.logo} resizeMode="contain" accessibilityLabel="Sehatsandhi — स्वास्थ्य की नई साझेदारी" />
       <Pressable style={[s.btn, { backgroundColor: '#0b7d57' }]} onPress={() => router.push('/me')}>
         <Text style={s.btnText}>For patients — My Sehatsandhi</Text>
         <Text style={[s.soon, { color: '#d6efe4' }]}>medicines · ambulance · insurance · my requests</Text>
       </Pressable>
       <Pressable style={[s.btn, s.ghost]} onPress={() => router.push('/find')}>
-        <Text style={[s.btnText, { color: C.ink }]}>Find a doctor</Text>
-        <Text style={s.soon}>no login · book on WhatsApp</Text>
+        <Text style={[s.btnText, { color: C.ink }]}>Book an appointment</Text>
+        <Text style={s.soon}>doctors · hospitals · lab tests · medicines · ambulance</Text>
+      </Pressable>
+      <Pressable style={[s.btn, s.ghost, { borderColor: '#f3d9a4' }]} onPress={() => router.push('/camps')}>
+        <Text style={[s.btnText, { color: C.ink }]}>🎁 Camps &amp; offers</Text>
+        <Text style={s.soon}>free health camps and special prices near you</Text>
       </Pressable>
       <Pressable style={s.btn} onPress={() => router.push('/login')}>
-        <Text style={s.btnText}>Business login</Text>
+        <Text style={s.btnText}>Login</Text>
+        <Text style={[s.soon, { color: '#d6efe4' }]}>doctors · clinic staff · pharmacies · labs · partners</Text>
       </Pressable>
     </View>
   )
@@ -37,7 +43,7 @@ export default function Start() {
 
 const s = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 },
-  logo: { width: 96, height: 96, borderRadius: 20 },
+  logo: { width: 260, height: 208 },
   title: { fontSize: 28, fontWeight: '800', color: C.ink },
   sub: { fontSize: 14, color: C.muted, marginBottom: 24 },
   btn: { width: '100%', backgroundColor: C.green, paddingVertical: 15, borderRadius: 14, alignItems: 'center' },

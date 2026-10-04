@@ -33,14 +33,14 @@ export const translations: Tree = {
 
 
   loginPage: {
-    title: { en: 'Doctor Login', hi: 'डॉक्टर Login' },
+    title: { en: 'Login', hi: 'लॉगिन' },
     subtitle: { en: 'Access your Sehatsandhi dashboard', hi: 'अपना Sehatsandhi डैशबोर्ड एक्सेस करें' },
     labelEmail: { en: 'Email Address', hi: 'ईमेल एड्रेस' },
     labelPassword: { en: 'Password', hi: 'पासवर्ड' },
     btnLogin: { en: 'Login →', hi: 'Login →' },
     btnSigningIn: { en: 'Signing in...', hi: 'साइन इन हो रहा है...' },
-    newDoctor: { en: 'New doctor?', hi: 'नए डॉक्टर हैं?' },
-    registerHere: { en: 'Register here', hi: 'यहां रजिस्टर करें' },
+    newDoctor: { en: 'New to Sehatsandhi?', hi: 'Sehatsandhi पर नए हैं?' },
+    registerHere: { en: 'Register your clinic or business', hi: 'अपना क्लिनिक या बिज़नेस रजिस्टर करें' },
     forgotPassword: { en: 'Forgot password?', hi: 'पासवर्ड भूल गए?' },
   },
 

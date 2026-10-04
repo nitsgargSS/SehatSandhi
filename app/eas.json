@@ -27,6 +27,15 @@
         "EXPO_PUBLIC_IS_STAGING": "false"
       },
       "channel": "production"
+    },
+    "store": {
+      "extends": "production",
+      "distribution": "store",
+      "channel": "production",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {}

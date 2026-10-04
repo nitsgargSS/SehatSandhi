@@ -4,12 +4,13 @@ import { router, useFocusEffect } from 'expo-router'
 import { myRecords, openRecord, type Records } from '../../lib/patient'
 import { Btn, Card, Chip, Err, Label, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
+import { withPatient } from '../../ui/PatientGate'
 
 // My health (0197): everyone on this number — visits, prescriptions, lab
 // reports, bills, discharge summaries — and the clinics they have been to.
 const d = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
 
-export default function RecordsScreen() {
+function RecordsScreen() {
   const [r, setR] = useState<Records | null>(null)
   const [who, setWho] = useState<string>('')
   const [err, setErr] = useState('')
@@ -97,3 +98,5 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   bold: { fontWeight: '700', color: C.ink, fontSize: 15 },
 })
+
+export default withPatient(RecordsScreen, 'Your records are the ones clinics saved on your number.')

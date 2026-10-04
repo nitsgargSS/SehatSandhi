@@ -4,11 +4,12 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { rate, type RateKind } from '../../lib/patient'
 import { Btn, Card, Chip, Err, Field, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
+import { withPatient } from '../../ui/PatientGate'
 
 // One rating (0196): a visit, a medicine order, an ambulance trip or an
 // insurance advisor — opened from "Waiting for your rating" or the reminder
 // notification.
-export default function RateScreen() {
+function RateScreen() {
   const { kind, id, title } = useLocalSearchParams<{ kind: RateKind; id: string; title?: string }>()
   const [stars, setStars] = useState(0)
   const [review, setReview] = useState('')
@@ -66,3 +67,5 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
   body: { color: C.ink, fontSize: 15 },
 })
+
+export default withPatient(RateScreen, 'Ratings come only from real visits on your number.')

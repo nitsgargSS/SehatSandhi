@@ -22,9 +22,10 @@ export default function RootLayout() {
     <>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerTintColor: C.ink, contentStyle: { backgroundColor: C.cream } }}>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ title: 'Business login' }} />
-        <Stack.Screen name="find" options={{ title: 'Find a doctor' }} />
+        <Stack.Screen name="index" options={{ headerShown: false, title: 'Home' }} />
+        <Stack.Screen name="login" options={{ title: 'Login' }} />
+        <Stack.Screen name="find" options={{ title: 'Book an appointment' }} />
+        <Stack.Screen name="camps" options={{ title: 'Camps & offers' }} />
         <Stack.Screen name="me" options={{ headerShown: false }} />
         <Stack.Screen name="(biz)" options={{ headerShown: false }} />
       </Stack>
