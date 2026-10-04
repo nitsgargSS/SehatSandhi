@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
 import { WA_LINK, AMBULANCE_NUMBER } from '../types'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, loginIcon, PAGE } from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
+import { qrDataUrl } from '../lib/qr'
 
 // Design 1a / Turn-4 — patient homepage, "Warm Care".
 //
@@ -27,6 +28,7 @@ interface Strings {
   trust_verified: string; trust_free: string; trust_wa: string
   biz_cta: string; login_cta: string; biz_title: string; biz_sub: string
   faq_nav: string; faq_title: string; faq_sub: string; faqs: { q: string; a: string }[]
+  scan_title: string; scan_sub: string; scan_steps: string[]; scan_tap: string; scan_show: string
 }
 
 const DICT: Record<'en' | 'hi', Strings> = {
@@ -45,6 +47,11 @@ const DICT: Record<'en' | 'hi', Strings> = {
     trust_verified: 'Verified providers', trust_free: 'Free for you', trust_wa: 'All on WhatsApp',
     biz_cta: 'Manage Business',
     login_cta: 'Business login',
+    scan_title: 'Scan to find health services in your area',
+    scan_sub: 'Doctors, medicines, lab tests, ambulance and insurance near you — on WhatsApp, free.',
+    scan_steps: ['Point your phone camera at this code', 'WhatsApp opens with "Hi" already typed', 'Press send — our assistant replies straight away'],
+    scan_tap: 'Open WhatsApp',
+    scan_show: 'Or show this code to someone so they can scan it.',
     biz_title: 'Are you a healthcare provider?',
     biz_sub: 'Doctors, hospitals, pharmacies, labs, insurance & ambulance — list your business, or log in to manage it.',
     faq_nav: 'Questions',
@@ -84,6 +91,11 @@ const DICT: Record<'en' | 'hi', Strings> = {
     trust_verified: 'सत्यापित प्रोवाइडर', trust_free: 'आपके लिए मुफ़्त', trust_wa: 'सब कुछ व्हाट्सएप पर',
     biz_cta: 'बिज़नेस मैनेज करें',
     login_cta: 'बिज़नेस लॉगिन',
+    scan_title: 'अपने इलाके की स्वास्थ्य सेवाएँ खोजने के लिए स्कैन करें',
+    scan_sub: 'डॉक्टर, दवाई, लैब टेस्ट, एम्बुलेंस और बीमा — आपके पास, व्हाट्सएप पर, मुफ़्त।',
+    scan_steps: ['फ़ोन का कैमरा इस कोड पर रखें', 'व्हाट्सएप "Hi" लिखा हुआ खुल जाएगा', 'भेजें दबाएँ — हमारा असिस्टेंट तुरंत जवाब देगा'],
+    scan_tap: 'व्हाट्सएप खोलें',
+    scan_show: 'या यह कोड किसी और को दिखाएँ ताकि वे स्कैन कर सकें।',
     biz_title: 'आप हेल्थकेयर प्रोवाइडर हैं?',
     biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब, बीमा और एम्बुलेंस — अपना बिज़नेस लिस्ट करें, या लॉग इन करके मैनेज करें।',
     faq_nav: 'सवाल',
@@ -251,6 +263,46 @@ function DoctorTeaser({ t }: { t: Strings }) {
   )
 }
 
+// Scan to chat: a QR that opens our WhatsApp with "Hi" typed (WA_LINK — the
+// one opening the AiSensy flow answers). Large beside the categories on a
+// computer, where the phone in your hand scans the screen; on a phone, a tap
+// to open WhatsApp comes first and the code is there to show someone else.
+function ScanCard({ t, link, wide }: { t: Strings; link: string; wide?: boolean }) {
+  const [src, setSrc] = useState('')
+  useEffect(() => { qrDataUrl(link, 480).then(setSrc).catch(() => setSrc('')) }, [link])
+  const qr = src
+    ? <img src={src} alt={t.scan_title} width={wide ? 180 : 116} height={wide ? 180 : 116}
+        style={{ display: 'block', borderRadius: 12, background: '#fff', padding: 8, border: '1px solid #e2dccf', flex: '0 0 auto' }} />
+    : <div style={{ width: wide ? 180 : 116, height: wide ? 180 : 116, borderRadius: 12, background: '#fff', border: '1px solid #e2dccf', flex: '0 0 auto' }} />
+  return (
+    <div style={{ background: '#fff', border: '1px solid #ece5d7', borderRadius: 20, padding: wide ? '26px 30px' : '18px 18px',
+                  display: 'flex', gap: wide ? 30 : 16, alignItems: 'center', flexWrap: wide ? 'nowrap' : 'wrap' }}>
+      {wide && qr}
+      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+        <div style={{ fontSize: wide ? 22 : 16.5, fontWeight: 800, color: '#14201c', lineHeight: 1.25, letterSpacing: '-.01em' }}>{t.scan_title}</div>
+        <div style={{ fontSize: wide ? 15 : 13.5, color: '#5f6b64', marginTop: 6, lineHeight: 1.5 }}>{t.scan_sub}</div>
+        {wide ? (
+          <ol style={{ margin: '14px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
+            {t.scan_steps.map((st, i) => (
+              <li key={st} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14.5, color: '#3f4a44' }}>
+                <span style={{ width: 24, height: 24, borderRadius: 999, background: '#0E9F6E', color: '#fff', fontSize: 12.5, fontWeight: 800,
+                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>{i + 1}</span>
+                {st}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <a href={link} target="_blank" rel="noreferrer"
+            style={{ display: 'inline-flex', marginTop: 12, background: '#25D366', color: '#fff', fontWeight: 800, fontSize: 14.5,
+                     padding: '10px 16px', borderRadius: 12, textDecoration: 'none' }}>{t.scan_tap}</a>
+        )}
+        {!wide && <div style={{ fontSize: 12, color: '#8a8f86', marginTop: 8 }}>{t.scan_show}</div>}
+      </div>
+      {!wide && qr}
+    </div>
+  )
+}
+
 function HowItWorksCard({ t, dark }: { t: Strings; dark?: boolean }) {
   const bg = dark ? 'linear-gradient(140deg,#0E9F6E,#0b7d57)' : 'transparent'
   const titleColor = dark ? '#fff' : '#14201c'
@@ -329,6 +381,7 @@ export default function PatientHome() {
               {CATS.map(c => <CategoryTile key={c.key} c={c} />)}
             </div>
           </div>
+          <div style={{ padding: '16px 20px 4px' }}><ScanCard t={t} link={waLink} /></div>
           <div style={{ padding: '16px 20px 4px' }}><DoctorTeaser t={t} /></div>
           <div style={{ padding: '18px 22px 8px' }}><HowItWorksCard t={t} /></div>
           {/* Distinct id per layout. Both are in the DOM and CSS hides one, so a
@@ -378,6 +431,9 @@ export default function PatientHome() {
             {CATS.map(c => <CategoryTile key={c.key} c={c} big />)}
           </div>
         </div>
+
+        {/* scan to chat — the phone in your hand scans the screen */}
+        <div style={{ padding: '24px 0 0' }}><ScanCard t={t} link={waLink} wide /></div>
 
         {/* full-width doctor teaser band */}
         <div style={{ padding: '20px 0 0' }}><DoctorTeaser t={t} /></div>
