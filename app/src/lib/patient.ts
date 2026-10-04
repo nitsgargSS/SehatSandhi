@@ -139,6 +139,6 @@ export const sendToClinic = (businessId: string, body: string, photoUrl: string 
 
 // 0198: book inside the app on the signed-in number, and cancel a future booking.
 export interface Booked { id: string; doctor: string | null; clinic: string; address: string | null; phone: string | null; at: string; name: string }
-export const bookAppointment = (businessId: string, practitionerId: string, slot: string, name: string, age: number | null) =>
+export const bookAppointment = (businessId: string, practitionerId: string | null, slot: string, name: string, age: number | null) =>
   rpc<Booked>('sehat_app_book', { p_business: businessId, p_practitioner: practitionerId, p_slot: slot, p_name: name, p_age: age })
 export const cancelBooking = (id: string) => rpc<null>('sehat_app_cancel_booking', { p_id: id })
