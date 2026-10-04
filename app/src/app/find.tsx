@@ -45,7 +45,7 @@ const KINDS: { id: Kind; label: string; en: string; hi: string }[] = [
   { id: 'insurance', label: '🛡️ Insurance', en: 'Insurance', hi: 'बीमा' },
 ]
 const KIND_WORD: Record<Kind, string> = { hospital: 'hospitals', lab: 'labs', pharmacy: 'pharmacies', ambulance: 'ambulance services', insurance: 'insurance advisors' }
-const kindChips = () => KINDS.map(k => ({ label: k.label, say: `__kind__${k.id}` }))
+const kindChips = () => [...KINDS.map(k => ({ label: k.label, say: `__kind__${k.id}` })), { label: '🎁 Camps & offers', say: '__go__/camps' }]
 
 // Every kind of doctor we list (the tests, labs and pharmacy have their own paths).
 const NOT_DOCTORS = ['LAB', 'PATH', 'RAD', 'PHARMACY']
@@ -165,6 +165,10 @@ export default function Find() {
     setBusy(true)
     try {
       const u: ReturnType<typeof understand> = preset ? { other: preset } : understand(said)
+      if (!preset && /(camp|shivir|शिविर|कैंप|offer|ऑफर|discount)/i.test(said)) {
+        bot('Free health camps and special offers near you:', [{ label: '🎁 Camps & offers', say: '__go__/camps' }])
+        return
+      }
       // Pharmacies, labs, hospitals, ambulances and advisors: listed here too.
       if (u.other) { ctx.current.kind = u.other; ctx.current.speciality = undefined }
       if (u.speciality) { ctx.current.speciality = u.speciality; ctx.current.kind = undefined }

@@ -26,8 +26,12 @@ export default function Start() {
         <Text style={[s.soon, { color: '#d6efe4' }]}>medicines · ambulance · insurance · my requests</Text>
       </Pressable>
       <Pressable style={[s.btn, s.ghost]} onPress={() => router.push('/find')}>
-        <Text style={[s.btnText, { color: C.ink }]}>Find a doctor</Text>
-        <Text style={s.soon}>no login · book on WhatsApp</Text>
+        <Text style={[s.btnText, { color: C.ink }]}>Book an appointment</Text>
+        <Text style={s.soon}>doctors · hospitals · lab tests · medicines · ambulance</Text>
+      </Pressable>
+      <Pressable style={[s.btn, s.ghost, { borderColor: '#f3d9a4' }]} onPress={() => router.push('/camps')}>
+        <Text style={[s.btnText, { color: C.ink }]}>🎁 Camps &amp; offers</Text>
+        <Text style={s.soon}>free health camps and special prices near you</Text>
       </Pressable>
       <Pressable style={s.btn} onPress={() => router.push('/login')}>
         <Text style={s.btnText}>Business login</Text>
