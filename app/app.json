@@ -23,7 +23,8 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "CAMERA"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -73,6 +74,13 @@
         "projectId": "117c9d8b-828b-487d-9db9-758ffe12d8b5"
       }
     },
-    "owner": "ng-technologies"
+    "owner": "ng-technologies",
+    "updates": {
+      "url": "https://u.expo.dev/117c9d8b-828b-487d-9db9-758ffe12d8b5",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
