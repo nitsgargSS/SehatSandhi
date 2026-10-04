@@ -1,20 +1,23 @@
 import { useEffect } from 'react'
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { C } from '../ui/theme'
 
 // Two doors: patients find a doctor (no login, like the WhatsApp bot), and
 // businesses sign in with their website login. A saved session skips in.
 export default function Start() {
+  // ?home=1 — the person chose to come back here, so stay.
+  const { home } = useLocalSearchParams<{ home?: string }>()
   useEffect(() => {
+    if (home) return
     // 0196: a saved patient session opens the patient's side; a business one the queue.
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) return
       const { error } = await supabase.rpc('sehat_me')
       router.replace(error ? '/queue' : '/me')
     })
-  }, [])
+  }, [home])
   return (
     <View style={s.wrap}>
       <Image source={require('../../assets/logo-full.png')} style={s.logo} resizeMode="contain" accessibilityLabel="Sehatsandhi — स्वास्थ्य की नई साझेदारी" />
