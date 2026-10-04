@@ -46,6 +46,30 @@ export function isValidPhone(raw: string | null | undefined): boolean {
   return normPhone(raw) !== null
 }
 
+/**
+ * What is wrong with a typed mobile number, in words — or null when it is a
+ * good ten-digit Indian mobile (+91 or a leading 0 allowed). Every phone box
+ * uses this, so nine digits or eleven are caught before Save (4 Oct 2026).
+ * Empty is fine when the field is optional. `foreign` (patients' numbers only)
+ * also accepts + and a country code, 8–15 digits.
+ */
+export function phoneProblem(raw: string | null | undefined, required = true, foreign = false): string | null {
+  const typed = (raw ?? '').trim()
+  if (!typed) return required ? 'Enter the 10-digit mobile number.' : null
+  let d = typed.replace(/[^0-9]/g, '')
+  // A patient's number may be foreign: + and the country code (sehat_patient_phone).
+  if (foreign && (typed.startsWith('+') || typed.startsWith('00'))) {
+    const cc = typed.startsWith('00') ? d.slice(2) : d
+    if (!cc.startsWith('91')) return /^[1-9][0-9]{7,14}$/.test(cc) ? null
+      : 'Incorrect number — a foreign number is + and the country code, then 8 to 15 digits in all.'
+  }
+  if (d.length === 12 && d.startsWith('91')) d = d.slice(2)
+  else if (d.length === 11 && d.startsWith('0')) d = d.slice(1)
+  if (d.length !== 10) return `Incorrect number — a mobile number has 10 digits, this has ${d.length}.`
+  if (!/^[6-9]/.test(d)) return 'Incorrect number — an Indian mobile number starts with 6, 7, 8 or 9.'
+  return null
+}
+
 /** A council registration number. Free-form across states, so only presence. */
 export function isValidRegNumber(raw: string | null | undefined): boolean {
   return (raw ?? '').trim().length > 0

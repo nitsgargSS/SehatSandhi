@@ -814,3 +814,72 @@ export async function getPractitionerSpeciality(practitionerId: string): Promise
   if (error) return null
   return (data?.speciality as string) ?? null
 }
+
+// ── 0193: corrections and the register ─────────────────────────────────────
+
+/** Correct a patient's name, gender, age / date of birth or phone. Any staff
+ *  member at the clinic; every change is logged with who made it. A phone
+ *  another household already has moves this one person into that household. */
+export async function updatePatientDetails(businessId: string, memberId: string, d: {
+  fullName?: string; gender?: string; ageYears?: number | null; dateOfBirth?: string | null; phone?: string
+}): Promise<{ changed: number; moved_household: boolean; household_size: number }> {
+  const { data, error } = await supabase.rpc('sehat_update_patient_details', {
+    p_business: businessId, p_member: memberId,
+    p_full_name: d.fullName ?? null, p_gender: d.gender ?? null, p_age_years: d.ageYears ?? null,
+    p_date_of_birth: d.dateOfBirth || null, p_phone: d.phone ?? null,
+  })
+  oops(error)
+  return data as { changed: number; moved_household: boolean; household_size: number }
+}
+
+/** Who else is on this person's phone number — a correction changes it for them too. */
+export async function patientHousehold(businessId: string, memberId: string): Promise<{ phone: string; others: string[] }> {
+  const { data, error } = await supabase.rpc('sehat_patient_household', { p_business: businessId, p_member: memberId })
+  oops(error)
+  return (data ?? { phone: '', others: [] }) as { phone: string; others: string[] }
+}
+
+export interface DetailChange { field: string; old_value: string | null; new_value: string | null; changed_by_name: string | null; changed_at: string }
+export async function patientDetailChanges(businessId: string, memberId: string): Promise<DetailChange[]> {
+  const { data, error } = await supabase.rpc('sehat_patient_detail_changes', { p_business: businessId, p_member: memberId })
+  oops(error)
+  return (data ?? []) as DetailChange[]
+}
+
+export type RegisterKind = 'visits' | 'patients' | 'new' | 'returning' | 'admissions' | 'follow_ups' | 'missed' | 'all'
+export interface RegisterRow {
+  on_date: string | null; kind: string; patient_member_id: string; full_name: string; phone: string | null; mrn: string | null
+  age_years: number | null; gender: string | null; pin_code: string | null; city: string | null
+  practitioner_id: string | null; doctor: string | null; visit_id: string | null
+  chief_complaint: string | null; diagnosis: string | null; follow_up_due: string | null
+  first_seen: string | null; visits_total: number
+}
+/** Who came when (0193) — the people behind every number on the Patient report
+ *  and My practice, counted the same way. */
+export async function visitRegister(businessId: string, o: {
+  from?: string | null; to?: string | null; doctorId?: string | null; query?: string; kind?: RegisterKind
+}): Promise<RegisterRow[]> {
+  const { data, error } = await supabase.rpc('sehat_visit_register', {
+    p_business: businessId, p_from: o.from ?? null, p_to: o.to ?? null,
+    p_doctor: o.doctorId ?? null, p_query: o.query?.trim() || null, p_kind: o.kind ?? 'visits',
+  })
+  oops(error)
+  return (data ?? []) as RegisterRow[]
+}
+
+/** 0193: other numbers a patient can be reached on. The saved main number is
+ *  never edited — another is added instead. */
+export interface OtherPhone { id: string; phone: string; label: string | null; added_by_name: string | null; created_at: string }
+export async function patientPhones(businessId: string, memberId: string): Promise<OtherPhone[]> {
+  const { data, error } = await supabase.rpc('sehat_patient_phones', { p_business: businessId, p_member: memberId })
+  oops(error)
+  return (data ?? []) as OtherPhone[]
+}
+export async function addPatientPhone(businessId: string, memberId: string, phone: string, label: string): Promise<void> {
+  const { error } = await supabase.rpc('sehat_add_patient_phone', { p_business: businessId, p_member: memberId, p_phone: phone, p_label: label || null })
+  oops(error)
+}
+export async function removePatientPhone(businessId: string, id: string): Promise<void> {
+  const { error } = await supabase.rpc('sehat_remove_patient_phone', { p_business: businessId, p_id: id })
+  oops(error)
+}

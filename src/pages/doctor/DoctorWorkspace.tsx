@@ -6,6 +6,8 @@ import {
   getDoctorPerformance, getDoctorPatients, DoctorPerformanceRow, DoctorPatientRow, getDiscounts, DiscountRow,
 } from '../../lib/doctorsApi'
 import RevenuePanel from './RevenuePanel'
+import VisitRegister, { type RegisterRequest } from './VisitRegister'
+import type { RegisterKind } from '../../lib/patientsApi'
 import PublicProfileEditor from './PublicProfileEditor'
 
 // One hospital, many doctors (0121). All patients live in the business; every
@@ -134,13 +136,13 @@ function TodayAppointments({ businessId, practitionerId }: { businessId: string;
   )
 }
 
-function Tiles({ r }: { r: DoctorPerformanceRow | undefined }) {
+function Tiles({ r, onShow }: { r: DoctorPerformanceRow | undefined; onShow?: (kind: RegisterKind) => void }) {
   if (!r) return null
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <StatTile label="Appointments" value={r.appointments} sub={`${r.completed} seen · ${r.no_shows} no-show`} />
-      <StatTile label="OPD visits" value={r.opd_visits} sub={`${r.prescriptions} prescriptions`} />
-      <StatTile label="Admissions" value={r.admissions} sub={`${r.discharges} discharged`} />
+      <StatTile label="OPD visits" value={r.opd_visits} sub={`${r.prescriptions} prescriptions`} onClick={onShow ? () => onShow('visits') : undefined} />
+      <StatTile label="Admissions" value={r.admissions} sub={`${r.discharges} discharged`} onClick={onShow ? () => onShow('admissions') : undefined} />
       <StatTile label="Billed / collected" value={inr(r.billed)} sub={`${inr(r.collected)} collected`} />
     </div>
   )
@@ -274,9 +276,12 @@ function DiscountsGiven({ businessId, practitionerId, period }: { businessId: st
 }
 
 export function MyPractice({ businessId, practitionerId, doctorName, onOpenPatient }: {
-  businessId: string; practitionerId: string; doctorName?: string; onOpenPatient: (memberId: string) => void
+  businessId: string; practitionerId: string; doctorName?: string; onOpenPatient: (memberId: string, visitId?: string | null) => void
 }) {
   const [period, setPeriod] = useState<Period>('month')
+  // 0193: a number opens its list in the register below.
+  const [req, setReq] = useState<RegisterRequest | null>(null)
+  const show = (kind: RegisterKind) => { const { from, to } = periodRange(period); setReq({ kind, from, to, doctorId: practitionerId, nonce: Date.now() }) }
   const [row, setRow] = useState<DoctorPerformanceRow | undefined>()
   const [error, setError] = useState('')
   useEffect(() => {
@@ -296,7 +301,9 @@ export function MyPractice({ businessId, practitionerId, doctorName, onOpenPatie
         <PeriodChips value={period} onChange={setPeriod} />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Tiles r={row} />
+      <Tiles r={row} onShow={show} />
+      <VisitRegister businessId={businessId} defaultDoctorId={practitionerId} request={req}
+        title="My patients by date" onOpen={(m, v) => onOpenPatient(m, v)} />
       <OpdFee businessId={businessId} practitionerId={practitionerId} />
       <PublicProfileEditor practitionerId={practitionerId} />
       <TodayAppointments businessId={businessId} practitionerId={practitionerId} />

@@ -77,6 +77,8 @@ import DeskBooking from './DeskBooking'
 import { PractitionerPhoneCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import { linkNurse, listNurseLinks, type NurseLink } from '../../lib/nurseApi'
 import { addStaff, findPeople, inviteWhatsAppUrl, listStaffLog, staffInvite, type PersonMatch, type StaffAction, type StaffChangeDone, type StaffInvite, type StaffLogRow } from '../../lib/staffApi'
+import { phoneProblem } from '../../lib/credentials'
+import PhoneError from '../../components/PhoneError'
 
 
 interface CampOffer {
@@ -1925,7 +1927,7 @@ export default function DoctorDashboard() {
 
         {/* ══════════ PATIENT REPORT — how many, from where, who to bring back (0161) ══════════ */}
         {tab === 'patientreport' && doctor && emr && (access.opd || access.ipd) && (
-          <PatientReportPanel businessId={doctor.id} />
+          <PatientReportPanel businessId={doctor.id} onOpenPatient={openPatient} />
         )}
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
@@ -2269,8 +2271,11 @@ export default function DoctorDashboard() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <input className="input-field text-sm" placeholder="Full name"
                         value={docForm.name} onChange={e => setDocForm(f => ({ ...f, name: e.target.value }))} />
-                      <input className="input-field text-sm" placeholder="Mobile number *" inputMode="numeric"
-                        value={docForm.phone} onChange={e => setDocForm(f => ({ ...f, phone: e.target.value }))} />
+                      <div>
+                        <input className="input-field text-sm w-full" placeholder="Mobile number * (10 digits)" inputMode="numeric"
+                          value={docForm.phone} onChange={e => setDocForm(f => ({ ...f, phone: e.target.value.replace(/[^\d+ ]/g, '') }))} />
+                        <PhoneError value={docForm.phone} />
+                      </div>
                       <input className="input-field text-sm" placeholder="Email * — how they sign in" type="email" inputMode="email" autoComplete="off"
                         value={docForm.email} onChange={e => setDocForm(f => ({ ...f, email: e.target.value }))} />
                       {docForm.role === 'doctor' && (
@@ -2310,7 +2315,7 @@ export default function DoctorDashboard() {
                     )}
                     <div className="flex gap-2">
                       <button onClick={() => addRosterDoctor()}
-                        disabled={rosterBusy || !docForm.name.trim() || docForm.phone.replace(/\D/g, '').length < 10
+                        disabled={rosterBusy || !docForm.name.trim() || !!phoneProblem(docForm.phone)
                           || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(docForm.email.trim())
                           || (docForm.role === 'doctor' && !docForm.regNumber.trim())}
                         className="btn-teal text-sm py-2 px-5 disabled:opacity-50">

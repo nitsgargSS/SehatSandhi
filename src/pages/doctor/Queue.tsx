@@ -11,6 +11,8 @@ import { searchPatients, PatientSearchResult, registerPatient, addVital, Vital }
 import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
 import { listBusinessDoctors, BusinessDoctor } from '../../lib/doctorsApi'
 import DoctorSelect from '../../components/DoctorSelect'
+import { phoneProblem } from '../../lib/credentials'
+import PhoneError from '../../components/PhoneError'
 
 // Today's OPD line — the screen reception has open all day.
 //
@@ -508,7 +510,10 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
             <div style={{ marginTop: 9, display: 'grid', gap: 7 }}>
               <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
                 <input style={{ ...input, flex: '2 1 180px' }} placeholder="Full name" value={np.name} onChange={e => setNp({ ...np, name: e.target.value })} />
-                <input style={{ ...input, flex: '1 1 130px' }} placeholder="Mobile (10 digits)" inputMode="numeric" value={np.phone} onChange={e => setNp({ ...np, phone: e.target.value })} />
+                <div style={{ flex: '1 1 130px' }}>
+                  <input style={{ ...input, width: '100%' }} placeholder="Mobile — 10 digits, or + country code" inputMode="tel" value={np.phone} onChange={e => setNp({ ...np, phone: e.target.value.replace(/[^\d+ ]/g, '') })} />
+                  <PhoneError value={np.phone} foreign />
+                </div>
                 <input style={{ ...input, flex: '0 1 80px' }} placeholder="Age" inputMode="numeric" value={np.age} onChange={e => setNp({ ...np, age: e.target.value })} />
                 <select style={{ ...input, flex: '0 1 110px' }} value={np.gender} onChange={e => setNp({ ...np, gender: e.target.value })}>
                   <option value="">Gender</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
@@ -518,7 +523,7 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
                   value={np.pin} onChange={e => setNp({ ...np, pin: e.target.value.replace(/\D/g, '') })} />
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button style={btn(true)} disabled={busy || np.name.trim().length < 2 || np.phone.replace(/\D/g, '').length < 10} onClick={registerNew}>Register</button>
+                <button style={btn(true)} disabled={busy || np.name.trim().length < 2 || !!phoneProblem(np.phone, true, true)} onClick={registerNew}>Register</button>
                 <button style={btn()} onClick={() => setAdding(false)}>Cancel</button>
               </div>
             </div>

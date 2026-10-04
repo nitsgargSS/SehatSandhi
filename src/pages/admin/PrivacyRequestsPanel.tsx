@@ -3,6 +3,8 @@ import { MessageCircle, Plus, ShieldCheck } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { StatTile } from '../../components/Charts'
 import { dateTime } from '../../lib/format'
+import { phoneProblem } from '../../lib/credentials'
+import PhoneError from '../../components/PhoneError'
 
 // Privacy requests (0174) — the DPDP rights queue.
 //
@@ -152,6 +154,7 @@ function NewRequest({ onDone, onCancel }: { onDone: (id: string) => void; onCanc
   const save = async () => {
     if (f.name.trim().length < 2) { setErr('Name is needed.'); return }
     if (!f.phone.trim() && !f.email.trim()) { setErr('A phone number or an email is needed.'); return }
+    { const bad = phoneProblem(f.phone, false); if (bad) { setErr(bad); return } }
     setBusy(true); setErr('')
     const { data, error } = await supabase.rpc('sehat_privacy_create', {
       p_kind: f.kind, p_name: f.name, p_phone: f.phone || null, p_email: f.email || null,
@@ -171,7 +174,7 @@ function NewRequest({ onDone, onCancel }: { onDone: (id: string) => void; onCanc
         <input className={sel} placeholder="Name of the person" value={f.name} onChange={set('name')} />
         <select className={sel} value={f.on_behalf} onChange={set('on_behalf')}>
           <option value="self">For themselves</option><option value="guardian">As parent / guardian</option><option value="nominee">As nominee</option></select>
-        <input className={sel} placeholder="Mobile number" inputMode="numeric" value={f.phone} onChange={set('phone')} />
+        <div><input className={sel} placeholder="Mobile number (10 digits)" inputMode="numeric" value={f.phone} onChange={set('phone')} /><PhoneError value={f.phone} /></div>
         <input className={sel} placeholder="Email" value={f.email} onChange={set('email')} />
       </div>
       <textarea className={sel} rows={3} placeholder="What they asked for, in their words" value={f.details} onChange={set('details')} />
