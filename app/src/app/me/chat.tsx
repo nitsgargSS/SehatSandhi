@@ -4,12 +4,13 @@ import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { myThread, sendToClinic, takePhoto, pickPhoto, uploadPrescription, type ChatMessage } from '../../lib/patient'
 import { Err, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
+import { withPatient } from '../../ui/PatientGate'
 
 // A conversation with one clinic (0197). The clinic's staff answer from their
 // dashboard or app; their name shows on each reply.
 const t = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })
 
-export default function ChatScreen() {
+function ChatScreen() {
   const { business, name } = useLocalSearchParams<{ business: string; name?: string }>()
   const [msgs, setMsgs] = useState<ChatMessage[]>([])
   const [clinic, setClinic] = useState<{ name: string; phone: string | null } | null>(null)
@@ -79,3 +80,5 @@ const st = StyleSheet.create({
   send: { backgroundColor: C.green, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
   sendT: { color: '#fff', fontWeight: '800' },
 })
+
+export default withPatient(ChatScreen, 'The clinic answers you on your number.')

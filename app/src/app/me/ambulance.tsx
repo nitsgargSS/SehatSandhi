@@ -3,10 +3,11 @@ import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { me, whereAmI, askAmbulance, type Place, type Reply } from '../../lib/patient'
 import { Btn, Card, Chip, Err, Field, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
+import { withPatient } from '../../ui/PatientGate'
 
 // Ambulance from the app (0196 → 0191). 108 comes first; the request carries
 // where the phone is, so the crew gets a map pin.
-export default function AmbulanceScreen() {
+function AmbulanceScreen() {
   const [name, setName] = useState('')
   const [kind, setKind] = useState<'emergency' | 'scheduled'>('emergency')
   const [place, setPlace] = useState<Place | null>(null)
@@ -59,3 +60,5 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   body: { color: C.ink, fontSize: 15 },
 })
+
+export default withPatient(AmbulanceScreen, 'The ambulance that accepts calls you on this number.')

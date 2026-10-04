@@ -39,7 +39,9 @@ export async function me(): Promise<Me | null> {
 
 const rpc = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => {
   const { data, error } = await supabase.rpc(name, args)
-  if (error) throw new Error(error.message)
+  // Not signed in (or the sign-in ran out): say so in words, not the database's.
+  if (error) throw new Error(/permission denied|JWT|42501/i.test(`${error.message} ${error.code}`) && !/sign in/i.test(error.message)
+    ? 'Please sign in with your mobile number first (My Sehatsandhi).' : error.message)
   return data as T
 }
 

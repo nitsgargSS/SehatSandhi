@@ -3,6 +3,10 @@ import { Stack, router } from 'expo-router'
 import { C } from '../../ui/theme'
 
 // The patient's side of the app (0196).
+// Opened straight at an inner screen (from the booking chat or a notification),
+// My Sehatsandhi sits underneath, so the back button always has somewhere to go.
+export const unstable_settings = { initialRouteName: 'index' }
+
 export default function MeLayout() {
   return (
     <Stack screenOptions={{ headerTintColor: C.ink, contentStyle: { backgroundColor: C.cream } }}>

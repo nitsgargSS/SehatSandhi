@@ -3,10 +3,11 @@ import { Image, Linking, ScrollView, StyleSheet, Text, View } from 'react-native
 import { me, whereAmI, takePhoto, pickPhoto, uploadPrescription, orderMedicines, type Picked, type Reply } from '../../lib/patient'
 import { Btn, Card, Err, Field, Label, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
+import { withPatient } from '../../ui/PatientGate'
 
 // Order medicines from the app (0196 → 0189): the same order as WhatsApp,
 // with a photo of the prescription from the camera or gallery.
-export default function OrderScreen() {
+function OrderScreen() {
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
   const [address, setAddress] = useState('')
@@ -70,3 +71,5 @@ const st = StyleSheet.create({
   photo: { width: '100%', height: 220, borderRadius: 12, backgroundColor: '#eee' },
   body: { color: C.ink, fontSize: 15 },
 })
+
+export default withPatient(OrderScreen, 'The pharmacy sends the total to your number.')

@@ -3,13 +3,14 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { me, whereAmI, askInsurance, type Reply } from '../../lib/patient'
 import { Btn, Card, Chip, Err, Field, Label, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
+import { withPatient } from '../../ui/PatientGate'
 
 // Health insurance from the app (0196 → 0192): a licensed advisor near them
 // calls back; only the one who takes it gets the number.
 const COVERS = ['Family floater', 'Just me', 'Parents / senior citizen', 'Top-up of existing policy']
 const TIMES = ['Morning', 'Afternoon', 'After 6 pm']
 
-export default function InsuranceScreen() {
+function InsuranceScreen() {
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
   const [cover, setCover] = useState('')
@@ -53,3 +54,5 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' },
   body: { color: C.ink, fontSize: 15 },
 })
+
+export default withPatient(InsuranceScreen, 'The advisor calls you on this number.')
