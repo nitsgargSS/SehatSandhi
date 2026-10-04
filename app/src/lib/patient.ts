@@ -136,3 +136,9 @@ export const myThread = (businessId: string) =>
   rpc<{ clinic: { name: string; phone: string | null; address: string | null }; messages: ChatMessage[] }>('sehat_my_thread', { p_business: businessId })
 export const sendToClinic = (businessId: string, body: string, photoUrl: string | null) =>
   rpc<ChatMessage>('sehat_my_send', { p_business: businessId, p_body: body, p_photo_url: photoUrl })
+
+// 0198: book inside the app on the signed-in number, and cancel a future booking.
+export interface Booked { id: string; doctor: string | null; clinic: string; address: string | null; phone: string | null; at: string; name: string }
+export const bookAppointment = (businessId: string, practitionerId: string, slot: string, name: string, age: number | null) =>
+  rpc<Booked>('sehat_app_book', { p_business: businessId, p_practitioner: practitionerId, p_slot: slot, p_name: name, p_age: age })
+export const cancelBooking = (id: string) => rpc<null>('sehat_app_cancel_booking', { p_id: id })

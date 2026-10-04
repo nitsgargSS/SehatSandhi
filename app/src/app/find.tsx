@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { router } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { understand, asPlace } from '../lib/assistant'
-import { whereAmI } from '../lib/patient'
+import { whereAmI, me, requestCode, verifyCode, bookAppointment, type Me, type Booked } from '../lib/patient'
+import { registerPush } from '../lib/push'
 import { SPECIALITIES, WA_NUMBER } from '@web/types'
 import { C } from '../ui/theme'
 
-// "Find a doctor" — the patient side, no login. It does what the WhatsApp bot
-// does (speciality → area → doctor → time) but in conversation: say it any way,
-// in English or Hindi, and it asks only for what is missing. Booking itself
-// happens on WhatsApp, pre-filled with the clinic's SS-code, doctor and time —
-// the bot books it on a number WhatsApp has already proven (bot_book_at).
-// Searches use the same public functions the bot and the website use.
+// "Find a doctor" — what the WhatsApp bot does (speciality → area → doctor →
+// time) but in conversation: say it any way, in English or Hindi, and it asks
+// only for what is missing. Searching needs no login. Booking happens right
+// here (0198): the patient proves their number once with a WhatsApp code, and
+// the app books on it — the same open slots the bot and the clinic desk use.
+// Medicines, ambulance and insurance go to the app's own screens, not WhatsApp.
 
 type Doc = {
   practitioner_id: string; full_name: string; qualification: string | null; business_id: string
@@ -26,8 +28,11 @@ type Msg =
 // Omit that keeps each kind of message separate (plain Omit merges the union).
 type NewMsg = Msg extends infer M ? M extends unknown ? Omit<M, 'id'> : never : never
 
-const COMMON = ['EYE', 'GEN', 'PAED', 'DENT', 'GYN', 'ORTH', 'SKIN', 'ENT', 'CARD']
+// Every kind of doctor we list (the tests, labs and pharmacy have their own paths).
+const NOT_DOCTORS = ['LAB', 'PATH', 'RAD', 'PHARMACY']
+const DOCTORS = SPECIALITIES.filter(s => !NOT_DOCTORS.includes(s.id)).map(s => s.id)
 const spName = (id?: string) => SPECIALITIES.find(s => s.id === id)
+const spChip = (id: string) => ({ label: spName(id)!.en.split(' (')[0], say: spName(id)!.en })
 const istDate = (plusDays: number) => new Date(Date.now() + 5.5 * 3_600_000 + plusDays * 86_400_000).toISOString().slice(0, 10)
 const DAY_WORD = ['today', 'tomorrow', 'day after tomorrow']
 const slotText = (iso: string) => new Date(iso).toLocaleString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })
@@ -49,8 +54,8 @@ export default function Find() {
   useEffect(() => {
     const last = recall()
     if (last) { ctx.current.pin = last.pin; ctx.current.area = last.label }
-    bot('Namaste! Tell me what you need — for example "aankh ka doctor", "bachche ko bukhar", or "dentist in Jagadhri kal".',
-      COMMON.slice(0, 6).map(id => ({ label: spName(id)!.en.split(' (')[0], say: spName(id)!.en })))
+    bot('Namaste! Tell me what you need — for example "aankh ka doctor", "bachche ko bukhar", or "dentist in Delhi kal". Or pick a doctor:',
+      DOCTORS.map(spChip))
   }, [])
 
   const placeToPin = async (place: string): Promise<{ pin: string; label: string } | null> => {
@@ -73,7 +78,7 @@ export default function Find() {
       .slice(0, 6)
     if (!found.length) {
       bot(`No ${spName(speciality)?.en ?? 'doctor'} is listed near ${area ?? pin} yet. Try a nearby town, or another kind of doctor.`,
-        COMMON.filter(c => c !== speciality).slice(0, 4).map(id => ({ label: spName(id)!.en.split(' (')[0], say: spName(id)!.en })))
+        DOCTORS.filter(c => c !== speciality).slice(0, 6).map(spChip))
       return
     }
     const ids = [...new Set(found.map(d => d.business_id))]
@@ -102,30 +107,26 @@ export default function Find() {
     setBusy(true)
     try {
       const u = understand(said)
-      // 0189: medicines are delivered — the order itself is taken on WhatsApp,
-      // where the bot asks for the address and a photo of the prescription.
+      // Medicines, ambulance and insurance have their own screens in the app.
       if (u.other === 'pharmacy') {
-        bot('Medicines can be delivered home from a pharmacy near you. Send your prescription photo or the medicine names on WhatsApp — a pharmacy will tell you the total, and nothing is sent until you approve it.',
-          [{ label: 'Order medicines on WhatsApp', say: `__wa__Order medicines${ctx.current.area ? ` — ${ctx.current.area}` : ''}` }])
+        bot('Medicines can be delivered home from a pharmacy near you. Send a photo of the prescription or type the medicine names — a pharmacy tells you the total, and nothing is sent until you approve it.',
+          [{ label: '💊 Order medicines', say: '__go__/me/order' }])
         return
       }
-      // 0191: an ambulance — 108 first, then the WhatsApp request that alerts
-      // every ambulance nearby. Nobody is asked to wait.
       if (u.other === 'ambulance') {
-        bot('In an emergency call 108 now — it is free. You can also send your pickup address on WhatsApp: we alert every ambulance near you and the first to accept calls you.',
-          [{ label: 'Call 108', say: '__tel__108' }, { label: 'Ambulance on WhatsApp', say: `__wa__Ambulance${ctx.current.area ? ` — ${ctx.current.area}` : ''}` }])
+        bot('In an emergency call 108 now — it is free. You can also alert private ambulances near you: the first to accept calls you.',
+          [{ label: '📞 Call 108', say: '__tel__108' }, { label: '🚑 Ambulance near me', say: '__go__/me/ambulance' }])
         return
       }
-      // 0192: health insurance — a licensed advisor near them calls back.
       if (u.other === 'insurance') {
-        bot('A licensed health insurance advisor near you can call you back. Tell our WhatsApp assistant what cover you want — only the advisor who takes it gets your number.',
-          [{ label: 'Insurance on WhatsApp', say: `__wa__Health insurance${ctx.current.area ? ` — ${ctx.current.area}` : ''}` }])
+        bot('A licensed health insurance advisor near you can call you back. Only the advisor who takes your request gets your number.',
+          [{ label: '🛡️ Ask for an advisor', say: '__go__/me/insurance' }])
         return
       }
       if (u.other) {
-        const what = u.other === 'lab' ? 'a lab test' : 'an ambulance'
-        bot(`For ${what}, our WhatsApp assistant finds the nearest one for you right away.`,
-          [{ label: 'Open WhatsApp', say: `__wa__Hi, I need ${what}${ctx.current.area ? ` near ${ctx.current.area}` : ''}` }])
+        // Lab tests are not bookable in the app yet; the WhatsApp assistant finds labs.
+        bot('For a lab test, our WhatsApp assistant finds the nearest lab for you right away.',
+          [{ label: 'Find a lab on WhatsApp', say: `__wa__Hi, I need a lab test${ctx.current.area ? ` near ${ctx.current.area}` : ''}` }])
         return
       }
       if (u.speciality) ctx.current.speciality = u.speciality
@@ -139,8 +140,7 @@ export default function Find() {
       }
       if (u.pin || ctx.current.pin) remember({ pin: ctx.current.pin!, label: ctx.current.area ?? ctx.current.pin! })
       if (!ctx.current.speciality) {
-        bot('Which kind of doctor? You can also just describe the problem.',
-          COMMON.map(id => ({ label: spName(id)!.en.split(' (')[0], say: spName(id)!.en })))
+        bot('Which kind of doctor? You can also just describe the problem.', DOCTORS.map(spChip))
         return
       }
       if (!ctx.current.pin) {
@@ -157,14 +157,9 @@ export default function Find() {
 
   const tapChip = (say: string) => {
     if (say.startsWith('__tel__')) { Linking.openURL(`tel:${say.slice(7)}`); return }
+    if (say.startsWith('__go__')) { router.push(say.slice(6) as '/me/order'); return }
     if (say.startsWith('__wa__')) { Linking.openURL(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(say.slice(6))}`); return }
     handle(say)
-  }
-
-  const bookOnWhatsApp = (d: Doc, slot: string) => {
-    const head = d.code ? `Hi ${d.code} (${d.business_name})` : `Hi (${d.business_name})`
-    const msg = `${head} — I want to book an appointment with ${d.full_name} on ${slotText(slot)}`
-    Linking.openURL(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(msg)}`)
   }
 
   return (
@@ -192,23 +187,14 @@ export default function Find() {
                         ))}
                       </View>
                     </>
-                  ) : <Text style={st.meta}>No open slots in the next days — message the clinic on WhatsApp.</Text>}
+                  ) : (
+                    <Text style={st.meta}>No open times in the next 3 days.{d.phone ? ' ' : ''}{!!d.phone && <Text style={st.link} onPress={() => Linking.openURL(`tel:${d.phone}`)}>Call the clinic</Text>}</Text>
+                  )}
                 </View>
               ))}
             </View>
           )
-          if ('book' in m) return (
-            <View key={m.id} style={[st.bubble, st.botB]}>
-              <Text style={st.botT}>{m.book.doc.full_name}, {m.book.doc.business_name}{'\n'}{slotText(m.book.slot)}</Text>
-              <Pressable style={st.wa} onPress={() => bookOnWhatsApp(m.book.doc, m.book.slot)}>
-                <Text style={st.waT}>Book on WhatsApp</Text>
-              </Pressable>
-              {!!m.book.doc.phone && (
-                <Pressable onPress={() => Linking.openURL(`tel:${m.book.doc.phone}`)}><Text style={st.link}>Call the clinic</Text></Pressable>
-              )}
-              <Text style={st.small}>WhatsApp opens with your booking written — just press send. The assistant confirms it there.</Text>
-            </View>
-          )
+          if ('book' in m) return <BookCard key={m.id} doc={m.book.doc} slot={m.book.slot} />
           return (
             <View key={m.id} style={{ gap: 6, alignItems: m.from === 'me' ? 'flex-end' : 'flex-start' }}>
               <View style={[st.bubble, m.from === 'me' ? st.meB : st.botB]}>
@@ -239,6 +225,80 @@ export default function Find() {
   )
 }
 
+// Confirm a time: who it is for, then book. Signs the patient in first if needed.
+function BookCard({ doc, slot }: { doc: Doc; slot: string }) {
+  const [who, setWho] = useState<Me | null | undefined>(undefined)
+  const [name, setName] = useState('')
+  const [age, setAge] = useState('')
+  const [phone, setPhone] = useState('')
+  const [code, setCode] = useState('')
+  const [sent, setSent] = useState(false)
+  const [dev, setDev] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [done, setDone] = useState<Booked | null>(null)
+
+  useEffect(() => { me().then(m => { setWho(m); if (m?.name) setName(m.name) }).catch(() => setWho(null)) }, [])
+
+  const run = async (f: () => Promise<void>) => { setBusy(true); setErr(''); try { await f() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) } }
+  const send = () => run(async () => { const r = await requestCode(phone); setSent(true); setDev(r.devCode ?? '') })
+  const verify = () => run(async () => {
+    await supabase.auth.signOut().catch(() => {})
+    await verifyCode(phone, code)
+    registerPush().catch(() => {})
+    const m = await me(); setWho(m); if (m?.name && !name) setName(m.name)
+  })
+  const book = () => run(async () => {
+    const a = age.trim() ? Number(age.replace(/\D/g, '')) : null
+    setDone(await bookAppointment(doc.business_id, doc.practitioner_id, slot, name, a))
+  })
+
+  if (done) return (
+    <View style={[st.bubble, st.botB, { borderColor: C.green, borderWidth: 2 }]}>
+      <Text style={st.okT}>✅ Booked</Text>
+      <Text style={st.botT}>{done.name} · {done.doctor ?? doc.full_name}{'\n'}{done.clinic}{'\n'}{slotText(done.at)}</Text>
+      {!!done.address && <Text style={st.meta}>{done.address}</Text>}
+      <Text style={st.small}>Please arrive 10 minutes early. The clinic has your booking.</Text>
+      <Pressable style={st.primary} onPress={() => router.push('/me')}><Text style={st.primaryT}>See my bookings</Text></Pressable>
+      {!!done.phone && <Pressable onPress={() => Linking.openURL(`tel:${done.phone}`)}><Text style={st.link}>Call the clinic</Text></Pressable>}
+    </View>
+  )
+
+  return (
+    <View style={[st.bubble, st.botB]}>
+      <Text style={st.botT}>{doc.full_name}, {doc.business_name}{'\n'}<Text style={{ fontWeight: '800' }}>{slotText(slot)}</Text></Text>
+      {who === undefined ? <ActivityIndicator color={C.green} /> : !who ? (
+        <>
+          <Text style={st.small}>To book, confirm your mobile number once — we send a code on WhatsApp.</Text>
+          <TextInput style={st.field} placeholder="Mobile number" keyboardType="phone-pad" value={phone} onChangeText={setPhone} editable={!sent} />
+          {!sent ? (
+            <Pressable style={[st.primary, (busy || phone.replace(/\D/g, '').length < 10) && st.off]} disabled={busy || phone.replace(/\D/g, '').length < 10} onPress={send}>
+              <Text style={st.primaryT}>{busy ? '…' : 'Send code'}</Text></Pressable>
+          ) : (
+            <>
+              <TextInput style={st.field} placeholder="6-digit code" keyboardType="number-pad" maxLength={6} value={code} onChangeText={setCode} />
+              {!!dev && <Text style={st.small}>Test mode: your code is {dev}</Text>}
+              <Pressable style={[st.primary, (busy || code.length !== 6) && st.off]} disabled={busy || code.length !== 6} onPress={verify}>
+                <Text style={st.primaryT}>{busy ? '…' : 'Confirm number'}</Text></Pressable>
+              <Pressable onPress={() => { setSent(false); setCode('') }}><Text style={st.link}>Change number</Text></Pressable>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <Text style={st.small}>Booking on +{who.phone}. Who is the patient?</Text>
+          <TextInput style={st.field} placeholder="Patient's name" value={name} onChangeText={setName} />
+          <TextInput style={st.field} placeholder="Age (optional)" keyboardType="number-pad" maxLength={3} value={age} onChangeText={setAge} />
+          <Pressable style={[st.primary, (busy || !name.trim()) && st.off]} disabled={busy || !name.trim()} onPress={book}>
+            <Text style={st.primaryT}>{busy ? 'Booking…' : 'Confirm booking'}</Text></Pressable>
+        </>
+      )}
+      {!!err && <Text style={st.err}>{err}</Text>}
+      {!!doc.phone && <Pressable onPress={() => Linking.openURL(`tel:${doc.phone}`)}><Text style={st.link}>Call the clinic</Text></Pressable>}
+    </View>
+  )
+}
+
 const st = StyleSheet.create({
   wrap: { padding: 14, gap: 10, paddingBottom: 20 },
   bubble: { maxWidth: '88%', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 14 },
@@ -256,8 +316,12 @@ const st = StyleSheet.create({
   slotHead: { fontSize: 12.5, fontWeight: '700', color: C.muted, marginTop: 6 },
   slot: { backgroundColor: '#eaf7f0', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
   slotText: { color: C.green, fontWeight: '800' },
-  wa: { backgroundColor: '#25D366', borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
-  waT: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  primary: { backgroundColor: C.green, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  primaryT: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  off: { opacity: 0.5 },
+  field: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, minWidth: 240 },
+  okT: { fontSize: 17, fontWeight: '800', color: C.green },
+  err: { color: '#b42318', fontSize: 13 },
   link: { color: C.green, fontWeight: '700', textAlign: 'center' },
   small: { fontSize: 12, color: C.muted },
   bar: { flexDirection: 'row', gap: 8, padding: 10, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.card },

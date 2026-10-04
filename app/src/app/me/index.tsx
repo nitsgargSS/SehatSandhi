@@ -3,7 +3,7 @@ import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View 
 import { router, useFocusEffect } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { registerPush, unregisterPush } from '../../lib/push'
-import { me, requestCode, verifyCode, myActivity, type Me, type Activity, type RateKind } from '../../lib/patient'
+import { me, requestCode, verifyCode, myActivity, cancelBooking, type Me, type Activity, type RateKind } from '../../lib/patient'
 import { Btn, Card, Err, Field, Label, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
 
@@ -26,6 +26,7 @@ export default function MyHome() {
   const [code, setCode] = useState('')
   const [sent, setSent] = useState(false)
   const [dev, setDev] = useState('')
+  const [confirming, setConfirming] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const m = await me().catch(() => null)
@@ -56,7 +57,7 @@ export default function MyHome() {
     <ScrollView contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
       <Card>
         <Text style={st.h}>अपने नंबर से साइन इन करें / Sign in with your number</Text>
-        <Note>We send a 6-digit code to your WhatsApp. Then you can order medicines, ask for an ambulance or an insurance advisor, see all your requests, and rate them.</Note>
+        <Note>We send a 6-digit code to your WhatsApp. Then you can book doctors, order medicines, ask for an ambulance or an insurance advisor, see your health records, and rate them.</Note>
         <Field label="Mobile number" keyboardType="phone-pad" placeholder="98765 43210" value={phone} onChangeText={setPhone} editable={!sent} />
         {!sent ? <Btn label="Send code on WhatsApp" busy={busy} disabled={phone.replace(/\D/g, '').length < 10} onPress={send} /> : (
           <>
@@ -136,6 +137,17 @@ export default function MyHome() {
         <Card key={b.id}>
           <Text style={st.bold}>🩺 {b.place ?? 'Clinic'}{b.doctor ? ` · ${b.doctor}` : ''}</Text>
           <Note>{when(b.when)} · {STATUS[b.status] ?? b.status}{b.name ? ` · ${b.name}` : ''}</Note>
+          {/* 0198: an upcoming booking can be cancelled here; the clinic sees it at once. */}
+          {['booked', 'confirmed'].includes(b.status) && new Date(b.when).getTime() > Date.now() && (
+            confirming === b.id ? (
+              <View style={st.row}>
+                <Btn small kind="danger" label="Yes, cancel it" onPress={async () => {
+                  try { await cancelBooking(b.id); setConfirming(null); await load() } catch (e) { setErr((e as Error).message) }
+                }} />
+                <Btn small kind="ghost" label="Keep it" onPress={() => setConfirming(null)} />
+              </View>
+            ) : <Btn small kind="ghost" label="Cancel booking" onPress={() => setConfirming(b.id)} />
+          )}
         </Card>
       ))}
       <Btn kind="ghost" small label="Sign out" onPress={signOut} />
@@ -150,6 +162,7 @@ const st = StyleSheet.create({
   bold: { fontWeight: '700', color: C.ink, fontSize: 15 },
   body: { color: C.ink, fontSize: 14, flex: 1 },
   stars: { color: C.green, fontWeight: '800' },
+  row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   rateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: { width: '47%', backgroundColor: C.card, borderWidth: 1.5, borderRadius: 16, paddingVertical: 16, alignItems: 'center', gap: 4 },
