@@ -19,8 +19,12 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.sehatsandhi.app",
       "permissions": [
-        "NOTIFICATIONS"
-      ]
+        "NOTIFICATIONS",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -44,7 +48,21 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Sehatsandhi uses your location to find doctors, pharmacies and ambulances near you, and to tell an ambulance where to come. / पास के डॉक्टर, फ़ार्मेसी और एम्बुलेंस ढूँढने के लिए।"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "To send a photo of your prescription or a report. / पर्ची या रिपोर्ट की फ़ोटो भेजने के लिए।",
+          "cameraPermission": "To take a photo of a prescription or report. / पर्ची या रिपोर्ट की फ़ोटो लेने के लिए।"
+        }
+      ],
+      "expo-document-picker"
     ],
     "scheme": "sehatsandhi",
     "experiments": {
@@ -56,6 +74,13 @@
         "projectId": "117c9d8b-828b-487d-9db9-758ffe12d8b5"
       }
     },
-    "owner": "ng-technologies"
+    "owner": "ng-technologies",
+    "updates": {
+      "url": "https://u.expo.dev/117c9d8b-828b-487d-9db9-758ffe12d8b5",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

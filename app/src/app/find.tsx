@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { understand, asPlace } from '../lib/assistant'
+import { whereAmI } from '../lib/patient'
 import { SPECIALITIES, WA_NUMBER } from '@web/types'
 import { C } from '../ui/theme'
 
@@ -226,6 +227,10 @@ export default function Find() {
         {busy && <Text style={st.meta}>…</Text>}
       </ScrollView>
       <View style={st.bar}>
+        {/* 0196: the PIN from where the phone is, instead of typing it */}
+        <Pressable style={st.send} accessibilityLabel="Use my location"
+          onPress={() => whereAmI().then(p => p.pin ? handle(p.pin) : bot('I could not find your PIN code from your location. Please type it.')).catch(e => bot((e as Error).message))}>
+          <Text style={st.sendT}>📍</Text></Pressable>
         <TextInput style={st.input} placeholder="Type here — any language" value={text} onChangeText={setText}
           onSubmitEditing={() => { const t = text; setText(''); handle(t) }} returnKeyType="send" />
         <Pressable style={st.send} onPress={() => { const t = text; setText(''); handle(t) }}><Text style={st.sendT}>Send</Text></Pressable>

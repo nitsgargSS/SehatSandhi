@@ -46,6 +46,10 @@ export default function TabsLayout() {
         title: 'Patients', href: noClinic ? null : undefined,
         tabBarIcon: ({ color, size }) => <Ionicons name="people" color={color} size={size} />,
       }} />
+      <Tabs.Screen name="messages" options={{
+        title: 'Messages', href: s?.role.role === 'delivery' || s?.role.role === 'driver' ? null : undefined,
+        tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" color={color} size={size} />,
+      }} />
       <Tabs.Screen name="me" options={{
         title: sub || 'Me', tabBarLabel: 'Me',
         tabBarIcon: ({ color, size }) => <Ionicons name="person-circle" color={color} size={size} />,

@@ -16,6 +16,8 @@ import PharmacyPanel from './PharmacyPanel'
 import OrdersPanel from './OrdersPanel'
 import TripsPanel from './TripsPanel'
 import LeadsPanel from './LeadsPanel'
+import MessagesPanel from './MessagesPanel'
+import { unreadCount } from '../../lib/messagesApi'
 import CollectionsPanel from './CollectionsPanel'
 import PatientReportPanel from './PatientReportPanel'
 import LabPanel from './LabPanel'
@@ -127,7 +129,7 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads'>('today')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages'>('today')
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -305,6 +307,14 @@ export default function DoctorDashboard() {
     ? myPractitionerId : null
   // A patient another tab asked to open (My practice, Doctors → Patients).
   const [openMember, setOpenMember] = useState<string | null>(null)
+  // 0197: unread patient messages, for the tab label.
+  const [msgUnread, setMsgUnread] = useState(0)
+  useEffect(() => {
+    if (!doctor?.id) return
+    const tick = () => unreadCount(doctor.id).then(setMsgUnread).catch(() => {})
+    tick(); const i = setInterval(tick, 60_000)
+    return () => clearInterval(i)
+  }, [doctor?.id])
   // 0182: a visit to open with the patient — the queue's Consult.
   const [openVisit, setOpenVisit] = useState<string | null>(null)
   const openPatient = (memberId: string, visitId: string | null = null) => { setOpenMember(memberId); setOpenVisit(visitId); setTab('patients') }
@@ -1041,8 +1051,13 @@ export default function DoctorDashboard() {
   const handlesTrips = isAmbulance && (!role.enforced || ['owner', 'manager', 'driver'].includes(role.role ?? ''))
   // 0192: an insurance advisor's leads.
   const handlesLeads = myVertical === 'insurance' && (!role.enforced || ['owner', 'manager'].includes(role.role ?? ''))
+  // 0197: patients' messages from the app — every role that sees patients.
+  const handlesMessages = !!doctor && !['delivery', 'driver'].includes(role.role ?? '') && myVertical !== 'insurance' && myVertical !== 'ambulance'
 
   const tabs = [
+    ...(handlesMessages ? [
+      { id: 'messages', label: msgUnread ? `Messages (${msgUnread})` : 'Messages', icon: <MessageCircle className="w-4 h-4" /> },
+    ] : []),
     ...(handlesLeads ? [
       { id: 'leads', label: 'Leads', icon: <ShieldCheck className="w-4 h-4" /> },
     ] : []),
@@ -1897,6 +1912,9 @@ export default function DoctorDashboard() {
         )}
 
         {/* ══════════ PHARMACY — in-house dispensing (0158) ══════════ */}
+        {tab === 'messages' && doctor && handlesMessages && (
+          <MessagesPanel businessId={doctor.id} onUnread={setMsgUnread} />
+        )}
         {tab === 'leads' && doctor && handlesLeads && (
           <LeadsPanel businessId={doctor.id} role={role.enforced ? role.role : 'owner'} />
         )}

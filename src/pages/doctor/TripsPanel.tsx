@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Ambulance, Check, ChevronDown, ChevronUp, MapPin, Phone, RefreshCw, X } from 'lucide-react'
 import {
-  listTrips, acceptTrip, declineTrip, dropTrip, onTheWay, pickedUp, completeTrip, tripDrivers,
+  listTrips, tripLocation, mapsUrl, acceptTrip, declineTrip, dropTrip, onTheWay, pickedUp, completeTrip, tripDrivers,
   TRIP_STATUS, TRIP_EVENT, type Trip, type TripScope, type Driver, type FareMode,
 } from '../../lib/ambulanceApi'
 import { DeliveryAreaCard } from './OrdersPanel'
@@ -95,6 +95,8 @@ function TripCard({ t, businessId, isDriver, drivers, busy, run }: {
   const [reason, setReason] = useState('')
   const [asking, setAsking] = useState<'decline' | 'drop' | null>(null)
   const urgent = t.kind === 'emergency' && t.status === 'open'
+  const [loc, setLoc] = useState<{ lat: number; lng: number } | null>(null)
+  useEffect(() => { if (t.mine) tripLocation(businessId, t.id).then(setLoc).catch(() => setLoc(null)) }, [businessId, t.id, t.mine])
   useEffect(() => { if (!driver && drivers.length) setDriver(drivers.find(d => d.role === 'driver')?.practitioner_id ?? '') }, [drivers, driver])
 
   return (
@@ -120,8 +122,8 @@ function TripCard({ t, businessId, isDriver, drivers, busy, run }: {
               <div className="font-semibold text-navy-700">{t.patient_name}</div>
               {t.patient_phone && <a href={`tel:+${t.patient_phone}`} className="flex items-center gap-1 text-teal-700 font-semibold"><Phone className="w-4 h-4" /> +{t.patient_phone}</a>}
               {t.pickup_address && (
-                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${t.pickup_address}, ${t.pin_code}`)}`} target="_blank" rel="noreferrer"
-                  className="flex items-start gap-1 text-gray-700"><MapPin className="w-4 h-4 mt-0.5 shrink-0" /> {t.pickup_address}, {t.pin_code}</a>
+                <a href={mapsUrl(t, loc)} target="_blank" rel="noreferrer"
+                  className="flex items-start gap-1 text-gray-700"><MapPin className="w-4 h-4 mt-0.5 shrink-0" /> {t.pickup_address}, {t.pin_code}{loc ? ' · 📍 exact location' : ''}</a>
               )}
             </div>
           )}
