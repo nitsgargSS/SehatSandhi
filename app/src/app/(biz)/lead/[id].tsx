@@ -6,11 +6,16 @@ import {
   leadSummary, listLeads, acceptLead, declineLead, markContacted, markWon, markLost, reportLead,
   LEAD_STATUS, LEAD_EVENT, type Lead,
 } from '@web/lib/insuranceApi'
-import { Btn, Card, Err, Field, Label, Note } from '../../../ui/kit'
+import { Btn, Card, Chip, Err, Field, Label, Note } from '../../../ui/kit'
 import { C } from '../../../ui/theme'
 
 // One insurance lead (0192): accept for the flat fee → call → bought / not
 // bought, or report a problem within 7 days.
+// 0195: the only reasons a lead can be reported, and how long after accepting.
+const REASONS: [string, string, number][] = [
+  ['wrong_number', 'Wrong / switched-off number', 48], ['duplicate', 'A lead I already have', 48],
+  ['never_asked', 'Never asked for insurance', 72], ['not_health_or_area', 'Not health / not my area', 72],
+]
 const when = (iso: string | null) => iso
   ? new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : ''
 
@@ -24,6 +29,7 @@ export default function LeadScreen() {
   const [insurer, setInsurer] = useState('')
   const [plan, setPlan] = useState('')
   const [step, setStep] = useState<'won' | 'lost' | 'report' | null>(null)
+  const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -90,8 +96,14 @@ export default function LeadScreen() {
           {step === 'lost' && <Btn kind="ghost" label="Save as not bought (uses the note above)" busy={busy} onPress={() => run(() => markLost(biz!, l.id, note))} />}
           {step === 'report' && (
             <>
-              <Note>Within 7 days of accepting. Put what's wrong in the note above — e.g. wrong number. If the lead was not genuine, ₹{fee} goes back to your wallet.</Note>
-              <Btn kind="danger" label="Send report" busy={busy} disabled={!note.trim()} onPress={() => run(() => reportLead(biz!, l.id, note.trim()))} />
+              <Note>Why is this lead not genuine? A lead that did not convert (not interested, bought elsewhere) cannot be reported. If it was not genuine, ₹{fee} goes back to your wallet.</Note>
+              <View style={st.row2}>
+                {REASONS.map(([code, label, hours]) => {
+                  const open = !!l.accepted_at && Date.now() < new Date(l.accepted_at).getTime() + hours * 3600_000
+                  return <Chip key={code} label={`${label}${open ? '' : ` (only within ${hours} h)`}`} on={reason === code} onPress={() => open && setReason(code)} />
+                })}
+              </View>
+              <Btn kind="danger" label="Send report" busy={busy} disabled={!reason} onPress={() => run(() => reportLead(biz!, l.id, `${reason}: ${note.trim()}`))} />
             </>
           )}
         </Card>

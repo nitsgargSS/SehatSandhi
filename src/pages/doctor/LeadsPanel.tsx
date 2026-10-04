@@ -103,12 +103,21 @@ export default function LeadsPanel({ businessId, role }: { businessId: string; r
   )
 }
 
+// 0195: the only reasons a lead can be reported, and how long after accepting.
+const REPORT_REASONS: [string, string, number][] = [
+  ['wrong_number', 'Wrong or switched-off number', 48],
+  ['duplicate', 'A lead I already have (same number)', 48],
+  ['never_asked', 'The person says they never asked for insurance', 72],
+  ['not_health_or_area', 'Not health insurance, or not my area', 72],
+]
+
 function LeadCard({ l, fee, businessId, busy, run }: { l: Lead; fee: number; businessId: string; busy: boolean; run: (fn: () => Promise<unknown>) => void }) {
   const [open, setOpen] = useState(['open', 'accepted', 'contacted'].includes(l.status))
   const [note, setNote] = useState('')
   const [insurer, setInsurer] = useState('')
   const [plan, setPlan] = useState('')
   const [step, setStep] = useState<'won' | 'lost' | 'report' | null>(null)
+  const [reason, setReason] = useState('')
 
   return (
     <div className="card shadow-sm">
@@ -170,10 +179,20 @@ function LeadCard({ l, fee, businessId, busy, run }: { l: Lead; fee: number; bus
                 </div>
               )}
               {step === 'report' && (
-                <div className="flex gap-2 flex-wrap items-center bg-amber-50 rounded-xl p-3">
-                  <input className="input-field flex-1 min-w-[180px]" placeholder="What's wrong? e.g. wrong number, never asked for insurance" value={note} onChange={e => setNote(e.target.value)} />
-                  <button disabled={busy || !note.trim()} onClick={() => run(() => reportLead(businessId, l.id, note.trim()))} className="btn-outline text-sm py-2 px-4">Send to Sehatsandhi</button>
-                  <p className="w-full text-xs text-gray-500">Within 7 days of accepting. If we find the lead was not genuine, the ₹{fee} goes back to your wallet.</p>
+                <div className="bg-amber-50 rounded-xl p-3 space-y-2">
+                  <div className="font-semibold text-navy-700">Why is this lead not genuine?</div>
+                  {REPORT_REASONS.map(([code, label, hours]) => {
+                    const left = l.accepted_at ? new Date(l.accepted_at).getTime() + hours * 3600_000 - Date.now() : 0
+                    return (
+                      <label key={code} className={`flex items-start gap-2 text-sm ${left <= 0 ? 'opacity-50' : ''}`}>
+                        <input type="radio" name={`r-${l.id}`} className="mt-1 accent-teal-600" disabled={left <= 0} checked={reason === code} onChange={() => setReason(code)} />
+                        <span>{label} <span className="text-xs text-gray-500">— {left > 0 ? `report within ${Math.ceil(left / 3600_000)} h more` : `only within ${hours} hours of accepting`}</span></span>
+                      </label>
+                    )
+                  })}
+                  <input className="input-field w-full" placeholder="Anything to add (optional) — e.g. number switched off, tried twice" value={note} onChange={e => setNote(e.target.value)} />
+                  <button disabled={busy || !reason} onClick={() => run(() => reportLead(businessId, l.id, `${reason}: ${note.trim()}`))} className="btn-outline text-sm py-2 px-4">Send to Sehatsandhi</button>
+                  <p className="text-xs text-gray-600">A lead that did not convert — not interested, bought elsewhere, too costly — cannot be reported. If we find the lead was not genuine, the ₹{fee} goes back to your wallet. Some reports are decided at once from the record (for example, a duplicate is checked against your earlier leads).</p>
                 </div>
               )}
             </div>

@@ -42,7 +42,7 @@ const content = {
       },
       {
         h: '9. Insurance Advisors — Lead Fees',
-        p: 'Insurance advisors list free. The lead fee is taken from your wallet only when you choose to accept a lead, and the amount is shown before you accept. If a lead is not genuine — for example the number is wrong or the person never asked for insurance — report it from the lead within 7 days of accepting. If we find the report is right, the fee goes back into your wallet, usually within 2 business days; the lead\'s history shows the decision. A lead that was genuine but did not end in a policy is not refunded.',
+        p: 'Insurance advisors list free. The lead fee is taken from your wallet only when you choose to accept a lead, and the amount is shown before you accept. A lead can be reported from the lead itself for one of four reasons only: a wrong or switched-off number, or a lead you already have from the same number — within 48 hours of accepting; the person says they never asked for insurance, or it is not health insurance or not your area — within 72 hours. A lead that was genuine but did not end in a policy (not interested, bought elsewhere, too costly) is not refunded. Some reports are decided at once from the record — a duplicate is checked against your earlier leads, and a wrong number is not accepted once you have marked that you spoke to the person. The rest are reviewed by us, usually within 2 business days. If the report is right, the fee goes back into your wallet; the lead\'s history shows the decision. Advisors who report an unusually high share of their leads may be asked for more detail, and repeated false reports can end a listing.',
       },
       {
         h: '10. Money in Your Wallet',
@@ -101,7 +101,7 @@ const content = {
       },
       {
         h: '9. बीमा सलाहकार — लीड फीस',
-        p: 'बीमा सलाहकार मुफ़्त लिस्ट होते हैं। लीड फीस आपके वॉलेट से सिर्फ तब कटती है जब आप कोई लीड स्वीकार करना चुनते हैं, और रकम स्वीकार करने से पहले दिखती है। अगर लीड असली नहीं है — जैसे नंबर गलत है या व्यक्ति ने कभी बीमा के बारे में पूछा ही नहीं — तो स्वीकार करने के 7 दिन के अंदर उसी लीड से रिपोर्ट करें। जाँच में रिपोर्ट सही निकली तो फीस आपके वॉलेट में वापस आ जाती है, आमतौर पर 2 बिज़नेस दिनों में; लीड की हिस्ट्री में फ़ैसला दिखता है। जो लीड असली थी पर पॉलिसी में नहीं बदली, उसका रिफंड नहीं होता।',
+        p: 'बीमा सलाहकार मुफ़्त लिस्ट होते हैं। लीड फीस आपके वॉलेट से सिर्फ तब कटती है जब आप कोई लीड स्वीकार करना चुनते हैं, और रकम स्वीकार करने से पहले दिखती है। लीड सिर्फ इन चार कारणों से, उसी लीड से रिपोर्ट की जा सकती है: नंबर गलत या बंद है, या उसी नंबर की लीड आपके पास पहले से है — स्वीकार करने के 48 घंटे के अंदर; व्यक्ति कहता है कि उसने बीमा के बारे में कभी पूछा ही नहीं, या यह स्वास्थ्य बीमा नहीं है या आपका इलाका नहीं — 72 घंटे के अंदर। जो लीड असली थी पर पॉलिसी में नहीं बदली (रुचि नहीं, कहीं और से ले ली, महँगी लगी), उसका रिफंड नहीं होता। कुछ रिपोर्ट रिकॉर्ड से तुरंत तय हो जाती हैं — डुप्लिकेट आपकी पिछली लीड्स से जाँचा जाता है, और अगर आपने दर्ज किया कि व्यक्ति से बात हो गई, तो गलत नंबर की रिपोर्ट नहीं मानी जाती। बाकी हम देखते हैं, आमतौर पर 2 बिज़नेस दिनों में। रिपोर्ट सही निकली तो फीस आपके वॉलेट में वापस आती है; लीड की हिस्ट्री में फ़ैसला दिखता है। जो सलाहकार अपनी लीड्स का असामान्य रूप से बड़ा हिस्सा रिपोर्ट करते हैं, उनसे और जानकारी माँगी जा सकती है, और बार-बार गलत रिपोर्ट पर लिस्टिंग खत्म की जा सकती है।',
       },
       {
         h: '10. आपके वॉलेट का पैसा',

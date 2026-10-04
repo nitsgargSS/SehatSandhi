@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { adminLeads, resolveLead, setLeadFee, getLeadFee, LEAD_STATUS, type AdminLeadRow } from '../../lib/insuranceApi'
+import { adminLeads, resolveLead, setLeadFee, getLeadFee, advisorReportRates, LEAD_STATUS, type AdminLeadRow, type AdvisorReportRate } from '../../lib/insuranceApi'
 
 // 0192: every insurance lead, the flat fee taken, and the reports that need a
 // decision — refund the fee to the advisor's wallet, or reject the report.
@@ -11,6 +11,8 @@ export default function InsuranceLeadsSection() {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
+  const [rates, setRates] = useState<AdvisorReportRate[]>([])
+  useEffect(() => { advisorReportRates(30).then(setRates).catch(() => setRates([])) }, [rows])
 
   const load = () => { setRows(null); adminLeads(days).then(setRows).catch(e => setErr((e as Error).message)) }
   useEffect(load, [days])
@@ -41,6 +43,27 @@ export default function InsuranceLeadsSection() {
           {feeMsg && <span className="text-sm text-gray-600">{feeMsg}</span>}
         </div>
       </div>
+
+      {rates.length > 0 && (
+        <div className="card shadow-sm space-y-2">
+          <h3 className="font-bold text-navy-700 text-lg">Reports by advisor · last 30 days</h3>
+          <p className="text-sm text-gray-500">Only wrong numbers (48 h), duplicates (48 h), never-asked and not-health/not-area (72 h) can be reported. Red: 20% or more of 5+ leads reported — look closer before refunding.</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs text-gray-500"><th className="py-1 pr-3">Advisor</th><th className="pr-3 text-right">Accepted</th><th className="pr-3 text-right">Reported</th><th className="pr-3 text-right">Refunded</th><th className="pr-3 text-right">Rejected</th><th className="text-right">Rate</th></tr></thead>
+              <tbody>
+                {rates.map(r => (
+                  <tr key={r.business_id} className={`border-t border-gray-100 ${r.flagged ? 'bg-red-50' : ''}`}>
+                    <td className="py-1.5 pr-3">{r.advisor}</td><td className="pr-3 text-right">{r.accepted}</td><td className="pr-3 text-right">{r.reported}</td>
+                    <td className="pr-3 text-right">{r.refunded}</td><td className="pr-3 text-right">{r.rejected}</td>
+                    <td className={`text-right font-semibold ${r.flagged ? 'text-red-700' : ''}`}>{Math.round(Number(r.report_rate) * 100)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="card shadow-sm space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
