@@ -30,7 +30,9 @@ const CONTACT_TO = Deno.env.get('CONTACT_TO') ?? 'contact@sehatsandhi.com'
 const TOPICS: Record<string, string> = {
   booking: 'Booking an appointment',
   listing: 'Listing a clinic or business',
-  partner: 'Pharmacy / insurance / ambulance partnership',
+  partner: 'Joining as a pharmacy / ambulance service / insurance advisor',
+  // 0194: a patient's problem with a medicine order, ambulance or insurance request.
+  request: 'Medicine order, ambulance or insurance request',
   billing: 'Billing, refund or cancellation',
   listing_change: 'Correcting or removing a listing',
   // 0174: also files a privacy request (trigger on contact_inquiries), which

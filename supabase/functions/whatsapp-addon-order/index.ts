@@ -61,38 +61,72 @@ Deno.serve(async (req) => {
   if (bErr) return json({ error: bErr.message }, 500)
   if (!b) return json({ error: 'no such business' }, 404)
 
-  // ── Is there a paid term to add it to? ──
   const today = todayIst()
-  const end = b.term_end ? new Date(`${String(b.term_end).slice(0, 10)}T00:00:00Z`) : null
-  if (b.status !== 'active' || !end || end.getTime() <= today.getTime()) {
-    return json({ error: 'no_active_term', message: 'Your plan is not active. Renew your plan and tick WhatsApp there.' }, 409)
-  }
-
-  // ── Not already on for this term ──
+  const terms = await resolveTypeTerms(db, b.vertical)
   const { data: acct } = await db.from('business_wa_accounts')
     .select('subscription_status, next_billing_date').eq('business_id', businessId).maybeSingle()
   const waEnd = acct?.next_billing_date ? new Date(`${String(acct.next_billing_date).slice(0, 10)}T00:00:00Z`) : null
-  if (acct && acct.subscription_status !== 'inactive' && (!waEnd || waEnd.getTime() >= end.getTime())) {
-    return json({ error: 'already_active', message: 'WhatsApp is already included until your plan ends.' }, 409)
-  }
 
-  // ── The fee for the term the business is on ──
-  const termMonths = [1, 3, 6, 12].includes(Number(b.months_paid)) ? Number(b.months_paid) : 1
-  const terms = await resolveTypeTerms(db, b.vertical)
-  const term = terms.find(t => t.months === termMonths)
-  const fullFee = Number(term?.whatsapp_price ?? 0)
-  if (!(fullFee > 0)) {
-    return json({ error: 'not_offered', message: 'WhatsApp is not offered for this business type.' }, 409)
-  }
+  // 0195: a business type that lists free (insurance advisors) has no paid
+  // term to add WhatsApp to, so it buys WhatsApp on its own — a month (or the
+  // 6 or 12 months it asks for) from today, or from when the current one ends
+  // if that is within a week.
+  const listsFree = terms.length > 0 && terms.every(t => !(Number(t.price) > 0))
+  let end: Date
+  let termMonths: number
+  let fullFee: number
+  let amount: number
+  let daysLeft: number
+  let daysInTerm: number
+  let startDay = today
+  if (listsFree) {
+    if (b.status !== 'active') {
+      return json({ error: 'no_active_term', message: 'Your listing is not active yet.' }, 409)
+    }
+    termMonths = [1, 6, 12].includes(Number(body.months)) ? Number(body.months) : 1
+    if (acct && acct.subscription_status !== 'inactive' && waEnd && waEnd.getTime() > today.getTime() + 7 * DAY) {
+      return json({ error: 'already_active', message: `WhatsApp is on until ${isoDate(waEnd)}. You can renew it in the last week.` }, 409)
+    }
+    if (waEnd && waEnd.getTime() > today.getTime()) startDay = waEnd
+    const term = terms.find(t => t.months === termMonths)
+    fullFee = Number(term?.whatsapp_price ?? 0)
+    if (!(fullFee > 0)) {
+      return json({ error: 'not_offered', message: 'WhatsApp is not offered for this business type.' }, 409)
+    }
+    end = new Date(startDay); end.setUTCMonth(end.getUTCMonth() + termMonths)
+    daysInTerm = Math.max(1, Math.round((end.getTime() - startDay.getTime()) / DAY))
+    daysLeft = daysInTerm
+    amount = fullFee
+  } else {
+    // ── Is there a paid term to add it to? ──
+    const termEnd = b.term_end ? new Date(`${String(b.term_end).slice(0, 10)}T00:00:00Z`) : null
+    if (b.status !== 'active' || !termEnd || termEnd.getTime() <= today.getTime()) {
+      return json({ error: 'no_active_term', message: 'Your plan is not active. Renew your plan and tick WhatsApp there.' }, 409)
+    }
+    end = termEnd
 
-  // Pro rata by days. The term is the one on the listing; if its start is
-  // missing, it is the term's length back from its end.
-  const start = b.term_start
-    ? new Date(`${String(b.term_start).slice(0, 10)}T00:00:00Z`)
-    : (() => { const d = new Date(end); d.setUTCMonth(d.getUTCMonth() - termMonths); return d })()
-  const daysInTerm = Math.max(1, Math.round((end.getTime() - start.getTime()) / DAY))
-  const daysLeft = Math.min(daysInTerm, Math.max(1, Math.round((end.getTime() - today.getTime()) / DAY)))
-  const amount = Math.max(1, Math.round(fullFee * daysLeft / daysInTerm))
+    // ── Not already on for this term ──
+    if (acct && acct.subscription_status !== 'inactive' && (!waEnd || waEnd.getTime() >= end.getTime())) {
+      return json({ error: 'already_active', message: 'WhatsApp is already included until your plan ends.' }, 409)
+    }
+
+    // ── The fee for the term the business is on ──
+    termMonths = [1, 3, 6, 12].includes(Number(b.months_paid)) ? Number(b.months_paid) : 1
+    const term = terms.find(t => t.months === termMonths)
+    fullFee = Number(term?.whatsapp_price ?? 0)
+    if (!(fullFee > 0)) {
+      return json({ error: 'not_offered', message: 'WhatsApp is not offered for this business type.' }, 409)
+    }
+
+    // Pro rata by days. The term is the one on the listing; if its start is
+    // missing, it is the term's length back from its end.
+    const start = b.term_start
+      ? new Date(`${String(b.term_start).slice(0, 10)}T00:00:00Z`)
+      : (() => { const d = new Date(end); d.setUTCMonth(d.getUTCMonth() - termMonths); return d })()
+    daysInTerm = Math.max(1, Math.round((end.getTime() - start.getTime()) / DAY))
+    daysLeft = Math.min(daysInTerm, Math.max(1, Math.round((end.getTime() - today.getTime()) / DAY)))
+    amount = Math.max(1, Math.round(fullFee * daysLeft / daysInTerm))
+  }
 
   const [plan, taxSettings, recipientState] = await Promise.all([
     resolveActivePlan(db), resolveTaxSettings(db), resolveRecipientState(db, businessId),
@@ -103,11 +137,11 @@ Deno.serve(async (req) => {
 
   const label = termLabel(termMonths)
   const lineItems = [{
-    label: `WhatsApp Business Verification & Activation Fee — ${label}, ${daysLeft} of ${daysInTerm} days (${isoDate(today)} to ${isoDate(end)})`,
+    label: `WhatsApp Business Verification & Activation Fee — ${label}, ${daysLeft} of ${daysInTerm} days (${isoDate(startDay)} to ${isoDate(end)})`,
     amount,
   }]
   const quote = {
-    ok: true, termMonths, termLabel: label, termStart: isoDate(today), termEnd: isoDate(end),
+    ok: true, termMonths, termLabel: label, termStart: isoDate(startDay), termEnd: isoDate(end), standalone: listsFree,
     daysLeft, daysInTerm, fullFee, amount, tax, lineItems,
   }
   if (action === 'quote') return json(quote)
@@ -123,7 +157,7 @@ Deno.serve(async (req) => {
     type: 'listing',
     status: 'pending',
     period_months: termMonths,
-    term_start: isoDate(today),
+    term_start: isoDate(startDay),
     term_end: isoDate(end),
     taxable_value: tax.taxableValue,
     gst_rate: tax.applied ? tax.rate : 0,

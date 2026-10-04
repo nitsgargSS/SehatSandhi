@@ -72,3 +72,8 @@ export interface AdminLeadRow {
 export const adminLeads = (days = 30) => rpc<AdminLeadRow[]>('sehat_admin_insurance_leads', { p_days: days }).then(r => r ?? [])
 export const resolveLead = (id: string, refund: boolean, note: string) => rpc<string>('sehat_admin_resolve_lead', { p_lead: id, p_refund: refund, p_note: note || null })
 export const setLeadFee = (rupees: number) => rpc<number>('sehat_admin_set_lead_fee', { p_rupees: rupees })
+
+/** 0195: how often each advisor reports leads, last 30 days; 20%+ of 5+ is flagged. */
+export interface AdvisorReportRate { business_id: string; advisor: string; accepted: number; reported: number; refunded: number; rejected: number; report_rate: number; flagged: boolean }
+export const advisorReportRates = (days = 30) =>
+  rpc<AdvisorReportRate[]>('sehat_admin_advisor_report_rates', { p_days: days }).then(r => r ?? [])

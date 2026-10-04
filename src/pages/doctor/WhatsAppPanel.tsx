@@ -92,7 +92,7 @@ export default function WhatsAppPanel({ businessId, businessName, prefill, busin
     )
   }
 
-  return <WhatsAppWorkspace businessId={businessId} businessName={businessName} prefill={prefill}
+  return <WhatsAppWorkspace business={business} businessId={businessId} businessName={businessName} prefill={prefill}
     banner={access?.state === 'grace' ? (
       <div className="space-y-3">
         <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3 flex-wrap">
@@ -185,7 +185,8 @@ function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn
   )
 }
 
-function WhatsAppWorkspace({ businessId, businessName, prefill, banner }: {
+function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business }: {
+  business: { vertical?: string | null }
   businessId: string
   businessName: string
   prefill: { name?: string; email?: string; contact?: string }
@@ -227,7 +228,9 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner }: {
           <div>
             <h3 className="font-bold text-navy-700 flex items-center gap-2"><MessageCircle className="w-4 h-4 text-teal-600" /> WhatsApp marketing</h3>
             <p className="text-sm text-gray-500 mt-1">
-              Send approved messages — camps, notices, health tips — to patients who agreed to hear from {businessName}.
+              {business.vertical === 'insurance'
+                ? <>Send approved messages to the people whose leads you accepted in the last 90 days — they asked to hear about cover. Anyone who sends STOP is never messaged.</>
+                : <>Send approved messages — camps, notices, health tips — to patients who agreed to hear from {businessName}.</>}
             </p>
           </div>
           <div className="text-xs text-gray-500 text-right">
@@ -250,7 +253,7 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner }: {
       <WalletCard businessId={businessId} balance={balance} txs={txs} prefill={prefill} onChange={load} />
 
       {settings && (
-        <Composer
+        <Composer insurance={business.vertical === 'insurance'}
           businessId={businessId} businessName={businessName} settings={settings} balance={balance}
           blocker={blocker} templates={templates} pins={pins} onSent={load}
         />
@@ -354,7 +357,8 @@ function WalletCard({ businessId, balance, txs, prefill, onChange }: {
   )
 }
 
-function Composer({ businessId, businessName, settings, balance, blocker, templates, pins, onSent }: {
+function Composer({ insurance = false, businessId, businessName, settings, balance, blocker, templates, pins, onSent }: {
+  insurance?: boolean
   businessId: string; businessName: string; settings: MarketingSettings; balance: number
   blocker: string | null; templates: WaTemplate[]; pins: { pin_code: string; patients: number }[]
   onSent: () => void
@@ -419,8 +423,10 @@ function Composer({ businessId, businessName, settings, balance, blocker, templa
         <p className="text-xs font-semibold text-gray-500 mb-2">1. PIN codes</p>
         {!pins.length ? (
           <p className="text-sm text-gray-500">
-            No patients have agreed to WhatsApp updates yet. Open a patient's record and use
-            "Patient agreed…" under WhatsApp updates to add them.
+            {insurance
+              ? 'Nobody to message yet. Leads you accept appear here for 90 days.'
+              : <>No patients have agreed to WhatsApp updates yet. Open a patient's record and use
+            "Patient agreed…" under WhatsApp updates to add them.</>}
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
