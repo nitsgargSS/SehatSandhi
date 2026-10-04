@@ -3,19 +3,13 @@ import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View 
 import { router, useFocusEffect } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { registerPush, unregisterPush } from '../../lib/push'
-import { me, requestCode, verifyCode, myActivity, cancelBooking, type Me, type Activity, type RateKind } from '../../lib/patient'
+import { me, requestCode, verifyCode, myActivity, type Me, type Activity } from '../../lib/patient'
+import { RateList, RequestList, requests, toRate } from '../../ui/MyLists'
 import { Btn, Card, Err, Field, Label, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
 
 // The patient's home in the app (0196): sign in once with a WhatsApp code,
 // then everything on their number — and what is waiting for a rating.
-const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })
-const STATUS: Record<string, string> = {
-  open: 'Waiting for a reply', accepted: 'Accepted', quoted: 'Price ready — approve it', confirmed: 'Approved', packed: 'Packed',
-  out_for_delivery: 'On the way', delivered: 'Delivered', on_the_way: 'On the way', picked_up: 'Picked up', completed: 'Completed',
-  contacted: 'Advisor spoke to you', won: 'Policy bought', lost: 'Closed', cancelled: 'Cancelled', expired: 'Expired', no_pharmacy: 'No pharmacy',
-  booked: 'Booked', disputed: 'Under review',
-}
 
 export default function MyHome() {
   const [who, setWho] = useState<Me | null | undefined>(undefined)
@@ -26,7 +20,6 @@ export default function MyHome() {
   const [code, setCode] = useState('')
   const [sent, setSent] = useState(false)
   const [dev, setDev] = useState('')
-  const [confirming, setConfirming] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const m = await me().catch(() => null)
@@ -76,34 +69,11 @@ export default function MyHome() {
     </ScrollView>
   )
 
-  const site = act?.site ?? 'https://sehatsandhi.com'
-  const toRate: { kind: RateKind; id: string; title: string }[] = act ? [
-    ...act.bookings.filter(b => b.rateable).map(b => ({ kind: 'booking' as const, id: b.id, title: `Visit — ${b.place ?? 'clinic'}${b.doctor ? ` (${b.doctor})` : ''}` })),
-    ...act.orders.filter(o => o.rateable).map(o => ({ kind: 'order' as const, id: o.id, title: `Medicines ${o.code} — ${o.pharmacy ?? ''}` })),
-    ...act.trips.filter(t => t.rateable).map(t => ({ kind: 'trip' as const, id: t.id, title: `Ambulance ${t.code} — ${t.service ?? ''}` })),
-    ...act.insurance.filter(l => l.rateable).map(l => ({ kind: 'insurance' as const, id: l.id, title: `Insurance advisor — ${l.advisor ?? ''}` })),
-  ] : []
-
   return (
     <ScrollView contentContainerStyle={st.wrap} refreshControl={<RefreshControl refreshing={false} onRefresh={load} />}>
       <Text style={st.h}>नमस्ते{who.name ? `, ${who.name.split(' ')[0]}` : ''} 🙏</Text>
       <Note>+{who.phone}</Note>
 
-      {toRate.length > 0 && (
-        <Card style={{ borderColor: C.green, borderWidth: 2 }}>
-          <Label>Waiting for your rating</Label>
-          {toRate.map(r => (
-            <Pressable key={r.kind + r.id} onPress={() => router.push({ pathname: '/me/rate', params: { kind: r.kind, id: r.id, title: r.title } })} style={st.rateRow}>
-              <Text style={st.body}>{r.title}</Text><Text style={st.stars}>☆☆☆☆☆ ›</Text>
-            </Pressable>
-          ))}
-        </Card>
-      )}
-
-      <Pressable onPress={() => router.push('/me/records')} style={st.health}>
-        <Text style={st.healthT}>📋 मेरा स्वास्थ्य रिकॉर्ड / My health records</Text>
-        <Text style={st.healthS}>Visits, prescriptions, reports, bills — and message your clinic ›</Text>
-      </Pressable>
 
       <View style={st.grid}>
         <Pressable style={[st.tile, { borderColor: '#f3c2d6' }]} onPress={() => router.push('/me/order')}><Text style={st.tileIcon}>💊</Text><Text style={st.tileT}>दवाई घर पर{'\n'}Medicines</Text></Pressable>
@@ -111,47 +81,13 @@ export default function MyHome() {
         <Pressable style={[st.tile, { borderColor: '#b3dce6' }]} onPress={() => router.push('/me/insurance')}><Text style={st.tileIcon}>🛡️</Text><Text style={st.tileT}>बीमा{'\n'}Insurance</Text></Pressable>
         <Pressable style={[st.tile, { borderColor: '#b7e2cf' }]} onPress={() => router.push('/find')}><Text style={st.tileIcon}>🩺</Text><Text style={st.tileT}>अपॉइंटमेंट{'\n'}Appointment</Text></Pressable>
         <Pressable style={[st.tile, { borderColor: '#f3d9a4' }]} onPress={() => router.push('/camps')}><Text style={st.tileIcon}>🎁</Text><Text style={st.tileT}>कैंप और ऑफर{'\n'}Camps &amp; offers</Text></Pressable>
-        <Pressable style={[st.tile, { borderColor: '#d6d0f0' }]} onPress={() => router.push('/me/records')}><Text style={st.tileIcon}>📋</Text><Text style={st.tileT}>रिकॉर्ड{'\n'}Records</Text></Pressable>
+        <Pressable style={[st.tile, { borderColor: '#d6d0f0' }]} onPress={() => router.push('/me/records')}><Text style={st.tileIcon}>📋</Text><Text style={st.tileT}>रिकॉर्ड और मैसेज{'\n'}Records &amp; messages</Text></Pressable>
       </View>
 
+      {/* Kept short: the latest 3 of each; the rest behind 'See all'. */}
       <Err msg={err} />
-      <Label>My requests</Label>
-      {act && !act.orders.length && !act.trips.length && !act.insurance.length && !act.bookings.length && <Note>Nothing yet. Your bookings, orders and requests will show here.</Note>}
-      {act?.orders.map(o => (
-        <Card key={o.id}><Pressable onPress={() => Linking.openURL(`${site}/o/${o.token}`)}>
-          <Text style={st.bold}>💊 {o.code} · {STATUS[o.status] ?? o.status}</Text>
-          <Note>{when(o.created_at)}{o.pharmacy ? ` · ${o.pharmacy}` : ''}{o.total ? ` · ₹${o.total}` : ''} · open ›</Note>
-        </Pressable></Card>
-      ))}
-      {act?.trips.map(t => (
-        <Card key={t.id}><Pressable onPress={() => Linking.openURL(`${site}/a/${t.token}`)}>
-          <Text style={st.bold}>🚑 {t.code} · {STATUS[t.status] ?? t.status}</Text>
-          <Note>{when(t.created_at)}{t.service ? ` · ${t.service}` : ''} · open ›</Note>
-        </Pressable></Card>
-      ))}
-      {act?.insurance.map(l => (
-        <Card key={l.id}><Pressable onPress={() => Linking.openURL(`${site}/i/${l.token}`)}>
-          <Text style={st.bold}>🛡️ {l.code} · {STATUS[l.status] ?? l.status}</Text>
-          <Note>{when(l.created_at)}{l.advisor ? ` · ${l.advisor}` : ''} · open ›</Note>
-        </Pressable></Card>
-      ))}
-      {act?.bookings.map(b => (
-        <Card key={b.id}>
-          <Text style={st.bold}>🩺 {b.place ?? 'Clinic'}{b.doctor ? ` · ${b.doctor}` : ''}</Text>
-          <Note>{when(b.when)} · {STATUS[b.status] ?? b.status}{b.name ? ` · ${b.name}` : ''}</Note>
-          {/* 0198: an upcoming booking can be cancelled here; the clinic sees it at once. */}
-          {['booked', 'confirmed'].includes(b.status) && new Date(b.when).getTime() > Date.now() && (
-            confirming === b.id ? (
-              <View style={st.row}>
-                <Btn small kind="danger" label="Yes, cancel it" onPress={async () => {
-                  try { await cancelBooking(b.id); setConfirming(null); await load() } catch (e) { setErr((e as Error).message) }
-                }} />
-                <Btn small kind="ghost" label="Keep it" onPress={() => setConfirming(null)} />
-              </View>
-            ) : <Btn small kind="ghost" label="Cancel booking" onPress={() => setConfirming(b.id)} />
-          )}
-        </Card>
-      ))}
+      <RateList items={toRate(act)} limit={3} onAll={() => router.push('/me/requests')} />
+      <RequestList items={requests(act)} limit={3} onAll={() => router.push('/me/requests')} onChanged={load} />
       <Btn kind="ghost" small label="Sign out" onPress={signOut} />
     </ScrollView>
   )
