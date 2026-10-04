@@ -8,13 +8,22 @@ import { C } from '../ui/theme'
 // businesses sign in with their website login. A saved session skips in.
 export default function Start() {
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { if (data.session) router.replace('/queue') })
+    // 0196: a saved patient session opens the patient's side; a business one the queue.
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) return
+      const { error } = await supabase.rpc('sehat_me')
+      router.replace(error ? '/queue' : '/me')
+    })
   }, [])
   return (
     <View style={s.wrap}>
       <Image source={require('../../assets/icon.png')} style={s.logo} />
       <Text style={s.title}>Sehatsandhi</Text>
       <Text style={s.sub}>स्वास्थ्य की नई साझेदारी</Text>
+      <Pressable style={[s.btn, { backgroundColor: '#0b7d57' }]} onPress={() => router.push('/me')}>
+        <Text style={s.btnText}>For patients — My Sehatsandhi</Text>
+        <Text style={[s.soon, { color: '#d6efe4' }]}>medicines · ambulance · insurance · my requests</Text>
+      </Pressable>
       <Pressable style={[s.btn, s.ghost]} onPress={() => router.push('/find')}>
         <Text style={[s.btnText, { color: C.ink }]}>Find a doctor</Text>
         <Text style={s.soon}>no login · book on WhatsApp</Text>

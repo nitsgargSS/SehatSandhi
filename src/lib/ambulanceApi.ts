@@ -95,3 +95,10 @@ export interface AdminTripRow {
   mismatch: boolean; ended_reason: string | null
 }
 export const adminTrips = (days = 30) => rpc<AdminTripRow[]>('sehat_admin_ambulance_requests', { p_days: days }).then(r => r ?? [])
+
+/** 0196: where the patient was when they asked from the app — a map pin for the crew. */
+export const tripLocation = (businessId: string, id: string) =>
+  rpc<{ lat: number; lng: number } | null>('sehat_am_location', { p_business: businessId, p_req: id })
+export const mapsUrl = (t: { pickup_address: string | null; pin_code: string }, loc: { lat: number; lng: number } | null) =>
+  loc ? `https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${t.pickup_address ?? ''}, ${t.pin_code}`)}`

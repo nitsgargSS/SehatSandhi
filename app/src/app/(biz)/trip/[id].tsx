@@ -3,7 +3,7 @@ import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSession } from '../../../lib/session'
 import {
-  getTrip, acceptTrip, declineTrip, dropTrip, onTheWay, pickedUp, completeTrip, tripDrivers,
+  getTrip, tripLocation, mapsUrl, acceptTrip, declineTrip, dropTrip, onTheWay, pickedUp, completeTrip, tripDrivers,
   TRIP_STATUS, TRIP_EVENT, type Trip, type Driver, type FareMode,
 } from '@web/lib/ambulanceApi'
 import { Btn, Card, Chip, Err, Field, Label, Note } from '../../../ui/kit'
@@ -30,6 +30,8 @@ export default function TripScreen() {
   const [asking, setAsking] = useState<'decline' | 'drop' | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [loc, setLoc] = useState<{ lat: number; lng: number } | null>(null)
+  useEffect(() => { if (biz && id && t?.mine) tripLocation(biz, id).then(setLoc).catch(() => setLoc(null)) }, [biz, id, t?.mine])
 
   const load = useCallback(async () => {
     if (!biz || !id) return
@@ -64,7 +66,7 @@ export default function TripScreen() {
           {!!t.pickup_address && <Text style={st.body}>{t.pickup_address}, {t.pin_code}</Text>}
           <View style={st.row2}>
             {!!t.patient_phone && <Btn label={`Call +${t.patient_phone}`} onPress={() => Linking.openURL(`tel:+${t.patient_phone}`)} />}
-            {!!t.pickup_address && <Btn kind="ghost" label="Open map" onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${t.pickup_address}, ${t.pin_code}`)}`)} />}
+            {(!!t.pickup_address || !!loc) && <Btn kind="ghost" label={loc ? '📍 Open exact location' : 'Open map'} onPress={() => Linking.openURL(mapsUrl(t, loc))} />}
           </View>
         </Card>
       )}

@@ -57,6 +57,8 @@ export async function unregisterPush() {
 /** Where a tapped notification should take the user. */
 export function routeFor(data: Record<string, unknown> | undefined): string | null {
   const kind = data?.kind
+  // 0196: a patient asked to rate what they used.
+  if (kind === 'review' && typeof data?.what === 'string' && typeof data?.id === 'string') return `/me/rate?kind=${data.what}&id=${data.id}`
   if (kind === 'medicine_order' && typeof data?.order_id === 'string') return `/order/${data.order_id}`
   if (kind === 'ambulance' && typeof data?.request_id === 'string') return `/trip/${data.request_id}`
   if (kind === 'insurance_lead' && typeof data?.lead_id === 'string') return `/lead/${data.lead_id}`

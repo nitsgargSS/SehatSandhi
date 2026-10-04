@@ -16,6 +16,7 @@ import { SPECIALITIES } from '../../types'
 import MedicineOrdersSection from './MedicineOrdersSection'
 import AmbulanceRequestsSection from './AmbulanceRequestsSection'
 import InsuranceLeadsSection from './InsuranceLeadsSection'
+import ChannelsSection from './ChannelsSection'
 
 // Where the listings are, where they are not, what kind they are, who is due,
 // and which towns notice us.
@@ -34,7 +35,7 @@ import InsuranceLeadsSection from './InsuranceLeadsSection'
 // button that claims to have sent a message it did not send is worse than no
 // button, because the clinic is then not chased by anyone.
 
-type Section = 'gaps' | 'areas' | 'matrix' | 'renewals' | 'geo' | 'manage' | 'orders' | 'ambulance' | 'insurance'
+type Section = 'gaps' | 'areas' | 'matrix' | 'renewals' | 'geo' | 'manage' | 'orders' | 'ambulance' | 'insurance' | 'channels'
 
 export default function InsightsPanel() {
   const [section, setSection] = useState<Section>('gaps')
@@ -55,7 +56,7 @@ export default function InsightsPanel() {
 
       <div className="flex gap-2 flex-wrap">
         {([['gaps', 'Gaps to market'], ['areas', 'By area'], ['matrix', 'Type × region'], ['renewals', 'Renewals'],
-           ['geo', 'Where we are noticed'], ['manage', 'Service areas'], ['orders', 'Medicine orders'], ['ambulance', 'Ambulance requests'], ['insurance', 'Insurance leads']] as [Section, string][]).map(([s, label]) => (
+           ['geo', 'Where we are noticed'], ['manage', 'Service areas'], ['orders', 'Medicine orders'], ['ambulance', 'Ambulance requests'], ['insurance', 'Insurance leads'], ['channels', 'App vs WhatsApp']] as [Section, string][]).map(([s, label]) => (
           <button key={s} onClick={() => setSection(s)} className={chip(section === s)}>{label}</button>
         ))}
       </div>
@@ -64,6 +65,7 @@ export default function InsightsPanel() {
       {section === 'orders' && <MedicineOrdersSection />}
       {section === 'ambulance' && <AmbulanceRequestsSection />}
       {section === 'insurance' && <InsuranceLeadsSection />}
+      {section === 'channels' && <ChannelsSection />}
       {section === 'areas' && <AreasSection chip={chip} />}
       {section === 'matrix' && <MatrixSection chip={chip} />}
       {section === 'renewals' && <RenewalsSection chip={chip} />}
