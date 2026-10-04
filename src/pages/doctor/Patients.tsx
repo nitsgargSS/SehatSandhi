@@ -55,6 +55,8 @@ import { inStockMedicines, suggestMedicines, rxFromStock, itemLabel, type StockR
 import DoctorSelect from '../../components/DoctorSelect'
 import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
 import { opdVisit, opdSlipUrl, patientHistory, HistoryRow, vitalsLine, setTokenStatus } from '../../lib/queueApi'
+import { updatePatientDetails, patientHousehold, patientDetailChanges, type DetailChange } from '../../lib/patientsApi'
+import VisitRegister from './VisitRegister'
 
 // A hospital's doctors, for the "which doctor" pickers below (0121). Empty on
 // a failure, which simply hides the pickers.
@@ -145,7 +147,10 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
   // Two ways to find somebody: by who they are, or by what they were treated
   // for. The second answers "who did I operate on that needs seeing again?",
   // which the name search cannot.
-  const [mode, setMode] = useState<'name' | 'diagnosis'>('name')
+  const [mode, setMode] = useState<'name' | 'diagnosis' | 'date'>('name')
+  // 0193: a visit picked from the date register opens straight to that visit.
+  const [focusVisit, setFocusVisit] = useState<string | null>(null)
+  const [searchNow, setSearchNow] = useState(0)
   const [dxResults, setDxResults] = useState<ClinicalHit[]>([])
   // 0162: narrow by when, where it was written, major/minor OT and doctor —
   // or, with no words, list by those alone ("all minor OTs in March").
@@ -180,6 +185,7 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
     const timer = setTimeout(async () => {
       try {
         const rows = await searchPatients(q, businessId)
+        if (!cancelled) setSelected(null)
         if (!cancelled) { setResults(rows); setError('') }
         logAccess(businessId, null, 'search', q.length > 40 ? q.slice(0, 40) : q)
       } catch (e) {
@@ -187,9 +193,9 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
       } finally {
         if (!cancelled) setSearching(false)
       }
-    }, 300)
+    }, searchNow ? 0 : 300)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [query, businessId, mode])
+  }, [query, businessId, mode, searchNow])
 
   // The diagnosis search, debounced the same way. Kept separate from the name
   // search rather than branching inside it: they take different arguments,
@@ -223,7 +229,7 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
             RPC refuses it and the tab is not drawn. */}
         {clinical && (
           <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            {([['name', 'By name'], ['diagnosis', 'By surgery, diagnosis or keyword']] as [typeof mode, string][]).map(([m, label]) => (
+            {([['name', 'By name'], ['date', 'By date'], ['diagnosis', 'By surgery, diagnosis or keyword']] as [typeof mode, string][]).map(([m, label]) => (
               <button
                 key={m}
                 onClick={() => { setMode(m); setQuery(''); setResults([]); setDxResults([]) }}
@@ -239,11 +245,13 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
             ))}
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {mode !== 'date' && (
+        <form style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+          onSubmit={e => { e.preventDefault(); setSelected(null); setSearchNow(n => n + 1) }}>
           <Search className="w-4 h-4" style={{ color: BIZ.muted, flex: '0 0 auto' }} />
           <input
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => { setQuery(e.target.value); if (e.target.value.trim().length >= 2) setSelected(null) }}
             placeholder={mode === 'diagnosis'
               ? 'Any words — surgery, diagnosis, implant, drug, instruction… (e.g. "lap chole", "mesh", "no lifting")'
               : 'Search by name, phone number or file number…'}
@@ -251,14 +259,19 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
             style={{ ...input, border: 'none', padding: '4px 0', fontSize: 15 }}
           />
           {searching && <Spinner />}
+          <button type="submit" style={{ ...btn(false), fontSize: 12.5, flex: '0 0 auto' }}>Search</button>
           {mode === 'name' && (
-            <button style={{ ...btn(true), fontSize: 12.5, flex: '0 0 auto' }}
+            <button type="button" style={{ ...btn(true), fontSize: 12.5, flex: '0 0 auto' }}
               onClick={() => { setRegistering(true); setSelected(null) }}>
               <Plus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />
               New patient
             </button>
           )}
-        </div>
+        </form>
+        )}
+        {mode === 'date' && (
+          <div style={{ fontSize: 12.5, color: BIZ.muted }}>Pick the dates, a doctor and what to list. Open any visit to add to it or write the diagnosis.</div>
+        )}
         {/* Following someone up is the whole reason this search exists, so the
             filter for it sits with the box rather than behind a menu. */}
         {mode === 'diagnosis' && (
@@ -324,7 +337,7 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
           {results.map((r, i) => (
             <button
               key={r.patient_member_id}
-              onClick={() => { setSelected(r.patient_member_id); logAccess(businessId, r.patient_member_id, 'view') }}
+              onClick={() => { { setFocusVisit(null); setSelected(r.patient_member_id) }; logAccess(businessId, r.patient_member_id, 'view') }}
               style={{
                 display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
                 fontFamily: 'inherit', background: '#fff', border: 'none',
@@ -356,7 +369,7 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
           {dxResults.map((r, i) => (
             <button
               key={`${r.source}-${r.source_id}`}
-              onClick={() => { setSelected(r.patient_member_id); logAccess(businessId, r.patient_member_id, 'view') }}
+              onClick={() => { { setFocusVisit(null); setSelected(r.patient_member_id) }; logAccess(businessId, r.patient_member_id, 'view') }}
               style={{
                 display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
                 fontFamily: 'inherit', background: '#fff', border: 'none',
@@ -420,6 +433,13 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
         </div>
       )}
 
+      {/* 0193: kept mounted while a record is open, so closing it returns to the same dates and list. */}
+      {mode === 'date' && (
+        <div hidden={!!selected}>
+          <VisitRegister businessId={businessId} defaultDoctorId={doctorId ?? null}
+            onOpen={(m, v) => { setFocusVisit(v); setSelected(m) }} />
+        </div>
+      )}
       {selected && (
         <PatientRecord
           key={`${selected}:${openVisitId ?? ''}`}
@@ -427,7 +447,7 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
           businessId={businessId}
           practitionerId={practitionerId}
           doctorId={doctorId ?? null}
-          focusVisitId={selected === openMemberId ? (openVisitId ?? null) : null}
+          focusVisitId={focusVisit ?? (selected === openMemberId ? (openVisitId ?? null) : null)}
           onClose={() => setSelected(null)}
         />
       )}
@@ -764,6 +784,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
               {summary.blood_group && ` · ${summary.blood_group}`}
               {summary.mrn && ` · file ${summary.mrn}`}
             </div>
+            <PatientDetailsEditor businessId={businessId} memberId={memberId} summary={summary} onSaved={reload} />
             <PatientAddress businessId={businessId} memberId={memberId} />
             <div style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 3 }}>
               {summary.visits_here} visit{summary.visits_here === 1 ? '' : 's'} here
@@ -4284,6 +4305,99 @@ function ConsultationRecorder({ memberId, businessId, practitionerId, visits, on
             </span>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+
+// 0193: correct a name, gender, age / date of birth or phone typed wrong at
+// registration — any staff member. Address and PIN are corrected just below
+// (PatientAddress). Every change is kept with who made it.
+function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
+  businessId: string; memberId: string; summary: PatientSummary; onSaved: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState({ name: '', gender: '', age: '', dob: '', phone: '' })
+  const [others, setOthers] = useState<string[]>([])
+  const [log, setLog] = useState<DetailChange[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  const start = () => {
+    setF({
+      name: summary.full_name ?? '', gender: summary.gender ?? '',
+      age: summary.age_years != null ? String(summary.age_years) : '',
+      dob: summary.date_of_birth ?? '',
+      phone: (summary.phone ?? '').replace(/^91/, ''),
+    })
+    setErr(''); setMsg(''); setOpen(true)
+    patientHousehold(businessId, memberId).then(h => setOthers(h.others)).catch(() => setOthers([]))
+    patientDetailChanges(businessId, memberId).then(setLog).catch(() => setLog([]))
+  }
+  const phoneChanged = f.phone.replace(/\D/g, '').slice(-10) !== (summary.phone ?? '').replace(/\D/g, '').slice(-10)
+
+  const save = async () => {
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      const r = await updatePatientDetails(businessId, memberId, {
+        fullName: f.name, gender: f.gender || undefined,
+        dateOfBirth: f.dob || null,
+        ageYears: !f.dob && f.age !== '' ? Number(f.age) : null,
+        phone: phoneChanged ? f.phone : undefined,
+      })
+      setMsg(r.changed === 0 ? 'Nothing changed.' : r.moved_household
+        ? 'Saved. That number already had a family on it, so this patient is now listed with them.'
+        : `Saved ${r.changed} change${r.changed === 1 ? '' : 's'}.`)
+      setOpen(false); onSaved()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  if (!open) return (
+    <div style={{ marginTop: 4, fontSize: 12.5 }}>
+      <button onClick={start} style={{ color: '#0f6b4a', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: 12.5 }}>
+        Edit name, age, gender or phone
+      </button>
+      {msg && <span style={{ marginLeft: 8, color: BIZ.green }}>{msg}</span>}
+    </div>
+  )
+  return (
+    <div style={{ marginTop: 8, padding: 12, borderRadius: 10, background: '#f6faf8', border: `1px solid ${BIZ.border}`, display: 'grid', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input style={{ ...input, flex: '2 1 220px' }} placeholder="Full name" value={f.name} maxLength={80} onChange={e => setF({ ...f, name: e.target.value })} aria-label="Full name" />
+        <select style={{ ...input, flex: '0 1 120px' }} value={f.gender} onChange={e => setF({ ...f, gender: e.target.value })} aria-label="Gender">
+          <option value="">Gender</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
+        </select>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input style={{ ...input, flex: '0 1 90px' }} placeholder="Age" inputMode="numeric" value={f.age} disabled={!!f.dob}
+          onChange={e => setF({ ...f, age: e.target.value.replace(/\D/g, '').slice(0, 3) })} aria-label="Age in years" />
+        <span style={{ fontSize: 12, color: BIZ.muted }}>or date of birth</span>
+        <input type="date" style={{ ...input, flex: '0 1 160px' }} value={f.dob} onChange={e => setF({ ...f, dob: e.target.value })} aria-label="Date of birth" />
+        <input style={{ ...input, flex: '1 1 160px' }} placeholder="Mobile (10 digits)" inputMode="tel" value={f.phone}
+          onChange={e => setF({ ...f, phone: e.target.value.replace(/[^\d+ ]/g, '') })} aria-label="Mobile number" />
+      </div>
+      {phoneChanged && others.length > 0 && (
+        <div style={{ fontSize: 12.5, color: '#8a5a00', background: '#fdf5e6', borderRadius: 8, padding: '7px 10px' }}>
+          {others.length === 1 ? `${others[0]} is` : `${others.join(', ')} are`} on the same number. If the new number is not on Sehatsandhi yet,
+          it changes for them too. If it already belongs to another family, only {summary.full_name} moves to that family.
+        </div>
+      )}
+      {err && <div style={{ fontSize: 13, color: '#b3261e' }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button style={btn(true)} disabled={busy || f.name.trim().length < 2} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
+        <button style={btn()} onClick={() => setOpen(false)}>Cancel</button>
+      </div>
+      {log && log.length > 0 && (
+        <details style={{ fontSize: 12, color: BIZ.muted }}>
+          <summary style={{ cursor: 'pointer' }}>Changes made ({log.length})</summary>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 16 }}>
+            {log.map((c, i) => (
+              <li key={i}>{new Date(c.changed_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} — {c.field}: {c.old_value ?? '—'} → {c.new_value ?? '—'}{c.changed_by_name ? ` · ${c.changed_by_name}` : ''}</li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   )

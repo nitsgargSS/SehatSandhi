@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { isoDate, moneyExact, shortDate } from '../../lib/format'
 import { downloadCsv } from '../../lib/billingApi'
 import { StatTile, ColumnChart, BarList, Point } from '../../components/Charts'
+import VisitRegister, { type RegisterRequest } from './VisitRegister'
+import type { RegisterKind } from '../../lib/patientsApi'
 
 // The patient report (0161): how many patients, how often, from where, who
 // they are, who saw them, what they came with, whose follow-up is due and who
@@ -71,7 +73,10 @@ function Card({ title, children, note }: { title: string; children: React.ReactN
   )
 }
 
-export default function PatientReportPanel({ businessId }: { businessId: string }) {
+export default function PatientReportPanel({ businessId, onOpenPatient }: { businessId: string; onOpenPatient?: (memberId: string, visitId?: string | null) => void }) {
+  // 0193: every number opens the people behind it, below.
+  const [req, setReq] = useState<RegisterRequest | null>(null)
+  const show = (kind: RegisterKind, from: string | null, to: string | null) => setReq({ kind, from, to, doctorId: null, nonce: Date.now() })
   const [preset, setPreset] = useState('30d')
   const [range, setRange] = useState<[string, string]>(PRESETS[2][2]())
   const [grain, setGrain] = useState<Grain>('day')
@@ -145,15 +150,19 @@ export default function PatientReportPanel({ businessId }: { businessId: string 
       {loading && !r ? <div className="card shadow-sm text-sm text-gray-400 py-10 text-center">Loading…</div> : r && t && (
         <div className={`space-y-4 ${loading ? 'opacity-60' : ''}`}>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatTile label="Patients, all time" value={t.all_time} sub={`${t.active_12m.toLocaleString('en-IN')} seen in the last 12 months`} />
-            <StatTile label="Patients in this period" value={t.seen} sub={change(t.seen, t.prev_seen)} />
-            <StatTile label="New patients" value={t.new} sub={change(t.new, t.prev_new)} />
-            <StatTile label="Returning patients" value={t.returning} sub={t.seen ? `${Math.round((t.returning / t.seen) * 100)}% of patients came back` : undefined} />
-            <StatTile label="Visits" value={t.visits} sub={change(t.visits, t.prev_visits)} />
-            <StatTile label="Admissions" value={t.admissions} />
+            <StatTile onClick={() => show('all', null, null)} active={req?.kind === 'all'} label="Patients, all time" value={t.all_time} sub={`${t.active_12m.toLocaleString('en-IN')} seen in the last 12 months`} />
+            <StatTile onClick={() => show('patients', range[0], range[1])} active={req?.kind === 'patients'} label="Patients in this period" value={t.seen} sub={change(t.seen, t.prev_seen)} />
+            <StatTile onClick={() => show('new', range[0], range[1])} active={req?.kind === 'new'} label="New patients" value={t.new} sub={change(t.new, t.prev_new)} />
+            <StatTile onClick={() => show('returning', range[0], range[1])} active={req?.kind === 'returning'} label="Returning patients" value={t.returning} sub={t.seen ? `${Math.round((t.returning / t.seen) * 100)}% of patients came back` : undefined} />
+            <StatTile onClick={() => show('visits', range[0], range[1])} active={req?.kind === 'visits'} label="Visits" value={t.visits} sub={change(t.visits, t.prev_visits)} />
+            <StatTile onClick={() => show('admissions', range[0], range[1])} active={req?.kind === 'admissions'} label="Admissions" value={t.admissions} />
             <StatTile label="Billed" value={moneyExact(t.revenue)} sub={t.seen ? `${moneyExact(t.revenue / t.seen)} per patient` : undefined} />
-            <StatTile label="Follow-ups" value={r.follow_ups.due_7d} sub={`due in 7 days · ${r.follow_ups.overdue} missed`} tone={r.follow_ups.overdue > 0 ? 'alert' : 'normal'} />
+            <StatTile onClick={() => show('follow_ups', isoDate(), shift(7))} active={req?.kind === 'follow_ups'} label="Follow-ups" value={r.follow_ups.due_7d} sub={`due in 7 days · ${r.follow_ups.overdue} missed`} tone={r.follow_ups.overdue > 0 ? 'alert' : 'normal'} />
           </div>
+          {req && (
+            <VisitRegister businessId={businessId} request={req} title="The list behind the number"
+              onOpen={(m, v) => onOpenPatient?.(m, v)} />
+          )}
 
           <Card title="Patients over time">
             <div className="flex gap-1 mb-3">

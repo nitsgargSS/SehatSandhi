@@ -17,17 +17,29 @@ const SERIES = '#0d9488'
 const ALERT = '#d97706'
 
 /** A single headline number. Not a chart — a number is clearer than a plot of one. */
-export function StatTile({ label, value, sub, tone = 'normal' }: {
+export function StatTile({ label, value, sub, tone = 'normal', onClick, active }: {
   label: string
   value: string | number
   sub?: string
   tone?: 'normal' | 'alert'
+  /** 0193: a number that opens the list behind it. */
+  onClick?: () => void
+  active?: boolean
 }) {
+  const shown = typeof value === 'number' ? value.toLocaleString('en-IN') : value
+  if (onClick) return (
+    <button type="button" onClick={onClick} title={`Show the ${label.toLowerCase()}`}
+      className={`text-left bg-white border rounded-xl p-4 hover:border-teal-400 hover:shadow-sm transition ${active ? 'border-teal-500 ring-2 ring-teal-100' : 'border-gray-100'}`}>
+      <div className="text-xs font-medium text-gray-500 mb-1">{label}</div>
+      <div className="text-2xl font-bold underline decoration-dotted underline-offset-4" style={{ color: tone === 'alert' ? ALERT : '#1d6fb8' }}>{shown}</div>
+      <div className="text-xs text-gray-400 mt-0.5">{sub ? `${sub} · ` : ''}<span className="text-teal-700">show list</span></div>
+    </button>
+  )
   return (
     <div className="bg-white border border-gray-100 rounded-xl p-4">
       <div className="text-xs font-medium text-gray-500 mb-1">{label}</div>
       <div className="text-2xl font-bold" style={{ color: tone === 'alert' ? ALERT : '#1e3a5f' }}>
-        {typeof value === 'number' ? value.toLocaleString('en-IN') : value}
+        {shown}
       </div>
       {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
     </div>

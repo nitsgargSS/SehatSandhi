@@ -1925,7 +1925,7 @@ export default function DoctorDashboard() {
 
         {/* ══════════ PATIENT REPORT — how many, from where, who to bring back (0161) ══════════ */}
         {tab === 'patientreport' && doctor && emr && (access.opd || access.ipd) && (
-          <PatientReportPanel businessId={doctor.id} />
+          <PatientReportPanel businessId={doctor.id} onOpenPatient={openPatient} />
         )}
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
