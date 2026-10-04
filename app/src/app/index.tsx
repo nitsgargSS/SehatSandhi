@@ -34,7 +34,8 @@ export default function Start() {
         <Text style={s.soon}>free health camps and special prices near you</Text>
       </Pressable>
       <Pressable style={s.btn} onPress={() => router.push('/login')}>
-        <Text style={s.btnText}>Business login</Text>
+        <Text style={s.btnText}>Login</Text>
+        <Text style={[s.soon, { color: '#d6efe4' }]}>doctors · clinic staff · pharmacies · labs · partners</Text>
       </Pressable>
     </View>
   )
