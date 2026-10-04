@@ -5,6 +5,8 @@ import { supabase } from '../../lib/supabase'
 import StaffCodeModal from './StaffCodeModal'
 import { PersonMatches } from './Invitations'
 import { findPeople, type PersonMatch } from '../../lib/staffApi'
+import { phoneProblem } from '../../lib/credentials'
+import PhoneError from '../../components/PhoneError'
 
 // 0149: nurses and the doctors they work for, on Doctors & staff (owner and
 // manager) and in My practice (a doctor's own nurses). The database decides
@@ -168,10 +170,13 @@ export function MyNurses({ businessId, practitionerId }: { businessId: string; p
         <p className="text-sm font-medium text-gray-700 mb-2">Add a new nurse</p>
         <div className="grid sm:grid-cols-3 gap-2">
           <input className="input-field text-sm" placeholder="Full name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-          <input className="input-field text-sm" placeholder="Mobile" inputMode="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+          <div>
+            <input className="input-field text-sm w-full" placeholder="Mobile (10 digits)" inputMode="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/[^\d+ ]/g, '') }))} />
+            <PhoneError value={form.phone} />
+          </div>
           <input className="input-field text-sm" placeholder="Email (they sign in with it)" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
         </div>
-        <button onClick={() => startAdd()} disabled={busy || !form.name.trim() || !form.phone.trim() || !form.email.trim()}
+        <button onClick={() => startAdd()} disabled={busy || !form.name.trim() || !!phoneProblem(form.phone) || !form.email.trim()}
           className="btn-teal text-sm py-2 px-4 mt-2 disabled:opacity-50">Add nurse</button>
       </div>
 

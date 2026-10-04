@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { fetchOpenWindows, type TimeSlot } from '../../lib/availability'
 import { listBusinessDoctors, type BusinessDoctor } from '../../lib/doctorsApi'
+import { phoneProblem } from '../../lib/credentials'
+import PhoneError from '../../components/PhoneError'
 
 // 0152: book an appointment at the desk, into the same open slots the WhatsApp
 // bot offers — so a doctor's leave, their hours at another clinic and full
@@ -82,9 +84,12 @@ export default function DeskBooking({ businessId, onBooked }: { businessId: stri
       {slot && (
         <div className="grid sm:grid-cols-4 gap-2">
           <input className="input-field text-sm sm:col-span-2" placeholder="Patient name" value={p.name} onChange={e => setP(v => ({ ...v, name: e.target.value }))} />
-          <input className="input-field text-sm" placeholder="Mobile" inputMode="tel" value={p.phone} onChange={e => setP(v => ({ ...v, phone: e.target.value }))} />
+          <div>
+            <input className="input-field text-sm w-full" placeholder="Mobile (10 digits)" inputMode="tel" value={p.phone} onChange={e => setP(v => ({ ...v, phone: e.target.value.replace(/[^\d+ ]/g, '') }))} />
+            <PhoneError value={p.phone} />
+          </div>
           <input className="input-field text-sm" placeholder="Age" inputMode="numeric" value={p.age} onChange={e => setP(v => ({ ...v, age: e.target.value }))} />
-          <button onClick={book} disabled={busy || !p.name.trim() || p.phone.replace(/\D/g, '').length < 10}
+          <button onClick={book} disabled={busy || !p.name.trim() || !!phoneProblem(p.phone)}
             className="btn-teal text-sm py-2 px-4 disabled:opacity-50 sm:col-span-4 sm:w-auto sm:justify-self-start">
             {busy ? 'Booking…' : 'Book'}
           </button>

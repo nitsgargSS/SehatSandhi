@@ -6,6 +6,7 @@ import { searchPractitioners, PractitionerMatch } from '../../lib/identityApi'
 import { DraftPractitioner } from '../../lib/businessApi'
 import { isValidEmail, isValidPhone, isValidRegNumber } from '../../lib/credentials'
 import { searchDoctorsByName } from '../../lib/registryLookup'
+import PhoneError from '../../components/PhoneError'
 
 // Adding a doctor to a business, either way round.
 //
@@ -341,8 +342,11 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
               onChange={e => setDraft(d => ({ ...d, qualification: e.target.value }))} style={input} />
             <input placeholder="Registration number *" value={draft.reg_number ?? ''}
               onChange={e => setDraft(d => ({ ...d, reg_number: e.target.value }))} style={input} />
-            <input placeholder="Mobile number *" inputMode="numeric" value={draft.phone ?? ''}
-              onChange={e => setDraft(d => ({ ...d, phone: e.target.value }))} style={input} />
+            <div>
+              <input placeholder="Mobile number * (10 digits)" inputMode="numeric" value={draft.phone ?? ''}
+                onChange={e => setDraft(d => ({ ...d, phone: e.target.value.replace(/[^\d+ ]/g, '') }))} style={{ ...input, width: '100%' }} />
+              <PhoneError value={draft.phone} className="text-xs text-red-600 mt-1" />
+            </div>
             <input placeholder="Email *" type="email" inputMode="email" autoComplete="off"
               value={draft.email ?? ''}
               onChange={e => setDraft(d => ({ ...d, email: e.target.value }))} style={input} />

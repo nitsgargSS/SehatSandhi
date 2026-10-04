@@ -14,6 +14,8 @@ import {
 } from '../../lib/labApi'
 import { downloadCsv } from '../../lib/billingApi'
 import { sizeText } from '../../lib/shrinkUpload'
+import { phoneProblem } from '../../lib/credentials'
+import PhoneError from '../../components/PhoneError'
 
 // The lab (0168) — tests, packages, orders, results, signed reports.
 //
@@ -295,6 +297,7 @@ function NewOrder({ businessId, tests, packages, onCreated, goTests, canManage, 
     try {
       let memberId = patient?.id ?? ''
       if (!memberId && reg) {
+        { const bad = phoneProblem(reg.phone, true, true); if (bad) throw new Error(bad) }
         memberId = await registerPatient(businessId, { fullName: reg.name.trim(), phone: reg.phone.trim(), relation: 'self',
           gender: reg.gender || undefined, ageYears: reg.age ? Number(reg.age) : null })
       }
@@ -318,7 +321,10 @@ function NewOrder({ businessId, tests, packages, onCreated, goTests, canManage, 
         ) : reg ? (
           <div className="grid sm:grid-cols-4 gap-2">
             <input className="input-field sm:col-span-2" placeholder="Full name" value={reg.name} onChange={e => setReg({ ...reg, name: e.target.value })} />
-            <input className="input-field" placeholder="Mobile" inputMode="tel" value={reg.phone} onChange={e => setReg({ ...reg, phone: e.target.value })} />
+            <div>
+              <input className="input-field w-full" placeholder="Mobile — 10 digits, or + country code" inputMode="tel" value={reg.phone} onChange={e => setReg({ ...reg, phone: e.target.value.replace(/[^\d+ ]/g, '') })} />
+              <PhoneError value={reg.phone} foreign />
+            </div>
             <div className="flex gap-2">
               <input className="input-field" placeholder="Age" inputMode="numeric" value={reg.age} onChange={e => setReg({ ...reg, age: e.target.value })} />
               <select className="input-field" value={reg.gender} onChange={e => setReg({ ...reg, gender: e.target.value })}>

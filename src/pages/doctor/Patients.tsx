@@ -55,7 +55,8 @@ import { inStockMedicines, suggestMedicines, rxFromStock, itemLabel, type StockR
 import DoctorSelect from '../../components/DoctorSelect'
 import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
 import { opdVisit, opdSlipUrl, patientHistory, HistoryRow, vitalsLine, setTokenStatus } from '../../lib/queueApi'
-import { updatePatientDetails, patientHousehold, patientDetailChanges, type DetailChange } from '../../lib/patientsApi'
+import { updatePatientDetails, patientDetailChanges, patientPhones, addPatientPhone, removePatientPhone, type DetailChange, type OtherPhone } from '../../lib/patientsApi'
+import { phoneProblem } from '../../lib/credentials'
 import VisitRegister from './VisitRegister'
 
 // A hospital's doctors, for the "which doctor" pickers below (0121). Empty on
@@ -543,7 +544,8 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
-  const ready = form.fullName.trim().length > 1 && form.phone.replace(/\D/g, '').length >= 10
+  const phoneErr = form.phone.trim() ? phoneProblem(form.phone, true, true) : null
+  const ready = form.fullName.trim().length > 1 && !phoneProblem(form.phone, true, true)
     && (!toOpd || feeValid(fee, opdDoctor)) && (!toOpd || doctors.length <= 1 || !!underDoctor)
 
   if (done) {
@@ -586,8 +588,9 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
             <input style={input} value={form.fullName} autoFocus
               onChange={e => setForm({ ...form, fullName: e.target.value })} /></div>
           <div style={{ flex: '1 1 150px' }}><div style={label}>Mobile number</div>
-            <input style={input} inputMode="numeric" placeholder="10 digits"
-              value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+            <input style={{ ...input, ...(phoneErr ? { borderColor: '#d64545' } : {}) }} inputMode="tel" placeholder="10 digits, or +44… for a foreign number"
+              value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value.replace(/[^\d+ ]/g, '') })} />
+            {phoneErr && <div style={{ fontSize: 12, color: '#b3261e', marginTop: 3 }}>{phoneErr}</div>}</div>
         </div>
 
         <div><div style={label}>Whose number is this?</div>
@@ -784,6 +787,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
               {summary.blood_group && ` · ${summary.blood_group}`}
               {summary.mrn && ` · file ${summary.mrn}`}
             </div>
+            <OtherNumbers businessId={businessId} memberId={memberId} />
             <PatientDetailsEditor businessId={businessId} memberId={memberId} summary={summary} onSaved={reload} />
             <PatientAddress businessId={businessId} memberId={memberId} />
             <div style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 3 }}>
@@ -4311,15 +4315,15 @@ function ConsultationRecorder({ memberId, businessId, practitionerId, visits, on
 }
 
 
-// 0193: correct a name, gender, age / date of birth or phone typed wrong at
+// 0193: correct a name, gender or age / date of birth typed wrong at
 // registration — any staff member. Address and PIN are corrected just below
-// (PatientAddress). Every change is kept with who made it.
+// (PatientAddress). The saved mobile number is not edited — another number is
+// added instead (OtherNumbers). Every change is kept with who made it.
 function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
   businessId: string; memberId: string; summary: PatientSummary; onSaved: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [f, setF] = useState({ name: '', gender: '', age: '', dob: '', phone: '' })
-  const [others, setOthers] = useState<string[]>([])
+  const [f, setF] = useState({ name: '', gender: '', age: '', dob: '' })
   const [log, setLog] = useState<DetailChange[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -4330,13 +4334,10 @@ function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
       name: summary.full_name ?? '', gender: summary.gender ?? '',
       age: summary.age_years != null ? String(summary.age_years) : '',
       dob: summary.date_of_birth ?? '',
-      phone: (summary.phone ?? '').replace(/^91/, ''),
     })
     setErr(''); setMsg(''); setOpen(true)
-    patientHousehold(businessId, memberId).then(h => setOthers(h.others)).catch(() => setOthers([]))
     patientDetailChanges(businessId, memberId).then(setLog).catch(() => setLog([]))
   }
-  const phoneChanged = f.phone.replace(/\D/g, '').slice(-10) !== (summary.phone ?? '').replace(/\D/g, '').slice(-10)
 
   const save = async () => {
     setBusy(true); setErr(''); setMsg('')
@@ -4345,11 +4346,8 @@ function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
         fullName: f.name, gender: f.gender || undefined,
         dateOfBirth: f.dob || null,
         ageYears: !f.dob && f.age !== '' ? Number(f.age) : null,
-        phone: phoneChanged ? f.phone : undefined,
       })
-      setMsg(r.changed === 0 ? 'Nothing changed.' : r.moved_household
-        ? 'Saved. That number already had a family on it, so this patient is now listed with them.'
-        : `Saved ${r.changed} change${r.changed === 1 ? '' : 's'}.`)
+      setMsg(r.changed === 0 ? 'Nothing changed.' : `Saved ${r.changed} change${r.changed === 1 ? '' : 's'}.`)
       setOpen(false); onSaved()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -4357,7 +4355,7 @@ function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
   if (!open) return (
     <div style={{ marginTop: 4, fontSize: 12.5 }}>
       <button onClick={start} style={{ color: '#0f6b4a', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: 12.5 }}>
-        Edit name, age, gender or phone
+        Edit name, age or gender
       </button>
       {msg && <span style={{ marginLeft: 8, color: BIZ.green }}>{msg}</span>}
     </div>
@@ -4375,15 +4373,7 @@ function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
           onChange={e => setF({ ...f, age: e.target.value.replace(/\D/g, '').slice(0, 3) })} aria-label="Age in years" />
         <span style={{ fontSize: 12, color: BIZ.muted }}>or date of birth</span>
         <input type="date" style={{ ...input, flex: '0 1 160px' }} value={f.dob} onChange={e => setF({ ...f, dob: e.target.value })} aria-label="Date of birth" />
-        <input style={{ ...input, flex: '1 1 160px' }} placeholder="Mobile (10 digits)" inputMode="tel" value={f.phone}
-          onChange={e => setF({ ...f, phone: e.target.value.replace(/[^\d+ ]/g, '') })} aria-label="Mobile number" />
       </div>
-      {phoneChanged && others.length > 0 && (
-        <div style={{ fontSize: 12.5, color: '#8a5a00', background: '#fdf5e6', borderRadius: 8, padding: '7px 10px' }}>
-          {others.length === 1 ? `${others[0]} is` : `${others.join(', ')} are`} on the same number. If the new number is not on Sehatsandhi yet,
-          it changes for them too. If it already belongs to another family, only {summary.full_name} moves to that family.
-        </div>
-      )}
       {err && <div style={{ fontSize: 13, color: '#b3261e' }}>{err}</div>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button style={btn(true)} disabled={busy || f.name.trim().length < 2} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
@@ -4399,6 +4389,58 @@ function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
           </ul>
         </details>
       )}
+    </div>
+  )
+}
+
+// 0193: other numbers a patient can be reached on. The saved main number stays
+// as it is (it is their WhatsApp); a second number is added here, ten digits
+// checked, and search finds them by it. One added by mistake can be removed.
+function OtherNumbers({ businessId, memberId }: { businessId: string; memberId: string }) {
+  const [list, setList] = useState<OtherPhone[]>([])
+  const [adding, setAdding] = useState(false)
+  const [phone, setPhone] = useState('')
+  const [label, setLabel] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  const load = useCallback(() => { patientPhones(businessId, memberId).then(setList).catch(() => setList([])) }, [businessId, memberId])
+  useEffect(load, [load])
+  const problem = phone.trim() ? phoneProblem(phone, true, true) : null
+  const add = async () => {
+    const p = phoneProblem(phone, true, true); if (p) { setErr(p); return }
+    setBusy(true); setErr('')
+    try { await addPatientPhone(businessId, memberId, phone, label); setPhone(''); setLabel(''); setAdding(false); load() }
+    catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  const remove = async (o: OtherPhone) => {
+    try { await removePatientPhone(businessId, o.id); load() } catch (e) { setErr((e as Error).message) }
+  }
+  return (
+    <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 3 }}>
+      {list.map(o => (
+        <span key={o.id} style={{ marginRight: 10, whiteSpace: 'nowrap' }}>
+          Also: +{o.phone}{o.label ? ` (${o.label})` : ''}
+          <button onClick={() => remove(o)} title="Remove this number" aria-label={`Remove ${o.phone}`}
+            style={{ marginLeft: 4, background: 'none', border: 'none', color: '#b3261e', cursor: 'pointer', padding: 0 }}>×</button>
+        </span>
+      ))}
+      {!adding ? (
+        <button onClick={() => setAdding(true)} style={{ color: '#0f6b4a', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: 12.5 }}>
+          Add another number
+        </button>
+      ) : (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start', marginTop: 6 }}>
+          <div>
+            <input style={{ ...input, width: 170, ...(problem ? { borderColor: '#d64545' } : {}) }} placeholder="10 digits, or + country code" inputMode="tel"
+              value={phone} onChange={e => setPhone(e.target.value.replace(/[^\d+ ]/g, ''))} aria-label="Another mobile number" autoFocus />
+            {problem && <div style={{ fontSize: 12, color: '#b3261e', marginTop: 2, maxWidth: 260 }}>{problem}</div>}
+          </div>
+          <input style={{ ...input, width: 150 }} placeholder="Whose? e.g. son (optional)" value={label} maxLength={40} onChange={e => setLabel(e.target.value)} aria-label="Whose number" />
+          <button style={btn(true)} disabled={busy || !!problem || !phone.trim()} onClick={add}>{busy ? 'Adding…' : 'Add'}</button>
+          <button style={btn()} onClick={() => { setAdding(false); setPhone(''); setErr('') }}>Cancel</button>
+        </div>
+      )}
+      {err && <div style={{ fontSize: 12.5, color: '#b3261e', marginTop: 3 }}>{err}</div>}
     </div>
   )
 }

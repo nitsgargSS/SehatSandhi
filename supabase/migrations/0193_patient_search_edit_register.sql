@@ -11,15 +11,14 @@
 --    became like '%%' — every patient matched, whatever was typed. Now the
 --    phone is only compared when the query has at least three digits.
 --
--- 2. CORRECTIONS. A wrong name, age, gender or phone could not be fixed once
---    saved (address and PIN already could, 0183). sehat_update_patient_details
---    lets any staff member at the clinic correct them, and every change is
---    kept — who, when, from what to what — in patient_detail_changes.
---    A phone number belongs to a household (patients.phone is unique):
---      • a number nobody has yet corrects it for the household;
---      • a number another household already has moves this one person into
---        that household — the usual case of a child registered on the wrong
---        parent's number.
+-- 2. CORRECTIONS. A wrong name, age or gender could not be fixed once saved
+--    (address and PIN already could, 0183). sehat_update_patient_details lets
+--    any staff member at the clinic correct them, and every change is kept —
+--    who, when, from what to what — in patient_detail_changes.
+--    The saved mobile number is NOT edited on screen (the clinic's call, 4 Oct
+--    2026): it is the patient's WhatsApp identity. Another number is ADDED
+--    instead (patient_phones, below) and search finds the patient by it. The
+--    function can still re-home a number for a Sehatsandhi admin's repair.
 --
 -- 3. THE REGISTER. sehat_visit_register lists the people behind every number
 --    on the Patient report and My practice — visits, patients seen, new,
@@ -28,6 +27,22 @@
 --    does, so the list under a number has that many rows. Diagnosis and
 --    complaint only for clinical staff.
 -- ============================================================================
+
+-- Other numbers a patient can be reached on. Exactly ten digits, like the
+-- main one; searchable; removable if added by mistake (the removal is logged).
+create table if not exists patient_phones (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references businesses(id) on delete cascade,
+  patient_member_id uuid not null references patient_members(id) on delete cascade,
+  phone text not null check (phone ~ '^91[6-9][0-9]{9}$'),
+  label text,
+  added_by_name text,
+  created_at timestamptz not null default now(),
+  unique (patient_member_id, phone)
+);
+create index if not exists patient_phones_phone_idx on patient_phones (phone);
+alter table patient_phones enable row level security;
+revoke all on patient_phones from anon, authenticated;
 
 -- ── 1. Search ───────────────────────────────────────────────────────────────
 create or replace function sehat_search_patients(p_query text, p_business uuid default null)
@@ -54,6 +69,7 @@ language sql stable security definer set search_path = public as $$
        m.full_name ilike '%' || q.raw || '%'
        -- 0193: only a query with digits in it is a phone search.
        or (length(q.digits) >= 3 and p.phone like '%' || q.digits || '%')
+       or (length(q.digits) >= 3 and exists (select 1 from patient_phones x where x.patient_member_id = m.id and x.phone like '%' || q.digits || '%'))
        or upper(coalesce(bp.mrn, '')) = upper(q.raw)
      )
    order by (m.full_name ilike q.raw || '%') desc, bp.last_seen_at desc nulls last, m.full_name
@@ -138,6 +154,11 @@ begin
   end if;
 
   if nullif(btrim(coalesce(p_phone, '')), '') is not null then
+    -- Staff add another number instead (sehat_add_patient_phone); re-homing
+    -- the main number is a Sehatsandhi admin's repair only.
+    if not sehat_is_admin() then
+      raise exception 'The saved mobile number cannot be changed. Add another number instead.' using errcode = '42501';
+    end if;
     v_phone := sehat_normalise_phone(p_phone);
     if v_phone is null then raise exception 'Enter a 10-digit Indian mobile number.' using errcode = '22023'; end if;
     if v_phone is distinct from v_patient.phone then
@@ -193,6 +214,53 @@ begin
 end $$;
 revoke all on function sehat_patient_detail_changes(uuid, uuid) from public, anon;
 grant execute on function sehat_patient_detail_changes(uuid, uuid) to authenticated;
+
+create or replace function sehat_add_patient_phone(p_business uuid, p_member uuid, p_phone text, p_label text default null)
+returns uuid language plpgsql volatile security definer set search_path = public as $$
+declare v_phone text := sehat_patient_phone(p_phone); v_id uuid;
+begin
+  if not sehat_caller_owns_business(p_business) then raise exception 'Not your clinic.' using errcode = '42501'; end if;
+  if not exists (select 1 from business_patients where business_id = p_business and patient_member_id = p_member) then
+    raise exception 'That patient is not registered here.' using errcode = 'P0002';
+  end if;
+  if v_phone is null then raise exception '%', sehat_patient_phone_problem(p_phone) using errcode = '22023'; end if;
+  if v_phone = (select p.phone from patient_members m join patients p on p.id = m.patient_id where m.id = p_member) then
+    raise exception 'That is already their main number.' using errcode = 'P0001';
+  end if;
+  insert into patient_phones (business_id, patient_member_id, phone, label, added_by_name)
+  values (p_business, p_member, v_phone, nullif(btrim(left(coalesce(p_label, ''), 40)), ''), sehat_mo_actor_name(p_business))
+  on conflict (patient_member_id, phone) do update set label = coalesce(excluded.label, patient_phones.label)
+  returning id into v_id;
+  insert into patient_detail_changes (business_id, patient_member_id, field, old_value, new_value, changed_by, changed_by_name)
+  values (p_business, p_member, 'another number added', null, v_phone || coalesce(' (' || nullif(btrim(p_label), '') || ')', ''), auth.uid(), sehat_mo_actor_name(p_business));
+  return v_id;
+end $$;
+revoke all on function sehat_add_patient_phone(uuid, uuid, text, text) from public, anon;
+grant execute on function sehat_add_patient_phone(uuid, uuid, text, text) to authenticated;
+
+create or replace function sehat_remove_patient_phone(p_business uuid, p_id uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare r patient_phones;
+begin
+  if not sehat_caller_owns_business(p_business) then raise exception 'Not your clinic.' using errcode = '42501'; end if;
+  delete from patient_phones where id = p_id and business_id = p_business returning * into r;
+  if r.id is null then raise exception 'Number not found.' using errcode = 'P0002'; end if;
+  insert into patient_detail_changes (business_id, patient_member_id, field, old_value, new_value, changed_by, changed_by_name)
+  values (p_business, r.patient_member_id, 'another number removed', r.phone, null, auth.uid(), sehat_mo_actor_name(p_business));
+end $$;
+revoke all on function sehat_remove_patient_phone(uuid, uuid) from public, anon;
+grant execute on function sehat_remove_patient_phone(uuid, uuid) to authenticated;
+
+create or replace function sehat_patient_phones(p_business uuid, p_member uuid)
+returns table (id uuid, phone text, label text, added_by_name text, created_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not sehat_caller_owns_business(p_business) then raise exception 'Not your clinic.' using errcode = '42501'; end if;
+  return query select x.id, x.phone, x.label, x.added_by_name, x.created_at from patient_phones x
+    where x.business_id = p_business and x.patient_member_id = p_member order by x.created_at;
+end $$;
+revoke all on function sehat_patient_phones(uuid, uuid) from public, anon;
+grant execute on function sehat_patient_phones(uuid, uuid) to authenticated;
 
 -- ── 3. The register ─────────────────────────────────────────────────────────
 -- p_kind: visits | patients | new | returning | admissions | follow_ups | missed | all
@@ -311,6 +379,7 @@ begin
    where v_q is null
       or p.full_name ilike '%' || v_q || '%'
       or (length(v_digits) >= 3 and p.phone like '%' || v_digits || '%')
+      or (length(v_digits) >= 3 and exists (select 1 from patient_phones x where x.patient_member_id = r.member and x.phone like '%' || v_digits || '%'))
       or upper(coalesce(p.mrn, '')) = upper(v_q)
       or p.pin_code = v_q
       or (v_clin and (pv.diagnosis ilike '%' || v_q || '%' or pv.chief_complaint ilike '%' || v_q || '%'))
@@ -319,5 +388,141 @@ begin
 end $$;
 revoke all on function sehat_visit_register(uuid, date, date, uuid, text, text) from public, anon;
 grant execute on function sehat_visit_register(uuid, date, date, uuid, text, text) to authenticated;
+
+
+-- ── 4. Ten digits, or a foreign number with its country code ────────────────
+-- Decided 4 Oct 2026: a phone box takes exactly ten digits for an Indian
+-- mobile (+91 or a leading 0 allowed) and says so when it gets nine or eleven;
+-- and, for the foreign patients big-city clinics see, a number typed with +
+-- and its country code (+44 7700 900123) — 8 to 15 digits, stored as digits
+-- (447700900123). Foreign numbers are kept and searchable; WhatsApp messages
+-- to them depend on the sender (AiSensy) supporting that country.
+create or replace function sehat_patient_phone(p_raw text)
+returns text language plpgsql immutable as $$
+declare t text := btrim(coalesce(p_raw, '')); d text := regexp_replace(coalesce(p_raw, ''), '[^0-9]', '', 'g');
+begin
+  if t like '+%' or t like '00%' then
+    if t like '00%' then d := substr(d, 3); end if;
+    if left(d, 2) = '91' then d := substr(d, 3);            -- +91: an Indian number after all
+    else
+      return case when d ~ '^[1-9][0-9]{7,14}$' then d end;
+    end if;
+  elsif length(d) = 12 and left(d, 2) = '91' then d := substr(d, 3);
+  elsif length(d) = 11 and left(d, 1) = '0' then d := substr(d, 2);
+  end if;
+  return case when d ~ '^[6-9][0-9]{9}$' then '91' || d end;
+end $$;
+
+create or replace function sehat_patient_phone_problem(p_raw text)
+returns text language plpgsql immutable as $$
+declare t text := btrim(coalesce(p_raw, '')); d text := regexp_replace(coalesce(p_raw, ''), '[^0-9]', '', 'g');
+begin
+  if t = '' then return 'Enter the mobile number.'; end if;
+  if (t like '+%' or t like '00%') and left(case when t like '00%' then substr(d, 3) else d end, 2) <> '91' then
+    return 'Incorrect number — a foreign number is + and the country code, then 8 to 15 digits in all.';
+  end if;
+  if length(d) = 12 and left(d, 2) = '91' then d := substr(d, 3);
+  elsif length(d) = 11 and left(d, 1) = '0' then d := substr(d, 2); end if;
+  if length(d) <> 10 then return format('Incorrect number — a mobile number has 10 digits, this has %s.', length(d)); end if;
+  return 'Incorrect number — an Indian mobile number starts with 6, 7, 8 or 9.';
+end $$;
+
+alter table patients drop constraint if exists patients_phone_format;
+alter table patients add constraint patients_phone_format
+  check (phone ~ '^91[6-9][0-9]{9}$' or (phone ~ '^[1-9][0-9]{7,14}$' and phone !~ '^91')) not valid;
+alter table patient_phones drop constraint if exists patient_phones_phone_check;
+alter table patient_phones add constraint patient_phones_phone_check
+  check (phone ~ '^91[6-9][0-9]{9}$' or (phone ~ '^[1-9][0-9]{7,14}$' and phone !~ '^91'));
+
+create or replace function sehat_register_patient(
+  p_business uuid,
+  p_phone text,
+  p_full_name text,
+  p_relation text default 'self',
+  p_gender text default null,
+  p_age_years integer default null,
+  p_date_of_birth date default null,
+  p_blood_group text default null,
+  p_mrn text default null,
+  p_source text default 'walk_in',
+  p_pin_code text default null
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  v_phone text;
+  v_patient uuid;
+  v_member uuid;
+  v_name text;
+  v_pin text := nullif(regexp_replace(coalesce(p_pin_code, ''), '\D', '', 'g'), '');
+begin
+  if not sehat_caller_owns_business(p_business) then
+    raise exception 'not your business';
+  end if;
+
+  v_name := btrim(coalesce(p_full_name, ''));
+  if v_name = '' then raise exception 'a patient needs a name'; end if;
+
+  if v_pin is not null and v_pin !~ '^[1-9][0-9]{5}$' then
+    raise exception 'a PIN code is 6 digits';
+  end if;
+
+  -- 0193: exactly ten digits for an Indian mobile, or a foreign number typed
+  -- with + and its country code. Anything else says what is wrong.
+  v_phone := sehat_patient_phone(p_phone);
+  if v_phone is null then
+    raise exception '%', sehat_patient_phone_problem(p_phone);
+  end if;
+
+  select id into v_patient from patients where phone = v_phone;
+  if v_patient is null then
+    insert into patients (phone) values (v_phone) returning id into v_patient;
+  end if;
+
+  select id into v_member
+    from patient_members
+   where patient_id = v_patient
+     and lower(btrim(full_name)) = lower(v_name)
+     and status <> 'deleted'
+   limit 1;
+
+  if v_member is null then
+    insert into patient_members (
+      patient_id, full_name, relation, gender, age_years, date_of_birth, blood_group,
+      is_self
+    ) values (
+      v_patient, v_name,
+      coalesce(nullif(btrim(p_relation), ''), 'self'),
+      p_gender, p_age_years, p_date_of_birth, p_blood_group,
+      coalesce(nullif(btrim(p_relation), ''), 'self') = 'self'
+        and not exists (select 1 from patient_members m where m.patient_id = v_patient and m.is_self)
+    ) returning id into v_member;
+  else
+    update patient_members
+       set gender        = coalesce(gender, p_gender),
+           age_years     = coalesce(age_years, p_age_years),
+           date_of_birth = coalesce(date_of_birth, p_date_of_birth),
+           blood_group   = coalesce(blood_group, p_blood_group),
+           updated_at    = now()
+     where id = v_member;
+  end if;
+
+  perform sehat_link_patient_to_business(v_member, p_business, p_source, 'registered at the front desk');
+
+  if coalesce(btrim(p_mrn), '') <> '' then
+    begin
+      update business_patients set mrn = btrim(p_mrn)
+       where business_id = p_business and patient_member_id = v_member;
+    exception when unique_violation then
+      raise exception 'file number % is already used by another patient here', btrim(p_mrn);
+    end;
+  end if;
+
+  -- Said at the counter, so it overwrites; see the header.
+  if v_pin is not null then
+    perform sehat_set_patient_pin(v_patient, v_pin, true);
+  end if;
+
+  return v_member;
+end $$;
 
 notify pgrst, 'reload schema';

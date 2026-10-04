@@ -866,3 +866,20 @@ export async function visitRegister(businessId: string, o: {
   oops(error)
   return (data ?? []) as RegisterRow[]
 }
+
+/** 0193: other numbers a patient can be reached on. The saved main number is
+ *  never edited — another is added instead. */
+export interface OtherPhone { id: string; phone: string; label: string | null; added_by_name: string | null; created_at: string }
+export async function patientPhones(businessId: string, memberId: string): Promise<OtherPhone[]> {
+  const { data, error } = await supabase.rpc('sehat_patient_phones', { p_business: businessId, p_member: memberId })
+  oops(error)
+  return (data ?? []) as OtherPhone[]
+}
+export async function addPatientPhone(businessId: string, memberId: string, phone: string, label: string): Promise<void> {
+  const { error } = await supabase.rpc('sehat_add_patient_phone', { p_business: businessId, p_member: memberId, p_phone: phone, p_label: label || null })
+  oops(error)
+}
+export async function removePatientPhone(businessId: string, id: string): Promise<void> {
+  const { error } = await supabase.rpc('sehat_remove_patient_phone', { p_business: businessId, p_id: id })
+  oops(error)
+}

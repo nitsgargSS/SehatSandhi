@@ -10,6 +10,8 @@ import {
   StockRow, Batch, PharmacyBill, Purchase, RxForDispensing, PharmacySummary, PharmacySettings,
   PharmacyItem, PharmacyPayMethod, PurchaseLine, PAY_METHODS, GST_RATES,
 } from '../../lib/pharmacyApi'
+import { phoneProblem } from '../../lib/credentials'
+import PhoneError from '../../components/PhoneError'
 
 // In-house dispensing (0158): the clinic's own medicine counter.
 //
@@ -198,6 +200,7 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
     if (!lines.length) { setErr('Add at least one medicine.'); return }
     if (mode === 'patient' && !patient) { setErr('Choose the patient, or switch to walk-in.'); return }
     if (mode === 'walkin' && !walkName.trim()) { setErr('Give the customer\'s name.'); return }
+    if (mode === 'walkin' && phoneProblem(walkPhone, false, true)) { setErr(phoneProblem(walkPhone, false, true)!); return }
     if (discount > 0 && !reason.trim()) { setErr('Say why there is a discount.'); return }
     setBusy(true)
     try {
@@ -275,7 +278,10 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
       ) : (
         <div className="grid sm:grid-cols-2 gap-2">
           <input className="input-field" value={walkName} onChange={e => setWalkName(e.target.value)} placeholder="Customer name" />
-          <input className="input-field" value={walkPhone} onChange={e => setWalkPhone(e.target.value)} placeholder="Mobile (optional)" inputMode="tel" />
+          <div>
+            <input className="input-field w-full" value={walkPhone} onChange={e => setWalkPhone(e.target.value.replace(/[^\d+ ]/g, ''))} placeholder="Mobile (optional)" inputMode="tel" />
+            <PhoneError value={walkPhone} foreign />
+          </div>
         </div>
       )}
 
