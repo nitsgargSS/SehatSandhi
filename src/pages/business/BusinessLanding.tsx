@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, loginIcon, PAGE } from '../../components/SiteHeader'
 import SiteFooter from '../../components/SiteFooter'
@@ -10,6 +11,7 @@ import BusinessFeatures from './BusinessFeatures'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { useTaxSettings } from '../../hooks/useTaxSettings'
 import { money } from '../../lib/format'
+import { getLeadFee } from '../../lib/insuranceApi'
 
 // Design 2a — "List your business" marketing landing, desktop-first, Warm Care look.
 // Colors are the exact design values (kept off the site's teal/navy theme on purpose).
@@ -41,6 +43,9 @@ const VERTICAL_BLURBS: Record<string, string> = {
 
 export default function BusinessLanding() {
   const { plan, tiers, verticals, terms } = usePricing()
+  // 0192: what an insurance lead costs — said where the partner offer is.
+  const [leadFee, setLeadFee] = useState(100)
+  useEffect(() => { getLeadFee().then(setLeadFee).catch(() => {}) }, [])
   const tax = useTaxSettings()
   const flatPlan = plan.mode !== 'pincode_tiers'
   const flatPrice = plan.monthly_price ?? 0
@@ -306,7 +311,7 @@ export default function BusinessLanding() {
               ))}
             </div>
             <p style={{ fontSize: 13, color: BIZ.mutedWarm, textAlign: 'center', marginTop: 22, maxWidth: 680, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
-              {PARTNER_OFFER.later}
+              {PARTNER_OFFER.later(leadFee)}
             </p>
           </>
         )}

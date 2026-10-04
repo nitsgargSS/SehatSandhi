@@ -48,12 +48,13 @@ export interface Vertical {
 }
 
 /** The partner offer, said the same way on the landing page and at signup.
- *  Production bills these verticals commission-only with no monthly fee
- *  (vertical_billing), so "free to join" is what checkout actually does. */
+ *  0192: only insurance advisors are partners now, and they list free and pay
+ *  a flat fee per lead they accept — nothing on policies (Section 40,
+ *  Insurance Act). The fee itself comes from the server (sehat_lead_fee). */
 export const PARTNER_OFFER = {
-  badge: 'Free to join · launch offer',
-  body: 'Registration is free during our launch — no monthly fee and nothing to pay upfront.',
-  later: 'Later, a simple 10% commission will apply only to business that comes to you through Sehatsandhi. We will tell you before it starts.',
+  badge: 'Free to list',
+  body: 'Listing is free — no monthly fee and nothing to pay upfront.',
+  later: (fee: number) => `You pay a flat ₹${fee} only for each lead you choose to accept, from a prepaid wallet. No commission on any policy — what you earn from the insurer is yours.`,
 }
 
 // The six service categories patients can find a business under, matching
@@ -91,14 +92,14 @@ export const VERTICALS: Vertical[] = [
   // pharmacy lists in are the areas it delivers medicine orders to.
   { key: 'pharmacy',  label: 'Pharmacy / Medical Store',   sub: 'Medicine delivery',      color: '#DB2777', billing: 'pincode_monthly' },
   { key: 'lab',       label: 'Diagnostic Lab',             sub: 'Tests & sample pickup',  color: '#7C3AED', billing: 'pincode_monthly' },
-  { key: 'insurance', label: 'Health Insurance',           sub: 'Plans & agents',         color: '#0891B2', billing: 'commission', commissionPercent: 10,
-    commissionBasis: 'your commission',
-    commissionNote: 'Only on policies sold through Sehatsandhi, from your own commission — your rate with the insurer stays exactly as it is.',
+  { key: 'insurance', label: 'Health Insurance',           sub: 'Plans & agents',         color: '#0891B2', billing: 'commission', commissionPercent: 0,
+    commissionBasis: 'flat fee per accepted lead',
+    commissionNote: 'You need an IRDAI licence or POSP code to accept leads; patients see it.',
     partnerHeadline: 'Leads for local insurance advisors',
     partnerPoints: [
       'Families in your area who are looking for health cover are passed to you as leads.',
       'Visit them at home or at work, explain the plans in person, and close the policy yourself.',
-      'No cold calling, and your commission with the insurer stays exactly as it is.',
+      'Pay only for the leads you accept — each one is yours alone. No cold calling, and no cut of your commission.',
     ] },
   // 0191: a listing fee, no commission. Requests come only from the PIN codes
   // the service says it serves; the patient is never kept waiting for an accept.

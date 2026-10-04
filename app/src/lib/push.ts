@@ -59,5 +59,6 @@ export function routeFor(data: Record<string, unknown> | undefined): string | nu
   const kind = data?.kind
   if (kind === 'medicine_order' && typeof data?.order_id === 'string') return `/order/${data.order_id}`
   if (kind === 'ambulance' && typeof data?.request_id === 'string') return `/trip/${data.request_id}`
+  if (kind === 'insurance_lead' && typeof data?.lead_id === 'string') return `/lead/${data.lead_id}`
   return kind === 'queue' || kind === 'appointment' ? '/queue' : null
 }

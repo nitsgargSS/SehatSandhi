@@ -9,7 +9,9 @@ export default function TabsLayout() {
   const pharmacy = s?.clinic?.vertical === 'pharmacy'
   // 0191: an ambulance service works trips.
   const ambulance = s?.clinic?.vertical === 'ambulance'
-  const noClinic = pharmacy || ambulance
+  // 0192: an insurance advisor works leads.
+  const insurance = s?.clinic?.vertical === 'insurance'
+  const noClinic = pharmacy || ambulance || insurance
   const sub = s ? `${s.name || s.email}${s.role.role ? ` · ${ROLE_WORD[s.role.role] ?? s.role.role}` : ''}` : ''
   return (
     <Tabs screenOptions={{
@@ -17,6 +19,11 @@ export default function TabsLayout() {
       headerTitleStyle: { fontWeight: '800' },
       sceneStyle: { backgroundColor: C.cream },
     }}>
+      <Tabs.Screen name="leads" options={{
+        title: s?.clinic?.name ?? 'Leads', tabBarLabel: 'Leads', headerTitleAlign: 'left',
+        href: insurance ? undefined : null,
+        tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark" color={color} size={size} />,
+      }} />
       <Tabs.Screen name="trips" options={{
         title: s?.clinic?.name ?? 'Trips', tabBarLabel: 'Trips', headerTitleAlign: 'left',
         href: ambulance ? undefined : null,
