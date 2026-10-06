@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { useSession } from '../../lib/session'
 import { searchPatients, registerPatient, type PatientSearchResult } from '@web/lib/patientsApi'
 import { opdVisit, patientHistory } from '@web/lib/queueApi'
 import { listBusinessDoctors, type BusinessDoctor } from '@web/lib/doctorsApi'
+import { setAppointmentStatus } from '@web/lib/appointmentApi'
 import { Btn, Card, Chip, Err, Field, Label, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
 
@@ -13,6 +14,8 @@ import { C } from '../../ui/theme'
 // patient goes back to the one they last saw), the reason, the OPD fee — full,
 // discounted or free, below full needs a reason (0135) — and out of turn only
 // with a reason. sehat_opd_visit issues the token and adds the fee to the bill.
+// Opened from Bookings → Arrived, it comes with the booking's name, phone, age
+// and doctor; the token given, the booking is marked completed.
 const GENDERS: [string, string][] = [['male', 'Male'], ['female', 'Female'], ['other', 'Other']]
 type Fee = { mode: 'full' | 'discount' | 'free'; price: string; reason: string }
 const fullFee = (d?: BusinessDoctor | null) => d ? (d.discounted_fee ?? d.consultation_fee ?? 0) : 0
@@ -21,8 +24,10 @@ const rs = (n: number) => `₹${n.toLocaleString('en-IN')}`
 export default function NewToken() {
   const { s } = useSession()
   const biz = s?.clinic?.id ?? ''
+  const pre = useLocalSearchParams<{ name?: string; phone?: string; age?: string; doctor?: string; appointment?: string }>()
   const [doctors, setDoctors] = useState<BusinessDoctor[]>([])
-  const [q, setQ] = useState('')
+  // A booking arriving: look them up by the booked number first.
+  const [q, setQ] = useState(pre.phone ? pre.phone.replace(/\D/g, '').slice(-10) : '')
   const [rows, setRows] = useState<PatientSearchResult[]>([])
   const [picked, setPicked] = useState<{ id: string; name: string; phone: string | null } | null>(null)
   const [adding, setAdding] = useState(false)
@@ -41,7 +46,7 @@ export default function NewToken() {
     listBusinessDoctors(biz).then(d => {
       setDoctors(d)
       // A doctor giving a token defaults to themselves; one doctor, nothing to pick.
-      setDoctor(cur => cur ?? (s?.doctorId && d.some(x => x.practitioner_id === s.doctorId) ? s.doctorId : d.length === 1 ? d[0].practitioner_id : null))
+      setDoctor(cur => cur ?? (pre.doctor && d.some(x => x.practitioner_id === pre.doctor) ? pre.doctor : s?.doctorId && d.some(x => x.practitioner_id === s.doctorId) ? s.doctorId : d.length === 1 ? d[0].practitioner_id : null))
     }).catch(e => setErr((e as Error).message))
   }, [biz])
 
@@ -98,6 +103,7 @@ export default function NewToken() {
         fee: charge, discountReason: charge == null ? null : fee.reason.trim(), reason,
         priority: outOfTurn ? 10 : 0, priorityReason: outOfTurn ? why.trim() : null,
       })
+      if (pre.appointment) await setAppointmentStatus(pre.appointment, 'completed').catch(() => {})
       setIssued({ token: r.token_number, name: picked.name, doctor: doc?.full_name ?? '', fee: r.fee })
       setPicked(null); setQ(''); setReason(''); setFee({ mode: 'full', price: '', reason: '' }); setOutOfTurn(false); setWhy('')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
@@ -152,7 +158,8 @@ export default function NewToken() {
               {q.trim().length >= 2 && rows.length === 0 && <Note>No one found.</Note>}
               <Btn small kind="ghost" label="+ New patient" onPress={() => {
                 const d = q.replace(/\D/g, '')
-                setNp({ name: d.length >= 10 ? '' : q.trim(), phone: d.length >= 10 ? d.slice(-10) : '', age: '', gender: '', pin: '' })
+                setNp({ name: pre.name ?? (d.length >= 10 ? '' : q.trim()), phone: d.length >= 10 ? d.slice(-10) : (pre.phone ?? ''),
+                  age: pre.age ?? '', gender: '', pin: '' })
                 setAdding(true)
               }} />
             </View>

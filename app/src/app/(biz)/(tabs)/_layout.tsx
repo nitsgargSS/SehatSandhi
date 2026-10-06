@@ -41,6 +41,10 @@ export default function TabsLayout() {
         title: s?.clinic?.name ?? 'Queue', tabBarLabel: 'Queue', headerTitleAlign: 'left', href: noClinic || adminOnly ? null : undefined,
         tabBarIcon: ({ color, size }) => <Ionicons name="list" color={color} size={size} />,
       }} />
+      <Tabs.Screen name="bookings" options={{
+        title: 'Bookings', href: noClinic || adminOnly ? null : undefined,
+        tabBarIcon: ({ color, size }) => <Ionicons name="calendar" color={color} size={size} />,
+      }} />
       <Tabs.Screen name="beds" options={{
         title: 'Beds', href: s?.hasWards ? undefined : null,
         tabBarIcon: ({ color, size }) => <Ionicons name="bed" color={color} size={size} />,
