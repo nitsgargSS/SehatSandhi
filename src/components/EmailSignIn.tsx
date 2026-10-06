@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { isValidEmail, normEmail, passwordProblem, checkPassword } from '../lib/credentials'
+import { isValidEmail, normEmail, passwordProblem, checkPassword, passwordSaveError } from '../lib/credentials'
 import { prepareEmailLogin, linkMyLogin } from '../lib/businessApi'
 import { markPasswordChanged } from '../lib/passwordState'
 import { Spinner } from './Loading'
@@ -145,7 +145,7 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
     setBusy(true)
     try {
       const { data, error: err } = await supabase.auth.updateUser({ password: next })
-      if (err) { setError(err.message); return }
+      if (err) { setError(passwordSaveError(err)); return }
       // Restart the expiry clock. Supabase Auth does not record when a password
       // was set, so a missed call here means they are asked to change it again
       // on their next sign-in.

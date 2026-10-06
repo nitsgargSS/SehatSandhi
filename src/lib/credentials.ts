@@ -89,8 +89,22 @@ export function isValidRegNumber(raw: string | null | undefined): boolean {
 // people towards Passw0rd! and away from length, which is what actually helps.
 // It is required here because it was asked for, and paired with a 10-character
 // minimum so it is not carrying the weight on its own.
+//
+// Every rule must match Supabase's exactly (checked 6 Oct 2026 on staging and
+// production: minimum 10, lower + upper + digit + one of PASSWORD_SYMBOLS).
+// A tick here that Supabase then refuses is the worst outcome — the form said
+// yes and the save said no — so where the two could count differently, this
+// side is the stricter one:
+//  - length counts characters, not UTF-16 units: JavaScript counts an emoji (and
+//    some symbols) as 2, so 8 letters + 😀 — 9 characters — ticked "at least 10".
+//  - "special" means Supabase's list only. A space, ₹, é or an emoji is not one
+//    of them, though /[^A-Za-z0-9]/ said it was.
+//  - the 72-byte ceiling is bcrypt's; Supabase refuses anything longer.
 
 export const PASSWORD_MIN = 10
+export const PASSWORD_MAX_BYTES = 72
+/** Supabase Auth's "symbols" set (Authentication > Policies). Keep in step with it. */
+export const PASSWORD_SYMBOLS = '!@#$%^&*()_+-=[]{};\'\\:"|<>?,./`~'
 
 export interface PasswordCheck {
   ok: boolean
@@ -101,19 +115,38 @@ export interface PasswordCheck {
 }
 
 export function checkPassword(pw: string): PasswordCheck {
+  const chars = Array.from(pw)
   const rules = [
-    { label: `At least ${PASSWORD_MIN} characters`, met: pw.length >= PASSWORD_MIN },
-    { label: 'A lower-case letter', met: /[a-z]/.test(pw) },
-    { label: 'An upper-case letter', met: /[A-Z]/.test(pw) },
-    { label: 'A number', met: /[0-9]/.test(pw) },
-    { label: 'A special character, like ! @ # or ?', met: /[^A-Za-z0-9]/.test(pw) },
+    { label: `At least ${PASSWORD_MIN} characters`, met: chars.length >= PASSWORD_MIN },
+    { label: 'A lower-case letter (a–z)', met: /[a-z]/.test(pw) },
+    { label: 'An upper-case letter (A–Z)', met: /[A-Z]/.test(pw) },
+    { label: 'A number (0–9)', met: /[0-9]/.test(pw) },
+    { label: 'A special character, like ! @ # or ?', met: chars.some(c => PASSWORD_SYMBOLS.includes(c)) },
   ]
+  // Only shown once broken; nobody needs telling about it while typing.
+  if (new TextEncoder().encode(pw).length > PASSWORD_MAX_BYTES) {
+    rules.push({ label: `No more than ${PASSWORD_MAX_BYTES} characters`, met: false })
+  }
   const firstUnmet = rules.find(r => !r.met)
   return {
     ok: rules.every(r => r.met),
     rules,
     firstProblem: firstUnmet ? firstUnmet.label : null,
   }
+}
+
+/**
+ * Supabase's refusal of a password, in the form's words. Should not happen now
+ * the rules above match its policy, but if the policy is changed in the
+ * dashboard first, this is what people see instead of 'weak_password'.
+ */
+export function passwordSaveError(err: { message?: string; code?: string }): string {
+  const m = err.message ?? ''
+  if (err.code === 'weak_password' || /at least \d+ characters|should contain|weak/i.test(m)) {
+    return `That password was not accepted: ${m.replace(/\.$/, '')}. Use at least ${PASSWORD_MIN} characters with a lower-case letter, an upper-case letter, a number and one of ${PASSWORD_SYMBOLS.split('').join(' ')}`
+  }
+  if (err.code === 'same_password') return 'That is the password you already have.'
+  return m || 'Your password could not be saved. Please try again.'
 }
 
 /**

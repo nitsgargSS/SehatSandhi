@@ -46,6 +46,17 @@ const Contact = lazy(() => import('./pages/Contact'))
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'))
 const Terms = lazy(() => import('./pages/Terms'))
 const RefundPolicy = lazy(() => import('./pages/RefundPolicy'))
+// Patients on the website (sehatsandhi.com/my) — the app's patient side.
+const MyHome = lazy(() => import('./pages/my/MyHome'))
+const MyRequests = lazy(() => import('./pages/my/MyHome').then(m => ({ default: m.MyRequests })))
+const MyRecords = lazy(() => import('./pages/my/MyRecords'))
+const MyChat = lazy(() => import('./pages/my/MyRecords').then(m => ({ default: m.MyChat })))
+const MyOrder = lazy(() => import('./pages/my/MyForms').then(m => ({ default: m.MyOrder })))
+const MyAmbulance = lazy(() => import('./pages/my/MyForms').then(m => ({ default: m.MyAmbulance })))
+const MyInsurance = lazy(() => import('./pages/my/MyForms').then(m => ({ default: m.MyInsurance })))
+const MyRate = lazy(() => import('./pages/my/MyForms').then(m => ({ default: m.MyRate })))
+const MyBook = lazy(() => import('./pages/my/MyBook'))
+const CampsPage = lazy(() => import('./pages/my/MyBook').then(m => ({ default: m.Camps })))
 
 // ── SECURITY: Admin URL is intentionally non-obvious ──
 // Never link this path from Navbar, Footer, sitemap,
@@ -120,7 +131,7 @@ const FLOAT_HIDDEN_PATHS = ['/business/register', '/doctor/register', '/business
 // so tracking these would hand every one of them to Google Analytics, where
 // anyone with report access could open a patient's medicines, their hospital
 // stay, or what they were charged for it.
-const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/', '/ds/', '/bill/', '/lab/']
+const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/', '/ds/', '/bill/', '/lab/', '/my']
 
 const PageViewTracker = () => {
   const { pathname } = useLocation()
@@ -246,6 +257,16 @@ export default function App() {
               directly, so the paths are stable and each page stands alone. */}
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/my" element={<MyHome />} />
+          <Route path="/my/requests" element={<MyRequests />} />
+          <Route path="/my/records" element={<MyRecords />} />
+          <Route path="/my/chat/:business" element={<MyChat />} />
+          <Route path="/my/order" element={<MyOrder />} />
+          <Route path="/my/ambulance" element={<MyAmbulance />} />
+          <Route path="/my/insurance" element={<MyInsurance />} />
+          <Route path="/my/rate" element={<MyRate />} />
+          <Route path="/my/book" element={<MyBook />} />
+          <Route path="/camps" element={<CampsPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/refund" element={<RefundPolicy />} />

@@ -26,7 +26,7 @@ interface Strings {
   doctors: string; hospitals: string; pharmacy: string; labs: string; insurance: string; ambulance: string
   doc_teaser_title: string; doc_teaser_sub: string; how: string; step1: string; step2: string; step3: string
   trust_verified: string; trust_free: string; trust_wa: string
-  biz_cta: string; login_cta: string; biz_title: string; biz_sub: string
+  biz_cta: string; login_cta: string; my_cta: string; biz_title: string; biz_sub: string
   faq_nav: string; faq_title: string; faq_sub: string; faqs: { q: string; a: string }[]
   scan_title: string; scan_sub: string; scan_steps: string[]; scan_tap: string; scan_show: string
 }
@@ -47,6 +47,7 @@ const DICT: Record<'en' | 'hi', Strings> = {
     trust_verified: 'Verified providers', trust_free: 'Free for you', trust_wa: 'All on WhatsApp',
     biz_cta: 'Manage Business',
     login_cta: 'Login',
+    my_cta: 'My Sehatsandhi',
     scan_title: 'Scan to find health services in your area',
     scan_sub: 'Doctors, medicines, lab tests, ambulance and insurance near you — on WhatsApp, free.',
     scan_steps: ['Point your phone camera at this code', 'WhatsApp opens with "Hi" already typed', 'Press send — our assistant replies straight away'],
@@ -91,6 +92,7 @@ const DICT: Record<'en' | 'hi', Strings> = {
     trust_verified: 'सत्यापित प्रोवाइडर', trust_free: 'आपके लिए मुफ़्त', trust_wa: 'सब कुछ व्हाट्सएप पर',
     biz_cta: 'बिज़नेस मैनेज करें',
     login_cta: 'लॉगिन',
+    my_cta: 'मेरा Sehatsandhi',
     scan_title: 'अपने इलाके की स्वास्थ्य सेवाएँ खोजने के लिए स्कैन करें',
     scan_sub: 'डॉक्टर, दवाई, लैब टेस्ट, एम्बुलेंस और बीमा — आपके पास, व्हाट्सएप पर, मुफ़्त।',
     scan_steps: ['फ़ोन का कैमरा इस कोड पर रखें', 'व्हाट्सएप "Hi" लिखा हुआ खुल जाएगा', 'भेजें दबाएँ — हमारा असिस्टेंट तुरंत जवाब देगा'],
@@ -364,6 +366,7 @@ export default function PatientHome() {
         <div style={{ width: '100%', maxWidth: 520, minHeight: '100vh', background: '#FBF7F0', display: 'flex', flexDirection: 'column' }}>
           <SiteHeader>
             <HeaderLink href="#faq-m">{t.faq_nav}</HeaderLink>
+            <HeaderLink to="/my">{t.my_cta}</HeaderLink>
             <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
             <HeaderCta to="/business/login" icon={loginIcon}>{t.login_cta}</HeaderCta>
             <LangButton label={langBtn} onClick={toggleLang} />
@@ -403,6 +406,7 @@ export default function PatientHome() {
       <div className="hidden lg:block">
         <SiteHeader>
           <HeaderLink href="#faq-d">{t.faq_nav}</HeaderLink>
+          <HeaderLink to="/my">{t.my_cta}</HeaderLink>
           <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
             <HeaderCta to="/business/login" icon={loginIcon}>{t.login_cta}</HeaderCta>
           <LangButton label={langBtn} onClick={toggleLang} />

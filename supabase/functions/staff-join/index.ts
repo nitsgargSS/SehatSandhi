@@ -25,13 +25,17 @@ const ROLE_LABEL: Record<string, string> = {
   doctor: 'Doctor', owner: 'Owner', nurse: 'Nurse', receptionist: 'Reception', manager: 'Manager', pharmacist: 'Pharmacist', delivery: 'Delivery', driver: 'Driver',
 }
 
-// Mirrors src/lib/credentials.ts checkPassword, so an API call cannot skip the form's rules.
+// Mirrors src/lib/credentials.ts checkPassword (and so Supabase's own password
+// policy), so an API call cannot skip the form's rules. Characters, not UTF-16
+// units; special = Supabase's symbol list only; 72 bytes is bcrypt's ceiling.
+const PASSWORD_SYMBOLS = '!@#$%^&*()_+-=[]{};\'\\:"|<>?,./`~'
 function passwordProblem(pw: string): string | null {
-  if (pw.length < 10) return 'Use at least 10 characters.'
-  if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw) || !/[^A-Za-z0-9]/.test(pw)) {
-    return 'Use a lower-case letter, an upper-case letter, a number and a special character.'
+  const chars = Array.from(pw)
+  if (chars.length < 10) return 'Use at least 10 characters.'
+  if (!/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/[0-9]/.test(pw) || !chars.some(c => PASSWORD_SYMBOLS.includes(c))) {
+    return 'Use a lower-case letter, an upper-case letter, a number and a special character like ! @ # or ?.'
   }
-  if (pw.length > 72) return 'Keep it under 72 characters.'
+  if (new TextEncoder().encode(pw).length > 72) return 'Keep it to 72 characters or fewer.'
   return null
 }
 

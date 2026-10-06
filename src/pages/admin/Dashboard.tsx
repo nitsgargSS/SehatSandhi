@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { CheckCircle2, XCircle, LogOut, Users, Clock, TrendingUp, Plus, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { markPasswordChanged } from '../../lib/passwordState'
+import { checkPassword, passwordProblem, passwordSaveError } from '../../lib/credentials'
 import StatusBadge from '../../components/StatusBadge'
 import { money, num, shortDate, dateTime, isoDate } from '../../lib/format'
 import { Business, Practitioner, SPECIALITIES } from '../../types'
@@ -568,9 +569,11 @@ export default function AdminDashboard() {
     setPwErr(''); setPwMsg('')
 
     if (pw.next !== pw.confirm) { setPwErr('The two new passwords do not match.'); return }
-    // Supabase's own floor is 6, which is not a password. Length is the only
-    // rule that reliably helps, so ask for length rather than punctuation.
-    if (pw.next.length < 12) { setPwErr('Use at least 12 characters — length matters more than symbols.'); return }
+    // Admins keep their longer 12-character floor, on top of the rules Supabase
+    // enforces for everyone (it refused a 12-character phrase with no symbol).
+    if (Array.from(pw.next).length < 12) { setPwErr('Use at least 12 characters.'); return }
+    const problem = passwordProblem(pw.next)
+    if (problem) { setPwErr(problem); return }
     if (pw.next === pw.current) { setPwErr('That is the password you already have.'); return }
     // Without the email the re-auth below fails, and its error message would
     // blame the current password for something that is not its fault.
@@ -588,7 +591,7 @@ export default function AdminDashboard() {
       if (reauth) { setPwErr('That current password is not right.'); return }
 
       const { error } = await supabase.auth.updateUser({ password: pw.next })
-      if (error) { setPwErr(error.message); return }
+      if (error) { setPwErr(passwordSaveError(error)); return }
       // Same reason as EmailSignIn: without this the 0080 clock never restarts.
       await markPasswordChanged().catch(() => {})
 
@@ -2072,9 +2075,12 @@ export default function AdminDashboard() {
                     </div>
                   ))}
                   {/* Say the rule before it is broken, not after. */}
-                  <p className={`text-xs ${pw.next && pw.next.length < 12 ? 'text-amber-600' : 'text-gray-400'}`}>
-                    At least 12 characters. A short phrase you will remember beats a short jumble you will not.
-                  </p>
+                  <ul className="text-xs text-gray-500 pl-4 list-disc">
+                    {[{ label: 'At least 12 characters (admins)', met: Array.from(pw.next).length >= 12 },
+                      ...checkPassword(pw.next).rules.slice(1)].map(r => (
+                      <li key={r.label} className={r.met ? 'text-teal-700' : undefined}>{r.met ? '✓ ' : ''}{r.label}</li>
+                    ))}
+                  </ul>
                 </div>
 
                 <button onClick={changePassword}

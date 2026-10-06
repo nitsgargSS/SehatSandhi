@@ -19,7 +19,7 @@ import {
   PriceResult, DraftPractitioner, CareModule, linkMyLogin, phoneVerify,
 } from '../../lib/businessApi'
 import { registerBusiness, registerPractitioner, attachPractitioner } from '../../lib/identityApi'
-import { isValidEmail, isValidPhone, isValidRegNumber, normEmail, passwordProblem } from '../../lib/credentials'
+import { isValidEmail, isValidPhone, isValidRegNumber, normEmail, passwordProblem, passwordSaveError } from '../../lib/credentials'
 import { markPasswordChanged } from '../../lib/passwordState'
 import EmailAndPassword, { EmailPasswordState } from './EmailAndPassword'
 import PhoneVerify, { phoneKey } from './PhoneVerify'
@@ -427,7 +427,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
     // asked for again, even if they come back to this step.
     if (step === 2 && !passwordSaved) {
       const { error: pwErr } = await supabase.auth.updateUser({ password: signIn.password })
-      if (pwErr) { setError(`Could not save your password: ${pwErr.message}`); return }
+      if (pwErr) { setError(`Could not save your password. ${passwordSaveError(pwErr)}`); return }
       await markPasswordChanged().catch(() => undefined)
       setPasswordSaved(true)
       setSignIn(st => ({ ...st, password: '', confirm: '' }))

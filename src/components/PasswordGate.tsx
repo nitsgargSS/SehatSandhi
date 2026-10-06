@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import IdleLogout, { IDLE_MINUTES } from './IdleLogout'
 import { supabase } from '../lib/supabase'
-import { passwordProblem, checkPassword } from '../lib/credentials'
+import { passwordProblem, checkPassword, passwordSaveError } from '../lib/credentials'
 import {
   fetchPasswordState, markPasswordChanged, mustChangeNow, shouldWarn, PasswordState,
 } from '../lib/passwordState'
@@ -59,7 +59,7 @@ export default function PasswordGate({ children, idle = 'business', loginPath = 
     setBusy(true)
     try {
       const { error: err } = await supabase.auth.updateUser({ password: next })
-      if (err) { setError(err.message); return }
+      if (err) { setError(passwordSaveError(err)); return }
       // Supabase Auth will not tell us when a password was set, so if this is
       // missed the clock never restarts and they are asked again next time.
       await markPasswordChanged()
