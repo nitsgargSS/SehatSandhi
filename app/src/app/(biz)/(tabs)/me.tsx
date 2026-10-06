@@ -41,6 +41,13 @@ export default function Me() {
           <Btn small kind="ghost" label="Collections & dues" onPress={() => router.push('/collections')} />
         </Card>
       )}
+      {!!s?.clinic && (!s.role.enforced || s.role.role === 'owner' || s.role.role === 'manager') && (
+        <Card>
+          <Label>Team</Label>
+          <Text style={st.meta}>Add or remove staff, change roles, send login links, doctors' leave.</Text>
+          <Btn small kind="ghost" label="Team & leave" onPress={() => router.push('/team')} />
+        </Card>
+      )}
       <Card>
         <Label>Password</Label>
         {pw === 'open' ? (
