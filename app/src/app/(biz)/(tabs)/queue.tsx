@@ -97,7 +97,10 @@ export default function QueueScreen() {
             <Chip label="Everyone" on={!mine} onPress={() => setMine(false)} />
           </View>
         )}
-        <Btn small label="Call next" busy={busy === 'next'} onPress={() => act('next', () => callNext(biz, onlyMine ? s?.doctorId : null))} />
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Btn small kind="ghost" label="+ New token" onPress={() => router.push('/token')} />
+          <Btn small label="Call next" busy={busy === 'next'} onPress={() => act('next', () => callNext(biz, onlyMine ? s?.doctorId : null))} />
+        </View>
       </View>
       <Err msg={err} />
 
@@ -120,7 +123,6 @@ export default function QueueScreen() {
           ))}
         </Card>
       )}
-      <Note>Give tokens and register new patients from the computer — Patients → Register.</Note>
     </ScrollView>
   )
 }
