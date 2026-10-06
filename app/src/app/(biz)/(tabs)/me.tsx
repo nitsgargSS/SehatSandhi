@@ -12,8 +12,10 @@ export default function Me() {
   return (
     <ScrollView contentContainerStyle={st.wrap}>
       <Card>
+        {/* No name on the account (an owner without a doctor profile) → the
+            email is the heading, once, not a heading and a repeat below it. */}
         <Text style={st.name}>{s?.name || s?.email}</Text>
-        <Text style={st.meta}>{s?.email}</Text>
+        {!!s?.name && <Text style={st.meta}>{s.email}</Text>}
         <Text style={st.meta}>{s?.role.role ? ROLE_WORD[s.role.role] ?? s.role.role : '—'} at {s?.clinic?.name ?? '—'}</Text>
       </Card>
       {(s?.clinics.length ?? 0) > 1 && (
