@@ -34,6 +34,13 @@ export default function Me() {
           : push.state === 'denied' ? 'Off — allow notifications for Sehatsandhi in your phone settings.'
           : `Not available here${push.why ? ` (${push.why})` : ''}.`}</Text>
       </Card>
+      {!!s?.clinic && !['pharmacy', 'ambulance', 'insurance'].includes(s.clinic.vertical) && !['delivery', 'driver'].includes(s.role.role ?? '') && (
+        <Card>
+          <Label>Money</Label>
+          <Text style={st.meta}>What was taken today by cash, UPI and card, by whom, and who still owes.</Text>
+          <Btn small kind="ghost" label="Collections & dues" onPress={() => router.push('/collections')} />
+        </Card>
+      )}
       <Card>
         <Label>Password</Label>
         {pw === 'open' ? (

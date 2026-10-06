@@ -39,7 +39,7 @@ export default function NewToken() {
   const [why, setWhy] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [issued, setIssued] = useState<{ token: number; name: string; doctor: string; fee: number } | null>(null)
+  const [issued, setIssued] = useState<{ token: number; name: string; doctor: string; fee: number; member: string } | null>(null)
 
   useEffect(() => {
     if (!biz) return
@@ -104,7 +104,7 @@ export default function NewToken() {
         priority: outOfTurn ? 10 : 0, priorityReason: outOfTurn ? why.trim() : null,
       })
       if (pre.appointment) await setAppointmentStatus(pre.appointment, 'completed').catch(() => {})
-      setIssued({ token: r.token_number, name: picked.name, doctor: doc?.full_name ?? '', fee: r.fee })
+      setIssued({ token: r.token_number, name: picked.name, doctor: doc?.full_name ?? '', fee: r.fee, member: picked.id })
       setPicked(null); setQ(''); setReason(''); setFee({ mode: 'full', price: '', reason: '' }); setOutOfTurn(false); setWhy('')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -115,9 +115,10 @@ export default function NewToken() {
         <Card style={{ borderColor: C.green }}>
           <Text style={st.big}>✓ Token {issued.token}</Text>
           <Text style={st.body}>{issued.name}{issued.doctor ? ` → ${issued.doctor}` : ''}</Text>
-          <Text style={st.meta}>{issued.fee > 0 ? `${rs(issued.fee)} added to the bill — collect it under Collections.` : 'No fee.'}</Text>
+          <Text style={st.meta}>{issued.fee > 0 ? `${rs(issued.fee)} added to their account.` : 'No fee.'}</Text>
           <View style={st.row}>
-            <Btn small label="Next patient" onPress={() => setIssued(null)} />
+            {issued.fee > 0 && <Btn small label={`Take ${rs(issued.fee)}`} onPress={() => router.push({ pathname: '/patient/[member]', params: { member: issued.member } })} />}
+            <Btn small kind={issued.fee > 0 ? 'ghost' : 'primary'} label="Next patient" onPress={() => setIssued(null)} />
             <Btn small kind="ghost" label="Back to queue" onPress={() => router.back()} />
           </View>
         </Card>
