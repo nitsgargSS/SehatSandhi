@@ -12,7 +12,8 @@ export default function TabsLayout() {
   // 0192: an insurance advisor works leads.
   const insurance = s?.clinic?.vertical === 'insurance'
   const noClinic = pharmacy || ambulance || insurance
-  const sub = s ? `${s.name || s.email}${s.role.role ? ` · ${ROLE_WORD[s.role.role] ?? s.role.role}` : ''}` : ''
+  // The Me card already shows the email; the header only names a person who has a name.
+  const sub = s?.name ? `${s.name}${s.role.role ? ` · ${ROLE_WORD[s.role.role] ?? s.role.role}` : ''}` : ''
   return (
     <Tabs screenOptions={{
       tabBarActiveTintColor: C.green, headerTintColor: C.ink,
