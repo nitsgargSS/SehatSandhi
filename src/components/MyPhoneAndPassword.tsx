@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { activeConfig } from '../lib/env'
 import { markPasswordChanged } from '../lib/passwordState'
+import { checkPassword, passwordProblem, passwordSaveError } from '../lib/credentials'
 
 // 0156: two things every login can do for itself, used on the admin Account
 // tab and a clinic user's My practice.
@@ -101,12 +102,15 @@ export function SetPasswordByCode() {
   }
   const save = async () => {
     setErr('')
-    if (pw.next !== pw.confirm) { setErr('The two passwords do not match.'); return }
-    if (pw.next.length < 12) { setErr('Use at least 12 characters — length matters more than symbols.'); return }
+    // The same rules as every other password form. This one used to ask only
+    // for 12 characters, so 'correct horse battery' passed here and Supabase
+    // then refused it for having no capital, number or symbol.
+    const problem = passwordProblem(pw.next, pw.confirm)
+    if (problem) { setErr(problem); return }
     setBusy(true)
     const { error } = await supabase.auth.updateUser({ password: pw.next, nonce: code.trim() })
     setBusy(false)
-    if (error) { setErr(/nonce|otp|token/i.test(error.message) ? 'That code is not right, or has expired. Ask for a new one.' : error.message); return }
+    if (error) { setErr(/nonce|otp|token/i.test(error.message) ? 'That code is not right, or has expired. Ask for a new one.' : passwordSaveError(error)); return }
     await markPasswordChanged().catch(() => {})
     setStep('idle'); setCode(''); setPw({ next: '', confirm: '' })
     setMsg('Password set. You can now sign in with it, or keep using an emailed code.')
@@ -125,10 +129,15 @@ export function SetPasswordByCode() {
         <div className="space-y-2">
           <input className="input-field text-center font-mono w-40" inputMode="numeric" maxLength={8} placeholder="Code from email"
             value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 8))} />
-          <input className="input-field" type="password" autoComplete="new-password" placeholder="New password (12+ characters)"
+          <input className="input-field" type="password" autoComplete="new-password" placeholder="New password"
             value={pw.next} onChange={e => setPw(p => ({ ...p, next: e.target.value }))} />
           <input className="input-field" type="password" autoComplete="new-password" placeholder="New password again"
             value={pw.confirm} onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} />
+          <ul className="text-xs text-gray-500 pl-4 list-disc">
+            {checkPassword(pw.next).rules.map(r => (
+              <li key={r.label} className={r.met ? 'text-teal-700' : undefined}>{r.met ? '✓ ' : ''}{r.label}</li>
+            ))}
+          </ul>
           <div className="flex gap-2">
             <button disabled={busy || code.length < 6 || !pw.next} onClick={save} className="btn-teal text-sm disabled:opacity-50">{busy ? 'Saving…' : 'Set password'}</button>
             <button onClick={() => setStep('idle')} className="text-sm text-gray-500 underline">Cancel</button>
