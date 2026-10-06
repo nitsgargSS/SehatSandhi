@@ -20,7 +20,9 @@ import { C } from '../../../ui/theme'
 // doctor's patient gets refraction, VA, IOP). Same calls as the website's
 // patient record; who recorded what is stamped by the database (0182).
 export default function Consult() {
-  const { token, visit, member, doctor } = useLocalSearchParams<{ token: string; visit: string; member: string; doctor: string }>()
+  const { token: tokenParam, visit, member, doctor } = useLocalSearchParams<{ token: string; visit: string; member: string; doctor: string }>()
+  // 'none' = a past visit opened from the patient's page to correct it — no queue token.
+  const token = tokenParam && tokenParam !== 'none' ? tokenParam : ''
   const { s } = useSession()
   const biz = s?.clinic?.id ?? ''
   const [p, setP] = useState<PatientSummary | null>(null)
@@ -188,6 +190,7 @@ function VisitNotes({ visit, token, prescriber, member, biz, prescriberId }: {
       diagnosis: f.diagnosis, advice: f.advice, followUpDate: toIso(f.follow) })
     setItems([{ drug_name: '', dosage: '', duration: '', instructions: '' }])
     const r = await getPrescriptions(member, biz); setIssued(r.filter(x => x.visit_id === visit && x.status === 'issued'))
+    if (!token) return
     // Issuing does not close the visit (more notes may follow) — but it is
     // usually the last step, so offer to finish right here.
     Alert.alert('Prescription issued', 'Finish this consultation now? The patient moves to Finished in the queue.', [
@@ -253,7 +256,9 @@ function VisitNotes({ visit, token, prescriber, member, biz, prescriberId }: {
       )}
 
       {!!msg && <Text style={{ color: msg.startsWith('✓') ? C.green : C.danger, textAlign: 'center' }}>{msg}</Text>}
-      <Btn label="Finish consultation" busy={busy === 'done'} onPress={finish} />
+      {/* Opened from the patient's page to correct a past visit: nothing to finish. */}
+      {token ? <Btn label="Finish consultation" busy={busy === 'done'} onPress={finish} />
+        : <Btn kind="ghost" label="Done" onPress={() => router.back()} />}
     </>
   )
 }
