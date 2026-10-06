@@ -7,7 +7,8 @@ export default function BizLayout() {
   // Tapped alerts are handled in the root layout (0196), for staff and patients alike.
   return (
     <SessionProvider>
-      <Stack screenOptions={{ headerTintColor: C.ink, contentStyle: { backgroundColor: C.cream } }}>
+      {/* headerBackTitle: iOS otherwise labels the back button with the route group, "(tabs)". */}
+      <Stack screenOptions={{ headerTintColor: C.ink, headerBackTitle: 'Back', contentStyle: { backgroundColor: C.cream } }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="consult/[token]" options={{ title: 'Consultation' }} />
         <Stack.Screen name="patient/[member]" options={{ title: 'Patient' }} />
