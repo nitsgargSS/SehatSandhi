@@ -26,7 +26,7 @@ export default function Patients() {
     <ScrollView contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
       <Field placeholder="Name or mobile number" value={q} onChangeText={setQ} autoCorrect={false} autoFocus />
       <Err msg={err} />
-      {q.trim().length >= 2 && rows.length === 0 && !err && <Note>No patient found. Register new patients from the computer.</Note>}
+      {q.trim().length >= 2 && rows.length === 0 && !err && <Note>No patient found. To register someone new, use Queue → + New token.</Note>}
       {rows.map(r => (
         <Pressable key={r.patient_member_id} onPress={() => router.push({ pathname: '/patient/[member]', params: { member: r.patient_member_id } })}>
           <Card>

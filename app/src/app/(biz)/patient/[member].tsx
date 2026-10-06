@@ -9,6 +9,7 @@ import { getBoard, tokenVisit, setTokenStatus, type QueueEntry } from '@web/lib/
 import { getPrescriptions, getDocuments, documentUrl, type Prescription, type PatientDocument } from '@web/lib/prescriptionsApi'
 import { takePhoto, pickPhoto, pickFile, type Picked } from '../../../lib/patient'
 import { uploadPatientFile, DOC_KINDS } from '../../../lib/staffUpload'
+import BillCard from '../../../ui/BillCard'
 import { Btn, Card, Chip, Err, Field, Label, Note, toDmy } from '../../../ui/kit'
 import { C } from '../../../ui/theme'
 
@@ -128,6 +129,7 @@ export default function PatientScreen() {
           busy={busy} onPress={consultNow} />
       )}
       <Err msg={err} />
+      {!!biz && !!member && <BillCard biz={biz} member={member} recordedBy={s?.practitionerId ?? null} />}
       {!s?.clinical ? <Note>Your role does not open the medical record.</Note> : (
         <>
           <Card>
