@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import { getMyRole, isClinicalRole, mayPrescribe, type RoleLookup } from '@web/lib/identityApi'
 import { getWards } from '@web/lib/admissionsApi'
 import { registerPush, type PushState } from './push'
+import { amAdmin } from './admin'
 
 // Who is signed in and where — loaded once after login, used by every screen.
 // The same rules as the website's dashboard (src/pages/doctor/Dashboard.tsx):
@@ -25,6 +26,8 @@ export interface Session {
   prescriber: boolean
   /** The clinic has wards — the Beds tab shows. */
   hasWards: boolean
+  /** On the Sehatsandhi admin list — the Admin tab shows. */
+  isAdmin: boolean
 }
 
 export interface PushStatus { state: PushState | 'checking'; why?: string }
@@ -55,7 +58,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const clinic = clinics.find(c => c.id === picked) ?? clinics[0] ?? null
       const role: RoleLookup = clinic ? await getMyRole(clinic.id) : { role: null, enforced: true }
       const isDoctor = !role.enforced || role.role === 'doctor' || role.role === 'owner'
-      const wards = clinic ? await getWards(clinic.id).catch(() => []) : []
+      const [wards, isAdmin] = await Promise.all([
+        clinic ? getWards(clinic.id).catch(() => []) : Promise.resolve([]),
+        amAdmin(user.id).catch(() => false),
+      ])
       setS({
         userId: user.id, email: user.email ?? '', name: me?.full_name ?? '',
         practitionerId: me?.id ?? null,
@@ -64,6 +70,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         clinical: isClinicalRole(role),
         prescriber: mayPrescribe(role) && !!me?.id,
         hasWards: wards.length > 0,
+        isAdmin,
       })
     } catch (err) { setError((err as Error).message) } finally { setLoading(false) }
   }, [picked])

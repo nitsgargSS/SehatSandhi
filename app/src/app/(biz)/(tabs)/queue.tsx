@@ -52,6 +52,7 @@ export default function QueueScreen() {
 
   if (sLoading && !s) return <View style={st.center}><Note>Loading…</Note></View>
   if (sErr) return <View style={st.center}><Err msg={sErr} /></View>
+  if (!biz && s?.isAdmin) return <Redirect href="/admin" />
   if (!biz) return <View style={st.center}><Note>No clinic is linked to this login.</Note></View>
   // 0189: sign-in lands here; a pharmacy's home is its orders.
   if (s?.clinic?.vertical === 'pharmacy') return <Redirect href="/orders" />
