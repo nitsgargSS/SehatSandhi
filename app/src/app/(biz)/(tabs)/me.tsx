@@ -1,14 +1,17 @@
+import { useState } from 'react'
 import { ScrollView, StyleSheet, Text } from 'react-native'
 import { router } from 'expo-router'
 import { useSession, ROLE_WORD } from '../../../lib/session'
 import { supabase } from '../../../lib/supabase'
 import { unregisterPush } from '../../../lib/push'
 import { Btn, Card, Chip, Label, Note } from '../../../ui/kit'
+import NewPassword from '../../../ui/NewPassword'
 import { C } from '../../../ui/theme'
 
 // Who is signed in, which clinic (switch if more than one), log out.
 export default function Me() {
   const { s, pick, push } = useSession()
+  const [pw, setPw] = useState<'closed' | 'open' | 'saved'>('closed')
   return (
     <ScrollView contentContainerStyle={st.wrap}>
       <Card>
@@ -30,6 +33,21 @@ export default function Me() {
           : push.state === 'checking' ? 'Checking…'
           : push.state === 'denied' ? 'Off — allow notifications for Sehatsandhi in your phone settings.'
           : `Not available here${push.why ? ` (${push.why})` : ''}.`}</Text>
+      </Card>
+      <Card>
+        <Label>Password</Label>
+        {pw === 'open' ? (
+          <>
+            <NewPassword onDone={() => setPw('saved')} />
+            <Btn small kind="ghost" label="Cancel" onPress={() => setPw('closed')} />
+          </>
+        ) : (
+          <>
+            <Text style={st.meta}>{pw === 'saved' ? '✓ Password saved. Sign in with it, or with an emailed code.'
+              : 'Set one, or change it. You can always sign in with an emailed code instead.'}</Text>
+            <Btn small kind="ghost" label="Set or change password" onPress={() => setPw('open')} />
+          </>
+        )}
       </Card>
       <Note>Billing, pharmacy, staff, plan and reports are on the computer at sehatsandhi.com.</Note>
       <Btn kind="ghost" label="Log out" onPress={async () => { await unregisterPush(); await supabase.auth.signOut(); router.replace('/') }} />

@@ -1,15 +1,19 @@
 import { useState } from 'react'
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { linkMyLogin, prepareEmailLogin } from '@web/lib/businessApi'
+import { fetchPasswordState, mustChangeNow } from '@web/lib/passwordState'
+import NewPassword from '../ui/NewPassword'
 import { C } from '../ui/theme'
 
-// The same login as sehatsandhi.com/business/login — the website's two routes:
-// a 6-digit code by email (the everyday one), or email + password. Setting a
-// password happens on the website (Set a password tab) or from a staff invite.
+// The same login as sehatsandhi.com/business/login: a 6-digit code by email
+// (the everyday one), or email + password — and, as there, "Set a password":
+// an emailed code proves the address, then they choose one. Many staff have
+// only a phone, so setting, forgetting and expiry are all handled here.
 // WhatsApp OTP joins once AiSensy is live on production.
-type Mode = 'code' | 'password'
+type Mode = 'code' | 'password' | 'reset'
+const TAB: Record<Mode, string> = { code: 'Email me a code', password: 'Password', reset: 'Set / forgot password' }
 
 export default function Login() {
   const [mode, setMode] = useState<Mode>('code')
@@ -19,9 +23,19 @@ export default function Login() {
   const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // Signed in, but a new password is needed first: chosen ('reset'), or the
+  // old one expired (0080/0081 — an expired login reads nothing, so the clinic
+  // would look empty).
+  const [choose, setChoose] = useState<null | 'reset' | 'expired'>(null)
   const addr = email.trim().toLowerCase()
 
-  const done = async () => { await linkMyLogin(); router.replace('/queue') }
+  const enter = async () => { await linkMyLogin(); router.replace('/queue') }
+  const done = async () => {
+    if (mode === 'reset') { setChoose('reset'); setBusy(false); return }
+    // Asked before anything else, as the website's guards do.
+    if (mustChangeNow(await fetchPasswordState())) { setChoose('expired'); setBusy(false); return }
+    await enter()
+  }
 
   const sendCode = async () => {
     setBusy(true); setErr('')
@@ -46,16 +60,31 @@ export default function Login() {
     await done()
   }
 
+  if (choose) return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.wrap}>
+      <ScrollView contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
+        <Text style={s.title}>{choose === 'expired' ? 'Your password has expired' : 'Choose a password'}</Text>
+        <Text style={s.h}>{choose === 'expired'
+          ? `Choose a new one for ${addr} to carry on.`
+          : `For ${addr}. Next time, sign in with this password or with an emailed code.`}</Text>
+        <NewPassword onDone={enter} label="Save and continue" />
+        {choose === 'reset' && <Pressable onPress={enter}><Text style={s.link}>Skip for now</Text></Pressable>}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  )
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.wrap}>
       <View style={s.tabs}>
-        {(['code', 'password'] as Mode[]).map(m => (
-          <Pressable key={m} onPress={() => { setMode(m); setErr(''); setSent(false) }} style={[s.tab, mode === m && s.tabOn]}>
-            <Text style={[s.tabText, mode === m && { color: '#fff' }]}>{m === 'code' ? 'Email me a code' : 'Password'}</Text>
+        {(['code', 'password', 'reset'] as Mode[]).map(m => (
+          <Pressable key={m} onPress={() => { setMode(m); setErr(''); setSent(false); setCode('') }} style={[s.tab, mode === m && s.tabOn]}>
+            <Text style={[s.tabText, mode === m && { color: '#fff' }]}>{TAB[m]}</Text>
           </Pressable>
         ))}
       </View>
-      <Text style={s.h}>Use the email you sign in with on sehatsandhi.com</Text>
+      <Text style={s.h}>{mode === 'reset'
+        ? 'Forgot your password, or never set one? We email you a code to prove it is you, then you choose a password.'
+        : 'Use the email you sign in with on Sehatsandhi.'}</Text>
       <TextInput style={s.input} placeholder="Email" autoCapitalize="none" keyboardType="email-address"
         autoComplete="email" value={email} onChangeText={t => { setEmail(t); setSent(false) }} editable={!sent} />
 
@@ -63,7 +92,7 @@ export default function Login() {
         <TextInput style={s.input} placeholder="Password" secureTextEntry autoComplete="password"
           value={password} onChangeText={setPassword} onSubmitEditing={signIn} />
       )}
-      {mode === 'code' && sent && (
+      {mode !== 'password' && sent && (
         <>
           <Text style={s.note}>If {addr} is registered, a 6-digit code is on its way. Check Spam too.</Text>
           <TextInput style={[s.input, s.code]} placeholder="000000" keyboardType="number-pad" maxLength={6}
@@ -77,14 +106,18 @@ export default function Login() {
         <Btn busy={busy} disabled={!addr || !password} onPress={signIn} label="Sign in" />
       ) : sent ? (
         <>
-          <Btn busy={busy} disabled={code.length < 6} onPress={verify} label="Confirm" />
+          <Btn busy={busy} disabled={code.length < 6} onPress={verify} label={mode === 'reset' ? 'Confirm and choose a password' : 'Confirm'} />
           <Pressable onPress={() => { setSent(false); setCode('') }}><Text style={s.link}>Use a different email</Text></Pressable>
         </>
       ) : (
         <Btn busy={busy} disabled={!addr.includes('@')} onPress={sendCode} label="Send me a code" />
       )}
 
-      <Text style={s.note}>No password yet? Use a code, or set one on sehatsandhi.com → Login → Set a password.</Text>
+      {mode === 'password' && (
+        <Pressable onPress={() => { setMode('reset'); setErr(''); setSent(false) }}>
+          <Text style={s.link}>Forgot it, or never set one? Set a password</Text>
+        </Pressable>
+      )}
     </KeyboardAvoidingView>
   )
 }
@@ -99,7 +132,8 @@ function Btn({ busy, disabled, onPress, label }: { busy: boolean; disabled: bool
 
 const s = StyleSheet.create({
   wrap: { flex: 1, padding: 20, gap: 12 },
-  tabs: { flexDirection: 'row', gap: 8 },
+  tabs: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  title: { fontSize: 20, fontWeight: '800', color: C.ink },
   tab: { paddingVertical: 9, paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#ece7dc' },
   tabOn: { backgroundColor: C.green },
   tabText: { fontWeight: '700', color: C.muted },
