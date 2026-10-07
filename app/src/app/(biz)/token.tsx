@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSession } from '../../lib/session'
 import { searchPatients, registerPatient, type PatientSearchResult } from '@web/lib/patientsApi'
-import { opdVisit, opdSlipUrl, patientHistory } from '@web/lib/queueApi'
-import { SITE } from '../../lib/env'
+import { opdVisit, patientHistory } from '@web/lib/queueApi'
+import { printOpdSlip } from '../../lib/printSlip'
 import { listBusinessDoctors, type BusinessDoctor } from '@web/lib/doctorsApi'
 import { setAppointmentStatus } from '@web/lib/appointmentApi'
 import { Btn, Card, Chip, Err, Field, Label, Note } from '../../ui/kit'
@@ -117,10 +117,10 @@ export default function NewToken() {
           <Text style={st.big}>✓ Token {issued.token}</Text>
           <Text style={st.body}>{issued.name}{issued.doctor ? ` → ${issued.doctor}` : ''}</Text>
           <Text style={st.meta}>{issued.fee > 0 ? `${rs(issued.fee)} added to their account.` : 'No fee.'}</Text>
-          <Note>Print slip opens the slip in your phone's browser — tap Print there (Wi-Fi printer, or save as PDF). Sign in to the website on this phone once.</Note>
+          <Note>Print slip opens your phone's print window — a Wi-Fi printer, or Save as PDF to share.</Note>
           <View style={st.row}>
             {issued.fee > 0 && <Btn small label={`Take ${rs(issued.fee)}`} onPress={() => router.push({ pathname: '/patient/[member]', params: { member: issued.member } })} />}
-            <Btn small kind="ghost" label="🖨 Print slip" onPress={() => Linking.openURL(`${SITE}${opdSlipUrl(issued.queue)}`)} />
+            <Btn small kind="ghost" label="🖨 Print slip" onPress={() => printOpdSlip(issued.queue).catch(e => setErr((e as Error).message))} />
             <Btn small kind={issued.fee > 0 ? 'ghost' : 'primary'} label="Next patient" onPress={() => setIssued(null)} />
             <Btn small kind="ghost" label="Back to queue" onPress={() => router.back()} />
           </View>
