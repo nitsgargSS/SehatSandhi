@@ -28,6 +28,8 @@ export interface Session {
   hasWards: boolean
   /** On the Sehatsandhi admin list — the Admin tab shows. */
   isAdmin: boolean
+  /** 0168: a clinic or hospital running its own lab (a lab business is vertical 'lab'). */
+  labModule: boolean
 }
 
 export interface PushStatus { state: PushState | 'checking'; why?: string }
@@ -52,9 +54,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const me = p as { id: string; full_name: string | null } | null
       const { data: ids, error: e } = await supabase.rpc('sehat_caller_business_ids')
       if (e) throw new Error(e.message)
-      const { data: biz } = await supabase.from('businesses').select('id, name, vertical')
+      const { data: biz } = await supabase.from('businesses').select('id, name, vertical, lab_module')
         .in('id', (ids as string[]) ?? []).order('created_at')
-      const clinics = (biz ?? []) as { id: string; name: string; vertical: string }[]
+      const clinics = (biz ?? []) as { id: string; name: string; vertical: string; lab_module?: boolean | null }[]
       const clinic = clinics.find(c => c.id === picked) ?? clinics[0] ?? null
       const role: RoleLookup = clinic ? await getMyRole(clinic.id) : { role: null, enforced: true }
       const isDoctor = !role.enforced || role.role === 'doctor' || role.role === 'owner'
@@ -71,6 +73,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         prescriber: mayPrescribe(role) && !!me?.id,
         hasWards: wards.length > 0,
         isAdmin,
+        labModule: !!clinic?.lab_module,
       })
     } catch (err) { setError((err as Error).message) } finally { setLoading(false) }
   }, [picked])

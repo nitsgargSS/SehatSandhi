@@ -82,7 +82,7 @@ export default function Find() {
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
-  const ctx = useRef<{ speciality?: string; kind?: Kind; pin?: string; area?: string; day: number }>({ day: 0 })
+  const ctx = useRef<{ speciality?: string; kind?: Kind; pin?: string; area?: string; day: number; hint?: string }>({ day: 0 })
   const scroll = useRef<ScrollView>(null)
   const n = useRef(0)
   const push = (m: NewMsg) => setMsgs(x => [...x, { ...m, id: ++n.current } as Msg])
@@ -143,17 +143,6 @@ export default function Find() {
     ])
   }
 
-  const openSlots = async (business: string, practitioner: string | null) => {
-    for (let k = ctx.current.day; k <= Math.max(ctx.current.day, 2); k++) {
-      const { data: w } = await supabase.rpc('sehat_open_windows', { p_business_id: business, p_date: istDate(k), p_practitioner_id: practitioner })
-      const now = Date.now()
-      const slots = ((w ?? []) as { window_start: string; seats_left: number }[])
-        .filter(x => x.seats_left > 0 && new Date(x.window_start).getTime() > now + 15 * 60_000).map(x => x.window_start).slice(0, 6)
-      if (slots.length) return { slots, slotDay: k }
-    }
-    return { slots: [] as string[], slotDay: ctx.current.day }
-  }
-
   const searchPlaces = async () => {
     const { kind, pin, area } = ctx.current
     if (!kind || !pin) return
@@ -166,12 +155,12 @@ export default function Find() {
       return
     }
     const places: Place[] = await Promise.all(rows.map(async r => (
-      kind === 'lab' ? { ...r, ...(await openSlots(r.business_id, null)) } : { ...r, slots: [], slotDay: ctx.current.day }
+      { ...r, slots: [], slotDay: ctx.current.day }
     )))
     if (kind === 'ambulance') bot('In an emergency call 108 first — it is free.', [{ label: '📞 Call 108', say: '__tel__108' }])
     push({ from: 'bot', places, kind })
     const next: Record<Kind, { text: string; chips: { label: string; say: string }[] }> = {
-      lab: { text: 'Tap a time to book the test. Want another day?', chips: [{ label: 'Today', say: '__day__0' }, { label: 'Tomorrow', say: '__day__1' }, { label: 'Day after', say: '__day__2' }] },
+      lab: { text: 'Tap "Choose tests & book" — sample at the lab or at home, at a time that suits you.', chips: [] },
       pharmacy: { text: 'Want medicines delivered? Send the prescription photo — a pharmacy near you tells you the total first.', chips: [{ label: '💊 Order medicines', say: '__go__/me/order' }] },
       ambulance: { text: 'Or alert all of them at once — the first to accept calls you and sees where you are.', chips: [{ label: '🚑 Alert ambulances near me', say: '__go__/me/ambulance' }] },
       insurance: { text: 'Tell us the cover you want and one of these advisors calls you back. Only the advisor who takes it gets your number.', chips: [{ label: '🛡️ Ask for an advisor', say: '__go__/me/insurance' }] },
@@ -210,7 +199,7 @@ export default function Find() {
     await understood({
       speciality: m.intent === 'doctor' ? m.speciality ?? undefined : undefined,
       kind: KIND_OF[m.intent], doctorAny: m.intent === 'doctor' && !m.speciality,
-      pin: m.pincode ?? undefined, area: m.location ?? undefined, day: dayOffset(m),
+      pin: m.pincode ?? undefined, area: m.location ?? undefined, day: dayOffset(m), hint: m.lab_test_hint ?? undefined,
     })
   }
 
@@ -234,7 +223,7 @@ export default function Find() {
     }
   }
 
-  const understood = async (u: { speciality?: string; kind?: Kind; doctorAny?: boolean; pin?: string; area?: string; place?: string; day?: number }) => {
+  const understood = async (u: { speciality?: string; kind?: Kind; doctorAny?: boolean; pin?: string; area?: string; place?: string; day?: number; hint?: string }) => {
     setBusy(true)
     try {
       // Pharmacies, labs, hospitals, ambulances and advisors: listed here too.
@@ -242,6 +231,7 @@ export default function Find() {
       if (u.speciality) { ctx.current.speciality = u.speciality; ctx.current.kind = undefined }
       if (u.doctorAny) { ctx.current.kind = undefined }
       if (u.day !== undefined) ctx.current.day = u.day
+      if (u.hint !== undefined) ctx.current.hint = u.hint
       if (u.pin) { ctx.current.pin = u.pin; ctx.current.area = u.area ?? u.pin }
       if (u.place && !u.pin) {
         const hit = await placeToPin(u.place)
@@ -345,21 +335,13 @@ export default function Find() {
                   <Text style={st.docName}>{pl.title}</Text>
                   {!!pl.address && <Text style={st.meta} numberOfLines={2}>{pl.address}</Text>}
                   <Text style={st.meta}>{pl.avg_rating != null ? `★ ${pl.avg_rating} · ${pl.total_reviews} reviews` : 'New on Sehatsandhi'}</Text>
-                  {m.kind === 'lab' && (pl.slots.length ? (
-                    <>
-                      <Text style={st.slotHead}>Open {DAY_WORD[pl.slotDay]}:</Text>
-                      <View style={st.chips}>
-                        {pl.slots.map(sl => (
-                          <Pressable key={sl} style={st.slot} onPress={() => push({ from: 'bot', book: { doc: {
-                            practitioner_id: null, full_name: pl.title, qualification: null, business_id: pl.business_id, business_name: pl.title,
-                            address: pl.address, consultation_fee: null, nearby: true, area: null, slots: pl.slots, slotDay: pl.slotDay, code: null, phone: pl.phone,
-                          }, slot: sl } })}>
-                            <Text style={st.slotText}>{timeText(sl)}</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    </>
-                  ) : <Text style={st.meta}>No open times in the next 3 days.</Text>)}
+                  {/* 0207: tests, prices, lab or home, a time — on the lab's own screen. */}
+                  {m.kind === 'lab' && (
+                    <Pressable style={[st.slot, { alignSelf: 'flex-start', marginTop: 6 }]}
+                      onPress={() => router.push({ pathname: '/lab/[id]', params: { id: pl.business_id, hint: ctx.current.hint ?? '' } })}>
+                      <Text style={st.slotText}>🧪 Choose tests & book</Text>
+                    </Pressable>
+                  )}
                   {/* Advisors are reached through a request (a paid lead), never a listed number. */}
                   {m.kind !== 'insurance' && !!pl.phone && (
                     <Pressable onPress={() => Linking.openURL(`tel:${pl.phone}`)}><Text style={[st.link, { textAlign: 'left', marginTop: 4 }]}>📞 Call {m.kind === 'pharmacy' ? 'the shop' : m.kind === 'ambulance' ? 'this ambulance' : m.kind === 'lab' ? 'the lab' : 'the hospital'}</Text></Pressable>

@@ -26,6 +26,7 @@ export default function RootLayout() {
         <Stack.Screen name="login" options={{ title: 'Login' }} />
         <Stack.Screen name="find" options={{ title: 'Book an appointment' }} />
         <Stack.Screen name="camps" options={{ title: 'Camps & offers' }} />
+        <Stack.Screen name="lab/[id]" options={{ title: 'Book lab tests' }} />
         <Stack.Screen name="emergency" options={{ title: 'Emergency', headerStyle: { backgroundColor: '#b3141b' }, headerTintColor: '#fff' }} />
         <Stack.Screen name="me" options={{ headerShown: false }} />
         <Stack.Screen name="(biz)" options={{ headerShown: false }} />

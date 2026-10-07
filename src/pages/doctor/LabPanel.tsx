@@ -963,6 +963,29 @@ function Packages({ businessId, tests, packages, canManage, reload }: {
   const [edit, setEdit] = useState<{ pkg: Partial<LabPackage>; ids: string[] } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [find, setFind] = useState('')
+  // 0208: ready-made packages (lists of catalogue codes) to start from.
+  const [templates, setTemplates] = useState<{ id: number; name: string; description: string | null; codes: string[] }[]>([])
+  useEffect(() => {
+    supabase.from('lab_package_templates').select('id, name, description, codes').eq('is_active', true).order('sort_order')
+      .then(({ data }) => setTemplates((data ?? []) as typeof templates))
+  }, [])
+  // A template's tests this lab has not listed yet join its price list (at the
+  // catalogue's suggested price), then the package opens with them ticked and a
+  // price suggested — the tests' total less 15%.
+  const fromTemplate = async (t: { name: string; description: string | null; codes: string[] }) => {
+    setBusy(true); setErr('')
+    try {
+      const have = new Set(tests.map(x => x.catalogue_code).filter(Boolean))
+      const missing = t.codes.filter(c => !have.has(c))
+      if (missing.length) await importCatalogue(businessId, missing)
+      const fresh = await getTests(businessId)
+      const ids = fresh.filter(x => x.catalogue_code && t.codes.includes(x.catalogue_code)).map(x => x.id)
+      const sum = fresh.filter(x => ids.includes(x.id)).reduce((a, x) => a + x.price, 0)
+      reload()
+      setEdit({ pkg: { name: t.name, description: t.description, price: Math.round(sum * 0.85 / 10) * 10 }, ids })
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
   const save = async () => {
     if (!edit) return
     setBusy(true); setErr('')
@@ -979,9 +1002,10 @@ function Packages({ businessId, tests, packages, canManage, reload }: {
           <input className="input-field" type="number" min={0} placeholder="Package price ₹" value={edit.pkg.price ?? ''} onChange={e => setEdit({ ...edit, pkg: { ...edit.pkg, price: Number(e.target.value) } })} />
           <input className="input-field" placeholder="Short description (optional)" value={edit.pkg.description ?? ''} onChange={e => setEdit({ ...edit, pkg: { ...edit.pkg, description: e.target.value } })} />
         </div>
+        <input className="input-field" placeholder="Search your tests — e.g. sugar, thyroid" value={find} onChange={e => setFind(e.target.value)} />
         <p className="text-xs text-gray-500">Tests chosen: {edit.ids.length} · separately they cost {moneyExact(sum)}{edit.pkg.price ? ` · package saves the patient ${moneyExact(Math.max(0, sum - Number(edit.pkg.price)))}` : ''}</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-1 max-h-80 overflow-auto border border-gray-100 rounded-lg p-2">
-          {tests.filter(t => t.is_active).map(t => (
+          {tests.filter(t => t.is_active && (!find.trim() || t.name.toLowerCase().includes(find.trim().toLowerCase()))).map(t => (
             <label key={t.id} className="text-sm flex items-center gap-2 py-1">
               <input type="checkbox" checked={edit.ids.includes(t.id)} onChange={e => setEdit({ ...edit, ids: e.target.checked ? [...edit.ids, t.id] : edit.ids.filter(x => x !== t.id) })} />
               {t.name} <span className="text-gray-400">{moneyExact(t.price)}</span>
@@ -999,7 +1023,20 @@ function Packages({ businessId, tests, packages, canManage, reload }: {
   }
   return (
     <div className="space-y-3">
-      {canManage && <div className="flex justify-end"><button disabled={!tests.length} onClick={() => setEdit({ pkg: {}, ids: [] })} className="btn-teal text-xs py-2 px-4"><Plus className="w-4 h-4" /> Package</button></div>}
+      {canManage && (
+        <div className="card shadow-sm space-y-2">
+          <p className="text-sm font-semibold text-navy-700">Start from a ready-made package</p>
+          <p className="text-xs text-gray-500">Its tests are added to your price list if needed; change the tests and the price before saving.</p>
+          <div className="flex flex-wrap gap-1.5">
+            {templates.map(t => (
+              <button key={t.id} disabled={busy} onClick={() => fromTemplate(t)} title={t.description ?? ''}
+                className="text-xs px-3 py-1.5 rounded-full border border-gray-200 hover:border-teal-400 disabled:opacity-50">{t.name}</button>
+            ))}
+            <button disabled={!tests.length || busy} onClick={() => setEdit({ pkg: {}, ids: [] })} className="btn-teal text-xs py-1.5 px-3"><Plus className="w-4 h-4" /> Blank package</button>
+          </div>
+          <Err msg={err} />
+        </div>
+      )}
       {!packages.length ? <div className="card shadow-sm text-sm text-gray-500 py-10 text-center">No packages yet — group tests into a checkup at one price.</div> : (
         <div className="grid sm:grid-cols-2 gap-3">
           {packages.map(p => (

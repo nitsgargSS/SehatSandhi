@@ -46,7 +46,7 @@ const rpc = async <T>(name: string, args: Record<string, unknown> = {}): Promise
 }
 
 export interface Activity {
-  bookings: { id: string; when: string; status: string; name: string | null; place: string | null; doctor: string | null; rated: boolean; rateable: boolean }[]
+  bookings: { id: string; when: string; status: string; name: string | null; place: string | null; doctor: string | null; purpose?: string | null; rated: boolean; rateable: boolean }[]
   orders: { id: string; code: string; token: string; status: string; created_at: string; pharmacy: string | null; total: number | null; rated: boolean; rateable: boolean }[]
   trips: { id: string; code: string; token: string; status: string; kind: string; created_at: string; service: string | null; rated: boolean; rateable: boolean }[]
   insurance: { id: string; code: string; token: string; status: string; created_at: string; advisor: string | null; rated: boolean; rateable: boolean }[]
