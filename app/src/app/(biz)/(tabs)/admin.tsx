@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Redirect, useFocusEffect } from 'expo-router'
+import { Redirect, router, useFocusEffect } from 'expo-router'
 import { useSession } from '../../../lib/session'
 import {
   today, pendingBusinesses, approveBusiness, rejectBusiness, pendingCamps, reviewCamp,
@@ -13,8 +13,8 @@ import { C } from '../../../ui/theme'
 // Sehatsandhi admin on the phone: how today went, and everything
 // waiting on a decision — new businesses, camps, WhatsApp broadcasts, insurance
 // lead reports. The same calls and the same rules as the website's admin
-// dashboard; everything else there (pricing, GST, privacy, team) stays on the
-// computer.
+// dashboard. Privacy requests and business lookup / disable open their own
+// screens; everything else there (pricing, GST, team) stays on the computer.
 const VERTICAL: Record<string, string> = {
   clinic: 'Clinic', hospital: 'Hospital', lab: 'Lab', pharmacy: 'Pharmacy', ambulance: 'Ambulance', insurance: 'Insurance',
 }
@@ -103,7 +103,11 @@ export default function Admin() {
             Last 24 hours by channel — App {t.app} · WhatsApp {t.whatsapp} · Website {t.website} · Front desk {t.frontDesk}
           </Text>
         )}
-        {!!t?.privacyOpen && <Text style={st.warn}>⚠ {t.privacyOpen} open privacy request{t.privacyOpen === 1 ? '' : 's'} — the 24 h / 15-day clock is running. Handle on the computer (Privacy tab).</Text>}
+        {!!t?.privacyOpen && <Text style={st.warn}>⚠ {t.privacyOpen} open privacy request{t.privacyOpen === 1 ? '' : 's'} — the 24 h / 15-day clock is running.</Text>}
+        <View style={st.btnRow}>
+          <Btn small kind={t?.privacyOpen ? 'primary' : 'ghost'} label={`Privacy requests${t?.privacyOpen ? ` (${t.privacyOpen})` : ''}`} onPress={() => router.push('/privacy')} />
+          <Btn small kind="ghost" label="Businesses" onPress={() => router.push('/businesses')} />
+        </View>
       </Card>
 
       <Card>
@@ -215,6 +219,7 @@ function Tile({ n, l }: { n: number; l: string }) {
 }
 
 const st = StyleSheet.create({
+  btnRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 6 },
   wrap: { padding: 14, gap: 12, paddingBottom: 48 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tile: { width: '31%', flexGrow: 1, backgroundColor: '#f7f4ec', borderRadius: 12, padding: 10 },
