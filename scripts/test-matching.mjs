@@ -60,7 +60,8 @@ for (const { i, m } of out) {
       if (why.length && m.action === 'proceed') wrongHigh++
     }
     if (!r.expected_intent && m.action === 'proceed' && !m.is_emergency) wrongHigh++
-    if (r.expected_pin && m.pincode !== r.expected_pin) why.push(`pin ${m.pincode ?? 'none'} ≠ ${r.expected_pin}`)
+    // expected_pin 'none': no place may be read into it (a person's name, an ordinary word).
+    if (r.expected_pin === 'none' ? m.pincode != null : (r.expected_pin && m.pincode !== r.expected_pin)) why.push(`pin ${m.pincode ?? 'none'} ≠ ${r.expected_pin}`)
     if (r.expected_day !== '' && r.expected_day != null && dayOf(m.target_date) !== Number(r.expected_day)) why.push(`day ${dayOf(m.target_date)} ≠ ${r.expected_day}`)
   }
   const p = (per[r.category] ??= { n: 0, ok: 0 })

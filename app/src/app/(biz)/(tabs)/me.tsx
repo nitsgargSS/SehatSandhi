@@ -56,6 +56,28 @@ export default function Me() {
           <Btn small kind="ghost" label="Tests & packages" onPress={() => router.push('/labmenu')} />
         </Card>
       )}
+      {/* Clinic set-up on the phone: doctors' fees, hours and profiles; pharmacy stock; the plan. */}
+      {!!s?.clinic && ['clinic', 'hospital'].includes(s.clinic.vertical) && (!s.role.enforced || ['owner', 'manager', 'doctor'].includes(s.role.role ?? '')) && (
+        <Card>
+          <Label>Doctors</Label>
+          <Text style={st.meta}>OPD fees, weekly hours and what patients see on each doctor's page.</Text>
+          <Btn small kind="ghost" label="Doctors, fees & hours" onPress={() => router.push('/doctors')} />
+        </Card>
+      )}
+      {!!s?.clinic && (s.clinic.vertical === 'pharmacy' || s.pharmacyModule) && (
+        <Card>
+          <Label>Pharmacy</Label>
+          <Text style={st.meta}>Stock on hand, what to reorder, what is expiring; add stock and new medicines.</Text>
+          <Btn small kind="ghost" label="Pharmacy stock" onPress={() => router.push('/stock')} />
+        </Card>
+      )}
+      {!!s?.clinic && (!s.role.enforced || ['owner', 'manager'].includes(s.role.role ?? '')) && (
+        <Card>
+          <Label>Plan</Label>
+          <Text style={st.meta}>Whether the listing is active, until when, and the next renewal.</Text>
+          <Btn small kind="ghost" label="Plan" onPress={() => router.push('/plan')} />
+        </Card>
+      )}
       <Card>
         <Label>Password</Label>
         {pw === 'open' ? (

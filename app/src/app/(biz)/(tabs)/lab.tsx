@@ -123,11 +123,12 @@ export default function LabOrders() {
 
   return (
     <ScrollView contentContainerStyle={st.wrap} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />} keyboardShouldPersistTaps="handled">
+      <Btn label="+ New order" onPress={() => router.push('/labnew')} />
       <View style={st.row}>{STAGES.map(([k, l]) => <Chip key={k} label={`${l}${counts[k] ? ` (${counts[k]})` : ''}`} on={stage === k} onPress={() => setStage(k)} />)}</View>
       <Err msg={err} />
       {rows.map(Order)}
       {!rows.length && <Note>{loading ? 'Loading…' : 'Nothing here. Pull down to refresh.'}</Note>}
-      <Note>New orders are made at the desk on the computer, or by patients in the app. Report PDFs and scans are uploaded on the computer.</Note>
+      <Note>Patients' own bookings from the app appear here too. A report PDF or photo is uploaded on the order's screen.</Note>
     </ScrollView>
   )
 }

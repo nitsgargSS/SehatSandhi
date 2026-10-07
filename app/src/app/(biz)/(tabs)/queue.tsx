@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Redirect, router, useFocusEffect } from 'expo-router'
 import { useSession } from '../../../lib/session'
+import { SITE } from '../../../lib/env'
 import {
-  getBoard, callNext, setTokenStatus, tokenVisit, reopenToken, visitHasDiagnosis, type QueueEntry,
+  getBoard, callNext, setTokenStatus, tokenVisit, reopenToken, visitHasDiagnosis, opdSlipUrl, type QueueEntry,
 } from '@web/lib/queueApi'
 import { Btn, Card, Chip, Err, Label, Note } from '../../../ui/kit'
 import { C } from '../../../ui/theme'
@@ -79,6 +80,7 @@ export default function QueueScreen() {
       <View style={st.btns}>
         {s?.clinical && <Btn small label="Consult" onPress={() => consult(e)} busy={busy === e.id} />}
         {e.status === 'called' && <Btn small kind="ghost" label="No answer" onPress={() => act(e.id, () => setTokenStatus(e.id, 'waiting'))} />}
+        {e.status !== 'in_consultation' && <Btn small kind="ghost" label="🖨 Slip" onPress={() => Linking.openURL(`${SITE}${opdSlipUrl(e.id)}`)} />}
         {e.status === 'in_consultation' && <Btn small kind="ghost" label="Done" onPress={() => finish(e)} />}
         {e.status === 'waiting' && <Btn small kind="danger" label="Left" onPress={async () => {
           if (await confirm('Patient left?', `Mark ${e.patient_name} as left without being seen? You can bring them back from Finished.`, 'Mark left'))

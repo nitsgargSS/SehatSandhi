@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import { useSession } from '../../../lib/session'
-import { IS_STAGING } from '../../../lib/env'
+import { SITE } from '../../../lib/env'
+import { supabase } from '../../../lib/supabase'
+import { bytesOf, pickFile, pickPhoto, takePhoto, type Picked } from '../../../lib/patient'
 import {
-  getOrder, getTestParameters, getResults, saveResults, approveOrder, sendReport, STATUS_LABEL,
-  type LabOrder, type LabParameter,
+  getOrder, getTestParameters, getResults, saveResults, approveOrder, sendReport, getUploads, sendUpload, STATUS_LABEL,
+  type LabOrder, type LabParameter, type UploadedReport,
 } from '@web/lib/labApi'
 import { Btn, Card, Chip, Err, Field, Label, Note } from '../../../ui/kit'
 import { C } from '../../../ui/theme'
@@ -14,8 +16,11 @@ import { C } from '../../../ui/theme'
 // lab's reference ranges where it has set them), then a doctor approves and
 // the report goes to the patient on WhatsApp — the website's results screen,
 // same functions (sehat_lab_save_results / _approve, lab-report-send).
+// A report made elsewhere (an X-ray reading, a machine print-out) is uploaded
+// as it is — a PDF or a photo — and sent the same way (0169,
+// sehat_lab_upload_report: the patient's folder, the lab's retention).
 type Param = LabParameter & { id: string }
-const SITE = IS_STAGING ? 'https://sehat-sandhi-staging.vercel.app' : 'https://sehatsandhi.com'
+// SITE: the paired website (lib/env).
 
 export default function LabOrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -29,6 +34,8 @@ export default function LabOrderScreen() {
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
+  const [uploads, setUploads] = useState<UploadedReport[]>([])
+  const [upTitle, setUpTitle] = useState('')
 
   const load = useCallback(async () => {
     const ord = await getOrder(id)
@@ -41,11 +48,13 @@ export default function LabOrderScreen() {
       v[it.id] = Object.fromEntries(res.filter(r => r.parameter_id).map(r => [r.parameter_id!, r.value_text ?? (r.value_num != null ? String(r.value_num) : '')]))
     }))
     setParams(p); setVals(v)
+    getUploads(ord.business_id, { orderId: ord.id }).then(setUploads).catch(() => setUploads([]))
   }, [id])
   useEffect(() => { load().catch(e => setErr((e as Error).message)) }, [load])
 
   const run = async (k: string, fn: () => Promise<unknown>, ok: string) => {
     setBusy(k); setErr(''); setMsg('')
+    // An empty message = the person backed out of a picker: nothing to say.
     try { await fn(); setMsg(ok); await load() } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
   }
 
@@ -61,6 +70,23 @@ export default function LabOrderScreen() {
     return lo != null && n < lo ? ' ↓ low' : hi != null && n > hi ? ' ↑ high' : ''
   }
   const report = o.latest_report
+  const upload = (get: () => Promise<Picked | null>) => run('upload', async () => {
+    const f = await get()
+    if (!f) throw new Error('')
+    if (!/^(application\/pdf|image\/)/.test(f.mime)) throw new Error('Choose a PDF or a photo.')
+    const bytes = await bytesOf(f.uri)
+    if (bytes.byteLength > 15 * 1024 * 1024) throw new Error('That file is over 15 MB — take a photo of the page instead.')
+    const path = `${o.business_id}/${o.patient_member_id}/lab-${Date.now()}-${f.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-60)}`
+    const { error: upErr } = await supabase.storage.from('patient-documents').upload(path, bytes, { contentType: f.mime, upsert: false })
+    if (upErr) throw new Error(upErr.message)
+    const { error } = await supabase.rpc('sehat_lab_upload_report', {
+      p_business: o.business_id, p_member: o.patient_member_id, p_storage_path: path,
+      p_title: upTitle.trim() || o.items.map(i => i.name).join(', ').slice(0, 120) || 'Lab report',
+      p_mime: f.mime, p_size: bytes.byteLength, p_report_date: null, p_order: o.id,
+    })
+    if (error) { await supabase.storage.from('patient-documents').remove([path]).catch(() => undefined); throw new Error(error.message) }
+    setUpTitle('')
+  }, '✓ Uploaded. Send it to the patient below.')
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
@@ -96,7 +122,7 @@ export default function LabOrderScreen() {
                 </View>
               )
             })}
-            {!(params[it.id] ?? []).length && <Note>This test has no result fields set up — add them on the computer (Lab → Tests), or upload the report there.</Note>}
+            {!(params[it.id] ?? []).length && <Note>This test has no result fields set up — upload its report below (PDF or photo), or add the fields in Tests & packages on the computer.</Note>}
             {enters && it.status !== 'approved' && !!(params[it.id] ?? []).length && (
               <Btn small label="Save results" busy={busy === it.id}
                 onPress={() => run(it.id, () => saveResults(it.id, (params[it.id] ?? []).map(p => ({ parameter_id: p.id, value: vals[it.id]?.[p.id] ?? '' }))), `✓ ${it.name} saved`)} />
@@ -123,6 +149,35 @@ export default function LabOrderScreen() {
             </View>
           </Card>
         )}
+        {enters && o.status !== 'cancelled' && (
+          <Card>
+            <Label>Upload a report — PDF or photo</Label>
+            <Note>For a report made outside the result fields (an X-ray reading, a machine print-out). It is sent as it is.</Note>
+            <Field placeholder={`Title (default: ${o.items.map(i => i.name).join(', ').slice(0, 40) || 'Lab report'})`} value={upTitle} onChangeText={setUpTitle} />
+            <View style={st.row}>
+              <Btn small label="📷 Take photo" busy={busy === 'upload'} onPress={() => upload(takePhoto)} />
+              <Btn small kind="ghost" label="🖼 Photo" onPress={() => upload(pickPhoto)} />
+              <Btn small kind="ghost" label="📄 PDF / file" onPress={() => upload(pickFile)} />
+            </View>
+          </Card>
+        )}
+        {uploads.map(u => (
+          <Card key={u.id}>
+            <Label>📎 {u.title}</Label>
+            <Text style={st.meta}>{u.purged_at ? 'Removed after the retention period' : `Kept until ${new Date(u.expires_on).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+              {u.sent_at ? ` · sent ${new Date(u.sent_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })}` : ' · not sent yet'}</Text>
+            {!!u.send_error && <Text style={st.flag}>{u.send_error}</Text>}
+            {!u.purged_at && <View style={st.row}>
+              <Btn small label={u.sent_at ? 'Send again' : 'Send to the patient'} busy={busy === `send-${u.id}`}
+                onPress={() => Alert.alert('Send this file?', `${u.title} → ${o.patient_name} on WhatsApp`, [{ text: 'Back', style: 'cancel' }, { text: 'Send', onPress: () =>
+                  run(`send-${u.id}`, async () => {
+                    const r = await sendUpload(u.id)
+                    if (!r.whatsapp && !r.email) throw new Error(r.errors?.join(' ') || 'Could not send — give the patient a print-out.')
+                  }, '✓ Sent on WhatsApp') }])} />
+              <Btn small kind="ghost" label="View" onPress={() => Linking.openURL(`${SITE}/lab/file/${u.public_token}`)} />
+            </View>}
+          </Card>
+        ))}
       </ScrollView>
     </KeyboardAvoidingView>
   )

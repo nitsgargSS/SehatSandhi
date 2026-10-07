@@ -14,6 +14,10 @@ export interface Match {
   /** 0201: which test, when it is a lab need — sugar, thyroid, cbc, xray… */
   lab_test_hint: string | null
   location: string | null
+  /** 0212: the place in Hindi when it was typed in Hindi. */
+  location_hi?: string | null
+  /** 0212: false = a place Sehatsandhi is not in yet (Karnal, Delhi…); null = no place said. */
+  place_live?: boolean | null
   pincode: string | null
   target_date: string | null
   time_window: 'morning' | 'afternoon' | 'evening' | null
