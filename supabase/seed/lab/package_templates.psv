@@ -1,0 +1,18 @@
+name|description|codes
+Full Body Checkup — Basic|Blood count, sugar, cholesterol, liver, kidney, thyroid and urine|CBC,FBS,LIPID,LFT,KFT,TSH,URINE
+Full Body Checkup — Advanced|The basic checkup plus HbA1c, vitamins, iron, electrolytes, calcium and uric acid|CBC,ESR,FBS,HBA1C,LIPID,LFT,KFT,THY,VITD,B12,IRON,ELEC,CALC,URIC,URINE
+Diabetes Care|Sugar control and the kidneys, eyes and heart it affects|FBS,PPBS,HBA1C,KFT,LIPID,URINEALB,URINE
+Thyroid Care|Thyroid hormones and antibodies|THY,ATPO
+Fever Panel|For fever of a few days — infections and blood count|CBC,ESR,MP,WIDAL,DENGUE,CRP,URINE
+Heart Health|Cholesterol and heart-risk markers with an ECG|LIPID,HSCRP,HCYS,FBS,ECG
+Liver Care|Liver function and hepatitis screening|LFT,GGT,HBSAG,HCV
+Kidney Care|Kidney function, salts and urine protein|KFT,ELEC,URIC,URINE,URINEALB
+Women's Health|Blood count, thyroid, vitamins, iron, calcium and sugar|CBC,THY,VITD,B12,IRON,CALC,FBS,PRL,URINE
+PCOD / PCOS Panel|Hormones, sugar and a pelvic ultrasound|LH,FSH,PRL,TESTO,TSH,FBS,INSF,USGPEL
+Senior Citizen Checkup|A full checkup for 60+, with an ECG|CBC,FBS,HBA1C,LIPID,LFT,KFT,THY,VITD,B12,PSA,URINE,ECG
+Pre-operative Panel|Tests usually asked for before surgery|CBC,BTCT,PTINR,RBS,KFT,VIRAL,BGRP,URINE,ECG,XRCHEST
+Pregnancy (Antenatal) Profile|First-visit tests in pregnancy|CBC,BGRP,RBS,TSH,VIRAL,RUBG,URINE,USGOBS
+Vitamin Panel|Vitamin D, B12, folic acid and calcium|VITD,B12,FOLATE,CALC
+Anaemia Panel|Why the haemoglobin is low|CBC,PBS,RETIC,IRON,FERR,B12,FOLATE
+Arthritis Panel|Joint pain — inflammation and rheumatoid markers|RAF,ACCP,CRP,ESR,URIC,VITD,CALC,ANA
+Allergy & Asthma|Allergy markers with a breathing test|IGE,AEC,CBC,PFT
