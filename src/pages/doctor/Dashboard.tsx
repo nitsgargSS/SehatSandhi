@@ -1509,6 +1509,7 @@ export default function DoctorDashboard() {
                             <p className="text-sm text-gray-400">
                               {t('dashboardPage.ageLabel')} {a.patient_age} · {new Date(a.slot_datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
                             </p>
+                            {a.purpose && <p className="text-xs text-teal-800 bg-teal-50 rounded-md px-2 py-1 mt-1">🧪 {a.purpose}</p>}
                             {/* The original time matters: a patient may still be
                                 holding a reminder for it. */}
                             {a.previous_slot_datetime && (
@@ -1649,6 +1650,7 @@ export default function DoctorDashboard() {
                             <p className="font-medium text-navy-700">{a.patient_name || 'Patient'}</p>
                             <p className="text-xs text-gray-500">{a.patient_phone}
                               {doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id) && <> · <b>{doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id)}</b></>}</p>
+                            {a.purpose && <p className="text-xs text-teal-800 bg-teal-50 rounded-md px-2 py-1 mt-1">🧪 {a.purpose}</p>}
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-sm font-semibold text-navy-700">

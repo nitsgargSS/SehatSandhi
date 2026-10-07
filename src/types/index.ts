@@ -108,6 +108,8 @@ export interface Appointment {
   // didn't arrive. Conflating them hides the thing worth measuring.
   status: 'booked' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
   booked_via: string
+  /** 0207: what a booking is for when it is not a consultation — e.g. lab tests, at the lab or at home. */
+  purpose?: string | null
   created_at: string
   cancelled_by?: 'patient' | 'clinic' | 'admin' | 'system' | null
   cancel_reason?: string | null
