@@ -70,7 +70,7 @@ function Book() {
         <button onClick={search} disabled={busy} className="btn-teal justify-center disabled:opacity-50">{busy ? 'Searching…' : 'Show doctors and times'}</button>
       </div>
 
-      {cards && !cards.length && <p className="text-gray-500">Nobody is listed near {pin} for this yet. Try a nearby PIN code or town.</p>}
+      {cards && !cards.length && <p className="text-gray-500">Nobody near {pin} has joined Sehatsandhi for this yet. We are growing across India and will be in your area soon. Try a nearby PIN code or town.</p>}
       {cards?.map(c => (
         <div key={c.key} className="card p-4">
           <p className="font-bold text-gray-800 text-lg">{c.title}</p>
