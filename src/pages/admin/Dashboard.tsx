@@ -29,6 +29,7 @@ import { PhoneVerifyCard, SetPasswordByCode } from '../../components/MyPhoneAndP
 import DisableBusinessModal from './DisableBusinessModal'
 import TeamPanel, { ActivityFeed } from './TeamPanel'
 import ClinicStaffList from './ClinicStaffList'
+import MessageReviewPanel from './MessageReviewPanel'
 import PrivacyRequestsPanel from './PrivacyRequestsPanel'
 
 // A listing as admin sees it: the business, plus the verification note a
@@ -39,11 +40,11 @@ interface BusinessRow extends Business {
 }
 
 type Tab = 'pending' | 'all' | 'leads' | 'privacy' | 'whatsapp' | 'camps' | 'coupons' | 'billing' | 'reports'
-  | 'insights' | 'gst' | 'team' | 'account' | 'sandbox'
+  | 'insights' | 'gst' | 'team' | 'account' | 'sandbox' | 'messages'
 
 // 0145: what a manager's panel shows. Billing is view-only for them. WhatsApp
 // (0155) is templates and message approvals only — no prices or wallets.
-const MANAGER_TABS: Tab[] = ['pending', 'all', 'camps', 'leads', 'privacy', 'whatsapp', 'billing', 'reports', 'account']
+const MANAGER_TABS: Tab[] = ['pending', 'all', 'camps', 'leads', 'privacy', 'messages', 'whatsapp', 'billing', 'reports', 'account']
 
 // Qualifications actually covered by NMC's Indian Medical
 // Register — dental/homeopathy/ayurveda have their own
@@ -194,6 +195,12 @@ export default function AdminDashboard() {
   }, [tab])
   useEffect(() => {
     listBroadcastsForReview('pending_approval').then(r => setWaPending(r.length)).catch(() => setWaPending(0))
+  }, [tab])
+  // 0201: typed messages the matcher was unsure of, waiting for review.
+  const [msgReview, setMsgReview] = useState(0)
+  useEffect(() => {
+    supabase.from('free_text_log').select('id', { count: 'exact', head: true }).eq('needs_review', true).is('reviewed_at', null)
+      .then(({ count }) => setMsgReview(count ?? 0))
   }, [tab])
   const isManager = myRole === 'manager'
   useEffect(() => {
@@ -820,6 +827,7 @@ export default function AdminDashboard() {
               { id: 'camps', label: t('adminDashboardPage.navCamps'), count: pendingCamps.length, badge: pendingCamps.length > 0 },
               { id: 'leads', label: 'Leads', count: 0, badge: false },
               { id: 'privacy', label: 'Privacy', count: privacyOpen, badge: privacyOpen > 0 },
+              { id: 'messages', label: 'Message review', count: msgReview, badge: msgReview > 0 },
               { id: 'whatsapp', label: 'WhatsApp', count: waPending, badge: waPending > 0 },
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
               { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
@@ -2031,6 +2039,7 @@ export default function AdminDashboard() {
           {tab === 'leads' && myRole && <LeadsPanel key={myRole} isAdmin={!isManager} myUid={myUid} />}
 
           {tab === 'privacy' && <PrivacyRequestsPanel />}
+          {tab === 'messages' && <MessageReviewPanel />}
 
           {tab === 'whatsapp' && <WhatsAppMarketingPanel isManager={isManager} businesses={doctors.map(d => ({ id: d.id, name: d.name }))} />}
 
