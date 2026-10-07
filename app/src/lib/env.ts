@@ -19,3 +19,7 @@ export const IS_STAGING = process.env.EXPO_PUBLIC_IS_STAGING === 'true'
 export const RECORDING_ENABLED = false
 export const SANDBOX_PURGE_TOKEN = ''
 export const activeConfig = (): BackendConfig => CONFIG
+
+/** The website this build pairs with — for pages the phone opens in its browser
+ *  (a printable OPD slip, a report). */
+export const SITE = IS_STAGING ? 'https://sehat-sandhi-staging.vercel.app' : 'https://sehatsandhi.com'

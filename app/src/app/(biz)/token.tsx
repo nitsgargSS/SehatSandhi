@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSession } from '../../lib/session'
 import { searchPatients, registerPatient, type PatientSearchResult } from '@web/lib/patientsApi'
-import { opdVisit, patientHistory } from '@web/lib/queueApi'
+import { opdVisit, opdSlipUrl, patientHistory } from '@web/lib/queueApi'
+import { SITE } from '../../lib/env'
 import { listBusinessDoctors, type BusinessDoctor } from '@web/lib/doctorsApi'
 import { setAppointmentStatus } from '@web/lib/appointmentApi'
 import { Btn, Card, Chip, Err, Field, Label, Note } from '../../ui/kit'
@@ -39,7 +40,7 @@ export default function NewToken() {
   const [why, setWhy] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [issued, setIssued] = useState<{ token: number; name: string; doctor: string; fee: number; member: string } | null>(null)
+  const [issued, setIssued] = useState<{ token: number; name: string; doctor: string; fee: number; member: string; queue: string } | null>(null)
 
   useEffect(() => {
     if (!biz) return
@@ -104,7 +105,7 @@ export default function NewToken() {
         priority: outOfTurn ? 10 : 0, priorityReason: outOfTurn ? why.trim() : null,
       })
       if (pre.appointment) await setAppointmentStatus(pre.appointment, 'completed').catch(() => {})
-      setIssued({ token: r.token_number, name: picked.name, doctor: doc?.full_name ?? '', fee: r.fee, member: picked.id })
+      setIssued({ token: r.token_number, name: picked.name, doctor: doc?.full_name ?? '', fee: r.fee, member: picked.id, queue: r.queue_id })
       setPicked(null); setQ(''); setReason(''); setFee({ mode: 'full', price: '', reason: '' }); setOutOfTurn(false); setWhy('')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -116,8 +117,10 @@ export default function NewToken() {
           <Text style={st.big}>✓ Token {issued.token}</Text>
           <Text style={st.body}>{issued.name}{issued.doctor ? ` → ${issued.doctor}` : ''}</Text>
           <Text style={st.meta}>{issued.fee > 0 ? `${rs(issued.fee)} added to their account.` : 'No fee.'}</Text>
+          <Note>Print slip opens the slip in your phone's browser — tap Print there (Wi-Fi printer, or save as PDF). Sign in to the website on this phone once.</Note>
           <View style={st.row}>
             {issued.fee > 0 && <Btn small label={`Take ${rs(issued.fee)}`} onPress={() => router.push({ pathname: '/patient/[member]', params: { member: issued.member } })} />}
+            <Btn small kind="ghost" label="🖨 Print slip" onPress={() => Linking.openURL(`${SITE}${opdSlipUrl(issued.queue)}`)} />
             <Btn small kind={issued.fee > 0 ? 'ghost' : 'primary'} label="Next patient" onPress={() => setIssued(null)} />
             <Btn small kind="ghost" label="Back to queue" onPress={() => router.back()} />
           </View>

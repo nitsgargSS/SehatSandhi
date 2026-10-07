@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import { useSession } from '../../../lib/session'
-import { IS_STAGING } from '../../../lib/env'
+import { SITE } from '../../../lib/env'
 import { supabase } from '../../../lib/supabase'
 import { bytesOf, pickFile, pickPhoto, takePhoto, type Picked } from '../../../lib/patient'
 import {
@@ -20,7 +20,7 @@ import { C } from '../../../ui/theme'
 // as it is — a PDF or a photo — and sent the same way (0169,
 // sehat_lab_upload_report: the patient's folder, the lab's retention).
 type Param = LabParameter & { id: string }
-const SITE = IS_STAGING ? 'https://sehat-sandhi-staging.vercel.app' : 'https://sehatsandhi.com'
+// SITE: the paired website (lib/env).
 
 export default function LabOrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
