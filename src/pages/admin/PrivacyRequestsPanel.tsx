@@ -47,7 +47,7 @@ const STATUS_LABEL: Record<Status, string> = {
 }
 const PLATFORM_LABEL: Record<string, string> = {
   contact_messages: 'Contact-page messages', messages_sent: 'Messages we sent', notifications: 'Queued notifications',
-  whatsapp_contact: 'WhatsApp contact record', whatsapp_sessions: 'WhatsApp conversations', ratings: 'Ratings given',
+  whatsapp_contact: 'WhatsApp contact record', whatsapp_sessions: 'WhatsApp conversations', typed_messages: 'Messages typed to the bot / app search', ratings: 'Ratings given',
   insurance_leads: 'Insurance leads', doctor_leads: 'Doctor leads', marketing_consents: 'Clinics allowed to send promotions',
   opted_out: 'On the STOP list', business_owner: 'Owns a listed business',
 }
