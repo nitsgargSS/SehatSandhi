@@ -785,7 +785,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                 <CheckCircle2 style={{ width: 64, height: 64, color: BIZ.green, marginBottom: 16 }} />
                 <h3 style={{ fontSize: 26, fontWeight: 800, color: BIZ.ink, margin: '0 0 8px' }}>{paid ? 'Payment received — listing active!' : 'Listing submitted!'}</h3>
                 <p style={{ fontSize: 15, color: BIZ.muted, maxWidth: 440, margin: '0 0 24px' }}>
-                  Your {verticalObj.label} listing across {zips.length} pincode{zips.length === 1 ? '' : 's'} {paid ? 'is now live for patients in those areas.' : 'is pending review. Our team will WhatsApp you to activate it.'}
+                  Your {verticalObj.label} listing {paid ? `is now live — patients in ${form.own_district || 'your district'} can find you on WhatsApp, the app and the website.` : 'is pending review. Our team will WhatsApp you to activate it.'}
                 </p>
                 {paid && invoiceToken && (
                   <div style={{ marginBottom: 20, background: BIZ.chipBg, border: '1px solid #cfe8dc', borderRadius: 16, padding: '16px 20px', maxWidth: 440 }}>
