@@ -295,7 +295,7 @@ export default function ReachSnapshot() {
               <span style={{ color: BIZ.ink }}><b>Live now</b> — patients here can already find clinics on WhatsApp.{' '}
                 <Link to="/business/register" style={{ color: BIZ.green, fontWeight: 800 }}>List yours →</Link></span>
             ) : (
-              <span style={{ color: BIZ.ink }}><b>Opening soon</b> — be among the first clinics in {found.label}{found.census_population ? `, ahead of ${inShort(found.census_population)}+ people` : ''}.{' '}
+              <span style={{ color: BIZ.ink }}><b>Open now</b> — be among the first clinics in {found.label} on Sehatsandhi{found.census_population ? `, ahead of ${inShort(found.census_population)}+ people` : ''}.{' '}
                 <Link to="/business/register" style={{ color: BIZ.green, fontWeight: 800 }}>Register free →</Link></span>
             )}
           </div>
@@ -336,8 +336,7 @@ export default function ReachSnapshot() {
       <div style={{ marginTop: 14, display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: BIZ.mutedWarm, lineHeight: 1.5 }}>
         <Check className="w-4 h-4" style={{ color: BIZ.green, flex: '0 0 auto', marginTop: 2 }} />
         <span>
-          {totals?.live_districts?.length ? `Live today in ${totals.live_districts.join(', ')}. ` : ''}
-          Opening district by district — register now to be first in yours.
+          Open to clinics, labs, pharmacies and ambulances across India — register today and be the first in your district.
         </span>
       </div>
     </div>
