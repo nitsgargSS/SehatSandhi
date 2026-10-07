@@ -119,7 +119,7 @@ export default function Find() {
       .filter(d => { const k = `${d.practitioner_id}|${d.business_id}`; if (seen.has(k)) return false; seen.add(k); return true })
       .slice(0, 20)
     if (!found.length) {
-      bot(`No ${spName(speciality)?.en ?? 'doctor'} is listed near ${area ?? pin} yet. Try a nearby town, or another kind of doctor.`,
+      bot(`No ${spName(speciality)?.en ?? 'doctor'} near ${area ?? pin} has joined Sehatsandhi yet. We are growing across India and will be in your area soon — we have noted what you need. Try a nearby town, or another kind of doctor.`,
         DOCTORS.filter(c => c !== speciality).slice(0, 6).map(spChip))
       return
     }
@@ -150,7 +150,7 @@ export default function Find() {
     if (error) { bot('Sorry, the search did not work just now. Please try again.'); return }
     const rows = ((data ?? []) as Omit<Place, 'slots' | 'slotDay'>[]).slice(0, 20)
     if (!rows.length) {
-      bot(`No ${KIND_WORD[kind]} are listed near ${area ?? pin} yet. Try a nearby town or PIN code.`,
+      bot(`No ${KIND_WORD[kind]} near ${area ?? pin} have joined Sehatsandhi yet. We are growing across India and will be in your area soon. Try a nearby town or PIN code.`,
         kind === 'ambulance' ? [{ label: '📞 Call 108', say: '__tel__108' }] : undefined)
       return
     }
@@ -184,8 +184,8 @@ export default function Find() {
       return
     }
     if (m.place_live === false && (m.intent || ctx.current.speciality || ctx.current.kind)) {
-      // 0212: somewhere we are not in yet — say so plainly (the server counted it as area interest).
-      bot(`Sehatsandhi is not in ${m.location} yet — we are in Yamuna Nagar district so far (Jagadhri, Yamuna Nagar, Radaur, Bilaspur, Chhachhrauli, Sadhaura). We have noted that you need this in ${m.location}, so we can start there sooner.\n\nNeed it in Yamuna Nagar district? Type the PIN code or town.`)
+      // 0212/0213: nobody has joined in that district yet (the server counted it as area interest).
+      bot(`Sehatsandhi is growing across India 🙏 Nobody in ${m.location} has joined us for this yet — we will be in your area soon, and we have noted what you need.\n\nNeed it somewhere else? Type that PIN code or town.`)
       if (m.intent === 'doctor' && m.speciality) { ctx.current.speciality = m.speciality; ctx.current.kind = undefined }
       else if (m.intent && KIND_OF[m.intent]) { ctx.current.kind = KIND_OF[m.intent]; ctx.current.speciality = undefined }
       ctx.current.pin = undefined; ctx.current.area = undefined
