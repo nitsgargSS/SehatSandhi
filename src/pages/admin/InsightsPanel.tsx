@@ -17,6 +17,7 @@ import MedicineOrdersSection from './MedicineOrdersSection'
 import AmbulanceRequestsSection from './AmbulanceRequestsSection'
 import InsuranceLeadsSection from './InsuranceLeadsSection'
 import ChannelsSection from './ChannelsSection'
+import BusinessMetricsSection from './BusinessMetricsSection'
 
 // Where the listings are, where they are not, what kind they are, who is due,
 // and which towns notice us.
@@ -35,10 +36,10 @@ import ChannelsSection from './ChannelsSection'
 // button that claims to have sent a message it did not send is worse than no
 // button, because the clinic is then not chased by anyone.
 
-type Section = 'gaps' | 'areas' | 'matrix' | 'renewals' | 'geo' | 'manage' | 'orders' | 'ambulance' | 'insurance' | 'channels'
+type Section = 'metrics' | 'gaps' | 'areas' | 'matrix' | 'renewals' | 'geo' | 'manage' | 'orders' | 'ambulance' | 'insurance' | 'channels'
 
 export default function InsightsPanel() {
-  const [section, setSection] = useState<Section>('gaps')
+  const [section, setSection] = useState<Section>('metrics')
 
   const chip = (active: boolean) =>
     `text-xs font-semibold px-3 py-1.5 rounded-full border ${
@@ -55,12 +56,13 @@ export default function InsightsPanel() {
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {([['gaps', 'Gaps to market'], ['areas', 'By area'], ['matrix', 'Type × region'], ['renewals', 'Renewals'],
+        {([['metrics', 'व्यापार आँकड़े · Business metrics'], ['gaps', 'Gaps to market'], ['areas', 'By area'], ['matrix', 'Type × region'], ['renewals', 'Renewals'],
            ['geo', 'Where we are noticed'], ['manage', 'Service areas'], ['orders', 'Medicine orders'], ['ambulance', 'Ambulance requests'], ['insurance', 'Insurance leads'], ['channels', 'App vs WhatsApp']] as [Section, string][]).map(([s, label]) => (
           <button key={s} onClick={() => setSection(s)} className={chip(section === s)}>{label}</button>
         ))}
       </div>
 
+      {section === 'metrics' && <BusinessMetricsSection />}
       {section === 'gaps' && <GapsSection chip={chip} />}
       {section === 'orders' && <MedicineOrdersSection />}
       {section === 'ambulance' && <AmbulanceRequestsSection />}
