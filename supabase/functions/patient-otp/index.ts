@@ -15,7 +15,11 @@
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
 //      AISENSY_API_KEY + AISENSY_PATIENT_LOGIN_CAMPAIGN (or AISENSY_LOGIN_CAMPAIGN)
 //        — an approved authentication template taking the code as its one variable;
-//      PATIENT_OTP_ECHO — sandbox only: returns the code when nothing could send it.
+//      PATIENT_OTP_ECHO — sandbox only: returns the code when nothing could send it;
+//      REVIEW_PATIENT_PHONE + REVIEW_PATIENT_CODE + REVIEW_LOGIN_UNTIL (YYYY-MM-DD)
+//        — app-store review: that one number signs in with that fixed code, no
+//          WhatsApp sent, until the date (0206 made its demo records and stops
+//          it reaching real businesses). Unset, or past the date, it is off.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
 
@@ -47,6 +51,16 @@ function timingSafeEqual(a: string, b: string): boolean {
   let d = 0
   for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i)
   return d === 0
+}
+
+/** The app reviewer's number, while the review window is open; else null. */
+function reviewLogin(phone: string): string | null {
+  const p = normalisePhone(Deno.env.get('REVIEW_PATIENT_PHONE') ?? '')
+  const code = (Deno.env.get('REVIEW_PATIENT_CODE') ?? '').replace(/\D/g, '')
+  const until = Deno.env.get('REVIEW_LOGIN_UNTIL') ?? ''
+  const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10)
+  if (!p || p !== phone || code.length !== 6 || !/^\d{4}-\d{2}-\d{2}$/.test(until) || today > until) return null
+  return code
 }
 
 /** AiSensy, as clinic-otp sends. null = not configured. */
@@ -93,11 +107,14 @@ Deno.serve(async (req) => {
     }
     if (rows.length >= MAX_CODES_PER_HOUR) return json({ error: 'Too many codes asked for. Try again in an hour.' }, 429)
 
-    const code = generateCode()
+    // App-store review: the fixed code, nothing sent. Verified like any other.
+    const review = reviewLogin(phone)
+    const code = review ?? generateCode()
     await db.from('login_codes').insert({
       phone, code_hash: await sha256Hex(code), business_id: null,
       expires_at: new Date(Date.now() + CODE_TTL_MINUTES * 60_000).toISOString(),
     })
+    if (review) return json({ ok: true })
     const sent = await sendCode(phone, code)
     if (!sent && Deno.env.get('PATIENT_OTP_ECHO') === 'true') return json({ ok: true, devCode: code, delivered: false })
     if (sent === null) return json({ error: 'DELIVERY_UNAVAILABLE', message: 'Sign-in codes cannot be sent just now. Please use WhatsApp to message us meanwhile.' }, 502)
