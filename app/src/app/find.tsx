@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../lib/supabase'
-import { understand, asPlace } from '../lib/assistant'
+import { matchText, looksLikeEmergency, dayOffset, summary, SECONDARY_HI, type Match } from '../lib/match'
 import { whereAmI, me, requestCode, verifyCode, bookAppointment, type Me, type Booked } from '../lib/patient'
 import { registerPush } from '../lib/push'
 import { SPECIALITIES, WA_NUMBER } from '@web/types'
@@ -10,7 +10,9 @@ import { C } from '../ui/theme'
 
 // "Find a doctor" — what the WhatsApp bot does (speciality → area → doctor →
 // time) but in conversation: say it any way, in English or Hindi, and it asks
-// only for what is missing. Searching needs no login. Booking happens right
+// only for what is missing. What they type is understood by the database's
+// matcher (0201, sehat_match_text) — the same one as the WhatsApp bot — never
+// by rules in the app; only the emergency word check runs here when offline. Searching needs no login. Booking happens right
 // here (0198): the patient proves their number once with a WhatsApp code, and
 // the app books on it — the same open slots the bot and the clinic desk use.
 // Medicines, ambulance and insurance go to the app's own screens, not WhatsApp.
@@ -51,7 +53,8 @@ const kindChips = () => [...KINDS.map(k => ({ label: k.label, say: `__kind__${k.
 const NOT_DOCTORS = ['LAB', 'PATH', 'RAD', 'PHARMACY']
 const DOCTORS = SPECIALITIES.filter(s => !NOT_DOCTORS.includes(s.id)).map(s => s.id)
 const spName = (id?: string) => SPECIALITIES.find(s => s.id === id)
-const spChip = (id: string) => ({ label: spName(id)!.en.split(' (')[0], say: spName(id)!.en })
+// Buttons carry their meaning; only typed words go to the matcher.
+const spChip = (id: string) => ({ label: spName(id)!.en.split(' (')[0], say: `__sp__${id}` })
 const istDate = (plusDays: number) => new Date(Date.now() + 5.5 * 3_600_000 + plusDays * 86_400_000).toISOString().slice(0, 10)
 const DAY_WORD = ['today', 'tomorrow', 'day after tomorrow']
 const slotText = (iso: string) => new Date(iso).toLocaleString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })
@@ -60,7 +63,22 @@ const KEY = 'sehat:lastArea'
 const remember = (v: { pin: string; label: string }) => { try { localStorage.setItem(KEY, JSON.stringify(v)) } catch { /* fine */ } }
 const recall = (): { pin: string; label: string } | null => { try { return JSON.parse(localStorage.getItem(KEY) ?? 'null') } catch { return null } }
 
+/** A bare reply to "which area?" — a PIN, or a place name (checked against the place list). */
+function asPlace(raw: string): { pin?: string; place?: string } {
+  const pin = raw.match(/\b[1-9]\d{5}\b/)
+  if (pin) return { pin: pin[0] }
+  const p = raw.trim()
+  return p.length >= 3 && /^[A-Za-zऀ-ॿ ]+$/.test(p) ? { place: p } : {}
+}
+const KIND_OF: Record<string, Kind> = { lab: 'lab', medicine: 'pharmacy', ambulance: 'ambulance', insurance: 'insurance' }
+const SECONDARY_SAY: Record<string, string> = {
+  lab: '__kind__lab', doctor: '__doctors__', medicine: '__go__/me/order', insurance: '__go__/me/insurance', camps: '__go__/camps', ambulance: '__go__/me/ambulance',
+}
+
 export default function Find() {
+  // From Home: q = what they typed, m = the matcher's answer to it (so it is not asked twice); kind = a tile.
+  const params = useLocalSearchParams<{ q?: string; m?: string; kind?: string }>()
+  const pending = useRef<{ said: string; m: Match } | null>(null)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -73,7 +91,11 @@ export default function Find() {
   useEffect(() => {
     const last = recall()
     if (last) { ctx.current.pin = last.pin; ctx.current.area = last.label }
-    bot('Namaste! Tell me what you need — for example "aankh ka doctor", "bachche ko bukhar", or "dentist in Delhi kal". Or pick one:',
+    if (params.m && params.q) {
+      try { apply(params.q, JSON.parse(params.m) as Match, true); return } catch { /* fall through to the welcome */ }
+    }
+    if (params.kind === 'lab') { handle('Lab test', 'lab'); return }
+    bot('Namaste! Tell me what you need — for example "aankh ka doctor", "bachche ko bukhar", or "kal jagadhri me dentist". Or pick one:',
       kindChips())
     bot('Doctors / डॉक्टर:', DOCTORS.map(spChip))
   }, [])
@@ -117,7 +139,7 @@ export default function Find() {
     }))
     push({ from: 'bot', doctors: docs, dayLabel: DAY_WORD[ctx.current.day] })
     bot('Tap a time to book it. Want another day?', [
-      { label: 'Today', say: 'today' }, { label: 'Tomorrow', say: 'tomorrow' }, { label: 'Day after', say: 'parso' },
+      { label: 'Today', say: '__day__0' }, { label: 'Tomorrow', say: '__day__1' }, { label: 'Day after', say: '__day__2' },
     ])
   }
 
@@ -149,7 +171,7 @@ export default function Find() {
     if (kind === 'ambulance') bot('In an emergency call 108 first — it is free.', [{ label: '📞 Call 108', say: '__tel__108' }])
     push({ from: 'bot', places, kind })
     const next: Record<Kind, { text: string; chips: { label: string; say: string }[] }> = {
-      lab: { text: 'Tap a time to book the test. Want another day?', chips: [{ label: 'Today', say: 'today' }, { label: 'Tomorrow', say: 'tomorrow' }, { label: 'Day after', say: 'parso' }] },
+      lab: { text: 'Tap a time to book the test. Want another day?', chips: [{ label: 'Today', say: '__day__0' }, { label: 'Tomorrow', say: '__day__1' }, { label: 'Day after', say: '__day__2' }] },
       pharmacy: { text: 'Want medicines delivered? Send the prescription photo — a pharmacy near you tells you the total first.', chips: [{ label: '💊 Order medicines', say: '__go__/me/order' }] },
       ambulance: { text: 'Or alert all of them at once — the first to accept calls you and sees where you are.', chips: [{ label: '🚑 Alert ambulances near me', say: '__go__/me/ambulance' }] },
       insurance: { text: 'Tell us the cover you want and one of these advisors calls you back. Only the advisor who takes it gets your number.', chips: [{ label: '🛡️ Ask for an advisor', say: '__go__/me/insurance' }] },
@@ -158,27 +180,73 @@ export default function Find() {
     bot(next[kind].text, next[kind].chips)
   }
 
-  // preset: a tapped service chip — its label is not parsed as a place.
+  // What the matcher understood → the conversation's context, then on as before.
+  // fromHome: the home box already asked (and logged) it.
+  const apply = async (said: string, m: Match, fromHome = false) => {
+    if (fromHome) push({ from: 'me', text: said })
+    if (m.is_emergency || m.action === 'emergency') {
+      bot('🚨 This looks like an emergency. Call 108 now — it is free.', [{ label: '📞 Call 108', say: '__tel__108' }, { label: '📞 112', say: '__tel__112' }])
+      router.push('/emergency')
+      return
+    }
+    if (m.action === 'confirm') {
+      pending.current = { said, m }
+      bot(m.reply_text.replace(/\n?हाँ \/ नहीं\s*$/, ''), [{ label: 'हाँ / Yes', say: '__yes__' }, { label: 'नहीं / No', say: '__no__' }])
+      return
+    }
+    if (m.action === 'menu' || !m.intent) {
+      // A reply to "which area?" / "which day?": the place or day the matcher found, or a town to look up.
+      if (ctx.current.speciality || ctx.current.kind) {
+        if (m.pincode || m.target_date) { await understood({ pin: m.pincode ?? undefined, area: m.location ?? undefined, day: dayOffset(m) }); return }
+        const pl = asPlace(said)
+        if (pl.pin || pl.place) { await understood({ place: pl.place, pin: pl.pin }); return }
+      }
+      bot('माफ़ कीजिए, हम समझ नहीं पाए। Sorry, I did not understand — pick one, or describe the problem differently:', kindChips())
+      bot('Doctors / डॉक्टर:', DOCTORS.map(spChip))
+      return
+    }
+    if (m.intent === 'camps') { bot('Free health camps and special offers near you:', [{ label: '🎁 Camps & offers', say: '__go__/camps' }]); return }
+    bot(`आपने खोजा: ${summary(m)}`, m.secondary_intents?.filter(x => SECONDARY_HI[x]).map(x => ({ label: SECONDARY_HI[x], say: SECONDARY_SAY[x] })))
+    await understood({
+      speciality: m.intent === 'doctor' ? m.speciality ?? undefined : undefined,
+      kind: KIND_OF[m.intent], doctorAny: m.intent === 'doctor' && !m.speciality,
+      pin: m.pincode ?? undefined, area: m.location ?? undefined, day: dayOffset(m),
+    })
+  }
+
+  // preset: a tapped service chip — its label is not sent to the matcher.
   const handle = async (said: string, preset?: Kind) => {
     if (!said.trim()) return
     push({ from: 'me', text: said })
     setBusy(true)
     try {
-      const u: ReturnType<typeof understand> = preset ? { other: preset } : understand(said)
-      if (!preset && /(camp|shivir|शिविर|कैंप|offer|ऑफर|discount)/i.test(said)) {
-        bot('Free health camps and special offers near you:', [{ label: '🎁 Camps & offers', say: '__go__/camps' }])
+      if (preset) { await understood({ kind: preset }); return }
+      const m = await matchText(said, ctx.current.pin)
+      if (!m) {
+        if (looksLikeEmergency(said)) { router.push('/emergency'); return }
+        bot('The network is slow — please pick one:', kindChips())
         return
       }
+      await apply(said, m)
+    } finally {
+      setBusy(false)
+      setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 200)
+    }
+  }
+
+  const understood = async (u: { speciality?: string; kind?: Kind; doctorAny?: boolean; pin?: string; area?: string; place?: string; day?: number }) => {
+    setBusy(true)
+    try {
       // Pharmacies, labs, hospitals, ambulances and advisors: listed here too.
-      if (u.other) { ctx.current.kind = u.other; ctx.current.speciality = undefined }
+      if (u.kind) { ctx.current.kind = u.kind; ctx.current.speciality = undefined }
       if (u.speciality) { ctx.current.speciality = u.speciality; ctx.current.kind = undefined }
+      if (u.doctorAny) { ctx.current.kind = undefined }
       if (u.day !== undefined) ctx.current.day = u.day
-      if (u.pin) { ctx.current.pin = u.pin; ctx.current.area = u.pin }
-      const placeWord = preset ? undefined : u.place ?? u.guess ?? (!u.speciality && !u.other && !u.pin && u.day === undefined ? asPlace(said).place : undefined)
-      if (placeWord) {
-        const hit = await placeToPin(placeWord)
+      if (u.pin) { ctx.current.pin = u.pin; ctx.current.area = u.area ?? u.pin }
+      if (u.place && !u.pin) {
+        const hit = await placeToPin(u.place)
         if (hit) { ctx.current.pin = hit.pin; ctx.current.area = hit.label }
-        else if (u.place || (!u.speciality && !u.guess)) { bot(`I could not find "${placeWord}". Type the PIN code (6 digits) or a nearby town.`); return }
+        else { bot(`I could not find "${u.place}". Type the PIN code (6 digits) or a nearby town.`); return }
       }
       if (u.pin || ctx.current.pin) remember({ pin: ctx.current.pin!, label: ctx.current.area ?? ctx.current.pin! })
       if (ctx.current.kind && !ctx.current.speciality) {
@@ -213,6 +281,27 @@ export default function Find() {
       return
     }
     if (say.startsWith('__wa__')) { Linking.openURL(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(say.slice(6))}`); return }
+    if (say.startsWith('__sp__')) {
+      const id = say.slice(6)
+      push({ from: 'me', text: spName(id)?.en ?? id })
+      understood({ speciality: id })
+      return
+    }
+    if (say.startsWith('__day__')) {
+      const d = Number(say.slice(7))
+      push({ from: 'me', text: DAY_WORD[d] })
+      understood({ day: d })
+      return
+    }
+    if (say === '__doctors__') { bot('Which kind of doctor?', DOCTORS.map(spChip)); return }
+    if (say === '__yes__' || say === '__no__') {
+      const p = pending.current
+      pending.current = null
+      push({ from: 'me', text: say === '__yes__' ? 'हाँ' : 'नहीं' })
+      if (say === '__yes__' && p) apply(p.said, { ...p.m, action: 'proceed' })
+      else { bot('Please pick one:', kindChips()); bot('Doctors / डॉक्टर:', DOCTORS.map(spChip)) }
+      return
+    }
     handle(say)
   }
 
