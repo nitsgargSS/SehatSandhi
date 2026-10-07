@@ -14,6 +14,8 @@ export default function TabsLayout() {
   const noClinic = pharmacy || ambulance || insurance
   // An admin who is not on any clinic's staff: the Admin tab and Me only.
   const adminOnly = !!s?.isAdmin && !s.clinic
+  // 0168/0207: a lab, or a clinic running its own lab — the Lab tab.
+  const runsLab = !!s?.clinic && (s.clinic.vertical === 'lab' || s.labModule) && !['delivery', 'driver'].includes(s.role.role ?? '')
   // The Me card already shows the email; the header only names a person who has a name.
   const sub = s?.name ? `${s.name}${s.role.role ? ` · ${ROLE_WORD[s.role.role] ?? s.role.role}` : ''}` : ''
   return (
@@ -44,6 +46,10 @@ export default function TabsLayout() {
       <Tabs.Screen name="bookings" options={{
         title: 'Bookings', href: noClinic || adminOnly ? null : undefined,
         tabBarIcon: ({ color, size }) => <Ionicons name="calendar" color={color} size={size} />,
+      }} />
+      <Tabs.Screen name="lab" options={{
+        title: 'Lab orders', tabBarLabel: 'Lab', href: runsLab ? undefined : null,
+        tabBarIcon: ({ color, size }) => <Ionicons name="flask" color={color} size={size} />,
       }} />
       <Tabs.Screen name="beds" options={{
         title: 'Beds', href: s?.hasWards ? undefined : null,

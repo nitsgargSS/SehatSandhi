@@ -85,7 +85,7 @@ export interface LabOrder {
   patient_phone: string | null
   mrn: string | null
   visit_id: string | null
-  source: 'desk' | 'doctor'
+  source: 'desk' | 'doctor' | 'app'
   ordered_by_name: string | null
   referred_by: string | null
   collection: 'lab' | 'home'
