@@ -1,0 +1,461 @@
+term,intent,speciality,lab_test_hint,weight
+doctor,doctor,,,1
+docter,doctor,,,1
+dactor,doctor,,,1
+daktar,doctor,,,1
+dr,doctor,,,0.8
+डॉक्टर,doctor,,,1
+डाक्टर,doctor,,,1
+चिकित्सक,doctor,,,1
+vaid,doctor,,,0.8
+hospital,doctor,,,0.8
+aspatal,doctor,,,0.8
+अस्पताल,doctor,,,0.8
+clinic,doctor,,,0.8
+क्लिनिक,doctor,,,0.8
+checkup,doctor,,,0.7
+appointment,doctor,,,0.8
+apointment,doctor,,,0.8
+dikhana hai,doctor,,,0.8
+dikhana,doctor,,,0.7
+दिखाना,doctor,,,0.7
+fever,doctor,GEN,,0.8
+bukhar,doctor,GEN,,0.8
+bukhaar,doctor,GEN,,0.8
+bukar,doctor,GEN,,0.8
+bhukhar,doctor,GEN,,0.8
+taap,doctor,GEN,,0.8
+बुखार,doctor,GEN,,0.8
+ताप,doctor,GEN,,0.8
+cough,doctor,GEN,,0.8
+khansi,doctor,GEN,,0.8
+khaansi,doctor,GEN,,0.8
+khasi,doctor,GEN,,0.8
+खांसी,doctor,GEN,,0.8
+खाँसी,doctor,GEN,,0.8
+cold,doctor,GEN,,0.7
+zukam,doctor,GEN,,0.8
+jukam,doctor,GEN,,0.8
+zukaam,doctor,GEN,,0.8
+sardi,doctor,GEN,,0.7
+जुकाम,doctor,GEN,,0.8
+सर्दी,doctor,GEN,,0.7
+kamzori,doctor,GEN,,0.8
+kamjori,doctor,GEN,,0.8
+weakness,doctor,GEN,,0.8
+कमजोरी,doctor,GEN,,0.8
+body pain,doctor,GEN,,0.8
+badan dard,doctor,GEN,,0.8
+बदन दर्द,doctor,GEN,,0.8
+sir dard,doctor,GEN,,0.8
+sar dard,doctor,GEN,,0.8
+headache,doctor,GEN,,0.8
+सिर दर्द,doctor,GEN,,0.8
+ulti,doctor,GEN,,0.7
+vomiting,doctor,GEN,,0.7
+उल्टी,doctor,GEN,,0.7
+chakkar,doctor,GEN,,0.7
+चक्कर,doctor,GEN,,0.7
+viral,doctor,GEN,,0.7
+typhoid,doctor,GEN,,0.8
+malaria,doctor,GEN,,0.8
+dengue,doctor,GEN,,0.8
+physician,doctor,GEN,,1.2
+general doctor,doctor,GEN,,1.2
+family doctor,doctor,GEN,,1.2
+सामान्य डॉक्टर,doctor,GEN,,1.2
+bachha,doctor,PAED,,0.9
+bachcha,doctor,PAED,,0.9
+baccha,doctor,PAED,,0.9
+bacha,doctor,PAED,,0.9
+bachche,doctor,PAED,,0.9
+bache,doctor,PAED,,0.9
+bacche,doctor,PAED,,0.9
+bachon,doctor,PAED,,0.9
+bachi,doctor,PAED,,0.9
+baby,doctor,PAED,,0.9
+child,doctor,PAED,,0.9
+children,doctor,PAED,,0.9
+kid,doctor,PAED,,0.9
+infant,doctor,PAED,,0.9
+newborn,doctor,PAED,,0.9
+shishu,doctor,PAED,,0.9
+बच्चा,doctor,PAED,,0.9
+बच्चे,doctor,PAED,,0.9
+बच्ची,doctor,PAED,,0.9
+शिशु,doctor,PAED,,0.9
+teeka,doctor,PAED,,1
+tika,doctor,PAED,,1
+vaccination,doctor,PAED,,1
+vaccine,doctor,PAED,,1
+टीका,doctor,PAED,,1
+टीकाकरण,doctor,PAED,,1
+paediatrician,doctor,PAED,,1.2
+pediatrician,doctor,PAED,,1.2
+child specialist,doctor,PAED,,1.2
+bachon ka doctor,doctor,PAED,,1.2
+बाल रोग,doctor,PAED,,1.2
+pregnancy,doctor,GYN,,1
+pregnant,doctor,GYN,,1
+garbh,doctor,GYN,,1
+garbhvati,doctor,GYN,,1
+गर्भ,doctor,GYN,,1
+गर्भवती,doctor,GYN,,1
+periods,doctor,GYN,,1
+period,doctor,GYN,,1
+mahavari,doctor,GYN,,1
+masik dharm,doctor,GYN,,1
+माहवारी,doctor,GYN,,1
+पीरियड,doctor,GYN,,1
+delivery,doctor,GYN,,1
+prasav,doctor,GYN,,1
+प्रसव,doctor,GYN,,1
+gynae,doctor,GYN,,1.2
+gynaecologist,doctor,GYN,,1.2
+gynecologist,doctor,GYN,,1.2
+lady doctor,doctor,GYN,,1.2
+mahila doctor,doctor,GYN,,1.2
+महिला डॉक्टर,doctor,GYN,,1.2
+स्त्री रोग,doctor,GYN,,1.2
+safed pani,doctor,GYN,,1
+ivf,doctor,IVF,,1.2
+infertility,doctor,IVF,,1.2
+fertility,doctor,IVF,,1.2
+santan,doctor,IVF,,1
+bachha nahi ho raha,doctor,IVF,,1.5
+संतान,doctor,IVF,,1
+बांझपन,doctor,IVF,,1.2
+aankh,doctor,EYE,,1
+ankh,doctor,EYE,,1
+aakh,doctor,EYE,,1
+aankhon,doctor,EYE,,1
+eye,doctor,EYE,,1
+eyes,doctor,EYE,,1
+आँख,doctor,EYE,,1
+आंख,doctor,EYE,,1
+आंखों,doctor,EYE,,1
+नेत्र,doctor,EYE,,1
+chashma,doctor,EYE,,1
+chasma,doctor,EYE,,1
+specs,doctor,EYE,,1
+spectacles,doctor,EYE,,1
+चश्मा,doctor,EYE,,1
+dhundhla,doctor,EYE,,1
+dhundla dikhna,doctor,EYE,,1
+kam dikhna,doctor,EYE,,1
+nazar,doctor,EYE,,1
+najar,doctor,EYE,,1
+नज़र,doctor,EYE,,1
+धुंधला,doctor,EYE,,1
+motiyabind,doctor,EYE,,1.2
+motiabind,doctor,EYE,,1.2
+cataract,doctor,EYE,,1.2
+मोतियाबिंद,doctor,EYE,,1.2
+glaucoma,doctor,EYE,,1.2
+kala motia,doctor,EYE,,1.2
+eye specialist,doctor,EYE,,1.2
+ophthalmologist,doctor,EYE,,1.2
+आंखों के डॉक्टर,doctor,EYE,,1.2
+daant,doctor,DENT,,1
+dant,doctor,DENT,,1
+daat,doctor,DENT,,1
+danth,doctor,DENT,,1
+teeth,doctor,DENT,,1
+tooth,doctor,DENT,,1
+दांत,doctor,DENT,,1
+दाँत,doctor,DENT,,1
+masoode,doctor,DENT,,1
+masude,doctor,DENT,,1
+masoodon,doctor,DENT,,1
+मसूड़े,doctor,DENT,,1
+gums,doctor,DENT,,1
+daant dard,doctor,DENT,,1.2
+toothache,doctor,DENT,,1.2
+दांत दर्द,doctor,DENT,,1.2
+root canal,doctor,DENT,,1.2
+rct,doctor,DENT,,1
+filling,doctor,DENT,,0.8
+dentist,doctor,DENT,,1.2
+dentest,doctor,DENT,,1.2
+dental,doctor,DENT,,1.2
+दंत,doctor,DENT,,1
+haddi,doctor,ORTH,,1
+hadi,doctor,ORTH,,1
+bone,doctor,ORTH,,1
+bones,doctor,ORTH,,1
+हड्डी,doctor,ORTH,,1
+joint,doctor,ORTH,,1
+joints,doctor,ORTH,,1
+jodon ka dard,doctor,ORTH,,1.2
+jodo me dard,doctor,ORTH,,1.2
+जोड़ों का दर्द,doctor,ORTH,,1.2
+ghutna,doctor,ORTH,,1
+ghutne,doctor,ORTH,,1
+knee,doctor,ORTH,,1
+घुटना,doctor,ORTH,,1
+घुटने,doctor,ORTH,,1
+kamar dard,doctor,ORTH,,1.2
+kamar,doctor,ORTH,,0.9
+back pain,doctor,ORTH,,1.2
+कमर दर्द,doctor,ORTH,,1.2
+kandha,doctor,ORTH,,1
+shoulder,doctor,ORTH,,1
+fracture,doctor,ORTH,,1.2
+toot gayi,doctor,ORTH,,1
+haddi toot,doctor,ORTH,,1.2
+moch,doctor,ORTH,,1
+sprain,doctor,ORTH,,1
+मोच,doctor,ORTH,,1
+arthritis,doctor,ORTH,,1.2
+gathiya,doctor,ORTH,,1.2
+orthopaedic,doctor,ORTH,,1.2
+orthopedic,doctor,ORTH,,1.2
+ortho,doctor,ORTH,,1.2
+हड्डी रोग,doctor,ORTH,,1.2
+skin,doctor,SKIN,,1
+twacha,doctor,SKIN,,1
+chamdi,doctor,SKIN,,1
+त्वचा,doctor,SKIN,,1
+khujli,doctor,SKIN,,1
+khujali,doctor,SKIN,,1
+itching,doctor,SKIN,,1
+खुजली,doctor,SKIN,,1
+daane,doctor,SKIN,,1
+dane,doctor,SKIN,,1
+दाने,doctor,SKIN,,1
+rash,doctor,SKIN,,1
+allergy,doctor,SKIN,,0.8
+एलर्जी,doctor,SKIN,,0.8
+pimple,doctor,SKIN,,1
+pimples,doctor,SKIN,,1
+acne,doctor,SKIN,,1
+muhase,doctor,SKIN,,1
+मुंहासे,doctor,SKIN,,1
+baal jhadna,doctor,SKIN,,1.2
+baal girna,doctor,SKIN,,1.2
+hair fall,doctor,SKIN,,1.2
+बाल झड़ना,doctor,SKIN,,1.2
+safed daag,doctor,SKIN,,1.2
+dermatologist,doctor,SKIN,,1.2
+skin specialist,doctor,SKIN,,1.2
+kaan,doctor,ENT,,1
+kan,doctor,ENT,,0.8
+ear,doctor,ENT,,1
+कान,doctor,ENT,,1
+naak,doctor,ENT,,1
+nak,doctor,ENT,,0.8
+nose,doctor,ENT,,1
+नाक,doctor,ENT,,1
+gala,doctor,ENT,,1
+gale,doctor,ENT,,1
+throat,doctor,ENT,,1
+गला,doctor,ENT,,1
+गले,doctor,ENT,,1
+gala kharab,doctor,ENT,,1.2
+gale me dard,doctor,ENT,,1.2
+sore throat,doctor,ENT,,1.2
+tonsil,doctor,ENT,,1.2
+tonsils,doctor,ENT,,1.2
+kaan me dard,doctor,ENT,,1.2
+kam sunai,doctor,ENT,,1.2
+sunai nahi deta,doctor,ENT,,1.2
+ent,doctor,ENT,,1.2
+dil,doctor,CARD,,1
+heart,doctor,CARD,,1
+दिल,doctor,CARD,,1
+हृदय,doctor,CARD,,1
+bp,doctor,CARD,,0.8
+blood pressure,doctor,CARD,,0.8
+ghabrahat,doctor,CARD,,0.8
+dhadkan,doctor,CARD,,1
+धड़कन,doctor,CARD,,1
+cardiologist,doctor,CARD,,1.2
+heart specialist,doctor,CARD,,1.2
+dil ka doctor,doctor,CARD,,1.2
+pet,doctor,GAST,,1
+पेट,doctor,GAST,,1
+stomach,doctor,GAST,,1
+pet dard,doctor,GAST,,1.2
+pet me dard,doctor,GAST,,1.2
+पेट दर्द,doctor,GAST,,1.2
+acidity,doctor,GAST,,1
+gas,doctor,GAST,,0.8
+kabz,doctor,GAST,,1
+kabj,doctor,GAST,,1
+constipation,doctor,GAST,,1
+कब्ज,doctor,GAST,,1
+dast,doctor,GAST,,1
+loose motion,doctor,GAST,,1
+दस्त,doctor,GAST,,1
+liver,doctor,GAST,,1
+jaundice,doctor,GAST,,1
+piliya,doctor,GAST,,1
+पीलिया,doctor,GAST,,1
+gastro,doctor,GAST,,1.2
+gastroenterologist,doctor,GAST,,1.2
+dimag,doctor,NEUR,,1
+brain,doctor,NEUR,,1
+दिमाग,doctor,NEUR,,1
+migraine,doctor,NEUR,,1.2
+maigren,doctor,NEUR,,1.2
+nas,doctor,NEUR,,0.8
+nason,doctor,NEUR,,1
+nerve,doctor,NEUR,,1
+spine,doctor,NEUR,,1
+haath pair sunn,doctor,NEUR,,1.2
+neurologist,doctor,NEUR,,1.2
+neuro,doctor,NEUR,,1.2
+kidney,doctor,URO,,1
+gurda,doctor,URO,,1
+गुर्दा,doctor,URO,,1
+urine,doctor,URO,,0.9
+peshab,doctor,URO,,1
+pishab,doctor,URO,,1
+पेशाब,doctor,URO,,1
+pathri,doctor,URO,,1.2
+stone,doctor,URO,,0.9
+पथरी,doctor,URO,,1.2
+prostate,doctor,URO,,1.2
+urologist,doctor,URO,,1.2
+cancer,doctor,ONC,,1.2
+kainsar,doctor,ONC,,1.2
+कैंसर,doctor,ONC,,1.2
+tumour,doctor,ONC,,1.2
+tumor,doctor,ONC,,1.2
+ganth,doctor,ONC,,0.8
+गांठ,doctor,ONC,,0.8
+oncologist,doctor,ONC,,1.2
+tanav,doctor,PSY,,1
+tension,doctor,PSY,,1
+stress,doctor,PSY,,1
+तनाव,doctor,PSY,,1
+depression,doctor,PSY,,1.2
+anxiety,doctor,PSY,,1.2
+neend nahi aati,doctor,PSY,,1.2
+neend,doctor,PSY,,0.8
+नींद,doctor,PSY,,0.8
+mental,doctor,PSY,,1
+मानसिक,doctor,PSY,,1
+psychiatrist,doctor,PSY,,1.2
+sugar,doctor,DIAB,,1
+shugar,doctor,DIAB,,1
+शुगर,doctor,DIAB,,1
+diabetes,doctor,DIAB,,1.2
+diabetic,doctor,DIAB,,1.2
+madhumeh,doctor,DIAB,,1.2
+मधुमेह,doctor,DIAB,,1.2
+thyroid,doctor,DIAB,,0.8
+physio,doctor,PHYS,,1.2
+physiotherapy,doctor,PHYS,,1.2
+physiotherapist,doctor,PHYS,,1.2
+फिजियो,doctor,PHYS,,1.2
+exercise therapy,doctor,PHYS,,1.2
+ayurved,doctor,ALT,,1.2
+ayurvedic,doctor,ALT,,1.2
+आयुर्वेद,doctor,ALT,,1.2
+homeopathy,doctor,ALT,,1.2
+homeopathic,doctor,ALT,,1.2
+homeo,doctor,ALT,,1.2
+होम्योपैथी,doctor,ALT,,1.2
+test,lab,,,0.8
+tests,lab,,,0.8
+jaanch,lab,,,0.9
+janch,lab,,,0.9
+जांच,lab,,,0.9
+जाँच,lab,,,0.9
+lab,lab,,,1
+laboratory,lab,,,1
+लैब,lab,,,1
+diagnostic,lab,,,1
+pathology,lab,,,1
+blood test,lab,,blood,1.5
+khoon ki jaanch,lab,,blood,1.5
+khoon jaanch,lab,,blood,1.5
+खून की जांच,lab,,blood,1.5
+sugar test,lab,,sugar,1.5
+sugar ki jaanch,lab,,sugar,1.5
+शुगर टेस्ट,lab,,sugar,1.5
+शुगर की जांच,lab,,sugar,1.5
+hba1c,lab,,sugar,1.5
+thyroid test,lab,,thyroid,1.5
+thyroid ki jaanch,lab,,thyroid,1.5
+थायराइड टेस्ट,lab,,thyroid,1.5
+cbc,lab,,cbc,1.5
+cbc test,lab,,cbc,1.5
+urine test,lab,,urine,1.5
+peshab ki jaanch,lab,,urine,1.5
+पेशाब की जांच,lab,,urine,1.5
+x ray,lab,,xray,1.5
+xray,lab,,xray,1.5
+एक्स रे,lab,,xray,1.5
+ultrasound,lab,,ultrasound,1.5
+alatrasound,lab,,ultrasound,1.5
+sonography,lab,,ultrasound,1.5
+अल्ट्रासाउंड,lab,,ultrasound,1.5
+mri,lab,,mri,1.5
+ct scan,lab,,ct,1.5
+scan,lab,,,1
+lipid profile,lab,,lipid,1.5
+liver test,lab,,lft,1.5
+kidney test,lab,,kft,1.5
+dawai,medicine,,,1
+dawa,medicine,,,1
+dawaai,medicine,,,1
+davai,medicine,,,1
+dvai,medicine,,,1
+दवाई,medicine,,,1
+दवा,medicine,,,1
+medicine,medicine,,,1
+medicines,medicine,,,1
+madicine,medicine,,,1
+tablet,medicine,,,0.9
+tablets,medicine,,,0.9
+goli,medicine,,,0.9
+गोली,medicine,,,0.9
+pharmacy,medicine,,,1.2
+chemist,medicine,,,1.2
+medical store,medicine,,,1.2
+मेडिकल स्टोर,medicine,,,1.2
+dawai mangwani,medicine,,,1.5
+dawai chahiye,medicine,,,1.5
+medicine order,medicine,,,1.5
+दवाई मंगवानी,medicine,,,1.5
+ambulance,ambulance,,,1.2
+embulance,ambulance,,,1.2
+ambulence,ambulance,,,1.2
+एम्बुलेंस,ambulance,,,1.2
+एंबुलेंस,ambulance,,,1.2
+insurance,insurance,,,1.2
+insurence,insurance,,,1.2
+इंश्योरेंस,insurance,,,1.2
+bima,insurance,,,1.2
+बीमा,insurance,,,1.2
+health insurance,insurance,,,1.5
+mediclaim,insurance,,,1.2
+claim,insurance,,,0.9
+policy,insurance,,,0.9
+ayushman,insurance,,,1.2
+ayushman card,insurance,,,1.5
+आयुष्मान,insurance,,,1.2
+cashless,insurance,,,1.2
+camp,camps,,,1.2
+camps,camps,,,1.2
+कैंप,camps,,,1.2
+shivir,camps,,,1.2
+शिविर,camps,,,1.2
+free checkup,camps,,,1.5
+free camp,camps,,,1.5
+muft jaanch,camps,,,1.5
+मुफ्त जांच,camps,,,1.5
+offer,camps,,,1
+offers,camps,,,1
+ऑफर,camps,,,1
+discount,camps,,,1
+chhoot,camps,,,1
+छूट,camps,,,1
+sugar की जांच,lab,,sugar,1.5
+sugar jaanch,lab,,sugar,1.5
+sugar check,lab,,sugar,1.5
+sugar test karwana,lab,,sugar,1.5
+thyroid की जांच,lab,,thyroid,1.5
+blood की जांच,lab,,blood,1.5
