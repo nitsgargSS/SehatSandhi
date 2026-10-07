@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { askAmbulance, askInsurance, orderMedicines, rate, uploadPhoto, whereAmI, type Place, type RateKind, type Reply } from '../../lib/patientApi'
 import { Err, MyShell, useMe } from './MyShell'
+import { supabase } from '../../lib/supabase'
 
 // Medicines, ambulance and insurance requests, and ratings — the app's forms on
 // the website, through the same functions (0196) on the signed-in number.
@@ -150,12 +151,18 @@ function Rate() {
   const [review, setReview] = useState('')
   const [paid, setPaid] = useState('')
   const [bought, setBought] = useState<boolean | null>(null)
+  const [saved, setSaved] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState(false)
   const send = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setErr('')
-    try { await rate(kind, id, stars, review, paid === '' ? null : Number(paid), bought); setDone(true) }
+    try {
+      await rate(kind, id, stars, review, paid === '' ? null : Number(paid), bought)
+      // 0214: the optional savings answer — never blocks the rating.
+      if (saved) await supabase.rpc('sehat_my_saved', { p_kind: kind, p_id: id, p_answer: saved, p_channel: 'website' }).then(() => undefined, () => undefined)
+      setDone(true)
+    }
     catch (e2) { setErr((e2 as Error).message) } finally { setBusy(false) }
   }
   if (done) return (
@@ -176,6 +183,9 @@ function Rate() {
         <div className="flex items-center gap-2 flex-wrap"><span className="text-sm text-gray-700">Did you buy a policy?</span>
           <Chip on={bought === true} onClick={() => setBought(true)}>Yes</Chip><Chip on={bought === false} onClick={() => setBought(false)}>No</Chip></div>
       )}
+      <div className="flex flex-col gap-2"><span className="text-sm text-gray-700">Sehatsandhi से आपका कितना समय/खर्च बचा? <span className="text-gray-400">(optional)</span></span>
+        <div className="flex gap-2 flex-wrap">{([['time_and_money', 'समय और पैसा दोनों / Both'], ['time', 'समय / Time'], ['money', 'पैसा / Money'], ['none', 'कोई फ़र्क नहीं / No difference']] as [string, string][]).map(([k, l]) =>
+          <Chip key={k} on={saved === k} onClick={() => setSaved(saved === k ? null : k)}>{l}</Chip>)}</div></div>
       <Field label="Anything to add? (optional)"><textarea className="input-field" rows={3} value={review} onChange={e => setReview(e.target.value)} /></Field>
       <Err msg={err} />
       <button className="btn-teal justify-center disabled:opacity-50" disabled={busy || stars === 0 || !id}>{busy ? 'Sending…' : 'Send rating'}</button>

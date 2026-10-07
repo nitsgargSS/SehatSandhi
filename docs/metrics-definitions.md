@@ -22,10 +22,17 @@ One patient = one normalised mobile number (`patients.phone`, `91XXXXXXXXXX`). T
 | **Repeat rate** | Of patients whose first (non-cancelled) booking was in the month, % with a second booking within 30 / 90 days. | `metric_repeat_cohorts` |
 | **Cohort retention** | Patients whose first activity was in month M; for each later month, how many were active (MAP rules). | `metric_retention_cohorts` |
 | **CAC** | Marketing spend for a channel in the month ÷ new patients whose first source maps to that channel in the month (patients from clinics' imported registers excluded). | `metric_cac_monthly` |
-| **Partner retention** | Of businesses whose paid term ended in the month, % that paid again (from `revenue_ledger`). | computed in the report from `partner_plan_status` / `revenue_ledger` |
+| **Partner retention** | Subscription plans whose last covered day fell in the month (and has passed); renewed = a later subscription paid no more than 30 days after that day. Razorpay's `term_end` is the first day *not* covered, so its last day is the day before. | `metric_partner_renewals` (0214) |
 | **Conversion funnel** | Searches (WhatsApp searches + website searches + typed messages) → results shown (WhatsApp searches with results + website searches + typed messages understood) → profile views (website profile views / WhatsApp clicks) → booked → completed. | `metric_funnel_monthly` |
 | **Time to launch a district** | `first_booking_at − onboarding_started_at` (days). | `metric_districts` |
 | **Unmet demand** | Searches that found nobody for that speciality / service in that area (`unmet_demand_log`). | `metric_impact_monthly.unmet_searches` |
+| **Unmet demand served** | Known patients (by phone) whose search found nobody in a district in the month — typed WhatsApp messages, the app's Find, the website's booking page — and how many booked there (not cancelled) within 90 days; for a doctor's speciality, a doctor of that speciality. | `metric_unmet_served` (0214) |
+| **Source per booking** | An online booking (WhatsApp, app, website) takes the patient's latest known source (`patients.last_source_*`) when it is under 30 days old, else *direct*; desk bookings are *clinic desk*. Bookings before 0214: *unknown*. | `metric_booking_sources` (0214) |
+| **Bookings by speciality** | By the booked doctor's speciality; lab bookings *lab*; *not recorded* when no doctor was named. | `metric_bookings_by_speciality` (0214) |
+| **Where partners came from** | A business's first source: *field sales* when its phone or email matches a doctor lead; the website campaign its owner arrived from (first day of registration only); else *unknown*. By month registered. | `metric_partner_sources` (0214) |
+| **Coupons** | Payments with a coupon (Razorpay's, or entered with an offline payment): count, discount given, revenue ex-GST. | `metric_coupons_monthly` (0214) |
+| **Time / money saved** | One optional answer given with a rating — time and money / time / money / no difference. Answers only, nothing medical. | `metric_impact_monthly.saved_*` (0214) |
+| **Voice notes** | Typed-message log rows marked voice (`free_text_log.input_kind`); 0 until voice notes reach the bot. | `metric_impact_monthly.voice_messages` (0214) |
 
 ## Where a patient came from
 
@@ -40,3 +47,7 @@ Per month (`metric_impact_monthly`): bookings at **rural vs urban** service area
 ## Frozen history
 
 `sehat_metrics_snapshot()` runs nightly and, the first time it runs in a new month, freezes last month's headline numbers into `metrics_monthly_snapshot` (month, district, metric_key, value, definition_version). Frozen rows are never edited — not even by admins. If a definition changes, bump the version and recompute into new rows; the old ones stay.
+
+## Districts (0214)
+
+A business registering in a district we do not have adds it by itself (status *onboarding*, onboarding started that day). The district is India Post's for the business's PIN, else what it typed. The first business there going live sets `first_partner_live_at` (status *live*); the first booking sets `first_booking_at`. Dates already entered by an admin are never changed. Still definition version 1: 0214 added metrics, it changed none.

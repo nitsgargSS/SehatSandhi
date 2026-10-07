@@ -119,6 +119,7 @@ export default function Find() {
       .filter(d => { const k = `${d.practitioner_id}|${d.business_id}`; if (seen.has(k)) return false; seen.add(k); return true })
       .slice(0, 20)
     if (!found.length) {
+      supabase.rpc('sehat_note_unmet', { p_speciality: speciality, p_pin: pin }).then(() => undefined, () => undefined)
       bot(`No ${spName(speciality)?.en ?? 'doctor'} near ${area ?? pin} has joined Sehatsandhi yet. We are growing across India and will be in your area soon — we have noted what you need. Try a nearby town, or another kind of doctor.`,
         DOCTORS.filter(c => c !== speciality).slice(0, 6).map(spChip))
       return
@@ -150,6 +151,7 @@ export default function Find() {
     if (error) { bot('Sorry, the search did not work just now. Please try again.'); return }
     const rows = ((data ?? []) as Omit<Place, 'slots' | 'slotDay'>[]).slice(0, 20)
     if (!rows.length) {
+      supabase.rpc('sehat_note_unmet', { p_speciality: kind, p_pin: pin }).then(() => undefined, () => undefined)
       bot(`No ${KIND_WORD[kind]} near ${area ?? pin} have joined Sehatsandhi yet. We are growing across India and will be in your area soon. Try a nearby town or PIN code.`,
         kind === 'ambulance' ? [{ label: '📞 Call 108', say: '__tel__108' }] : undefined)
       return

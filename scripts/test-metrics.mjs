@@ -21,6 +21,11 @@
 //   Money       T1 subscription ₹1200 ex-GST (GST 216), paid Mar 2, covers Mar 1 – May 31
 //               T2 featured listing ₹500, paid Apr 10, no period
 //   Spend       Mar Meta ₹1000; Apr Meta ₹500; Apr print ₹300
+//   0214        P1's latest touch: Instagram, code REEL07, just now (so its bookings carry it);
+//               T1 registered in March through our field team (a doctor lead), T2 in April, source unknown;
+//               T2's listing paid with coupon LAUNCH50 (₹100 off); T1 renewed on Jun 5 for Jun 1 – Aug 31;
+//               unmet searches: P2 a dentist in Jagadhri on Mar 15 (never booked again), P3 a lab
+//               in Damla on Apr 1 (booked there Apr 3); P1 answered "saved time" for the May visit.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -65,6 +70,22 @@ const EXPECT = {
   [`rural|${B}`]: 2, [`urban|${A}`]: 3, [`urban|${C}`]: 1,
   // Funnel: booked / completed follow the bookings.
   [`funnel_booked|${A}`]: 3, [`funnel_completed|${A}`]: 2, [`funnel_booked|${B}`]: 2,
+  // ── 0214 ──
+  // Source per booking: P1's (online) bookings carry Instagram; P2 and P3 had no recent touch → direct.
+  [`booking_src|${A}|instagram_reel`]: 2, [`booking_src|${A}|direct`]: 1, [`booking_src|${B}|direct`]: 2, [`booking_src|${C}|instagram_reel`]: 1,
+  [`booking_code|${A}|REEL07`]: 2,
+  // By speciality: no doctor named → the clinic's are 'not recorded', the lab's 'lab'.
+  [`spec|${A}|not recorded`]: 3, [`spec|${B}|lab`]: 2, [`spec|${C}|not recorded`]: 1,
+  // Where partners came from, by the month they registered.
+  [`partner_src|${A}|field_sales`]: 1, [`partner_src|${B}|unknown`]: 1,
+  // Coupons: one payment with LAUNCH50, ₹100 off, ₹500 revenue.
+  [`coupon_n|${B}|LAUNCH50`]: 1, [`coupon_off|${B}|LAUNCH50`]: 100, [`coupon_rev|${B}|LAUNCH50`]: 500,
+  // Renewals: the Mar–May plan ended May 31 and was renewed Jun 5; the Jun–Aug one ended Aug 31, not renewed.
+  [`renew_due|${C}`]: 1, [`renew_done|${C}`]: 1, [`renew_due|2026-08-01`]: 1, [`renew_done|2026-08-01`]: 0,
+  // Unmet demand served: March — P2, not served; April — P3, served (booked the lab in Damla two days later).
+  [`unmet|${A}`]: 1, [`unmet_served|${A}`]: 0, [`unmet|${B}`]: 1, [`unmet_served|${B}`]: 1,
+  // The savings question.
+  [`saved_time|${C}`]: 1,
 }
 
 const measure = (tbl) => `
@@ -90,20 +111,37 @@ insert into ${tbl}
   union all select 'rural|' || month, rural_bookings from metric_impact_monthly where month in ('${A}','${B}','${C}')
   union all select 'urban|' || month, urban_bookings from metric_impact_monthly where month in ('${A}','${B}','${C}')
   union all select 'funnel_booked|' || month, booked from metric_funnel_monthly where month in ('${A}','${B}','${C}')
-  union all select 'funnel_completed|' || month, completed from metric_funnel_monthly where month in ('${A}','${B}','${C}');`
+  union all select 'funnel_completed|' || month, completed from metric_funnel_monthly where month in ('${A}','${B}','${C}')
+  union all select 'booking_src|' || month || '|' || source_type, sum(total) from metric_booking_sources where month in ('${A}','${B}','${C}') group by month, source_type
+  union all select 'booking_code|' || month || '|' || campaign_code, sum(total) from metric_booking_sources where month in ('${A}','${B}','${C}') and campaign_code is not null group by month, campaign_code
+  union all select 'spec|' || month || '|' || speciality, sum(total) from metric_bookings_by_speciality where month in ('${A}','${B}','${C}') group by month, speciality
+  union all select 'partner_src|' || month || '|' || source_type, sum(n) from metric_partner_sources where month in ('${A}','${B}','${C}') group by month, source_type
+  union all select 'coupon_n|' || month || '|' || coupon_code, sum(payments) from metric_coupons_monthly where month in ('${A}','${B}','${C}') group by month, coupon_code
+  union all select 'coupon_off|' || month || '|' || coupon_code, sum(discount) from metric_coupons_monthly where month in ('${A}','${B}','${C}') group by month, coupon_code
+  union all select 'coupon_rev|' || month || '|' || coupon_code, sum(revenue) from metric_coupons_monthly where month in ('${A}','${B}','${C}') group by month, coupon_code
+  union all select 'renew_due|' || month, sum(due) from metric_partner_renewals where month in ('${C}', '2026-08-01') group by month
+  union all select 'renew_done|' || month, sum(renewed) from metric_partner_renewals where month in ('${C}', '2026-08-01') group by month
+  union all select 'unmet|' || month, sum(unmet_patients) from metric_unmet_served where month in ('${A}','${B}','${C}') group by month
+  union all select 'unmet_served|' || month, sum(served_patients) from metric_unmet_served where month in ('${A}','${B}','${C}') group by month
+  union all select 'saved_time|' || month, saved_time from metric_impact_monthly where month in ('${A}','${B}','${C}');`
 
 const ts = (d) => `timestamptz '${d} 11:00:00+05:30'`
 const sql = `begin;
 ${measure('before_m')}
-insert into businesses (id, name, vertical, status, own_pin_code, pin_codes) values
-  ('00000000-0000-4000-8000-00000000a001', 'TEST metrics clinic', 'clinic', 'active', '135003', array['135003']),
-  ('00000000-0000-4000-8000-00000000a002', 'TEST metrics lab', 'lab', 'active', '135051', array['135051']);
+insert into doctor_leads (name, phone, source) values ('TEST lead', '919990000101', 'field_test');
+insert into businesses (id, name, vertical, status, own_pin_code, pin_codes, phone, created_at) values
+  ('00000000-0000-4000-8000-00000000a001', 'TEST metrics clinic', 'clinic', 'active', '135003', array['135003'], '919990000101', ${ts('2026-03-01')}),
+  ('00000000-0000-4000-8000-00000000a002', 'TEST metrics lab', 'lab', 'active', '135051', array['135051'], '919990000102', ${ts('2026-04-01')});
 insert into patients (id, phone, name, source, first_source_type, first_channel, first_seen_at, created_at) values
   ('00000000-0000-4000-8000-00000000b001', '919990000001', 'TEST P1', 'appointment', 'instagram_reel', 'whatsapp', ${ts('2026-03-05')}, ${ts('2026-03-05')}),
   ('00000000-0000-4000-8000-00000000b002', '919990000002', 'TEST P2', 'appointment', 'google', 'website', ${ts('2026-03-10')}, ${ts('2026-03-10')}),
   ('00000000-0000-4000-8000-00000000b003', '919990000003', 'TEST P3', 'appointment', 'qr_poster', 'whatsapp', ${ts('2026-04-03')}, ${ts('2026-04-03')}),
   ('00000000-0000-4000-8000-00000000b004', '919990000004', 'TEST P4', 'appointment', 'instagram_reel', 'app', ${ts('2026-04-15')}, ${ts('2026-04-15')}),
   ('00000000-0000-4000-8000-00000000b005', '919990000005', 'TEST P5', 'hospital_register', 'clinic_register', 'clinic', ${ts('2026-03-02')}, ${ts('2026-03-02')});
+update patients set last_source_type = 'instagram_reel', last_source_detail = 'REEL07', last_seen_at = now() where id = '00000000-0000-4000-8000-00000000b001';
+insert into unmet_demand_log (source, pin_code, speciality, patient_wants_notification, patient_id, created_at) values
+  ('bot', '135003', 'DENT', false, '00000000-0000-4000-8000-00000000b002', ${ts('2026-03-15')}),
+  ('bot', '135051', 'lab', false, '00000000-0000-4000-8000-00000000b003', ${ts('2026-04-01')});
 insert into appointments (patient_phone, patient_name, patient_age, business_id, slot_datetime, status, booked_via, created_at) values
   ('919990000001', 'TEST P1', 30, '00000000-0000-4000-8000-00000000a001', ${ts('2026-03-06')}, 'completed', 'whatsapp_bot', ${ts('2026-03-05')}),
   ('919990000001', 'TEST P1', 30, '00000000-0000-4000-8000-00000000a001', ${ts('2026-03-21')}, 'booked',    'app',          ${ts('2026-03-20')}),
@@ -114,7 +152,12 @@ insert into appointments (patient_phone, patient_name, patient_age, business_id,
 insert into patient_app_days (patient_id, day) values ('00000000-0000-4000-8000-00000000b004', '2026-04-15');
 insert into offline_payments (payer_type, business_id, purpose, amount_inr, gst_amount, method, paid_at, period_start, period_end, recorded_by) values
   ('business', '00000000-0000-4000-8000-00000000a001', 'subscription', 1200, 216, 'upi', '2026-03-02', '2026-03-01', '2026-05-31', null),
-  ('business', '00000000-0000-4000-8000-00000000a002', 'featured_listing', 500, 90, 'cash', '2026-04-10', null, null, null);
+  ('business', '00000000-0000-4000-8000-00000000a002', 'featured_listing', 500, 90, 'cash', '2026-04-10', null, null, null),
+  ('business', '00000000-0000-4000-8000-00000000a001', 'subscription', 1200, 216, 'upi', '2026-06-05', '2026-06-01', '2026-08-31', null);
+update offline_payments set coupon_code = 'LAUNCH50', coupon_discount = 100 where business_id = '00000000-0000-4000-8000-00000000a002';
+insert into visit_savings (kind, ref_id, patient_id, answer, created_at)
+  select 'booking', id, '00000000-0000-4000-8000-00000000b001', 'time', ${ts('2026-05-02')} from appointments
+   where patient_phone = '919990000001' and created_at = ${ts('2026-05-01')};
 insert into marketing_spend (month, channel, amount_inr, entered_by) values
   ('2026-03-01', 'meta_ads', 1000, null), ('2026-04-01', 'meta_ads', 500, null), ('2026-04-01', 'print', 300, null);
 ${measure('after_m')}

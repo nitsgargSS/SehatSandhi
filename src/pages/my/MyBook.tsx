@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { SPECIALITIES } from '../../types'
+import { supabase } from '../../lib/supabase'
 import {
   bookAppointment, findCamps, findDoctors, findPlaces, me, openTimes, whereAmI,
   type Booked, type Camp, type Me,
@@ -40,6 +41,8 @@ function Book() {
         ? (await findPlaces('lab', pin)).map(l => ({ key: l.business_id, business: l.business_id, doctor: null, title: l.title, sub: l.avg_rating != null ? `★ ${l.avg_rating} · ${l.total_reviews} reviews` : 'New on Sehatsandhi', address: l.address, fee: null }))
         : (await findDoctors(what, pin)).map(d => ({ key: `${d.practitioner_id}|${d.business_id}`, business: d.business_id, doctor: d.practitioner_id, title: d.full_name,
             sub: `${d.qualification ? `${d.qualification} · ` : ''}${d.business_name}${d.nearby ? '' : ' · in your district'}`, address: d.address, fee: d.consultation_fee }))
+      // 0214: nobody here — this patient's unmet need, counted for "unmet demand served".
+      if (!rows.length) supabase.rpc('sehat_note_unmet', { p_speciality: what === 'LAB' ? 'lab' : what, p_pin: pin }).then(() => undefined, () => undefined)
       setCards(await Promise.all(rows.slice(0, 20).map(async r => ({ ...r, ...(await openTimes(r.business, r.doctor, dayN).then(t => ({ day: t.day, slots: t.slots }))) }))))
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
