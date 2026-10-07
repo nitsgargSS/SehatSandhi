@@ -215,6 +215,7 @@ export default function BusinessMetricsSection() {
         <BarList title={`"Sehatsandhi से आपका कितना समय/खर्च बचा?" — ${savedTotal} answer${savedTotal === 1 ? '' : 's'}`}
           data={totalBy(m.savings ?? [], 'answer', 'n').map(d => ({ ...d, label: SAVED[d.label] ?? d.label }))} />
         <p className="text-xs text-gray-500">Voice notes count once they are connected to the bot; until then every typed message is text.</p>
+        <WaSavingsSwitch />
       </div>
 
       <SpendForm reload={load} />
@@ -389,6 +390,28 @@ function CampaignCodes() {
           <td><button className="text-teal-700 underline" onClick={() => navigator.clipboard?.writeText(link(r))}>Copy WhatsApp link</button></td>
         </tr>
       ))}</tbody></table>
+    </div>
+  )
+}
+
+// 0215: the same question after a WhatsApp rating. Off until the AiSensy step
+// that catches the answer (type 'saved') is in place.
+function WaSavingsSwitch() {
+  const [on, setOn] = useState<boolean | null>(null)
+  const [err, setErr] = useState('')
+  useEffect(() => { supabase.rpc('sehat_admin_wa_savings', { p_on: null }).then(({ data, error }) => { if (error) setErr(error.message); else setOn(!!data) }) }, [])
+  const flip = async () => {
+    setErr('')
+    const { data, error } = await supabase.rpc('sehat_admin_wa_savings', { p_on: !on })
+    if (error) setErr(error.message); else setOn(!!data)
+  }
+  if (on === null) return err ? <p className="text-xs text-red-600">{err}</p> : null
+  return (
+    <div className="flex items-center gap-3 flex-wrap text-sm border-t border-gray-100 pt-3">
+      <span>Ask it on WhatsApp after a rating: <b className={on ? 'text-teal-700' : 'text-gray-500'}>{on ? 'On' : 'Off'}</b></span>
+      <button className={on ? 'btn-outline text-xs' : 'btn-teal text-xs'} onClick={flip}>{on ? 'Turn off' : 'Turn on'}</button>
+      <span className="text-xs text-gray-500">Turn on only after the AiSensy "saved" step is set up — otherwise the answer is not caught.</span>
+      {err && <span className="text-xs text-red-600">{err}</span>}
     </div>
   )
 }
