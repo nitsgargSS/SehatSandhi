@@ -2,8 +2,9 @@ import { Link } from 'react-router-dom'
 import { OPEN_ANALYTICS_SETTINGS } from './AnalyticsConsent'
 import { Facebook, Instagram } from 'lucide-react'
 import { useLanguage } from '../i18n/LanguageContext'
-import { WA_LINK, CALL_NUMBER, prettyPhone } from '../types'
+import { CALL_NUMBER, prettyPhone } from '../types'
 import { HEADER, PAGE } from './SiteHeader'
+import { waLink } from '../lib/firstTouch'
 
 // One footer for every public page, and the counterpart to SiteHeader.
 //
@@ -85,7 +86,7 @@ export default function SiteFooter() {
           <span style={{ opacity: .5 }}>{'  ·  '}</span>
           {/* The WhatsApp number is the booking bot's, so it is linked, never
               shown: a number on the page gets called, and it takes no calls. */}
-          <a href={WA_LINK} target="_blank" rel="noreferrer"
+          <a href={waLink()} target="_blank" rel="noreferrer"
             style={{ color: HEADER.green, fontWeight: 700 }}>
             {hi ? 'WhatsApp पर चैट करें' : 'Chat on WhatsApp'}
           </a>

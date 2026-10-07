@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { MessageCircle, Mail, MapPin, Clock, Phone, Send, CheckCircle2 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
-import { WA_LINK, CALL_NUMBER, prettyPhone } from '../types'
+import { CALL_NUMBER, prettyPhone } from '../types'
 import { activeConfig } from '../lib/env'
 import SiteHeader from '../components/SiteHeader'
 import SiteFooter, { SOCIALS } from '../components/SiteFooter'
 import { phoneProblem } from '../lib/credentials'
 import PhoneError from '../components/PhoneError'
+import { waLink } from '../lib/firstTouch'
 
 // A contact page with an address on it, because the footer alone is not what
 // gets checked.
@@ -194,7 +195,7 @@ export default function Contact() {
   const { lang } = useLanguage()
   const c = content[lang]
   // Opens the booking bot with "Hi", which is what starts it.
-  const wa = WA_LINK
+  const wa = waLink()
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
