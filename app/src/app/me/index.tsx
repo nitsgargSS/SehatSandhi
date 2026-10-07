@@ -7,6 +7,7 @@ import { me, requestCode, verifyCode, myActivity, type Me, type Activity } from 
 import { RateList, RequestList, requests, toRate } from '../../ui/MyLists'
 import { Btn, Card, Err, Field, Label, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
+import WhereHeard from '../../ui/WhereHeard'
 
 // The patient's home in the app (0196): sign in once with a WhatsApp code,
 // then everything on their number — and what is waiting for a rating.
@@ -73,6 +74,7 @@ export default function MyHome() {
     <ScrollView contentContainerStyle={st.wrap} refreshControl={<RefreshControl refreshing={false} onRefresh={load} />}>
       <Text style={st.h}>नमस्ते{who.name ? `, ${who.name.split(' ')[0]}` : ''} 🙏</Text>
       <Note>+{who.phone}</Note>
+      <WhereHeard />
 
 
       <View style={st.grid}>

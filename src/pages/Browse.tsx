@@ -1,8 +1,9 @@
-import { SPECIALITIES, WA_LINK } from '../types'
+import { SPECIALITIES } from '../types'
 import { useLanguage } from '../i18n/LanguageContext'
 import { track } from '../lib/analytics'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell, HEADER } from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
+import { waLink } from '../lib/firstTouch'
 
 // Pick a speciality, and carry on in WhatsApp.
 //
@@ -39,7 +40,7 @@ export default function Browse() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" style={{ gap: 10 }}>
             {SPECIALITIES.filter(s => !('staffOnly' in s)).map(s => (
-              <a key={s.id} href={WA_LINK} target="_blank" rel="noreferrer"
+              <a key={s.id} href={waLink()} target="_blank" rel="noreferrer"
                 onClick={() => track('whatsapp_click', { path: '/browse', speciality: s.id })}
                 style={{
                   background: '#fff', border: `1px solid ${HEADER.border}`, borderRadius: 14,

@@ -4,6 +4,7 @@ import { ChevronLeft, LogOut } from 'lucide-react'
 import SiteHeader, { HeaderLink } from '../../components/SiteHeader'
 import SiteFooter from '../../components/SiteFooter'
 import { me, requestCode, signOut, verifyCode, type Me } from '../../lib/patientApi'
+import { recordFirstTouch } from '../../lib/firstTouch'
 
 // The frame of every /my page: the site header, a back link, and — for pages
 // that act on the patient's own number — the WhatsApp-code sign-in in place of
@@ -62,7 +63,7 @@ export function SignIn({ onDone }: { onDone: () => void }) {
         We send a 6-digit code to your WhatsApp. Then you see your visits, prescriptions, reports and bills,
         book doctors, message your clinic, and order medicines — the same as in the Sehatsandhi app.
       </p>
-      <form onSubmit={e => { e.preventDefault(); if (!sent) { if (digits.length >= 10) run(async () => { const r = await requestCode(phone); setSent(true); setDev(r.devCode ?? '') }) } else if (code.length === 6) run(async () => { await verifyCode(phone, code); onDone() }) }}
+      <form onSubmit={e => { e.preventDefault(); if (!sent) { if (digits.length >= 10) run(async () => { const r = await requestCode(phone); setSent(true); setDev(r.devCode ?? '') }) } else if (code.length === 6) run(async () => { await verifyCode(phone, code); await recordFirstTouch(); onDone() }) }}
         className="flex flex-col gap-3">
         <label className="text-sm font-semibold text-gray-700">Mobile number
           <input className="input-field mt-1" inputMode="tel" autoComplete="tel" placeholder="98765 43210" value={phone} disabled={sent} onChange={e => setPhone(e.target.value)} />
