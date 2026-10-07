@@ -44,8 +44,10 @@ export function requests(act: Activity | null): Req[] {
       const upcoming = at > now && ['booked', 'confirmed'].includes(b.status)
       // A past booking still reads 'booked' in the clinic's book; to the patient it is a visit.
       const word = upcoming ? 'Upcoming' : b.status === 'cancelled' ? 'Cancelled' : b.status === 'completed' ? 'Visited' : 'Past'
-      return { key: `b${b.id}`, icon: '🩺', title: `${b.place ?? 'Clinic'}${b.doctor ? ` · ${b.doctor}` : ''}`, at,
-        sub: [word, b.name].filter(Boolean).join(' · '), cancelId: upcoming ? b.id : undefined }
+      // 0207: a lab booking says what it is for (tests, at the lab or at home).
+      const lab = !!b.purpose?.startsWith('Lab')
+      return { key: `b${b.id}`, icon: lab ? '🧪' : '🩺', title: `${b.place ?? 'Clinic'}${b.doctor ? ` · ${b.doctor}` : ''}`, at,
+        sub: [word, b.name, b.purpose?.replace(/^Lab tests: /, '')].filter(Boolean).join(' · '), cancelId: upcoming ? b.id : undefined }
     }),
   ]
   // Upcoming visits first (soonest first), then everything else newest first.

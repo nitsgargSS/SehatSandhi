@@ -48,6 +48,14 @@ export default function Me() {
           <Btn small kind="ghost" label="Team & leave" onPress={() => router.push('/team')} />
         </Card>
       )}
+      {/* 0207/0208: a lab's price list — what patients book in the app. */}
+      {!!s?.clinic && (s.clinic.vertical === 'lab' || s.labModule) && (!s.role.enforced || ['owner', 'manager', 'doctor'].includes(s.role.role ?? '')) && (
+        <Card>
+          <Label>Lab</Label>
+          <Text style={st.meta}>Tests, prices and packages patients can book in the app, and the home collection fee.</Text>
+          <Btn small kind="ghost" label="Tests & packages" onPress={() => router.push('/labmenu')} />
+        </Card>
+      )}
       <Card>
         <Label>Password</Label>
         {pw === 'open' ? (

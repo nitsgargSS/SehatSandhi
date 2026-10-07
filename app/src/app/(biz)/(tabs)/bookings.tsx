@@ -79,6 +79,8 @@ export default function Bookings() {
         <Text style={st.name}>{when(a.slot_datetime, range !== 'today')} · {a.patient_name}</Text>
         <Text style={st.meta}>{[a.patient_age ? `${a.patient_age}y` : null, docName(a.practitioner_id), STATUS[a.status] ?? a.status,
           VIA[a.booked_via] ? `via ${VIA[a.booked_via]}` : null].filter(Boolean).join(' · ')}</Text>
+        {/* 0207: what a lab booking is for — the tests, at the lab or at home (with the address). */}
+        {!!(a as Appointment & { purpose?: string | null }).purpose && <Text style={st.purpose}>🧪 {(a as Appointment & { purpose?: string | null }).purpose}</Text>}
         {!!a.patient_phone && <Text style={st.link} onPress={() => Linking.openURL(`tel:${a.patient_phone}`)}>📞 {a.patient_phone}</Text>}
         {!!a.previous_slot_datetime && <Text style={st.warn}>Moved from {when(a.previous_slot_datetime, true)}</Text>}
         {a.status === 'cancelled' && !!a.cancelled_by && <Text style={st.meta}>Cancelled by {a.cancelled_by === 'patient' ? 'the patient' : a.cancelled_by}{a.cancel_reason ? ` — ${a.cancel_reason}` : ''}</Text>}
@@ -155,6 +157,7 @@ const st = StyleSheet.create({
   name: { fontSize: 15.5, fontWeight: '700', color: C.ink },
   meta: { fontSize: 13, color: C.muted },
   warn: { fontSize: 12.5, color: '#b7791f' },
+  purpose: { fontSize: 13.5, color: C.ink, backgroundColor: '#eef8f3', borderRadius: 8, padding: 6 },
   link: { color: C.green, fontWeight: '600' },
   btns: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4 },
 })

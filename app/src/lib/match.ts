@@ -11,6 +11,8 @@ export interface Match {
   intent: 'doctor' | 'lab' | 'medicine' | 'ambulance' | 'insurance' | 'camps' | null
   speciality: string | null
   speciality_name_hi: string | null
+  /** 0201: which test, when it is a lab need — sugar, thyroid, cbc, xray… */
+  lab_test_hint: string | null
   location: string | null
   pincode: string | null
   target_date: string | null
