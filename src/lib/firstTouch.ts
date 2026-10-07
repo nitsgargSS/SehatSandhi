@@ -64,3 +64,12 @@ export async function recordFirstTouch() {
     p_type: t && t.type !== 'direct' ? t.type : 'direct', p_detail: t?.detail ?? null, p_channel: 'website',
   }).then(() => undefined, () => undefined)
 }
+
+/** 0214: a business that just registered — where its owner first came from
+ *  (the server accepts it on the first day only, and never over a known source). */
+export async function recordBusinessFirstTouch(businessId: string) {
+  const t = touch()
+  if (!t) return
+  await supabase.rpc('sehat_signup_set_source', { p_business: businessId, p_type: t.type, p_detail: t.detail })
+    .then(() => undefined, () => undefined)
+}

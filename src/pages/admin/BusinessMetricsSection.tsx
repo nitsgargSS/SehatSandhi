@@ -27,13 +27,23 @@ interface Metrics {
   districts: Row[]
   plans: { paying_now: number; listed: number }
   snapshots: number
+  // 0214
+  booking_sources: { month: string; source_type: string; campaign_code: string | null; total: number }[]
+  specialities: { month: string; speciality: string; total: number; completed: number }[]
+  partner_sources: { month: string; vertical: string; source_type: string; n: number }[]
+  coupons: { month: string; coupon_code: string; payments: number; discount: number; revenue: number }[]
+  renewals: { month: string; due: number; renewed: number }[]
+  unmet_served: { month: string; unmet_patients: number; served_patients: number }[]
+  savings: { month: string; answer: string; n: number }[]
 }
 
 const SOURCES: Record<string, string> = {
   meta_ctwa_ad: 'Meta (Click-to-WhatsApp) ad', instagram_reel: 'Instagram / Facebook', website_organic: 'Website', google: 'Google',
   sms_campaign: 'SMS / WhatsApp campaign', doctor_referral: 'Doctor / clinic', patient_referral: 'Friend / family', qr_poster: 'Poster / QR',
   camp: 'Health camp', direct: 'Direct', clinic_register: "Clinic's own register", other: 'Other', unknown: 'Not known',
+  clinic_desk: 'Booked at the clinic desk', field_sales: 'Our field team (doctor lead)',
 }
+const SAVED: Record<string, string> = { time_and_money: 'Time and money', time: 'Time', money: 'Money', none: 'No difference' }
 const PURPOSES: [string, string][] = [['pilot_registration', 'Pilot registration'], ['subscription', 'Subscription'],
   ['whatsapp_marketing_credits', 'WhatsApp marketing credits'], ['featured_listing', 'Featured listing'], ['lead_fees', 'Lead fees'], ['other', 'Other']]
 const CHANNELS: [string, string][] = [['meta_ads', 'Meta ads'], ['google_ads', 'Google ads'], ['sms', 'SMS'], ['print', 'Print / posters'],
@@ -96,6 +106,9 @@ export default function BusinessMetricsSection() {
   const maxOffset = Math.max(0, ...m.retention.map(r => r.month_offset))
   const imp = (k: string) => m.impact.reduce((a, r) => a + Number(r[k] ?? 0), 0)
   const r30 = rep(cur)
+  const due = sum(m.renewals ?? [], x => x.due), renewed = sum(m.renewals ?? [], x => x.renewed)
+  const unmetP = sum(m.unmet_served ?? [], x => x.unmet_patients), servedP = sum(m.unmet_served ?? [], x => x.served_patients)
+  const savedTotal = sum(m.savings ?? [], x => x.n)
 
   return (
     <div className="space-y-4">
@@ -127,6 +140,8 @@ export default function BusinessMetricsSection() {
         <StatTile label="Cost to acquire (CAC)" value={cacOf(cur) != null ? inr(cacOf(cur)!) : '—'} sub="marketing spend ÷ new patients" />
         <StatTile label="MRR" value={inr(Number(m.mrr.find(x => x.month === cur)?.mrr ?? 0))} sub="subscriptions spread over their months" />
         <StatTile label="Partners listed" value={m.plans.listed} sub="live (active) businesses" />
+        <StatTile label="Partner renewals (period)" value={pct(renewed, due)} sub={due ? `${renewed} of ${due} plans that ended were renewed` : 'no plan has ended yet'} />
+        <StatTile label="Unmet demand served (period)" value={pct(servedP, unmetP)} sub={unmetP ? `${servedP} of ${unmetP} patients who found nobody later booked there` : 'no known patient found nobody'} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
@@ -148,7 +163,25 @@ export default function BusinessMetricsSection() {
         <div className="card shadow-sm"><BarList title="Bookings by channel" data={totalBy(m.bookings, 'channel', 'total')} /></div>
         <div className="card shadow-sm"><BarList title="Revenue by purpose (₹)" data={totalBy(m.revenue, 'purpose', 'revenue')} /></div>
         <div className="card shadow-sm"><BarList title="Paying partners by type (latest month)" data={totalBy(m.partners.filter(x => x.month === cur), 'vertical', 'paying')} /></div>
+        <div className="card shadow-sm"><BarList title="Bookings by where that booking came from" data={totalBy(m.booking_sources ?? [], 'source_type', 'total').map(d => ({ ...d, label: SOURCES[d.label] ?? d.label }))} /></div>
+        <div className="card shadow-sm"><BarList title="Bookings by campaign code" data={totalBy((m.booking_sources ?? []).filter(x => x.campaign_code), 'campaign_code', 'total')} /></div>
+        <div className="card shadow-sm"><BarList title="Bookings by speciality" data={totalBy(m.specialities ?? [], 'speciality', 'total')} /></div>
+        <div className="card shadow-sm"><BarList title="Where new partners came from" data={totalBy(m.partner_sources ?? [], 'source_type', 'n').map(d => ({ ...d, label: SOURCES[d.label] ?? d.label }))} /></div>
       </div>
+
+      {!!(m.coupons ?? []).length && (
+        <div className="card shadow-sm overflow-x-auto">
+          <h4 className="font-semibold text-navy-700 text-sm mb-2">Coupons used with payments</h4>
+          <table className="text-xs w-full">
+            <thead><tr className="text-left text-gray-500"><th>Code</th><th className="text-right">Payments</th><th className="text-right">Discount given</th><th className="text-right">Revenue (ex-GST)</th></tr></thead>
+            <tbody>{totalBy(m.coupons, 'coupon_code', 'payments').map(c => {
+              const rows = m.coupons.filter(x => x.coupon_code === c.label)
+              return <tr key={c.label} className="border-t border-gray-100"><td className="py-1 font-mono">{c.label}</td><td className="text-right">{c.value}</td>
+                <td className="text-right">{inr(sum(rows, x => x.discount))}</td><td className="text-right">{inr(sum(rows, x => x.revenue))}</td></tr>
+            })}</tbody>
+          </table>
+        </div>
+      )}
 
       <div className="card shadow-sm overflow-x-auto">
         <h4 className="font-semibold text-navy-700 text-sm mb-2">Cohort retention — of each month's new patients, % active later</h4>
@@ -177,8 +210,11 @@ export default function BusinessMetricsSection() {
           <StatTile label="Medicine orders" value={imp('medicine_orders')} />
           <StatTile label="Searches nobody could serve" value={imp('unmet_searches')} sub="unmet demand — where to recruit next" />
           <StatTile label="Insurance requests" value={imp('insurance_requests')} />
-          <StatTile label="Typed messages" value={imp('typed_messages')} sub={`${pct(imp('hindi_messages'), imp('typed_messages'))} in Hindi`} />
+          <StatTile label="Typed messages" value={imp('typed_messages')} sub={`${pct(imp('hindi_messages'), imp('typed_messages'))} in Hindi · ${pct(imp('voice_messages'), imp('typed_messages'))} voice notes`} />
         </div>
+        <BarList title={`"Sehatsandhi से आपका कितना समय/खर्च बचा?" — ${savedTotal} answer${savedTotal === 1 ? '' : 's'}`}
+          data={totalBy(m.savings ?? [], 'answer', 'n').map(d => ({ ...d, label: SAVED[d.label] ?? d.label }))} />
+        <p className="text-xs text-gray-500">Voice notes count once they are connected to the bot; until then every typed message is text.</p>
       </div>
 
       <SpendForm reload={load} />
@@ -224,7 +260,7 @@ function SpendForm({ reload }: { reload: () => void }) {
 function OfflinePaymentForm({ reload }: { reload: () => void }) {
   const [rows, setRows] = useState<Row[]>([])
   const [biz, setBiz] = useState<{ id: string; name: string }[]>([])
-  const blank = { business_id: '', payer_name: '', purpose: 'subscription', amount: '', gst: '0', method: 'upi', reference_no: '', invoice_no: '', paid_at: new Date().toISOString().slice(0, 10), period_start: '', period_end: '', notes: '' }
+  const blank = { business_id: '', payer_name: '', purpose: 'subscription', amount: '', gst: '0', method: 'upi', reference_no: '', invoice_no: '', paid_at: new Date().toISOString().slice(0, 10), period_start: '', period_end: '', notes: '', coupon_code: '', coupon_discount: '' }
   const [f, setF] = useState(blank)
   const [err, setErr] = useState('')
   const load = () => supabase.from('offline_payments').select('*').order('paid_at', { ascending: false }).limit(20).then(({ data }) => setRows(data ?? []))
@@ -241,6 +277,7 @@ function OfflinePaymentForm({ reload }: { reload: () => void }) {
       purpose: f.purpose, amount_inr: Number(f.amount), gst_amount: Number(f.gst) || 0, method: f.method,
       reference_no: f.reference_no || null, invoice_no: f.invoice_no || null, paid_at: f.paid_at,
       period_start: f.period_start || null, period_end: f.period_end || null, notes: f.notes || null,
+      coupon_code: f.coupon_code.trim().toUpperCase() || null, coupon_discount: Number(f.coupon_discount) || 0,
     })
     if (error) { setErr(error.message); return }
     setF(blank); load(); reload()
@@ -258,6 +295,8 @@ function OfflinePaymentForm({ reload }: { reload: () => void }) {
         <select className="input-field" value={f.method} onChange={e => setF({ ...f, method: e.target.value })}>{['upi', 'bank', 'cash', 'cheque', 'other'].map(x => <option key={x} value={x}>{x.toUpperCase()}</option>)}</select>
         <input className="input-field" placeholder="UPI / bank reference" value={f.reference_no} onChange={e => setF({ ...f, reference_no: e.target.value })} />
         <input className="input-field" placeholder="Invoice no." value={f.invoice_no} onChange={e => setF({ ...f, invoice_no: e.target.value })} />
+        <input className="input-field" placeholder="Coupon code (if any)" value={f.coupon_code} onChange={e => setF({ ...f, coupon_code: e.target.value })} />
+        <input className="input-field" placeholder="Coupon ₹ off" inputMode="decimal" value={f.coupon_discount} onChange={e => setF({ ...f, coupon_discount: e.target.value.replace(/[^0-9.]/g, '') })} />
         <label className="text-xs text-gray-500">Paid on<input type="date" className="input-field" value={f.paid_at} onChange={e => setF({ ...f, paid_at: e.target.value })} /></label>
         <label className="text-xs text-gray-500">Covers from<input type="date" className="input-field" value={f.period_start} onChange={e => setF({ ...f, period_start: e.target.value })} /></label>
         <label className="text-xs text-gray-500">to<input type="date" className="input-field" value={f.period_end} onChange={e => setF({ ...f, period_end: e.target.value })} /></label>

@@ -24,6 +24,12 @@ const DEFINITIONS: [string, string][] = [
   ['Funnel', 'Searches → results shown → profiles opened → booked → completed.'],
   ['Time to launch a district', 'First booking date − onboarding start date.'],
   ['Unmet demand', 'Searches that found nobody for that service in that area.'],
+  ['Source per booking', 'An online booking carries the patient\'s latest known source when it is under 30 days old, else "direct"; desk bookings are "clinic desk".'],
+  ['Bookings by speciality', 'By the booked doctor\'s speciality; lab bookings as "lab"; "not recorded" when no doctor was named.'],
+  ['Where partners came from', 'A business\'s first source: our field team when it matches a doctor lead, the website campaign it registered from, else not known.'],
+  ['Partner retention', 'Subscription plans whose last day fell in the month (and has passed), and how many were renewed — a later subscription paid by 30 days after that day.'],
+  ['Unmet demand served', 'Known patients whose search found nobody in a district, and how many booked there within 90 days (the same speciality when it was a doctor).'],
+  ['Time / money saved', 'One optional answer given with a rating: time and money, time, money, or no difference. Answers only, nothing medical.'],
   ['Months', 'Calendar months, India time (Asia/Kolkata). Definition version 1 (docs/metrics-definitions.md).'],
 ]
 
@@ -70,6 +76,13 @@ export default function DataPackButton({ from, to, district }: { from: string; t
         ['Impact', rows('impact').map(r => ({ Month: lbl(String(r.month)), 'Rural bookings': r.rural_bookings, 'Urban bookings': r.urban_bookings, 'Medicine orders': r.medicine_orders,
           'Ambulance requests': r.ambulance_requests, 'Median minutes to accept': r.ambulance_median_accept_minutes ?? '', 'Median minutes to pick-up': r.ambulance_median_pickup_minutes ?? '',
           'Insurance requests': r.insurance_requests, 'Unmet searches': r.unmet_searches, 'Typed messages': r.typed_messages, 'In Hindi': r.hindi_messages }))],
+        ['Booking sources', rows('booking_sources').map(r => ({ Month: lbl(String(r.month)), Source: r.source_type, 'Campaign code': r.campaign_code ?? '', Bookings: r.total }))],
+        ['By speciality', rows('specialities').map(r => ({ Month: lbl(String(r.month)), Speciality: r.speciality, Bookings: r.total, Completed: r.completed }))],
+        ['Partner sources', rows('partner_sources').map(r => ({ Month: lbl(String(r.month)), Type: r.vertical, Source: r.source_type, 'New partners': r.n }))],
+        ['Coupons', rows('coupons').map(r => ({ Month: lbl(String(r.month)), Code: r.coupon_code, Payments: r.payments, 'Discount (₹)': Math.round(Number(r.discount)), 'Revenue ex-GST (₹)': Math.round(Number(r.revenue)) }))],
+        ['Partner retention', rows('renewals').map(r => ({ Month: lbl(String(r.month)), 'Plans ended': r.due, Renewed: r.renewed, '%': Number(r.due) ? Math.round(100 * Number(r.renewed) / Number(r.due)) : '' }))],
+        ['Unmet demand served', rows('unmet_served').map(r => ({ Month: lbl(String(r.month)), 'Patients who found nobody': r.unmet_patients, 'Later booked there': r.served_patients }))],
+        ['Time & money saved', rows('savings').map(r => ({ Month: lbl(String(r.month)), Answer: r.answer, Answers: r.n }))],
         ['Districts', rows('districts').map(r => ({ District: r.name, State: r.state, Status: r.status, 'Onboarding started': r.onboarding_started_at ?? '',
           'First partner live': r.first_partner_live_at ?? '', 'First booking': r.first_booking_at ?? '', 'Days to launch': r.days_to_launch ?? '' }))],
       ]

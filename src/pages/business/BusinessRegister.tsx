@@ -19,6 +19,7 @@ import {
   PriceResult, DraftPractitioner, CareModule, linkMyLogin, phoneVerify,
 } from '../../lib/businessApi'
 import { registerBusiness, registerPractitioner, attachPractitioner } from '../../lib/identityApi'
+import { recordBusinessFirstTouch } from '../../lib/firstTouch'
 import { isValidEmail, isValidPhone, isValidRegNumber, normEmail, passwordProblem, passwordSaveError } from '../../lib/credentials'
 import { markPasswordChanged } from '../../lib/passwordState'
 import EmailAndPassword, { EmailPasswordState } from './EmailAndPassword'
@@ -582,6 +583,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         await supabase.rpc('sehat_signup_set_category', { p_business: businessId, p_category: category })
           .then(() => undefined, () => undefined)
       }
+      // 0214: where this partner first came from (the website's first touch).
+      await recordBusinessFirstTouch(businessId)
       return businessId
     } catch (e) {
       setError(`Could not save: ${(e as Error).message}`)
