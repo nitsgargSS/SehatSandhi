@@ -183,6 +183,14 @@ export default function Find() {
       bot(m.reply_text.replace(/\n?हाँ \/ नहीं\s*$/, ''), [{ label: 'हाँ / Yes', say: '__yes__' }, { label: 'नहीं / No', say: '__no__' }])
       return
     }
+    if (m.place_live === false && (m.intent || ctx.current.speciality || ctx.current.kind)) {
+      // 0212: somewhere we are not in yet — say so plainly (the server counted it as area interest).
+      bot(`Sehatsandhi is not in ${m.location} yet — we are in Yamuna Nagar district so far (Jagadhri, Yamuna Nagar, Radaur, Bilaspur, Chhachhrauli, Sadhaura). We have noted that you need this in ${m.location}, so we can start there sooner.\n\nNeed it in Yamuna Nagar district? Type the PIN code or town.`)
+      if (m.intent === 'doctor' && m.speciality) { ctx.current.speciality = m.speciality; ctx.current.kind = undefined }
+      else if (m.intent && KIND_OF[m.intent]) { ctx.current.kind = KIND_OF[m.intent]; ctx.current.speciality = undefined }
+      ctx.current.pin = undefined; ctx.current.area = undefined
+      return
+    }
     if (m.action === 'menu' || !m.intent) {
       // A reply to "which area?" / "which day?": the place or day the matcher found, or a town to look up.
       if (ctx.current.speciality || ctx.current.kind) {
