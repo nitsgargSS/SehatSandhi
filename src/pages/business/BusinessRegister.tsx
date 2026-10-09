@@ -33,6 +33,8 @@ import { track } from '../../lib/analytics'
 import { headcountFor, applyHeadcount, describeDoctorRate } from '../../../supabase/functions/_shared/headcount'
 import { money, num } from '../../lib/format'
 import { getLeadFee } from '../../lib/insuranceApi'
+import { setNewDoctorSpecialities } from '../../lib/specialitiesApi'
+import SpecialityChooser from '../../components/SpecialityChooser'
 
 // Design 2b — 3-step onboarding wizard.
 // Layout: desktop = dark left step-rail + content pane; tablet (<900px) =
@@ -133,6 +135,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // than asked for.
   const [vertical, setVertical] = useState<VerticalKey>('clinic')
   const [form, setForm] = useState<Record<string, string>>({})
+  // 0221: what else a doctor registering alone practises, and the problems they treat.
+  const [soloExtra, setSoloExtra] = useState<{ other: string[]; subs: string[] }>({ other: [], subs: [] })
   const [zips, setZips] = useState<string[]>([])
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -508,6 +512,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       ? [{
           name: form.owner_name?.trim() || form.business_name?.trim() || 'Doctor',
           speciality: form.speciality || 'GEN',
+          other_specialities: soloExtra.other.filter(x => x !== form.speciality),
+          sub_specialities: soloExtra.subs,
           qualification: form.qualification || undefined,
           reg_number: form.reg_number || undefined,
           smc_id: form.smc_id ? Number(form.smc_id) : undefined,
@@ -565,6 +571,10 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       })))
 
       businessIdRef.current = businessId
+      // 0221/0222: what else each new doctor practises. Best effort — they can
+      // set it from their profile if this does not take.
+      await Promise.all(toAttach.filter(d => !d.practitioner_id && d.reg_number).map(d =>
+        setNewDoctorSpecialities(businessId, d.reg_number!, d.other_specialities ?? [], d.sub_specialities ?? [])))
       // The owner's own doctor record, if they are one, now has a login to
       // point at: the address was verified on step 2.
       await linkMyLogin()
@@ -957,6 +967,12 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             <p style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 6 }}>
                               This is what patients search by, so pick the one they would look for.
                             </p>
+                            {form.speciality && (
+                              <div style={{ marginTop: 12 }}>
+                                <SpecialityChooser main={form.speciality} other={soloExtra.other} subs={soloExtra.subs}
+                                  onChange={(other, subs) => setSoloExtra({ other, subs })} />
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div>

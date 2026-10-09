@@ -18,6 +18,8 @@ import { C } from '../ui/theme'
 // Medicines, ambulance and insurance go to the app's own screens, not WhatsApp.
 
 type Doc = {
+  /** 0221: what else they practise and the problems they treat. */
+  other_specialities?: string[] | null; sub_specialities?: string[] | null
   practitioner_id: string | null; full_name: string; qualification: string | null; business_id: string
   business_name: string; address: string | null; consultation_fee: number | null; nearby: boolean; area: string | null
   slots: string[]; slotDay: number; code: string | null; phone: string | null
@@ -82,7 +84,7 @@ export default function Find() {
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
-  const ctx = useRef<{ speciality?: string; kind?: Kind; pin?: string; area?: string; day: number; hint?: string }>({ day: 0 })
+  const ctx = useRef<{ speciality?: string; sub?: string; kind?: Kind; pin?: string; area?: string; day: number; hint?: string }>({ day: 0 })
   const scroll = useRef<ScrollView>(null)
   const n = useRef(0)
   const push = (m: NewMsg) => setMsgs(x => [...x, { ...m, id: ++n.current } as Msg])
@@ -111,7 +113,9 @@ export default function Find() {
   const search = async () => {
     const { speciality, pin, area } = ctx.current
     if (!speciality || !pin) return
-    const { data, error } = await supabase.rpc('sehat_find_doctors', { p_speciality: speciality, p_pin_code: pin })
+    // 0221: a problem they named ("sugar") narrows the search and puts those who treat it first.
+    const { data, error } = await supabase.rpc('sehat_find_doctors',
+      { p_speciality: speciality, p_pin_code: pin, ...(ctx.current.sub ? { p_sub: ctx.current.sub } : {}) })
     if (error) { bot('Sorry, the search did not work just now. Please try again.'); return }
     // One card per doctor per clinic (the search can return a doctor once per branch).
     const seen = new Set<string>()
@@ -208,6 +212,7 @@ export default function Find() {
     bot(`आपने खोजा: ${summary(m)}`, m.secondary_intents?.filter(x => SECONDARY_HI[x]).map(x => ({ label: SECONDARY_HI[x], say: SECONDARY_SAY[x] })))
     await understood({
       speciality: m.intent === 'doctor' ? m.speciality ?? undefined : undefined,
+      sub: m.intent === 'doctor' ? m.sub_speciality ?? undefined : undefined,
       kind: KIND_OF[m.intent], doctorAny: m.intent === 'doctor' && !m.speciality,
       pin: m.pincode ?? undefined, area: m.location ?? undefined, day: dayOffset(m), hint: m.lab_test_hint ?? undefined,
     })
@@ -233,12 +238,13 @@ export default function Find() {
     }
   }
 
-  const understood = async (u: { speciality?: string; kind?: Kind; doctorAny?: boolean; pin?: string; area?: string; place?: string; day?: number; hint?: string }) => {
+  const understood = async (u: { speciality?: string; sub?: string; kind?: Kind; doctorAny?: boolean; pin?: string; area?: string; place?: string; day?: number; hint?: string }) => {
     setBusy(true)
     try {
       // Pharmacies, labs, hospitals, ambulances and advisors: listed here too.
       if (u.kind) { ctx.current.kind = u.kind; ctx.current.speciality = undefined }
-      if (u.speciality) { ctx.current.speciality = u.speciality; ctx.current.kind = undefined }
+      // A new speciality forgets the last problem named, unless this one names its own.
+      if (u.speciality) { ctx.current.speciality = u.speciality; ctx.current.sub = u.sub; ctx.current.kind = undefined }
       if (u.doctorAny) { ctx.current.kind = undefined }
       if (u.day !== undefined) ctx.current.day = u.day
       if (u.hint !== undefined) ctx.current.hint = u.hint

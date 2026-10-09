@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { doctorUrl } from '../../lib/links'
+import SpecialityChooser from '../../components/SpecialityChooser'
+import { SPECIALITIES } from '../../types'
 
 // What patients see on the doctor's page (0137) — the page the WhatsApp bot and
 // the website link to. The doctor edits it here, or the clinic's owner/manager
@@ -10,21 +12,30 @@ import { doctorUrl } from '../../lib/links'
 const LANGS = ['Hindi', 'English', 'Punjabi', 'Haryanvi', 'Urdu', 'Bengali', 'Marathi', 'Gujarati', 'Tamil', 'Telugu']
 
 export default function PublicProfileEditor({ practitionerId }: { practitionerId: string }) {
-  const [p, setP] = useState<{ full_name: string; qualification: string; about: string; experience: string; languages: string[]; photo_url: string | null } | null>(null)
+  const [p, setP] = useState<{
+    full_name: string; qualification: string; about: string; experience: string; languages: string[]; photo_url: string | null
+    speciality: string | null; other: string[]; subs: string[]
+  } | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  const [hasColumns, setHasColumns] = useState(false)
 
   useEffect(() => {
-    supabase.from('practitioners').select('full_name, qualification, about, experience_years, languages, photo_url')
+    // '*' rather than a list: other_specialities and sub_specialities arrive with 0221,
+    // and naming them before then would fail the whole read.
+    supabase.from('practitioners').select('*')
       .eq('id', practitionerId).maybeSingle()
       .then(({ data }) => {
-        const d = data as { full_name: string; qualification: string | null; about: string | null; experience_years: number | null; languages: string[] | null; photo_url: string | null } | null
-        if (d) setP({ full_name: d.full_name, qualification: d.qualification ?? '', about: d.about ?? '', experience: d.experience_years != null ? String(d.experience_years) : '', languages: d.languages ?? [], photo_url: d.photo_url })
+        const d = data as { full_name: string; qualification: string | null; about: string | null; experience_years: number | null; languages: string[] | null; photo_url: string | null; speciality: string | null; other_specialities?: string[] | null; sub_specialities?: string[] | null } | null
+        setHasColumns(!!d && 'other_specialities' in d)
+        if (d) setP({ full_name: d.full_name, qualification: d.qualification ?? '', about: d.about ?? '', experience: d.experience_years != null ? String(d.experience_years) : '', languages: d.languages ?? [], photo_url: d.photo_url, speciality: d.speciality, other: d.other_specialities ?? [], subs: d.sub_specialities ?? [] })
       })
   }, [practitionerId])
 
   if (!p) return null
+  // Offered only where the database has the columns (0221).
+  const hasSpecialities = hasColumns
 
   const save = async (patch?: Record<string, unknown>) => {
     setBusy(true); setErr(''); setMsg('')
@@ -33,6 +44,7 @@ export default function PublicProfileEditor({ practitionerId }: { practitionerId
       about: p.about.trim() || null,
       experience_years: p.experience ? Number(p.experience) : null,
       languages: p.languages.length ? p.languages : null,
+      ...(hasSpecialities ? { other_specialities: p.other, sub_specialities: p.subs } : {}),
     }).eq('id', practitionerId)
     setBusy(false)
     if (error) setErr(error.message); else setMsg('Saved — your public page is updated.')
@@ -94,6 +106,15 @@ export default function PublicProfileEditor({ practitionerId }: { practitionerId
           })}
         </div>
       </div>
+      {hasSpecialities && p.speciality && (
+        <div className="border-t border-gray-100 pt-3">
+          <p className="text-sm text-gray-700 mb-2">
+            Main speciality: <b>{SPECIALITIES.find(s => s.id === p.speciality)?.en ?? p.speciality}</b>
+          </p>
+          <SpecialityChooser main={p.speciality} other={p.other} subs={p.subs}
+            onChange={(other, subs) => setP({ ...p, other, subs })} />
+        </div>
+      )}
       <label className="text-sm block"><span className="block text-xs font-medium text-gray-600 mb-1">About you</span>
         <textarea className="input-field min-h-[110px]" maxLength={1500} value={p.about}
           placeholder="What you treat, special interests, procedures you perform, where you trained…"

@@ -162,6 +162,9 @@ export interface RazorpayOrder {
 export interface DraftPractitioner {
   name: string
   speciality: string
+  /** 0221: up to two more specialities, and the problems they treat. */
+  other_specialities?: string[]
+  sub_specialities?: string[]
   qualification?: string
   phone?: string
   /** Mandatory since 0079 for anyone not already on the platform — it is their sign-in. */

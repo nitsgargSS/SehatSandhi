@@ -7,6 +7,7 @@ import { DraftPractitioner } from '../../lib/businessApi'
 import { isValidEmail, isValidPhone, isValidRegNumber } from '../../lib/credentials'
 import { searchDoctorsByName } from '../../lib/registryLookup'
 import PhoneError from '../../components/PhoneError'
+import SpecialityChooser from '../../components/SpecialityChooser'
 
 // Adding a doctor to a business, either way round.
 //
@@ -335,7 +336,8 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
             <input placeholder="Full name *" value={draft.name}
               onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} style={input} />
             <select value={draft.speciality}
-              onChange={e => setDraft(d => ({ ...d, speciality: e.target.value }))} style={input}>
+              onChange={e => setDraft(d => ({ ...d, speciality: e.target.value,
+                other_specialities: (d.other_specialities ?? []).filter(x => x !== e.target.value) }))} style={input}>
               {SPECIALITIES.map(sp => <option key={sp.id} value={sp.id}>{sp.en}</option>)}
             </select>
             <input placeholder="Qualification — e.g. MBBS, MD" value={draft.qualification ?? ''}
@@ -355,6 +357,13 @@ export default function PractitionerPicker({ added, onAdd, onRemove, clinicPhone
             <p style={{ fontSize: 12, color: '#6b7280', marginTop: -4 }}>
               Their own email — it is how they sign in, and it cannot be shared with another account.
             </p>
+          </div>
+
+          {/* 0221: an MD physician who also looks after diabetes and thyroid says so here. */}
+          <div style={{ marginTop: 12 }}>
+            <SpecialityChooser main={draft.speciality}
+              other={draft.other_specialities ?? []} subs={draft.sub_specialities ?? []}
+              onChange={(other, subs) => setDraft(d => ({ ...d, other_specialities: other, sub_specialities: subs }))} />
           </div>
 
           {/* The solo case, which is most clinics: the owner IS the doctor. They
