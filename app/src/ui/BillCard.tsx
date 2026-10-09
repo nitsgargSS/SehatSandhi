@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import {
-  getAccount, getCharges, getBills, addPayment, issueBill, sendBill, methodLabel, PAYMENT_METHOD_OPTIONS,
+  getAccount, getCharges, getBills, addPayment, issueBill, methodLabel, PAYMENT_METHOD_OPTIONS,
   type Account, type Bill, type Charge, type PaymentMethod,
 } from '@web/lib/billingApi'
 import { Btn, Card, Chip, Err, Field, Label, Note, toDmy } from './kit'
+import SendSheet from './SendSheet'
 import { C } from './theme'
 
 // What a patient owes here, taking their money, and their bills — the website's
@@ -84,11 +85,8 @@ export default function BillCard({ biz, member, recordedBy }: { biz: string; mem
             <Text style={st.body}>{b.bill_no} · {rs(b.net_payable)}{Number(b.balance_due) > 0 ? ` · ${rs(b.balance_due)} due` : ' · paid'}</Text>
             <Text style={st.meta}>{toDmy(b.issued_at.slice(0, 10))}{b.sent_at ? ' · sent' : ''}</Text>
           </View>
-          <Btn small kind="ghost" label={b.sent_at ? 'Send again' : 'Send'} busy={busy === b.id}
-            onPress={() => run(b.id, async () => {
-              const r = await sendBill(b.id)
-              if (!r.whatsapp && !r.email) throw new Error('No WhatsApp or email could be sent — give the patient a printed copy.')
-            }, `✓ ${b.bill_no} sent to the patient`)} />
+          <SendSheet kind="bill" id={b.id} biz={biz} label={b.sent_at ? 'Send again' : 'Send'}
+            onSent={note => { setErr(''); setMsg(`${b.bill_no}: ${note}`); load() }} />
         </View>
       ))}
       {!issued.length && !unbilled.length && <Note>No bills yet.</Note>}

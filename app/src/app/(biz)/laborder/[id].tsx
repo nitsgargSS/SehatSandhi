@@ -6,10 +6,11 @@ import { SITE } from '../../../lib/env'
 import { supabase } from '../../../lib/supabase'
 import { bytesOf, pickFile, pickPhoto, takePhoto, type Picked } from '../../../lib/patient'
 import {
-  getOrder, getTestParameters, getResults, saveResults, approveOrder, sendReport, getUploads, sendUpload, STATUS_LABEL,
+  getOrder, getTestParameters, getResults, saveResults, approveOrder, getUploads, sendUpload, STATUS_LABEL,
   type LabOrder, type LabParameter, type UploadedReport,
 } from '@web/lib/labApi'
 import { Btn, Card, Chip, Err, Field, Label, Note } from '../../../ui/kit'
+import SendSheet from '../../../ui/SendSheet'
 import { C } from '../../../ui/theme'
 
 // One lab order: enter each test's results (the test's own fields, with the
@@ -140,11 +141,8 @@ export default function LabOrderScreen() {
             <Text style={st.meta}>Approved by {report.approved_by_name ?? '—'}{report.sent_at ? ` · sent ${new Date(report.sent_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })}` : ' · not sent yet'}</Text>
             {!!report.send_error && <Text style={st.flag}>{report.send_error}</Text>}
             <View style={st.row}>
-              <Btn small label={report.sent_at ? 'Send again' : 'Send to the patient'} busy={busy === 'send'}
-                onPress={() => run('send', async () => {
-                  const r = await sendReport(report.id)
-                  if (!r.whatsapp && !r.email) throw new Error(r.errors?.join(' ') || 'Could not send — give the patient the printed report.')
-                }, '✓ Sent on WhatsApp')} />
+              <SendSheet kind="report" id={report.id} biz={o.business_id} label={report.sent_at ? 'Send again' : 'Send to the patient'}
+                onSent={note => run('send', async () => {}, note)} />
               <Btn small kind="ghost" label="View report" onPress={() => Linking.openURL(`${SITE}/lab/${report.token}`)} />
             </View>
           </Card>
