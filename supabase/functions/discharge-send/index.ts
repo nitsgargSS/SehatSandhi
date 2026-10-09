@@ -17,7 +17,7 @@
 //      MSG91_AUTHKEY, MSG91_EMAIL_TEMPLATE_ID, MSG91_EMAIL_FROM, MSG91_EMAIL_DOMAIN
 
 import { corsHeaders, json } from '../_shared/cors.ts'
-import { sendDocumentLink, logDelivery } from '../_shared/deliver.ts'
+import { asChannel, type Channel, sendDocumentLink, logDelivery, walletMessage } from '../_shared/deliver.ts'
 import { caller } from '../_shared/caller.ts'
 
 Deno.serve(async (req) => {
@@ -29,10 +29,14 @@ Deno.serve(async (req) => {
 
   let summaryId = ''
   let email: string | null = null
+  let channel: Channel | undefined
+  let linkOnly = false
   try {
     const body = await req.json()
     summaryId = typeof body.summaryId === 'string' ? body.summaryId : ''
     email = typeof body.email === 'string' && body.email.includes('@') ? body.email : null
+    channel = asChannel(body.channel)
+    linkOnly = body.channel === 'link'
   } catch {
     return json({ error: 'invalid JSON' }, 400)
   }
@@ -41,7 +45,7 @@ Deno.serve(async (req) => {
   // Read as the caller: another hospital's summary is invisible, so this 404s.
   const { data: ds, error } = await who.asCaller
     .from('discharge_summaries')
-    .select('id, summary_no, public_token, patient_name, patient_phone, clinic_name, status, superseded_by')
+    .select('id, summary_no, public_token, patient_name, patient_phone, clinic_name, status, superseded_by, business_id')
     .eq('id', summaryId)
     .maybeSingle()
 
@@ -68,16 +72,21 @@ Deno.serve(async (req) => {
 
   const target = {
     phone: String(ds.patient_phone ?? '').replace(/[^0-9]/g, ''),
+    businessId: String(ds.business_id),
     patientName: String(ds.patient_name ?? 'Patient'),
     clinicName: String(ds.clinic_name ?? 'the hospital'),
     link: `${site}/ds/${ds.public_token}`,
     campaignEnv: 'AISENSY_DISCHARGE_CAMPAIGN',
     email,
+    channel,
     documentKind: 'discharge_summary',
     documentLabel: `Discharge summary ${ds.summary_no ?? ''}`.trim(),
   }
 
-  const result = await sendDocumentLink(target)
+  // The clinic sends it from its own email app: hand over the link, send nothing.
+  if (linkOnly) return json({ ok: true, link: target.link, patientName: target.patientName, clinicName: target.clinicName, label: target.documentLabel })
+
+  const result = await sendDocumentLink(who.asService, target)
 
   await who.asService.from('discharge_summaries').update({
     sent_at: result.sent.length ? new Date().toISOString() : null,
@@ -92,5 +101,6 @@ Deno.serve(async (req) => {
     whatsapp: result.sent.includes('whatsapp'),
     email: result.sent.includes('email'),
     errors: result.errors.length ? result.errors : undefined,
+    message: walletMessage(result), needsPlan: result.needsPlan ? true : undefined,
   })
 })

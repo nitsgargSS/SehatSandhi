@@ -11,7 +11,9 @@ import {
   MarketingSettings, WaAccount, WalletTx, WaTemplate, AudienceMember, Broadcast,
   rupees, renderTemplate, getMarketingSettings, getWaAccount, getWallet, getBroadcastBlocker,
   getAudiencePins, getAudience, listTemplates, listBroadcasts, createBroadcast, topUpWallet,
+  acceptWaTerms, sendTestMessage,
 } from '../../lib/marketingApi'
+import { WA_TERMS, WA_TERMS_VERSION } from '../../lib/waTerms'
 
 // 0155: what each broadcast status means to the clinic.
 const BROADCAST_STATUS: Record<string, string> = {
@@ -244,6 +246,7 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 text-sm">
             <Price label="WhatsApp Business Verification & Activation Fee" value="Part of your plan — see the Plan tab" />
             <Price label="Each broadcast message" value={rupees(settings.per_message_paise)} />
+            <Price label="Each prescription, bill or report on WhatsApp" value={rupees(settings.direct_message_paise)} />
             <Price label="Replying to a patient within 24 hours" value="Free" />
           </div>
         )}
@@ -251,6 +254,10 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
       </div>
 
       <WalletCard businessId={businessId} balance={balance} txs={txs} prefill={prefill} onChange={load} />
+
+      {account && account.subscription_status !== 'inactive' && (
+        <TermsCard businessId={businessId} account={account} onAccepted={load} />
+      )}
 
       {settings && (
         <Composer insurance={business.vertical === 'insurance'}
@@ -313,7 +320,7 @@ function WalletCard({ businessId, balance, txs, prefill, onChange }: {
   }
 
   const TYPE: Record<WalletTx['type'], string> = {
-    recharge: 'Top-up', message_send: 'Broadcast', refund: 'Refund', adjustment: 'Adjustment',
+    recharge: 'Top-up', message_send: 'Message', refund: 'Refund', adjustment: 'Adjustment',
   }
 
   return (
@@ -322,7 +329,7 @@ function WalletCard({ businessId, balance, txs, prefill, onChange }: {
         <div>
           <h3 className="font-bold text-navy-700 flex items-center gap-2"><Wallet className="w-4 h-4 text-teal-600" /> Wallet</h3>
           <p className="text-3xl font-bold text-navy-700 mt-1">{rupees(balance)}</p>
-          <p className="text-xs text-gray-400">Spent only on broadcast messages. Not refundable to a bank account.</p>
+          <p className="text-xs text-gray-400">Spent on the WhatsApp messages you send — broadcasts, prescriptions, bills and reports. Top-ups are not refundable.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {TOP_UPS.map(v => (
@@ -351,6 +358,50 @@ function WalletCard({ businessId, balance, txs, prefill, onChange }: {
               </span>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 0219: the messaging terms, accepted once by the owner (and again if they change).
+function TermsCard({ businessId, account, onAccepted }: { businessId: string; account: WaAccount; onAccepted: () => void }) {
+  const accepted = account.terms_version === WA_TERMS_VERSION && !!account.terms_accepted_at
+  const [open, setOpen] = useState(!accepted)
+  const [agree, setAgree] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const accept = async () => {
+    setBusy(true); setErr('')
+    try { await acceptWaTerms(businessId, WA_TERMS_VERSION); setOpen(false); onAccepted() }
+    catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  if (accepted && !open) {
+    return (
+      <p className="text-xs text-gray-500">
+        WhatsApp messaging terms accepted on {shortDate(account.terms_accepted_at!)}. <button onClick={() => setOpen(true)} className="underline">Read them</button>
+      </p>
+    )
+  }
+  return (
+    <div className={`card shadow-sm ${accepted ? '' : 'border-2 border-amber-300'}`}>
+      <h3 className="font-bold text-navy-700">WhatsApp messaging terms</h3>
+      {!accepted && <p className="text-sm text-gray-500 mt-1">Please read and accept these before your first broadcast. Only the clinic's owner can accept.</p>}
+      <ol className="mt-3 space-y-2 text-sm text-gray-700 list-decimal pl-5">
+        {WA_TERMS.map(t => <li key={t.title}><b>{t.title}.</b> {t.text}</li>)}
+      </ol>
+      {accepted ? (
+        <button onClick={() => setOpen(false)} className="btn-outline text-sm mt-3">Close</button>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} className="mt-1" />
+            <span>I have read these terms and accept them for this clinic.</span>
+          </label>
+          <button onClick={accept} disabled={!agree || busy} className="btn-teal text-sm disabled:opacity-50">{busy ? 'Saving…' : 'Accept the terms'}</button>
+          {err && <p className="text-sm text-red-600">{err}</p>}
         </div>
       )}
     </div>
@@ -404,6 +455,17 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
   const togglePin = (p: string) =>
     setChosenPins(cs => cs.includes(p) ? cs.filter(x => x !== p) : [...cs, p])
   const toggle = (id: string) => setTicked(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  // 0219: the message as a patient would get it, on the clinic's own number first.
+  const [testing, setTesting] = useState(false)
+  const sendTest = async () => {
+    setTesting(true); setErr(''); setMsg('')
+    try {
+      const r = await sendTestMessage({ businessId, templateId, params })
+      setMsg(`Test sent to your clinic's number ending ${r.to.replace('…', '')}${r.chargedPaise ? ` · ${rupees(r.chargedPaise)} from your wallet` : ''}. Check WhatsApp.`)
+      onSent()
+    } catch (e) { setErr((e as Error).message) } finally { setTesting(false) }
+  }
 
   const send = async () => {
     setBusy(true); setErr(''); setMsg('')
@@ -501,9 +563,15 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
       </div>
 
       {!confirming ? (
-        <button onClick={() => setConfirming(true)} disabled={!!reason} className="btn-teal text-sm disabled:opacity-50">
-          Send to {count} patient{count === 1 ? '' : 's'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => setConfirming(true)} disabled={!!reason} className="btn-teal text-sm disabled:opacity-50">
+            Send to {count} patient{count === 1 ? '' : 's'}
+          </button>
+          <button onClick={sendTest} disabled={testing || !tpl || !tpl.approved || blanks} className="btn-outline text-sm disabled:opacity-50"
+            title="Sends this message to your clinic's own WhatsApp number, so you can see it before your patients do.">
+            {testing ? 'Sending test…' : `Send a test to my clinic's number · ${rupees(settings.per_message_paise)}`}
+          </button>
+        </div>
       ) : (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm space-y-2">
           <p>Send this message to <b>{count}</b> patients? <b>{rupees(cost)}</b> will be taken from the wallet.</p>

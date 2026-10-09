@@ -25,18 +25,18 @@ import {
   Admission, AdmissionNote, OccupancyRow, BedStay, MedicationOrder, DueDose,
 } from '../../lib/admissionsApi'
 import {
-  issuePrescription, getPrescriptions, cancelPrescription, sendPrescription,
+  issuePrescription, getPrescriptions, cancelPrescription,
   uploadDocument, getDocuments, documentUrl, deleteDocument, setLegalHold,
   Prescription, PrescriptionItem, PatientDocument,
 } from '../../lib/prescriptionsApi'
 import {
-  getDischargeSummaries, issueDischargeSummary, sendDischargeSummary,
+  getDischargeSummaries, issueDischargeSummary,
   DischargeSummary,
 } from '../../lib/dischargeApi'
 import {
   getCharges, getPayments, getAccount, addCharge, removeCharge,
   addPayment, removePayment, postBedCharges, refundPayment,
-  getBills, issueBill, cancelBill, sendBill,
+  getBills, issueBill, cancelBill,
   Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod, Bill,
   PAYMENT_METHOD_OPTIONS, methodLabel, downloadCsv,
 } from '../../lib/billingApi'
@@ -53,6 +53,7 @@ import { getMarketingConsent, setMarketingConsent } from '../../lib/marketingApi
 import { listBusinessDoctors, BusinessDoctor, setPatientDoctor, getPatientDoctor, setAttending } from '../../lib/doctorsApi'
 import { inStockMedicines, suggestMedicines, rxFromStock, itemLabel, type StockRow } from '../../lib/pharmacyApi'
 import DoctorSelect from '../../components/DoctorSelect'
+import SendMenu from '../../components/SendMenu'
 import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
 import { opdVisit, opdSlipUrl, patientHistory, HistoryRow, vitalsLine, setTokenStatus } from '../../lib/queueApi'
 import { updatePatientDetails, patientDetailChanges, patientPhones, addPatientPhone, removePatientPhone, type DetailChange, type OtherPhone } from '../../lib/patientsApi'
@@ -1260,15 +1261,6 @@ function PrescriptionsPane({ scripts, summary, memberId, businessId, practitione
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
-  const send = async (id: string) => {
-    setBusy(true); setErr(''); setNote('')
-    try {
-      const r = await sendPrescription(id)
-      setNote(r.whatsapp ? 'Sent on WhatsApp.' : r.email ? 'Sent by email.' : 'Queued.')
-      onChange()
-    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
-  }
-
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       {!writing && (
@@ -1390,10 +1382,11 @@ function PrescriptionsPane({ scripts, summary, memberId, businessId, practitione
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               {rx.status === 'issued' && (
-                <button style={{ ...btn(), fontSize: 12 }} disabled={busy} onClick={() => send(rx.id)}>
+                <SendMenu kind="prescription" id={rx.id} businessId={businessId} style={{ ...btn(), fontSize: 12 }} disabled={busy}
+                  onSent={n => { setErr(''); setNote(n); onChange() }}>
                   <Send className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />
                   {rx.sent_at ? 'Send again' : 'Send to patient'}
-                </button>
+                </SendMenu>
               )}
               {rx.status === 'issued' && (
                 <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
@@ -2670,14 +2663,6 @@ function DischargeSummarySection({ admission, memberId, businessId, practitioner
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
-  const send = async (s: DischargeSummary) => {
-    setBusy(true); setErr(''); setSentNote('')
-    try {
-      const r = await sendDischargeSummary(s.id)
-      setSentNote(r.whatsapp ? 'Sent on WhatsApp.' : r.email ? 'Emailed.' : 'Sent.')
-    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
-  }
-
   return (
     <div style={{ marginTop: 11, borderTop: `1px solid ${BIZ.border}`, paddingTop: 11 }}>
       <div style={{ ...label, marginBottom: 7 }}>Discharge summary</div>
@@ -2716,10 +2701,11 @@ function DischargeSummarySection({ admission, memberId, businessId, practitioner
                 style={{ ...btn(), fontSize: 12, textDecoration: 'none' }}>
                 Open
               </a>
-              <button style={{ ...btn(), fontSize: 12 }} disabled={busy} onClick={() => send(s)}>
+              <SendMenu kind="discharge" id={s.id} businessId={businessId} style={{ ...btn(), fontSize: 12 }} disabled={busy}
+                onSent={n => { setErr(''); setSentNote(n) }}>
                 <Send className="w-3 h-3" style={{ display: 'inline', marginRight: 4 }} />
                 {s.sent_at ? 'Resend' : 'Send to patient'}
-              </button>
+              </SendMenu>
             </div>
           )}
         </div>
@@ -4042,14 +4028,11 @@ function BillsSection({ charges, stays, memberId, businessId, practitionerId, on
             <div style={{ display: 'flex', gap: 6 }}>
               <a href={`/bill/${b.public_token}`} target="_blank" rel="noreferrer"
                 style={{ ...btn(), fontSize: 12, textDecoration: 'none' }}>Open</a>
-              <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
-                onClick={() => act(async () => {
-                  const r = await sendBill(b.id)
-                  setNote(r.whatsapp ? 'Sent on WhatsApp.' : r.email ? 'Emailed.' : 'Sent.')
-                })}>
+              <SendMenu kind="bill" id={b.id} businessId={businessId} style={{ ...btn(), fontSize: 12 }} disabled={busy}
+                onSent={n => act(async () => { setNote(n) })}>
                 <Send className="w-3 h-3" style={{ display: 'inline', marginRight: 4 }} />
                 {b.sent_at ? 'Resend' : 'Send'}
-              </button>
+              </SendMenu>
               <button style={{ ...btn(), fontSize: 12 }} disabled={busy}
                 onClick={() => act(async () => {
                   const reason = window.prompt('Why is this bill being cancelled?')

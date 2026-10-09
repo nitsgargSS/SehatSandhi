@@ -10,6 +10,7 @@ import { getPrescriptions, getDocuments, documentUrl, type Prescription, type Pa
 import { takePhoto, pickPhoto, pickFile, type Picked } from '../../../lib/patient'
 import { uploadPatientFile, DOC_KINDS } from '../../../lib/staffUpload'
 import BillCard from '../../../ui/BillCard'
+import SendSheet from '../../../ui/SendSheet'
 import { Btn, Card, Chip, Err, Field, Label, Note, toDmy } from '../../../ui/kit'
 import { C } from '../../../ui/theme'
 
@@ -37,6 +38,7 @@ export default function PatientScreen() {
   const [rx, setRx] = useState<Prescription[]>([])
   const [names, setNames] = useState<Record<string, string>>({})
   const [err, setErr] = useState('')
+  const [sentNote, setSentNote] = useState('')
   const [docs, setDocs] = useState<PatientDocument[]>([])
   const [picked, setPicked] = useState<Picked | null>(null)
   const [kind, setKind] = useState('lab_report')
@@ -61,6 +63,9 @@ export default function PatientScreen() {
     staffNames(biz).then(setNames).catch(() => {})
     loadDocs()
   }, [biz, member])
+  const reloadRx = useCallback(() => {
+    getPrescriptions(member, biz).then(r => setRx(r.filter(x => x.status === 'issued').slice(0, 10))).catch(() => {})
+  }, [biz, member])
   // Reloaded on return from a consultation, so a corrected diagnosis shows at once.
   const load = useCallback(() => {
     if (!biz || !member) return
@@ -70,9 +75,9 @@ export default function PatientScreen() {
     if (s?.clinical) {
       getVisits(member, biz).then(setVisits).catch(() => {})
       getVitals(member, biz).then(v => setVitals(v.slice(0, 5))).catch(() => {})
-      getPrescriptions(member, biz).then(r => setRx(r.filter(x => x.status === 'issued').slice(0, 10))).catch(() => {})
+      reloadRx()
     }
-  }, [biz, member, s?.clinical])
+  }, [biz, member, s?.clinical, reloadRx])
   useFocusEffect(load)
 
   const consultNow = async () => {
@@ -158,11 +163,18 @@ export default function PatientScreen() {
           <Card>
             <Label>Prescriptions</Label>
             {rx.length === 0 ? <Note>None issued.</Note> : rx.map(r => (
-              <Text key={r.id} style={st.item}>
-                <Text style={{ fontWeight: '700' }}>{toDmy(r.issued_at.slice(0, 10))} · {r.prescriber_name}</Text>{'\n'}
-                {r.items.map(i => [i.drug_name, i.dosage, i.duration].filter(Boolean).join(' ')).join('\n')}
-              </Text>
+              <View key={r.id} style={{ gap: 6 }}>
+                <Text style={st.item}>
+                  <Text style={{ fontWeight: '700' }}>{toDmy(r.issued_at.slice(0, 10))} · {r.prescriber_name}{r.sent_at ? ' · sent' : ''}</Text>{'\n'}
+                  {r.items.map(i => [i.drug_name, i.dosage, i.duration].filter(Boolean).join(' ')).join('\n')}
+                </Text>
+                <View style={{ flexDirection: 'row' }}>
+                  <SendSheet kind="prescription" id={r.id} biz={biz} label={r.sent_at ? 'Send again' : 'Send to the patient'}
+                    onSent={note => { setErr(''); setSentNote(note); reloadRx() }} />
+                </View>
+              </View>
             ))}
+            {!!sentNote && <Text style={{ color: C.green, fontWeight: '700' }}>{sentNote}</Text>}
           </Card>
         </>
       )}

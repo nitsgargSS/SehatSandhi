@@ -5,7 +5,7 @@ import { shortDate, dateTime } from '../../lib/format'
 import {
   MarketingSettings, WaTemplate, MarketingReportRow, BroadcastForReview, rupees, renderTemplate,
   getMarketingSettings, updateMarketingSettings, listTemplates, updateTemplate, createTemplate,
-  getMarketingReport, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
+  getMarketingReport, getWalletReport, type WalletReport, sendTestMessage, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
   setWaComplimentary, listWaComplimentary,
 } from '../../lib/marketingApi'
 
@@ -70,6 +70,8 @@ export default function WhatsAppMarketingPanel({ businesses, isManager = false }
         The WhatsApp add-on is billed with each business's plan (see GST and Billing). Meta's rate is taken as {rupees(META_RATE_PAISE)} a message.
       </p>
 
+      <WalletMoneyCard />
+
       {settings && <SettingsCard settings={settings} onSaved={setSettings} />}
       </>}
 
@@ -113,6 +115,14 @@ function ReviewCard() {
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
+  // 0219: see it on a phone before approving.
+  const [testPhone, setTestPhone] = useState('')
+  const [testNote, setTestNote] = useState('')
+  const test = async (id: string) => {
+    setBusy(id); setErr(''); setTestNote('')
+    try { const r = await sendTestMessage({ broadcastId: id, phone: testPhone }); setTestNote(`Test sent to the number ending ${r.to.replace('…', '')}.`) }
+    catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
+  }
   const load = () => {
     listBroadcastsForReview('pending_approval').then(setPending).catch(e => setErr(e.message))
     listBroadcastsForReview(null).then(r => setRecent(r.filter(b => b.reviewed_at).slice(0, 8))).catch(() => undefined)
@@ -133,6 +143,7 @@ function ReviewCard() {
         the clinic is refunded and told why.
       </p>
       {err && <p className="text-sm text-red-600 mb-2">{err}</p>}
+      {testNote && <p className="text-sm text-teal-700 mb-2">{testNote}</p>}
       {!pending.length && <p className="text-sm text-gray-400">Nothing waiting.</p>}
       <div className="space-y-3">
         {pending.map(b => (
@@ -151,9 +162,14 @@ function ReviewCard() {
                 <button onClick={() => { setRejecting(null); setReason('') }} className="text-sm text-gray-500 underline">Cancel</button>
               </div>
             ) : (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button disabled={busy === b.id} onClick={() => act(b.id, true)} className="btn-teal text-sm py-1.5 px-4 disabled:opacity-50">Approve</button>
                 <button disabled={busy === b.id} onClick={() => setRejecting(b.id)} className="btn-outline text-sm py-1.5 px-4">Reject…</button>
+                <span className="flex items-center gap-1 ml-auto">
+                  <input className="input-field text-sm w-36" inputMode="numeric" placeholder="Your mobile" aria-label="Mobile number for a test"
+                    value={testPhone} onChange={e => setTestPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} />
+                  <button disabled={busy === b.id || testPhone.length !== 10} onClick={() => test(b.id)} className="btn-outline text-sm py-1.5 px-3 disabled:opacity-50">Send me a test</button>
+                </span>
               </div>
             )}
           </div>
@@ -219,6 +235,59 @@ function NewTemplateForm({ onCreated }: { onCreated: () => void }) {
   )
 }
 
+// 0217: money in, money spent on messages, and what Meta is expected to bill
+// for them — the margin without working it out by hand.
+function WalletMoneyCard() {
+  const [report, setReport] = useState<WalletReport | null>(null)
+  const [err, setErr] = useState('')
+  useEffect(() => { getWalletReport(6).then(setReport).catch(e => setErr((e as Error).message)) }, [])
+  const monthName = (ym: string) => new Date(`${ym}-01T00:00:00`).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+
+  return (
+    <div className="card shadow-sm">
+      <h3 className="font-bold text-navy-700">Wallet money, month by month</h3>
+      <p className="text-sm text-gray-500 mt-1">
+        Top-ups reach our bank through Razorpay. Meta bills us afterwards for what was sent; its cost here is an estimate from the two Meta rates below, before GST.
+      </p>
+      {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
+      {report && <>
+        <p className="mt-3 text-sm bg-gray-50 rounded-lg px-3 py-2">
+          Held in wallets, not yet spent: <b>{rupees(report.unspent_paise)}</b> across {report.wallets_with_balance} {report.wallets_with_balance === 1 ? 'wallet' : 'wallets'}. This is credit clinics have paid for and can still use — not yet earned.
+        </p>
+        <div className="overflow-x-auto mt-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-gray-500">
+                <th className="py-2 pr-3">Month</th>
+                <th className="pr-3 text-right">Top-ups</th>
+                <th className="pr-3 text-right">Prescriptions, bills, reports</th>
+                <th className="pr-3 text-right">Broadcasts</th>
+                <th className="pr-3 text-right">Meta's cost (est.)</th>
+                <th className="text-right">Margin (est.)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {report.months.map(m => (
+                <tr key={m.month}>
+                  <td className="py-2 pr-3 font-semibold text-navy-700">{monthName(m.month)}</td>
+                  <td className="pr-3 text-right">{rupees(m.topups_paise)}</td>
+                  <td className="pr-3 text-right">{rupees(m.direct_spent_paise)} <span className="text-xs text-gray-400">· {m.direct_messages.toLocaleString('en-IN')}</span></td>
+                  <td className="pr-3 text-right">{rupees(m.broadcast_spent_paise)} <span className="text-xs text-gray-400">· {m.broadcast_messages.toLocaleString('en-IN')}</span></td>
+                  <td className="pr-3 text-right">{rupees(m.meta_cost_paise)}</td>
+                  <td className="text-right font-semibold text-navy-700">{rupees(m.margin_paise)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">
+          The small number beside each amount is how many messages. Messages that were not delivered and were refunded are left out. Lead fees and admin adjustments are not message income and are not counted here.
+        </p>
+      </>}
+    </div>
+  )
+}
+
 function SettingsCard({ settings, onSaved }: { settings: MarketingSettings; onSaved: (s: MarketingSettings) => void }) {
   const toRs = (p: number) => (p / 100).toFixed(2)
   // The WhatsApp fee itself is priced per business type and term in
@@ -226,6 +295,9 @@ function SettingsCard({ settings, onSaved }: { settings: MarketingSettings; onSa
   // grace period live here.
   const [form, setForm] = useState({
     perMessage: toRs(settings.per_message_paise),
+    perDirect: toRs(settings.direct_message_paise),
+    metaMarketing: String(settings.meta_marketing_cost_paise / 100),
+    metaUtility: String(settings.meta_utility_cost_paise / 100),
     grace: String(settings.grace_days),
   })
   const [sending, setSending] = useState(settings.sending_enabled)
@@ -236,13 +308,19 @@ function SettingsCard({ settings, onSaved }: { settings: MarketingSettings; onSa
   const paise = (v: string) => Math.round(Number(v) * 100)
   const save = async () => {
     setErr(''); setMsg('')
-    const p = { pm: paise(form.perMessage), g: Number(form.grace) }
+    const p = { pm: paise(form.perMessage), pd: paise(form.perDirect), g: Number(form.grace) }
     if (!Number.isFinite(p.pm) || p.pm <= 0) { setErr('Enter the message price in rupees, e.g. 1.59.'); return }
+    if (!Number.isFinite(p.pd) || p.pd <= 0) { setErr('Enter the price of a prescription, bill or report in rupees, e.g. 0.50.'); return }
     if (!Number.isInteger(p.g) || p.g < 0 || p.g > 60) { setErr('Grace period is 0–60 days.'); return }
+    // Meta's rates have fractions of a paisa (₹0.8631), so these are kept to two decimals of a paisa.
+    const mm = Math.round(Number(form.metaMarketing) * 10000) / 100, mu = Math.round(Number(form.metaUtility) * 10000) / 100
+    if (!Number.isFinite(mm) || mm < 0 || !Number.isFinite(mu) || mu < 0) { setErr('Enter Meta\u2019s two rates in rupees, e.g. 0.8631 and 0.115.'); return }
     setBusy(true)
     try {
-      onSaved(await updateMarketingSettings({ per_message_paise: p.pm, grace_days: p.g, sending_enabled: sending }))
-      setMsg('Saved. The new message price applies from each clinic\u2019s next broadcast.')
+      onSaved(await updateMarketingSettings({ per_message_paise: p.pm, direct_message_paise: p.pd, grace_days: p.g, sending_enabled: sending,
+        meta_marketing_cost_paise: mm, meta_utility_cost_paise: mu,
+      }))
+      setMsg('Saved. The new prices apply from each clinic\u2019s next message.')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -261,9 +339,12 @@ function SettingsCard({ settings, onSaved }: { settings: MarketingSettings; onSa
       <p className="text-sm text-gray-500 -mt-1">
         The WhatsApp fee (₹500 a month to start) is set per business type and term in <b>Billing → Prices by business type</b>.
       </p>
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid sm:grid-cols-3 gap-3">
         {field('perMessage', 'Per broadcast message (₹)')}
+        {field('perDirect', 'Per prescription, bill or report (₹)')}
         {field('grace', 'Grace after the add-on ends', 'days')}
+        {field('metaMarketing', 'Meta charges us, per promotion (₹)')}
+        {field('metaUtility', 'Meta charges us, per prescription etc. (₹)')}
       </div>
       <label className="flex items-start gap-2 text-sm bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
         <input type="checkbox" checked={sending} onChange={e => setSending(e.target.checked)} className="mt-1" />

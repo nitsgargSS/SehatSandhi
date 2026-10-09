@@ -24,6 +24,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { sendTemplate } from '../_shared/whatsapp.ts'
 
 const CODE_TTL_MINUTES = 10
 const MAX_ATTEMPTS = 5
@@ -70,123 +71,22 @@ type SendResult = {
   unconfigured?: boolean
 }
 
-const GRAPH = 'https://graph.facebook.com/v21.0'
-
 /**
- * Meta WhatsApp Cloud API, called directly — no BSP in the path for login codes.
- *
- * Authentication-category templates carry Meta's own fixed copy; we supply only
- * the code. It goes in the BODY *and* in the button: the copy-code button reads
- * its own parameter, and a template sent without it arrives with a button that
- * does nothing.
- */
-async function sendViaMeta(phone: string, code: string): Promise<SendResult | null> {
-  const phoneId = Deno.env.get('META_PHONE_NUMBER_ID')
-  const token = Deno.env.get('META_ACCESS_TOKEN')
-  if (!phoneId || !token) return null   // not configured — let the caller fall through
-
-  let res: Response
-  try {
-    res = await fetch(`${GRAPH}/${phoneId}/messages`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: phone,                       // digits only, no '+' — normalisePhone's shape
-        type: 'template',
-        template: {
-          name: Deno.env.get('META_TEMPLATE_NAME') ?? 'login_code',
-          language: { code: Deno.env.get('META_TEMPLATE_LANG') ?? 'en' },
-          components: [
-            { type: 'body', parameters: [{ type: 'text', text: code }] },
-            {
-              type: 'button',
-              // 'url' even though the button is COPY_CODE. Meta rejects the
-              // send outright if this says 'copy_code'.
-              sub_type: 'url',
-              index: 0,
-              parameters: [{ type: 'text', text: code }],
-            },
-          ],
-        },
-      }),
-    })
-  } catch {
-    return { sent: false }
-  }
-
-  if (res.ok) return { sent: true }
-
-  const body = await res.json().catch(() => ({})) as { error?: { code?: number } }
-  const metaCode = body?.error?.code
-  // 131026: cannot deliver — most often the number has no WhatsApp account.
-  // 131047: outside the allowed window for a non-template send.
-  if (metaCode === 131026 || metaCode === 131047) return { sent: false, unreachable: true }
-  return { sent: false }
-}
-
-/**
- * AISensy, the sender the platform actually runs on.
- *
- * Same endpoint and payload shape as appointment-notify and invoice-send, so
- * login codes go out over the number those already use. `templateParams` is
- * positional: the login campaign's approved template must take the code as its
- * single variable.
- *
- * Returns null when unconfigured, so the caller can tell "nothing was tried"
- * apart from "tried and refused" — those need different messages on screen.
- */
-async function sendViaAisensy(phone: string, code: string): Promise<SendResult | null> {
-  const key = Deno.env.get('AISENSY_API_KEY')
-  const campaign = Deno.env.get('AISENSY_LOGIN_CAMPAIGN')
-  if (!key || !campaign) return null
-
-  let res: Response
-  try {
-    res = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        apiKey: key, campaignName: campaign, destination: phone,
-        userName: 'Sehatsandhi', templateParams: [code],
-      }),
-    })
-  } catch (e) {
-    console.error(`clinic-otp: aisensy unreachable: ${String((e as Error).message ?? e)}`)
-    return { sent: false }
-  }
-
-  if (res.ok) return { sent: true }
-
-  // The body carries the reason — a wrong campaign name, an unapproved
-  // template, an exhausted wallet. Without it every failure looks identical in
-  // the logs and the fix is guesswork. Never log `code`: it is a live credential.
-  const detail = (await res.text().catch(() => '')).slice(0, 200)
-  console.error(`clinic-otp: aisensy refused ${res.status}: ${detail}`)
-  return { sent: false }
-}
-
-/**
- * WhatsApp delivery: AISensy first, Meta behind it.
- *
- * AISensy leads because that is the number this deployment is configured with
- * and the one the rest of the platform already sends through. Meta stays as a
- * fallback for if this moves to a directly-owned sender later; with no META_*
- * secrets set it returns null and costs nothing. Both are WhatsApp — there is
- * no SMS path here.
+ * WhatsApp delivery, through whichever provider is set up (_shared/whatsapp.ts).
+ * Both are WhatsApp — there is no SMS path here. Never log `code`: it is a
+ * live credential.
  */
 async function sendCode(phone: string, code: string): Promise<SendResult> {
-  const viaAisensy = await sendViaAisensy(phone, code)
-  if (viaAisensy?.sent) return viaAisensy
-
-  const viaMeta = await sendViaMeta(phone, code)
-  if (viaMeta?.sent || viaMeta?.unreachable) return viaMeta
-
-  // Nothing was even attempted: neither provider has credentials. Worth
-  // separating from a provider that tried and failed, because the fix is ours
-  // and the business can do nothing about it.
-  const configured = viaAisensy !== null || viaMeta !== null
-  return configured ? { sent: false } : { sent: false, unconfigured: true }
+  const r = await sendTemplate({
+    campaignEnv: 'AISENSY_LOGIN_CAMPAIGN', to: phone, userName: 'Sehatsandhi', params: [code], otp: true,
+  })
+  if (r.ok) return { sent: true }
+  // Nothing was even attempted: no provider has credentials. Worth separating
+  // from a provider that tried and failed, because the fix is ours and the
+  // business can do nothing about it.
+  if (!r.provider) return { sent: false, unconfigured: true }
+  console.error(`clinic-otp: ${r.provider} refused: ${r.error}`)
+  return { sent: false, unreachable: r.unreachable }
 }
 
 Deno.serve(async (req) => {

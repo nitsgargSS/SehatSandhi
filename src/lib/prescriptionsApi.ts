@@ -177,7 +177,7 @@ export async function sendPrescription(prescriptionId: string, email?: string) {
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok || !body.ok) {
-    throw new Error(body.error ?? 'Could not send it. The patient can still be given the printed copy.')
+    throw new Error(body.message ?? body.error ?? 'Could not send it. The patient can still be given the printed copy.')
   }
   return body as { whatsapp: boolean; email: boolean }
 }

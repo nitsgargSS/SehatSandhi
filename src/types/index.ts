@@ -148,6 +148,13 @@ export const SPECIALITIES = [
   { id: 'DIAB', en: 'Diabetologist',               hi: 'मधुमेह रोग' },
   { id: 'PHYS', en: 'Physiotherapy',               hi: 'फिजियोथेरेपी' },
   { id: 'ALT',  en: 'Ayurveda / Homeopathy',       hi: 'आयुर्वेद' },
+  // 0221: six that were missing.
+  { id: 'PULM', en: 'Chest & Lungs (Pulmonology)', hi: 'छाती रोग' },
+  { id: 'ENDO', en: 'Endocrinology / Thyroid & Hormones', hi: 'हार्मोन रोग' },
+  { id: 'RHEU', en: 'Rheumatology / Arthritis',    hi: 'गठिया रोग' },
+  { id: 'NEPH', en: 'Kidney (Nephrology)',         hi: 'किडनी रोग' },
+  { id: 'SURG', en: 'General Surgery',             hi: 'सर्जरी' },
+  { id: 'SEXO', en: 'Sexual Health (Sexology)',    hi: 'यौन रोग' },
   { id: 'LAB',  en: 'Blood Test / Diagnostics',    hi: 'जांच' },
   // 0168: doctors a hospital or lab adds to sign reports. Staff specialities —
   // not something a patient books, so Browse leaves them out (staffOnly).

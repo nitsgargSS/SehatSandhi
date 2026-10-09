@@ -8,6 +8,7 @@ import { useLanguage } from '../../i18n/LanguageContext'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, PageShell } from '../../components/SiteHeader'
 import SiteFooter from '../../components/SiteFooter'
 import { Spinner } from '../../components/Loading'
+import { listSubSpecialities, subNames, type SubSpeciality } from '../../lib/specialitiesApi'
 
 /** A place this doctor practises, and what they charge there. */
 interface Post {
@@ -18,6 +19,9 @@ interface Post {
   pin_codes: string[]
   consultation_fee: number
   is_primary: boolean
+  /** 0221: what else they practise, and the problems they treat. */
+  other_specialities?: string[] | null
+  sub_specialities?: string[] | null
   /** 0136 */
   discounted_fee?: number | null
   reg_verified?: boolean
@@ -50,6 +54,8 @@ export default function DoctorProfile() {
   const { slug } = useParams()
   const { t, lang } = useLanguage()
   const [doctor, setDoctor] = useState<Practitioner | null>(null)
+  const [subList, setSubList] = useState<SubSpeciality[]>([])
+  useEffect(() => { listSubSpecialities().then(setSubList) }, [])
   // Where this doctor works. Each post carries the fee AT that business,
   // because the same doctor legitimately charges differently in different
   // places — which a single consultation_fee on one row could never say.
@@ -162,6 +168,9 @@ export default function DoctorProfile() {
   )
 
   const speciality = SPECIALITIES.find(s => s.id === doctor.speciality)
+  const alsoPractises = (posts[0]?.other_specialities ?? [])
+    .map(id => SPECIALITIES.find(s => s.id === id)).filter(Boolean).map(s => (lang === 'hi' ? s!.hi : s!.en))
+  const treats = subNames(subList, posts[0]?.sub_specialities, lang === 'hi' ? 'hi' : 'en')
 
   // Schema.org structured data — includes aggregateRating when
   // real reviews exist, enabling star ratings in Google search
@@ -286,6 +295,13 @@ export default function DoctorProfile() {
             <p className="text-teal-600 font-semibold mb-4">
               {speciality ? (lang === 'hi' ? `${speciality.hi} — ${speciality.en}` : `${speciality.en} — ${speciality.hi}`) : doctor.speciality}
             </p>
+            {/* 0221: "also practises" and "treats" — said by the doctor, shown as such. */}
+            {(alsoPractises.length > 0 || treats.length > 0) && (
+              <div className="text-sm text-gray-600 -mt-2 mb-4 space-y-1">
+                {alsoPractises.length > 0 && <p><span className="text-gray-400">Also practises:</span> {alsoPractises.join(' · ')}</p>}
+                {treats.length > 0 && <p><span className="text-gray-400">Treats:</span> {treats.join(' · ')}</p>}
+              </div>
+            )}
 
             {/* Info grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">

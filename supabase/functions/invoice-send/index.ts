@@ -22,6 +22,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { sendTemplate } from '../_shared/whatsapp.ts'
 import { emailConfigured, esc, layout, sendEmail } from '../_shared/email.ts'
 
 const money = (n: number | null) =>
@@ -68,38 +69,26 @@ Deno.serve(async (req) => {
 
   // ── WhatsApp, via AISensy ──
   let whatsapp = 'skipped'
-  const aisensyKey = Deno.env.get('AISENSY_API_KEY')
-  const aisensyCampaign = Deno.env.get('AISENSY_INVOICE_CAMPAIGN')
   if (i.sent_whatsapp_at) {
     whatsapp = 'already sent'
-  } else if (!aisensyKey || !aisensyCampaign) {
-    whatsapp = 'skipped: AISENSY_API_KEY / AISENSY_INVOICE_CAMPAIGN not set'
   } else if (!i.recipient_phone) {
     whatsapp = 'skipped: no phone on the invoice'
   } else {
-    try {
-      const res = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey: aisensyKey,
-          campaignName: aisensyCampaign,
-          destination: i.recipient_phone.replace(/[^0-9]/g, ''),
-          userName: i.recipient_name ?? 'Business',
-          // Order must match the approved template's variable order.
-          templateParams: [i.invoice_number, money(i.total_amount), link],
-        }),
-      })
-      if (res.ok) {
-        whatsapp = 'sent'
-        await supabase.from('invoices').update({ sent_whatsapp_at: new Date().toISOString() }).eq('id', i.id)
-      } else {
-        whatsapp = `failed: ${res.status}`
-        errors.push(`whatsapp ${res.status}: ${(await res.text()).slice(0, 200)}`)
-      }
-    } catch (e) {
+    const r = await sendTemplate({
+      campaignEnv: 'AISENSY_INVOICE_CAMPAIGN',
+      to: i.recipient_phone.replace(/[^0-9]/g, ''),
+      userName: i.recipient_name ?? 'Business',
+      // Order must match the approved template's variable order.
+      params: [i.invoice_number, money(i.total_amount), link],
+    })
+    if (r.ok) {
+      whatsapp = 'sent'
+      await supabase.from('invoices').update({ sent_whatsapp_at: new Date().toISOString() }).eq('id', i.id)
+    } else if (!r.provider) {
+      whatsapp = `skipped: ${r.error}`
+    } else {
       whatsapp = 'failed'
-      errors.push(`whatsapp: ${String((e as Error).message ?? e)}`)
+      errors.push(r.error ?? 'whatsapp: not sent')
     }
   }
 

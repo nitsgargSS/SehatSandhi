@@ -21,6 +21,7 @@
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { esc, layout, sendEmail } from './email.ts'
+import { sendTemplate } from './whatsapp.ts'
 
 export const LINK_DAYS = 7
 
@@ -146,21 +147,13 @@ export async function sendStaffInvite(
   }
 
   let wa: InviteSent['whatsapp'] = 'not configured'
-  const apiKey = Deno.env.get('AISENSY_API_KEY')
-  const campaign = Deno.env.get('AISENSY_STAFF_INVITE_CAMPAIGN')
   if (!phone) wa = 'no number'
   else if (!send) wa = 'not sent'
-  else if (apiKey && campaign) {
-    try {
-      const res = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey, campaignName: campaign, destination: phone, userName: name, templateParams: [name, clinic, link] }),
-      })
-      wa = res.ok ? 'sent' : `whatsapp ${res.status}: ${(await res.text()).slice(0, 150)}`
-    } catch (e) {
-      wa = `whatsapp: ${String((e as Error).message ?? e)}`
-    }
+  else {
+    const r = await sendTemplate({
+      campaignEnv: 'AISENSY_STAFF_INVITE_CAMPAIGN', to: phone, userName: name, params: [name, clinic, link],
+    })
+    if (r.provider) wa = r.ok ? 'sent' : (r.error ?? 'whatsapp: not sent')
   }
 
   return { link, setUp, name, clinic, email: emailRes, whatsapp: wa, phone }

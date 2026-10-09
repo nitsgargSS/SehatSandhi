@@ -7,6 +7,7 @@ import { IS_STAGING } from '../../lib/env'
 import { bytesOf, pickPhoto, takePhoto, type Picked } from '../../lib/patient'
 import { DAYS_OF_WEEK, type AvailabilityTemplate } from '@web/lib/availability'
 import { doctorUrl } from '@web/lib/links'
+import { DOCTOR_SPECIALITIES, MAX_OTHER_SPECIALITIES, listSubSpecialities, subsFor, type SubSpeciality } from '@web/lib/specialitiesApi'
 import { Btn, Card, Chip, Err, Field, Label, Note } from '../../ui/kit'
 import { C } from '../../ui/theme'
 
@@ -138,16 +139,26 @@ function Fee({ biz, practitionerId }: { biz: string; practitionerId: string }) {
 
 // ── Public profile (PublicProfileEditor.tsx) ────────────────────────────────
 function Profile({ practitionerId }: { practitionerId: string }) {
-  const [p, setP] = useState<{ full_name: string; qualification: string; about: string; experience: string; languages: string[]; photo_url: string | null } | null>(null)
+  const [p, setP] = useState<{
+    full_name: string; qualification: string; about: string; experience: string; languages: string[]; photo_url: string | null
+    speciality: string | null; other: string[]; subs: string[]
+  } | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  // 0221: what else the doctor practises, and the problems they treat.
+  const [hasSpecialities, setHasSpecialities] = useState(false)
+  const [subList, setSubList] = useState<SubSpeciality[]>([])
+  const [allSubs, setAllSubs] = useState(false)
+  useEffect(() => { listSubSpecialities().then(setSubList) }, [])
   useEffect(() => {
-    supabase.from('practitioners').select('full_name, qualification, about, experience_years, languages, photo_url')
+    // '*': the two speciality lists arrive with 0221, and naming them before then would fail the read.
+    supabase.from('practitioners').select('*')
       .eq('id', practitionerId).maybeSingle()
       .then(({ data }) => {
-        const d = data as { full_name: string; qualification: string | null; about: string | null; experience_years: number | null; languages: string[] | null; photo_url: string | null } | null
-        if (d) setP({ full_name: d.full_name, qualification: d.qualification ?? '', about: d.about ?? '', experience: d.experience_years != null ? String(d.experience_years) : '', languages: d.languages ?? [], photo_url: d.photo_url })
+        const d = data as { full_name: string; qualification: string | null; about: string | null; experience_years: number | null; languages: string[] | null; photo_url: string | null; speciality: string | null; other_specialities?: string[] | null; sub_specialities?: string[] | null } | null
+        setHasSpecialities(!!d && 'other_specialities' in d)
+        if (d) setP({ full_name: d.full_name, qualification: d.qualification ?? '', about: d.about ?? '', experience: d.experience_years != null ? String(d.experience_years) : '', languages: d.languages ?? [], photo_url: d.photo_url, speciality: d.speciality, other: d.other_specialities ?? [], subs: d.sub_specialities ?? [] })
       })
   }, [practitionerId])
   if (!p) return null
@@ -159,6 +170,7 @@ function Profile({ practitionerId }: { practitionerId: string }) {
       about: p.about.trim() || null,
       experience_years: p.experience ? Number(p.experience) : null,
       languages: p.languages.length ? p.languages : null,
+      ...(hasSpecialities ? { other_specialities: p.other, sub_specialities: p.subs } : {}),
     }).eq('id', practitionerId)
     setBusy(false)
     if (error) setErr(error.message); else setMsg('Saved — the public page is updated.')
@@ -207,6 +219,31 @@ function Profile({ practitionerId }: { practitionerId: string }) {
         const on = p.languages.includes(l)
         return <Chip key={l} label={l} on={on} onPress={() => setP({ ...p, languages: on ? p.languages.filter(x => x !== l) : [...p.languages, l] })} />
       })}</View>
+      {hasSpecialities && !!p.speciality && (() => {
+        const main = p.speciality!
+        const full = p.other.length >= MAX_OTHER_SPECIALITIES
+        const usual = subsFor(subList, [main, ...p.other])
+        const shown = allSubs ? subList : subList.filter(x => usual.includes(x) || p.subs.includes(x.code))
+        return (
+          <>
+            <Text style={st.meta}>Other specialities you practise — up to {MAX_OTHER_SPECIALITIES} more</Text>
+            <View style={st.row}>{DOCTOR_SPECIALITIES.filter(x => x.id !== main && (!full || p.other.includes(x.id))).map(x => {
+              const on = p.other.includes(x.id)
+              return <Chip key={x.id} label={x.en} on={on} onPress={() => setP({ ...p, other: on ? p.other.filter(y => y !== x.id) : [...p.other, x.id] })} />
+            })}</View>
+            {subList.length > 0 && <>
+              <Text style={st.meta}>Problems you treat — patients who search for one will find you</Text>
+              <View style={st.row}>
+                {shown.map(x => {
+                  const on = p.subs.includes(x.code)
+                  return <Chip key={x.code} label={x.name_en} on={on} onPress={() => setP({ ...p, subs: on ? p.subs.filter(y => y !== x.code) : [...p.subs, x.code] })} />
+                })}
+                {!allSubs && shown.length < subList.length && <Chip label={`Show all ${subList.length}`} onPress={() => setAllSubs(true)} />}
+              </View>
+            </>}
+          </>
+        )
+      })()}
       <Field label={`About (${p.about.length}/1500)`} value={p.about} multiline maxLength={1500} style={{ minHeight: 100, textAlignVertical: 'top' }}
         placeholder="What you treat, special interests, procedures, where you trained…" onChangeText={t => setP({ ...p, about: t })} />
       <Err msg={err} />

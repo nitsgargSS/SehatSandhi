@@ -22,6 +22,7 @@
 //          it reaching real businesses). Unset, or past the date, it is off.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { sendTemplate } from '../_shared/whatsapp.ts'
 
 const CODE_TTL_MINUTES = 10
 const MAX_ATTEMPTS = 5
@@ -63,25 +64,17 @@ function reviewLogin(phone: string): string | null {
   return code
 }
 
-/** AiSensy, as clinic-otp sends. null = not configured. */
+/** WhatsApp, as clinic-otp sends. null = not configured. */
 async function sendCode(phone: string, code: string): Promise<boolean | null> {
-  const key = Deno.env.get('AISENSY_API_KEY')
-  const campaign = Deno.env.get('AISENSY_PATIENT_LOGIN_CAMPAIGN') ?? Deno.env.get('AISENSY_LOGIN_CAMPAIGN')
-  if (!key || !campaign) return null
-  try {
-    const res = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey: key, campaignName: campaign, destination: phone, userName: 'Sehatsandhi', templateParams: [code] }),
-    })
-    if (res.ok) return true
-    // Never log the code — it is a live credential.
-    console.error(`patient-otp: aisensy refused ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`)
-    return false
-  } catch (e) {
-    console.error(`patient-otp: aisensy unreachable: ${String((e as Error).message ?? e)}`)
-    return false
-  }
+  const r = await sendTemplate({
+    campaignEnv: ['AISENSY_PATIENT_LOGIN_CAMPAIGN', 'AISENSY_LOGIN_CAMPAIGN'],
+    to: phone, userName: 'Sehatsandhi', params: [code], otp: true,
+  })
+  if (r.ok) return true
+  if (!r.provider) return null
+  // Never log the code — it is a live credential.
+  console.error(`patient-otp: ${r.provider} refused: ${r.error}`)
+  return false
 }
 
 Deno.serve(async (req) => {
