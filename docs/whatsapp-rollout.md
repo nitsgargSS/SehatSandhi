@@ -89,6 +89,10 @@ and `messaging_settings` while it runs. Do it at a quiet time.
 
 ## Step 3 — Apply the migrations to production
 
+Done 9 Oct 2026, with 0221 and 0222 (specialities) after them: production's
+ledger shows 217 applied, the three held ones still pending. The Vault's two
+secrets were added the same evening.
+
 In order, one at a time, stopping at the first failure:
 
 ```
@@ -131,6 +135,9 @@ The waiting emails will then go out on the next run; read what they are first
 any is too old to send.
 
 ## Step 4 — Deploy the functions to production
+
+Done 9 Oct 2026: all seventeen, from `staging` at `5775027`, each with the
+JWT setting it had (`admin-business-action` is verified).
 
 Seventeen functions import a shared file that changed. Each keeps the JWT
 setting it has in production today:
