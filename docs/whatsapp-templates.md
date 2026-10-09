@@ -187,9 +187,52 @@ send above from AiSensy to Meta:
 
 `META_ACCESS_TOKEN` is the same token the bot uses.
 
-## Not covered yet
+## Sent by the database: rating request and order messages (0220)
 
-Three kinds of message are sent by the database itself, straight to AiSensy,
-and do not go through the shared send module: the rating request after a visit
-(0164), medicine-order updates (0189), and whatever `messaging_settings` names
-as a campaign. They need their own change before AiSensy can be switched off.
+Two messages are sent by the database itself. Both are Hindi: choose Language
+**Hindi** for them.
+
+### `rating_request`
+
+Utility. Three hours after a visit, from the main number.
+
+```
+नमस्ते {{1}} 🙏 {{2}} के साथ {{3}} की आपकी विज़िट कैसी रही? 1 (खराब) से 5 (बहुत अच्छा) तक एक नंबर भेजें। आपकी रेटिंग दूसरे मरीज़ों को सही डॉक्टर चुनने में मदद करती है।
+```
+
+Samples: `{{1}}` `Sunita` · `{{2}}` `Dr. Anita Verma` · `{{3}}` `20 सितंबर`
+
+### `order_update`
+
+Utility. A pharmacy's message about a medicine order, from the second number.
+
+```
+Sehatsandhi पर आपका दवाई ऑर्डर:
+
+{{1}}
+
+कोई सवाल हो तो यहीं जवाब दें।
+```
+
+Sample `{{1}}`: `24x7 Chemist ने आपका ऑर्डर देख लिया है। कुल ₹240, डिलीवरी शाम 6 बजे तक।`
+
+### Switching these two to Meta
+
+They do not read the edge functions' secrets; the database keeps its own, in
+its Vault. In the SQL editor, once, with your own values in place of the
+words in capitals (do not save this query):
+
+```sql
+select vault.create_secret('THE SYSTEM USER TOKEN', 'meta_access_token');
+select vault.create_secret('MAIN NUMBER PHONE ID', 'meta_phone_number_id');
+select vault.create_secret('SECOND NUMBER PHONE ID', 'meta_clinic_phone_number_id');
+```
+
+Then, when both templates are approved:
+
+```sql
+update messaging_settings set provider = 'meta', rating_campaign = 'rating_request', order_campaign = 'order_update';
+```
+
+`rating_sending_enabled` and `order_sending_enabled` on the same row are the
+on/off switches, as before.
