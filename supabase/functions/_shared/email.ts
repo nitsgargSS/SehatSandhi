@@ -24,6 +24,8 @@ export interface Email {
    *  (contact-submit) sets it to the visitor, so answering is just Reply. */
   replyTo?: string
   replyToName?: string
+  /** The name beside no-reply@ — "Sharma Clinic via Sehatsandhi". Default: Sehatsandhi. */
+  fromName?: string
 }
 
 export type SendResult = { ok: true } | { ok: false; error: string; retry: boolean }
@@ -43,7 +45,7 @@ export async function sendEmail(m: Email): Promise<SendResult> {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: token },
       body: JSON.stringify({
-        from: { address: EMAIL_FROM, name: 'Sehatsandhi' },
+        from: { address: EMAIL_FROM, name: m.fromName ?? 'Sehatsandhi' },
         to: [{ email_address: { address: m.to, name: m.toName ?? m.to } }],
         reply_to: [{ address: m.replyTo ?? EMAIL_REPLY_TO, name: m.replyTo ? (m.replyToName ?? m.replyTo) : 'Sehatsandhi' }],
         subject: m.subject,

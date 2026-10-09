@@ -310,6 +310,8 @@ export async function sendReport(reportId: string, email?: string): Promise<{ wh
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.error ?? 'Could not send the report.')
+  // 0217: nothing went, and the reason is the wallet — say so.
+  if (!body.ok && body.message) throw new Error(body.message)
   return body
 }
 
@@ -490,6 +492,8 @@ export async function sendUpload(uploadId: string): Promise<{ whatsapp: boolean;
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.error ?? 'Could not send the report.')
+  // 0217: nothing went, and the reason is the wallet — say so.
+  if (!body.ok && body.message) throw new Error(body.message)
   return body
 }
 

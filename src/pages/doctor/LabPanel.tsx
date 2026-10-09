@@ -16,6 +16,7 @@ import { downloadCsv } from '../../lib/billingApi'
 import { sizeText } from '../../lib/shrinkUpload'
 import { phoneProblem } from '../../lib/credentials'
 import PhoneError from '../../components/PhoneError'
+import SendMenu from '../../components/SendMenu'
 
 // The lab (0168) — tests, packages, orders, results, signed reports.
 //
@@ -483,7 +484,8 @@ function OrderDetail({ orderId, businessId, canManage, canResults, canApprove, o
           )}
           {canApprove && o.entered_count > 0 && <button disabled={busy} onClick={approveAndSend} className="btn-teal text-xs py-2 px-4"><Send className="w-4 h-4" /> Approve & send report</button>}
           {rep && <a href={`/lab/${rep.token}`} target="_blank" rel="noreferrer" className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1"><Printer className="w-3 h-3" /> Report {rep.report_no}</a>}
-          {rep && <button disabled={busy} onClick={() => run(async () => { const s = await sendReport(rep.id); return s.whatsapp ? 'Sent on WhatsApp.' : `Not sent${s.errors?.length ? `: ${s.errors[0]}` : ''}.` })} className="btn-outline text-xs py-1.5 px-3">Resend</button>}
+          {rep && <SendMenu kind="report" id={rep.id} businessId={businessId} disabled={busy} className="btn-outline text-xs py-1.5 px-3"
+            onSent={n => run(async () => n)}>Send to patient</SendMenu>}
           {canResults && o.status !== 'cancelled' && o.status !== 'ordered' && (
             <label className="btn-outline text-xs py-1.5 px-3 inline-flex items-center gap-1 cursor-pointer">
               <Upload className="w-3 h-3" /> Upload report file

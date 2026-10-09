@@ -318,6 +318,12 @@ export default function DoctorDashboard() {
   // 0182: a visit to open with the patient — the queue's Consult.
   const [openVisit, setOpenVisit] = useState<string | null>(null)
   const openPatient = (memberId: string, visitId: string | null = null) => { setOpenMember(memberId); setOpenVisit(visitId); setTab('patients') }
+  // A screen deep inside a tab asks for another one: the Send menu's "add WhatsApp to your plan".
+  useEffect(() => {
+    const go = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t === 'plan' || t === 'whatsapp') setTab(t) }
+    window.addEventListener('sehat:open-tab', go)
+    return () => window.removeEventListener('sehat:open-tab', go)
+  }, [])
   const [rosterBusy, setRosterBusy] = useState(false)
   const [rosterErr, setRosterErr] = useState('')
   // 0147: a staff change waiting for its emailed code, and the record of past ones.

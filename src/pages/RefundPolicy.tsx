@@ -46,7 +46,7 @@ const content = {
       },
       {
         h: '10. Money in Your Wallet',
-        p: 'Money you add to your Sehatsandhi wallet is credit for lead fees and WhatsApp messages. It is not refunded for a change of mind. Any unused balance is refunded to the original payment method within 7 business days when you close your account, or if we remove your listing for any reason other than a breach of our Terms — ask us through the Contact page.',
+        p: 'Money you add to your Sehatsandhi wallet is credit for lead fees and for the WhatsApp messages you send — broadcasts, prescriptions, bills and reports. Wallet top-ups are not refundable: the balance cannot be withdrawn or returned to a bank account or card, including when you close your account, and it does not expire while your account is open — you can keep using it for messages. The price of each kind of message is shown in your dashboard before you send. If a message you were charged for is not delivered, its charge is returned to your wallet automatically. The one exception: if we stop offering the WhatsApp service, or remove your listing for any reason other than a breach of our Terms, any unused balance is refunded to the original payment method within 7 business days — ask us through the Contact page.',
       },
       {
         h: '11. Money Patients Pay to a Clinic, Pharmacy or Ambulance',
@@ -105,7 +105,7 @@ const content = {
       },
       {
         h: '10. आपके वॉलेट का पैसा',
-        p: 'Sehatsandhi वॉलेट में डाला गया पैसा लीड फीस और WhatsApp मैसेज के लिए क्रेडिट है। मन बदलने पर इसका रिफंड नहीं होता। बचा हुआ बैलेंस 7 बिज़नेस दिनों में ओरिजिनल पेमेंट मेथड में लौटाया जाता है, जब आप अपना अकाउंट बंद करते हैं, या हम हमारी शर्तों के उल्लंघन के अलावा किसी और कारण से आपकी लिस्टिंग हटाते हैं — संपर्क पेज से हमसे कहें।',
+        p: 'Sehatsandhi वॉलेट में डाला गया पैसा लीड फीस और आपके भेजे WhatsApp मैसेज — ब्रॉडकास्ट, पर्चे, बिल और रिपोर्ट — के लिए क्रेडिट है। वॉलेट टॉप-अप का रिफंड नहीं होता: बैलेंस निकाला या बैंक अकाउंट या कार्ड में वापस नहीं किया जा सकता, अकाउंट बंद करने पर भी नहीं, और जब तक आपका अकाउंट खुला है यह एक्सपायर नहीं होता — आप इसे मैसेज भेजने में इस्तेमाल करते रह सकते हैं। हर तरह के मैसेज की कीमत भेजने से पहले आपके डैशबोर्ड में दिखती है। जिस मैसेज का चार्ज कटा और वह डिलीवर नहीं हुआ, उसका चार्ज अपने आप आपके वॉलेट में लौट आता है। एक ही अपवाद: अगर हम WhatsApp सर्विस देना बंद करते हैं, या हमारी शर्तों के उल्लंघन के अलावा किसी और कारण से आपकी लिस्टिंग हटाते हैं, तो बचा हुआ बैलेंस 7 बिज़नेस दिनों में ओरिजिनल पेमेंट मेथड में लौटाया जाता है — संपर्क पेज से हमसे कहें।',
       },
       {
         h: '11. मरीज़ क्लिनिक, फार्मेसी या एम्बुलेंस को जो पैसा देते हैं',

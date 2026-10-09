@@ -17,7 +17,7 @@
 //      AISENSY_API_KEY, AISENSY_LAB_REPORT_CAMPAIGN, MSG91_* (email)
 
 import { corsHeaders, json } from '../_shared/cors.ts'
-import { sendDocumentLink, logDelivery } from '../_shared/deliver.ts'
+import { asChannel, type Channel, sendDocumentLink, logDelivery, walletMessage } from '../_shared/deliver.ts'
 import { caller } from '../_shared/caller.ts'
 
 Deno.serve(async (req) => {
@@ -30,11 +30,15 @@ Deno.serve(async (req) => {
   let reportId = ''
   let uploadId = ''
   let email: string | null = null
+  let channel: Channel | undefined
+  let linkOnly = false
   try {
     const body = await req.json()
     reportId = typeof body.reportId === 'string' ? body.reportId : ''
     uploadId = typeof body.uploadId === 'string' ? body.uploadId : ''
     email = typeof body.email === 'string' && body.email.includes('@') ? body.email : null
+    channel = asChannel(body.channel)
+    linkOnly = body.channel === 'link'
   } catch {
     return json({ error: 'invalid JSON' }, 400)
   }
@@ -55,15 +59,20 @@ Deno.serve(async (req) => {
     const { data: lab } = await who.asService.from('businesses').select('name').eq('id', up.business_id).maybeSingle()
     const target = {
       phone: String(up.patient_phone ?? '').replace(/[^0-9]/g, ''),
+      businessId: String(up.business_id),
       patientName: String(up.patient_name ?? 'Patient'),
       clinicName: String(lab?.name ?? 'your lab'),
       link: `${site}/lab/file/${up.public_token}`,
       campaignEnv: 'AISENSY_LAB_REPORT_CAMPAIGN',
       email,
+      channel,
       documentKind: 'lab_report_file',
       documentLabel: String(up.title ?? 'Lab report'),
     }
-    const result = await sendDocumentLink(target)
+    // The clinic sends it from its own email app: hand over the link, send nothing.
+    if (linkOnly) return json({ ok: true, link: target.link, patientName: target.patientName, clinicName: target.clinicName, label: target.documentLabel })
+
+    const result = await sendDocumentLink(who.asService, target)
     await who.asService.from('lab_uploaded_reports').update({
       sent_at: result.sent.length ? new Date().toISOString() : null,
       sent_channels: result.sent,
@@ -71,7 +80,7 @@ Deno.serve(async (req) => {
     }).eq('id', up.id)
     await logDelivery(who.asService, target, result)
     return json({ ok: result.sent.length > 0, whatsapp: result.sent.includes('whatsapp'), email: result.sent.includes('email'),
-                  errors: result.errors.length ? result.errors : undefined })
+                  errors: result.errors.length ? result.errors : undefined, message: walletMessage(result), needsPlan: result.needsPlan ? true : undefined })
   }
 
   // Read as the caller: a report of another business is simply not visible.
@@ -95,16 +104,21 @@ Deno.serve(async (req) => {
 
   const target = {
     phone: String(ord?.patient_phone ?? '').replace(/[^0-9]/g, ''),
+    businessId: String(rep.business_id),
     patientName: String(ord?.patient_name ?? 'Patient'),
     clinicName: String(biz?.name ?? 'your lab'),
     link: `${site}/lab/${rep.public_token}`,
     campaignEnv: 'AISENSY_LAB_REPORT_CAMPAIGN',
     email,
+    channel,
     documentKind: 'lab_report',
     documentLabel: `Lab report ${rep.report_no ?? ''}`.trim(),
   }
 
-  const result = await sendDocumentLink(target)
+  // The clinic sends it from its own email app: hand over the link, send nothing.
+  if (linkOnly) return json({ ok: true, link: target.link, patientName: target.patientName, clinicName: target.clinicName, label: target.documentLabel })
+
+  const result = await sendDocumentLink(who.asService, target)
 
   await who.asService.from('lab_reports').update({
     sent_at: result.sent.length ? new Date().toISOString() : null,
@@ -118,6 +132,6 @@ Deno.serve(async (req) => {
     ok: result.sent.length > 0,
     whatsapp: result.sent.includes('whatsapp'),
     email: result.sent.includes('email'),
-    errors: result.errors.length ? result.errors : undefined,
+    errors: result.errors.length ? result.errors : undefined, message: walletMessage(result), needsPlan: result.needsPlan ? true : undefined,
   })
 })
