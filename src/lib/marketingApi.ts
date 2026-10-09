@@ -9,6 +9,11 @@ import { loadRazorpayCheckout, verifyRazorpayPayment } from './businessApi'
 
 export interface MarketingSettings {
   per_message_paise: number
+  /** 0217: a prescription, bill or report sent to one patient. */
+  direct_message_paise: number
+  /** 0217: what Meta charges us, before GST — for the margin estimate only. */
+  meta_marketing_cost_paise: number
+  meta_utility_cost_paise: number
   grace_days: number
   sending_enabled: boolean
   updated_at: string
@@ -24,6 +29,9 @@ export interface WaAccount {
   onboarded_at: string | null
   next_billing_date: string | null
   notes: string | null
+  /** 0219: the messaging terms the owner accepted, and when. */
+  terms_version?: string | null
+  terms_accepted_at?: string | null
 }
 
 export interface WalletTx {
@@ -269,7 +277,60 @@ export async function setMarketingConsent(memberId: string, businessId: string, 
   oops(error)
 }
 
+/** 0219: the owner accepts the messaging terms (src/lib/waTerms.ts). */
+export async function acceptWaTerms(businessId: string, version: string) {
+  const { error } = await supabase.rpc('sehat_accept_wa_terms', { p_business: businessId, p_version: version })
+  oops(error)
+}
+
+/**
+ * 0219: send the message as a test before it goes to patients. A clinic's test
+ * goes to its own registered number and costs one message; a reviewer names a
+ * waiting broadcast and a number, free.
+ */
+export async function sendTestMessage(what: { businessId: string; templateId: string; params: string[] } | { broadcastId: string; phone: string }) {
+  const { url, anon } = activeConfig()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!url || !anon || !session) throw new Error('Please sign in again.')
+  const res = await fetch(`${url}/functions/v1/wa-broadcast-send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, apikey: anon },
+    body: JSON.stringify({ action: 'test', ...what }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || !body.ok) throw new Error(body.message ?? body.error ?? 'The test could not be sent.')
+  return body as { to: string; chargedPaise: number }
+}
+
 // ── Admin ──────────────────────────────────────────────────────────────────
+
+/** 0217: the wallet's money for one month (India time). */
+export interface WalletMonth {
+  month: string                 // 'YYYY-MM'
+  topups_paise: number
+  direct_messages: number
+  direct_spent_paise: number
+  broadcast_messages: number
+  broadcast_spent_paise: number
+  lead_fees_paise: number
+  refunds_paise: number
+  adjustments_paise: number
+  /** Estimated from the two Meta rates in the settings. */
+  meta_cost_paise: number
+  margin_paise: number
+}
+export interface WalletReport {
+  months: WalletMonth[]
+  /** Topped up and not yet spent, across every wallet. */
+  unspent_paise: number
+  wallets_with_balance: number
+}
+
+export async function getWalletReport(months = 6): Promise<WalletReport> {
+  const { data, error } = await supabase.rpc('sehat_admin_wallet_report', { p_months: months })
+  oops(error)
+  return data as WalletReport
+}
 
 export async function getMarketingReport(): Promise<MarketingReportRow[]> {
   const { data, error } = await supabase.rpc('sehat_admin_wa_marketing_report')
