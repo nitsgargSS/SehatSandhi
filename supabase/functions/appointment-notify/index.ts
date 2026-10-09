@@ -18,6 +18,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { sendTemplate } from '../_shared/whatsapp.ts'
 
 const IST = 'Asia/Kolkata'
 const fmtSlot = (iso: string | null) => {
@@ -91,8 +92,6 @@ Deno.serve(async (req) => {
   const { data: rows, error } = await q
   if (error) return json({ error: error.message }, 500)
 
-  const aisensyKey = Deno.env.get('AISENSY_API_KEY')
-  const aisensyCampaign = Deno.env.get('AISENSY_APPOINTMENT_CAMPAIGN')
   const msg91Key = Deno.env.get('MSG91_AUTHKEY')
   const msg91Sender = Deno.env.get('MSG91_SENDER_ID')
   const msg91Template = Deno.env.get('MSG91_APPOINTMENT_DLT_TEMPLATE')
@@ -122,30 +121,18 @@ Deno.serve(async (req) => {
       .eq('id', id).eq('status', 'pending').select('id').maybeSingle()
     if (!claimed) continue
 
-    let ok = false, channel = '', lastError = ''
+    let ok = false, channel = '', lastError = '', waProvider = 'aisensy'
 
     // 1. WhatsApp
-    if (aisensyKey && aisensyCampaign) {
-      try {
-        const res = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            apiKey: aisensyKey,
-            campaignName: aisensyCampaign,
-            destination: phone,
-            userName: String(payload.patient_name ?? 'Patient'),
-            templateParams: [text],
-          }),
-        })
-        if (res.ok) { ok = true; channel = 'whatsapp' }
-        else lastError = `whatsapp ${res.status}: ${(await res.text()).slice(0, 150)}`
-      } catch (e) {
-        lastError = `whatsapp: ${String((e as Error).message ?? e)}`
-      }
-    } else {
-      lastError = 'AISENSY env not set'
-    }
+    const wa = await sendTemplate({
+      campaignEnv: 'AISENSY_APPOINTMENT_CAMPAIGN', to: phone,
+      userName: String(payload.patient_name ?? 'Patient'), params: [text],
+    })
+    if (wa.provider) waProvider = wa.provider
+    if (wa.ok) { ok = true; channel = 'whatsapp' }
+    // 0075's requeue matches this text exactly: a run with no provider set up
+    // is retried once one is.
+    else lastError = wa.provider ? (wa.error ?? 'whatsapp: not sent') : 'AISENSY env not set'
 
     // 2. SMS, only because WhatsApp did not get through
     if (!ok && msg91Key && msg91Sender && msg91Template) {
@@ -178,7 +165,7 @@ Deno.serve(async (req) => {
     await supabase.from('message_log').insert({
       phone,
       channel: ok ? channel : 'whatsapp',
-      provider: channel === 'sms' ? 'msg91' : 'aisensy',
+      provider: channel === 'sms' ? 'msg91' : waProvider,
       campaign: `appointment_${event}`,
       body_preview: text.slice(0, 160),
       status: ok ? 'sent' : 'failed',

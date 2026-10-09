@@ -21,6 +21,7 @@
 //      PHONE_VERIFY_ENABLED, AISENSY_API_KEY, AISENSY_LOGIN_CAMPAIGN
 
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { metaConfigured, sendTemplate } from '../_shared/whatsapp.ts'
 import { caller } from '../_shared/caller.ts'
 
 const CODE_TTL_MIN = 10
@@ -30,7 +31,7 @@ const PER_HOUR = 5
 
 const enabled = () =>
   Deno.env.get('PHONE_VERIFY_ENABLED') === 'true'
-  && !!Deno.env.get('AISENSY_API_KEY') && !!Deno.env.get('AISENSY_LOGIN_CAMPAIGN')
+  && ((!!Deno.env.get('AISENSY_API_KEY') && !!Deno.env.get('AISENSY_LOGIN_CAMPAIGN')) || metaConfigured())
 
 /** Ten digits, 6–9 first — sehat_norm_phone's shape. */
 function tenDigits(raw: string): string | null {
@@ -91,17 +92,12 @@ Deno.serve(async (req) => {
 
     // templateParams is positional: the login_code template takes the code as
     // its only variable. Never log the code.
-    const res = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        apiKey: Deno.env.get('AISENSY_API_KEY'), campaignName: Deno.env.get('AISENSY_LOGIN_CAMPAIGN'),
-        destination: `91${phone}`, userName: 'Sehatsandhi', source: 'signup-phone-verify',
-        templateParams: [code],
-      }),
-    }).catch(() => null)
-    if (!res?.ok) {
-      console.error(`phone-verify: aisensy ${res?.status ?? 'unreachable'}: ${(await res?.text().catch(() => '') ?? '').slice(0, 200)}`)
+    const sent = await sendTemplate({
+      campaignEnv: 'AISENSY_LOGIN_CAMPAIGN', to: `91${phone}`, userName: 'Sehatsandhi',
+      source: 'signup-phone-verify', params: [code], otp: true,
+    })
+    if (!sent.ok) {
+      console.error(`phone-verify: ${sent.provider ?? 'whatsapp'}: ${sent.error}`)
       return json({ error: 'We could not send a WhatsApp code to that number. Is it on WhatsApp?' }, 502)
     }
     return json({ ok: true })
