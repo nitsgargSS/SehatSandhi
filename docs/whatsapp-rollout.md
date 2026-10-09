@@ -47,6 +47,8 @@ has been done for production since 0082.
 
 ## Step 1 — Sandbox bookkeeping
 
+Done 9 Oct 2026: the sandbox ledger shows 218 of 218 applied.
+
 0216–0220 were pasted into the SQL editor, so the sandbox ledger does not know
 about them. Each is safe to run again; applying them through the script records
 them:
@@ -68,6 +70,10 @@ against each database is the way to find out whether they differ in anything
 that matters; that is its own piece of work.
 
 ## Step 2 — Prove the migrations on production, changing nothing
+
+Done 9 Oct 2026: all five would apply; rolled back after 4.9 seconds; nothing
+left behind. Production then had no WhatsApp add-on rows, no wallet with
+money and no broadcasts, and all three sending switches were off.
 
 `scripts/dry-run.mjs` applies them in one transaction and rolls it back:
 
@@ -105,6 +111,24 @@ functions are replaced:
 0219 schedules the broadcast sender every minute. It calls the edge function
 only when a broadcast is waiting, and needs `project_url` and
 `service_role_key` in production's Vault, as the appointment drain (0075) does.
+
+**Production's Vault has neither** (found by the dry run on 9 Oct; it holds
+only `aisensy_api_key` and `free_text_phone_salt`). This is older than this
+work and already hurts: every scheduled job that calls an edge function fails
+there — the appointment-message drain since 15 Sep, the email outbox since
+29 Sep (8 emails waiting, none ever sent from it), and the two purges of
+consultation audio and patient documents, which have never succeeded. Add the
+two secrets before or with this step, in production's SQL editor, with your
+own values (do not save the query):
+
+```sql
+select vault.create_secret('https://ctxkkqqtasegoowuqbmi.supabase.co', 'project_url');
+select vault.create_secret('THE PRODUCTION SERVICE ROLE KEY', 'service_role_key');
+```
+
+The waiting emails will then go out on the next run; read what they are first
+(`select kind, created_at from email_outbox where status = 'pending'`) in case
+any is too old to send.
 
 ## Step 4 — Deploy the functions to production
 
