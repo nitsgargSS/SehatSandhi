@@ -11,7 +11,10 @@
 //     typed number still works);
 //   • it remembers: the last area and the last patient are one tap away;
 //   • "where am I": the area question takes a shared location in place of a PIN;
-//   • STOP / START, and a 1–5 rating after a visit, are answered.
+//   • STOP / START, and a 1–5 rating after a visit, are answered;
+//   • "लिखकर बताएं": for a patient who does not know which doctor to see,
+//     every menu offers to take the problem in their own words (0221 — the
+//     matcher then finds the sub-speciality: "sugar", "piles", "gupt rog").
 //
 // Nothing here knows about HTTP or Meta — step() takes where the patient is
 // and what they just sent, and returns where they are now and what to send
@@ -78,6 +81,8 @@ const NO_PLACE = 'हमें आपकी लोकेशन से एरि�
 const ASK_SELECTION = 'कौनसे नंबर वाले डॉक्टर/सेंटर के साथ बुक करना चाहेंगे? नंबर बताएं (1, 2, 3 ....)'
 const ASK_SLOT = 'कौनसा स्लॉट चुनना चाहेंगे?'
 const ASK_NAME_AGE = 'मरीज़ का नाम और उम्र बताएं (जैसे: Sunita, 34)'
+const DESCRIBE = 'अपनी तकलीफ़ या ज़रूरत अपने शब्दों में लिखकर भेजें — जैसे "शुगर", "घुटने में दर्द", "बच्चे को बुखार", "बवासीर"।\nहम सही डॉक्टर ढूंढ देंगे। 🙏\n\nJust type your problem in your own words.'
+const DESCRIBE_ROW = { id: 'menu:describe', title: '✍️ लिखकर बताएं', description: 'Not sure which doctor? Type your problem' }
 const NOT_UNDERSTOOD = 'माफ़ कीजिए, हम समझ नहीं पाए। 🙏\nआप लिखकर भी बता सकते हैं — जैसे "दांत का डॉक्टर जगाधरी" — या नीचे से चुनें:'
 const PICK_ONE = 'किसके साथ बुक करना है? नीचे से चुनें या नंबर भेजें 👇'
 const FAILED = 'कुछ गड़बड़ हो गई। कृपया थोड़ी देर बाद फिर कोशिश करें।\nSomething went wrong. Please try again in a little while.'
@@ -95,6 +100,7 @@ const MAIN_MENU: Reply = {
     { id: 'menu:ambulance', title: '🚑 एम्बुलेंस', description: 'Ambulance — help, anytime' },
     { id: 'menu:insurance', title: '🛡️ इंश्योरेंस', description: 'Insurance — free home visit' },
     { id: 'menu:camps', title: '🎉 कैंप्स & ऑफर्स', description: 'Camps & Offers near you' },
+    DESCRIBE_ROW,
   ],
 }
 
@@ -129,6 +135,7 @@ const SPECIALITY_MENU: Reply = {
     { id: 'spec:ENT', title: '👂 कान-नाक-गला', description: 'ENT (Ear Nose Throat)' },
     { id: 'spec:GEN', title: 'जनरल फिजिशियन', description: 'General Physician' },
     { id: 'spec:more', title: 'अन्य स्पेशलिटी', description: 'More Specialities' },
+    DESCRIBE_ROW,
   ],
 }
 
@@ -148,7 +155,26 @@ const MORE_SPECIALITY_MENU: Reply = {
     { id: 'spec:PSY', title: '🧘 मानसिक स्वास्थ्य', description: 'Psychiatry / Mental Health' },
     { id: 'spec:DIAB', title: '💉 डायबिटीज़', description: 'Diabetologist' },
     { id: 'spec:PHYS', title: '🏃 फिजियोथेरेपी', description: 'Physiotherapy' },
+    { id: 'spec:more2', title: 'और स्पेशलिटी', description: 'Even more: chest, kidney, surgery…' },
+  ],
+}
+
+// A WhatsApp list holds ten rows, so the specialities run to a third page.
+const THIRD_SPECIALITY_MENU: Reply = {
+  kind: 'list',
+  header: 'और स्पेशलिटी',
+  body: 'ये स्पेशलिटीज़ भी उपलब्ध हैं:',
+  footer: '100% वेरिफाइड डॉक्टर',
+  sectionTitle: 'Please choose one option',
+  rows: [
     { id: 'spec:ALT', title: '🌿 आयुर्वेद-होम्योपैथी', description: 'Ayurveda / Homeopathy' },
+    { id: 'spec:PULM', title: '🫁 छाती और सांस', description: 'Chest & Lungs — asthma, TB' },
+    { id: 'spec:ENDO', title: '🦋 थायरॉइड-हार्मोन', description: 'Endocrinology — thyroid, hormones' },
+    { id: 'spec:RHEU', title: '🤲 गठिया रोग', description: 'Rheumatology — arthritis, gout' },
+    { id: 'spec:NEPH', title: '💧 किडनी (नेफ्रोलॉजी)', description: 'Kidney disease, dialysis' },
+    { id: 'spec:SURG', title: '🏥 सर्जरी', description: 'General Surgery — hernia, piles, gallbladder' },
+    { id: 'spec:SEXO', title: '🔒 यौन स्वास्थ्य', description: 'Sexual Health (Sexology) — private' },
+    DESCRIBE_ROW,
   ],
 }
 
@@ -353,7 +379,9 @@ function tapped(id: string, s: Session): Step | null {
   if (id === 'menu:lab') return show(v, TEST_TYPE_MENU)
   if (id === 'menu:insurance') return askPinInsurance(v)
   if (id === 'menu:pharmacy' || id === 'menu:ambulance' || id === 'menu:camps') return askPin(id.slice(5), v)
+  if (id === 'menu:describe') return { session: { state: 'idle', vars: carry(v) }, replies: [{ kind: 'text', body: DESCRIBE }] }
   if (id === 'spec:more') return show(v, MORE_SPECIALITY_MENU)
+  if (id === 'spec:more2') return show(v, THIRD_SPECIALITY_MENU)
   if (id.startsWith('spec:')) return askPin(id.slice(5), v)
   // The test type itself is not kept: a named test books, anything else gets a call back.
   if (id.startsWith('test:')) return askPin(id === 'test:other' ? 'lab_callback' : 'lab_booking', v)
@@ -414,7 +442,15 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
   }
 
   switch (state) {
-    case 'ask_pin': return search({ ...vars, pin: text }, rpc)
+    case 'ask_pin': {
+      // Not a PIN code: it may be a place — or they have moved on to another
+      // problem ("bawasir ka ilaj"). The matcher knows a need from a town.
+      if (typed && text && !/\d{6}/.test(text) && m.located === undefined) {
+        const f = await freeText(text, vars, phone, rpc)
+        if (f) return f
+      }
+      return search({ ...vars, pin: text }, rpc)
+    }
     case 'ask_pin_insurance': return insuranceLead(vars, text, phone, rpc)
     case 'ask_name': return book(vars, text, phone, rpc)
     case 'ask_selection':
