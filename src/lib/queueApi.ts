@@ -163,20 +163,29 @@ export interface OpdVisitInput {
   reason?: string | null
   priority?: number
   priorityReason?: string | null
+  /** 0226: how the fee was paid at the desk (cash, upi…). Left out, the fee stays due. */
+  paidMethod?: string | null
+  paidReference?: string | null
 }
 
-export async function opdVisit(i: OpdVisitInput): Promise<{ queue_id: string; token_number: number; fee: number; list_price: number | null }> {
+/** 0226: the ways an OPD fee is taken at the desk; 'later' records no payment. */
+export const FEE_PAID_OPTIONS: [string, string][] = [
+  ['cash', 'Cash'], ['upi', 'UPI'], ['credit_card', 'Credit card'], ['debit_card', 'Debit card'], ['later', 'Not received now'],
+]
+
+export async function opdVisit(i: OpdVisitInput): Promise<{ queue_id: string; token_number: number; fee: number; list_price: number | null; paid?: number }> {
   const { data, error } = await supabase.rpc('sehat_opd_visit', {
     p_business: i.businessId, p_member: i.patientMemberId, p_practitioner: i.practitionerId,
     p_fee: i.fee ?? null, p_discount_reason: i.discountReason || null, p_reason: i.reason || null,
     p_priority: i.priority ?? 0, p_priority_reason: i.priorityReason || null,
+    p_paid_method: i.paidMethod && i.paidMethod !== 'later' ? i.paidMethod : null, p_paid_reference: i.paidReference || null,
   })
   if (error) {
     throw new Error(error.message.includes('already has a live token')
       ? 'That patient already has a token in this line today.'
       : error.message)
   }
-  return data as { queue_id: string; token_number: number; fee: number; list_price: number | null }
+  return data as { queue_id: string; token_number: number; fee: number; list_price: number | null; paid?: number }
 }
 
 export interface HistoryRow { seen_on: string; kind: string; doctor_id: string | null; doctor_name: string | null; detail: string }

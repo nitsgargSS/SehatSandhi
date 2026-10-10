@@ -14,7 +14,13 @@ import { activeConfig } from './env'
 // is wrong by rounding on every line.
 
 export type ChargeCategory =
-  | 'consultation' | 'bed' | 'procedure' | 'medicine' | 'lab' | 'consumable' | 'other'
+  | 'consultation' | 'bed' | 'procedure' | 'medicine' | 'lab' | 'consumable' | 'product' | 'other'
+
+/** The heads money is charged under, as shown. 'product' (0225): things sold — spectacles, lenses. */
+export const HEAD_LABELS: Record<ChargeCategory | 'pharmacy', string> = {
+  consultation: 'Consultation', bed: 'Bed / room', procedure: 'Procedure', medicine: 'Medicine', lab: 'Test',
+  consumable: 'Consumable', product: 'Optical / products', other: 'Other', pharmacy: 'Pharmacy counter',
+}
 
 export type PaymentMethod =
   | 'cash' | 'upi' | 'credit_card' | 'debit_card' | 'card' | 'netbanking' | 'cheque' | 'insurance' | 'other'
@@ -149,6 +155,75 @@ export async function addCharge(
   oops(error)
 }
 
+// ── The price list and the invoice at the counter (0225) ──
+
+export interface PriceItem { id: string; business_id: string; name: string; category: ChargeCategory; price: number; gst_rate: number }
+
+/** 0226: the GST a counter-invoice line may carry — 0 unless the biller charges it. */
+export const INVOICE_GST_RATES = [0, 5, 12, 18, 28] as const
+
+export async function listPriceItems(businessId: string): Promise<PriceItem[]> {
+  const { data, error } = await supabase.from('clinic_price_items').select('id, business_id, name, category, price, gst_rate')
+    .eq('business_id', businessId).eq('is_active', true).order('name')
+  oops(error)
+  return ((data ?? []) as PriceItem[]).map(i => ({ ...i, price: Number(i.price), gst_rate: Number(i.gst_rate ?? 0) }))
+}
+
+/** Add an item, or change one's price. Owner and manager only — the database decides. */
+export async function savePriceItem(businessId: string, i: { id?: string; name: string; category: ChargeCategory; price: number; gstRate?: number }) {
+  const row = { name: i.name, category: i.category, price: i.price, gst_rate: i.gstRate ?? 0, updated_at: new Date().toISOString() }
+  const { data, error } = i.id
+    ? await supabase.from('clinic_price_items').update(row).eq('id', i.id).select('id')
+    : await supabase.from('clinic_price_items').insert({ business_id: businessId, ...row }).select('id')
+  if (error?.code === '23505') throw new Error(`"${i.name}" is already on the price list.`)
+  oops(error)
+  if (!data?.length) throw new Error('Only the owner or a manager can change the price list.')
+}
+
+/** Take an item off the list. Invoices already made keep their lines. */
+export async function retirePriceItem(id: string) {
+  const { data, error } = await supabase.from('clinic_price_items').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', id).select('id')
+  oops(error)
+  if (!data?.length) throw new Error('Only the owner or a manager can change the price list.')
+}
+
+export interface CounterInvoiceInput {
+  businessId: string
+  memberId: string
+  /** unitPrice is before GST; gstRate (percent) is added on top. */
+  lines: { category: ChargeCategory; description: string; quantity: number; unitPrice: number; gstRate?: number }[]
+  /** Unbilled charges already on the account to put on the same invoice. */
+  chargeIds?: string[]
+  discount?: number
+  discountReason?: string
+  /** Money taken now; 0 leaves the whole invoice due. */
+  paid: number
+  method: PaymentMethod
+  reference?: string
+  recordedBy?: string | null
+}
+
+/** Charges, a numbered bill and the payment against it, in one step. */
+export async function counterInvoice(i: CounterInvoiceInput): Promise<{ bill_id: string; bill_no: string; token: string; net: number; paid: number }> {
+  const { data, error } = await supabase.rpc('sehat_counter_invoice', {
+    p_business: i.businessId, p_member: i.memberId,
+    p_lines: i.lines.map(l => ({ category: l.category, description: l.description, quantity: l.quantity, unit_price: l.unitPrice, gst_rate: l.gstRate ?? 0 })),
+    p_charge_ids: i.chargeIds ?? [],
+    p_discount: i.discount ?? 0, p_discount_reason: i.discountReason || null, p_round_off: 0,
+    p_paid: i.paid, p_method: i.method, p_reference: i.reference || null,
+    p_recorded_by: i.recordedBy ?? null, p_doctor: null,
+  })
+  oops(error)
+  return data as { bill_id: string; bill_no: string; token: string; net: number; paid: number }
+}
+
+/** What was charged in a period, by head — for the owner and manager; empty for anyone else. */
+export async function getDayHeads(businessId: string, from: string, to: string): Promise<{ head: ChargeCategory | 'pharmacy'; lines: number; amount: number }[]> {
+  const { data, error } = await supabase.rpc('sehat_day_heads', { p_business: businessId, p_from: from, p_to: to })
+  oops(error)
+  return ((data ?? []) as { head: ChargeCategory | 'pharmacy'; lines: number; amount: number }[]).map(h => ({ ...h, amount: Number(h.amount) }))
+}
+
 export async function removeCharge(id: string) {
   const { error } = await supabase.from('patient_charges').delete().eq('id', id)
   oops(error)
@@ -241,6 +316,25 @@ export interface BillItem {
   unit_price: number
   amount: number
   charged_on: string | null
+  /** 0226: the GST in `amount`, when the line carries any. */
+  gst_rate?: number | null
+  tax_amount?: number | null
+}
+
+/**
+ * 0226: the tax on a bill, from its lines. A discount on the whole bill is
+ * spread over every line alike, so the tax comes down with it. null: no line
+ * carries GST.
+ */
+export function billTax(b: { items: BillItem[]; subtotal: number; discount_amount: number }): { taxable: number; cgst: number; sgst: number; tax: number } | null {
+  const lineTax = b.items.reduce((s, i) => s + Number(i.tax_amount ?? 0), 0)
+  if (!(lineTax > 0)) return null
+  const sub = Number(b.subtotal) || 0
+  const factor = sub > 0 ? (sub - Number(b.discount_amount || 0)) / sub : 1
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  const tax = r2(lineTax * factor)
+  const cgst = r2(tax / 2)
+  return { tax, cgst, sgst: r2(tax - cgst), taxable: r2(sub * factor - tax) }
 }
 
 export interface Bill {

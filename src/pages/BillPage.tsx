@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { fetchPublicBill, PublicBill } from '../lib/billingApi'
+import { billTax, fetchPublicBill, PublicBill } from '../lib/billingApi'
 import { moneyExact } from '../lib/format'
 
 // The patient's bill, opened from a WhatsApp or email link. No login: the token
@@ -26,6 +26,7 @@ const CATEGORY: Record<string, string> = {
   medicine: 'Medicine',
   lab: 'Test',
   consumable: 'Consumable',
+  product: 'Optical / products',
   other: 'Other',
 }
 
@@ -205,6 +206,7 @@ export default function BillPage() {
                   <div style={{ fontSize: 12, color: '#8a8172', marginTop: 1 }}>
                     {CATEGORY[it.category] ?? it.category}
                     {it.charged_on && ` · ${fmtDate(it.charged_on)}`}
+                    {Number(it.gst_rate ?? 0) > 0 && ` · GST ${Number(it.gst_rate)}% (${moneyExact(Number(it.tax_amount ?? 0))})`}
                   </div>
                 </td>
                 <td style={numCell}>{Number(it.quantity)}</td>
@@ -234,6 +236,17 @@ export default function BillPage() {
             />
           )}
           <TotalRow k="Net payable" v={moneyExact(bill.net_payable)} strong />
+          {/* 0226: when a line carries GST, what of the total is tax. */}
+          {(() => {
+            const t = billTax(bill)
+            return t && (
+              <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed #e4dccb' }}>
+                <TotalRow k="Includes: taxable value" v={moneyExact(t.taxable)} muted />
+                <TotalRow k="CGST" v={moneyExact(t.cgst)} muted />
+                <TotalRow k="SGST" v={moneyExact(t.sgst)} muted />
+              </div>
+            )
+          })()}
           {bill.paid > 0 && <TotalRow k="Paid" v={`− ${moneyExact(bill.paid)}`} muted />}
         </div>
 

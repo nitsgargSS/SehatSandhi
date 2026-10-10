@@ -19,6 +19,11 @@
 // a test number can run the new flow while the live number is still answered
 // elsewhere. Where the patient is in the conversation lives in wa_bot_sessions.
 //
+// THE CLINIC LINE (0224): a number listed in WA_CLINIC_PHONE_IDS — by default
+// META_CLINIC_PHONE_NUMBER_ID, the number clinics' messages go out from — is
+// answered too, as the clinic line: the bot works out which clinic the patient
+// means and stays with it. A patient has one conversation per line.
+//
 // Auth: ?key=<WA_INBOUND_SECRET> in the URL (AiSensy cannot add headers), and
 // for Meta also its X-Hub-Signature-256 over the body, checked against
 // META_APP_SECRET when that is set. Meta's one-time GET handshake is answered
@@ -29,6 +34,7 @@
 //      META_APP_SECRET, META_ACCESS_TOKEN      — Meta
 //      GOOGLE_GEOCODING_KEY                    — optional; a shared location → PIN (_shared/geocode.ts)
 //      WA_BOT_PHONE_IDS                        — phone number ids the bot answers on, comma separated
+//      WA_CLINIC_PHONE_IDS                     — phone number ids answered as the clinic line; default META_CLINIC_PHONE_NUMBER_ID
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
@@ -68,6 +74,8 @@ interface Extracted {
   phone: string | null; name: string | null; text: string | null; id: string | null; outbound: boolean; why?: string
   /** Meta only: the id of a tapped list row or button, and the number written to. */
   replyId?: string | null; toPhoneId?: string | null
+  /** Meta only: the id of the message this one answers. */
+  replyTo?: string | null
   /** Meta only: a location they shared. */
   location?: { latitude: number; longitude: number } | null
 }
@@ -84,6 +92,7 @@ function extract(p: Any): Extracted {
       id: m.id ?? null, outbound: false,
       replyId: m.interactive?.button_reply?.id ?? m.interactive?.list_reply?.id ?? null,
       toPhoneId: v.metadata?.phone_number_id ?? null,
+      replyTo: m.context?.id ?? null,
       location: m.type === 'location' && m.location ? { latitude: Number(m.location.latitude), longitude: Number(m.location.longitude) } : null,
     }
   }
@@ -137,11 +146,11 @@ const SESSION_IDLE_MS = 3_600_000
  * Answer one message. Returns a note for the inbound log. Never throws: the
  * webhook must still answer 200, or Meta retries and then switches it off.
  */
-async function runBot(db: Any, e: Extracted): Promise<string> {
+async function runBot(db: Any, e: Extracted, line: 'main' | 'clinic'): Promise<string> {
   try {
     const phone = e.phone!, from = e.toPhoneId!
     const { data: row } = await db.from('wa_bot_sessions')
-      .select('state, vars, last_message_id, updated_at').eq('phone', phone).maybeSingle()
+      .select('state, vars, last_message_id, updated_at').eq('phone', phone).eq('line', line).maybeSingle()
     if (row && e.id && row.last_message_id === e.id) return 'bot: redelivery, already answered'
 
     // Blue ticks and "typing…" while the database is asked.
@@ -153,7 +162,7 @@ async function runBot(db: Any, e: Extracted): Promise<string> {
     // A shared location becomes the PIN code (or town) it is in.
     const where = e.location ? await locate(e.location.latitude, e.location.longitude) : undefined
     const located = where === undefined ? undefined : (where?.pin ?? where?.place ?? null)
-    const next = await step(session, { text: e.text, replyId: e.replyId ?? null, fresh, ...(located !== undefined ? { located } : {}) }, phone, async (fn, args) => {
+    const next = await step(session, { text: e.text, replyId: e.replyId ?? null, fresh, line, replyTo: e.replyTo ?? null, ...(located !== undefined ? { located } : {}) }, phone, async (fn, args) => {
       const { data, error } = await db.rpc(fn, args)
       if (error) { console.error(`whatsapp-inbound: ${fn}: ${error.message}`); return null }
       return data
@@ -161,8 +170,8 @@ async function runBot(db: Any, e: Extracted): Promise<string> {
 
     // Saved before sending, so a redelivery that arrives mid-send is recognised.
     await db.from('wa_bot_sessions').upsert({
-      phone, state: next.session.state, vars: next.session.vars, last_message_id: e.id, updated_at: new Date().toISOString(),
-    })
+      phone, line, state: next.session.state, vars: next.session.vars, last_message_id: e.id, updated_at: new Date().toISOString(),
+    }, { onConflict: 'phone,line' })
 
     const errors: string[] = []
     for (const reply of next.replies) {
@@ -173,7 +182,8 @@ async function runBot(db: Any, e: Extracted): Promise<string> {
     }
     // The area a shared location came to — a PIN or town, nothing finer — so a lookup that fails shows.
     const at = located === undefined ? '' : `, location → ${located ?? 'not found'}`
-    return errors.length ? `bot: ${next.session.state}${at}, send failed: ${errors.join(' | ').slice(0, 300)}` : `bot: ${next.session.state}${at}`
+    const who = line === 'clinic' ? `clinic line${next.session.vars.clinic ? ` (${next.session.vars.clinic.code})` : ''}, ` : ''
+    return errors.length ? `bot: ${who}${next.session.state}${at}, send failed: ${errors.join(' | ').slice(0, 300)}` : `bot: ${who}${next.session.state}${at}`
   } catch (err) {
     console.error(`whatsapp-inbound: bot: ${String((err as Error).message ?? err)}`)
     return `bot: error: ${String((err as Error).message ?? err).slice(0, 200)}`
@@ -241,8 +251,11 @@ Deno.serve(async (req) => {
     const { error: oErr } = await db.rpc('sehat_wa_platform_optin', { p_phone: e.phone, p_text: e.text, p_message_id: e.id })
     optedIn = !oErr
   }
-  const botIds = (Deno.env.get('WA_BOT_PHONE_IDS') ?? '').split(',').map(x => x.trim()).filter(Boolean)
-  const bot = signed && e.toPhoneId && botIds.includes(e.toPhoneId) ? await runBot(db, e) : null
+  const ids = (v: string | undefined) => (v ?? '').split(',').map(x => x.trim()).filter(Boolean)
+  const botIds = ids(Deno.env.get('WA_BOT_PHONE_IDS'))
+  const clinicIds = ids(Deno.env.get('WA_CLINIC_PHONE_IDS') ?? Deno.env.get('META_CLINIC_PHONE_NUMBER_ID'))
+  const line = e.toPhoneId && clinicIds.includes(e.toPhoneId) ? 'clinic' : e.toPhoneId && botIds.includes(e.toPhoneId) ? 'main' : null
+  const bot = signed && line ? await runBot(db, e, line) : null
   await log(!error, (error ? `handle_inbound: ${error.message}` : `saved${e.name ? ` (${e.name})` : ''}${optedIn ? ' · opted in to tips' : ''}`)
     + (bot ? ` · ${bot}` : ''))
   return json({ ok: true, saved: !error, optedIn })

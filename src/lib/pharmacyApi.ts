@@ -212,6 +212,17 @@ export async function saveItem(businessId: string, item: Partial<PharmacyItem>):
   return data as string
 }
 
+/**
+ * 0225: delete a medicine entered by mistake. Owner, manager or doctor, and
+ * only with none in hand. One that is on a bill is not erased — it is marked
+ * not stocked and `deleted` comes back false, with how many bills hold it.
+ */
+export async function deleteItem(itemId: string): Promise<{ deleted: boolean; kept_for_bills?: number; name: string }> {
+  const { data, error } = await supabase.rpc('sehat_pharmacy_delete_item', { p_item: itemId })
+  oops(error)
+  return data as { deleted: boolean; kept_for_bills?: number; name: string }
+}
+
 export async function getBatches(itemId: string): Promise<Batch[]> {
   const { data, error } = await supabase.from('pharmacy_batches').select('*')
     .eq('item_id', itemId).order('expiry_date')

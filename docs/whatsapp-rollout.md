@@ -187,7 +187,25 @@ Secrets, in the production project's Edge Functions → Secrets:
 | `META_PRESCRIPTION_TEMPLATE`, `META_BILL_TEMPLATE`, … | each template's name, as it is approved |
 | `GOOGLE_GEOCODING_KEY` | optional; a shared location → PIN |
 
-Leave `WA_BOT_PHONE_IDS` unset for now: the bot answers nobody until Step 7.
+Leave `WA_BOT_PHONE_IDS` unset for now: the main number's bot answers nobody
+until Step 7.
+
+**The clinic line (0224).** Once `META_CLINIC_PHONE_NUMBER_ID` is set, messages
+patients send to the second number are answered as the clinic line — the bot
+works out which clinic is meant (its SS-code, the message replied to, or who
+has been in touch), offers that clinic's doctors and its phone number, and asks
+when it cannot tell. Nothing else is needed for that; to hold it back, set
+`WA_CLINIC_PHONE_IDS` to an empty value. Meta must be sending the second
+number's messages to this project's `whatsapp-inbound` (Step 7's webhook).
+
+When the second number is live, point the clinics' QR codes and OPD-slip links
+at it — one row, no deploy (posters already printed keep working on the main
+number, where the bot reads the same code):
+
+```sql
+insert into site_settings (key, value) values ('wa_clinic_number', '91XXXXXXXXXX')
+on conflict (key) do update set value = excluded.value;
+```
 
 Then the database's own copies for the rating and order senders (0220), and
 the switches, as written in `docs/whatsapp-templates.md`.
@@ -240,6 +258,8 @@ Only after a few days of Step 7 working:
 
 - 0082, 0085 and 0101 stay pending in production until `compute-price` and
   `razorpay-order` are redeployed for them.
-- The "Book appointment" button on clinic messages and clinic-specific replies
-  on the second number are not built.
+- A "Book appointment" button on the clinic templates themselves, and the
+  clinic's phone number in their wording, are not built: both change templates
+  Meta has to approve. A patient who replies gets both from the bot (0224).
+- A person at the clinic or at Sehatsandhi answering by hand (an inbox).
 - The sandbox's six edited migrations.

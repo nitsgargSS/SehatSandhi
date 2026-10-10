@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { moneyExact, isoDate } from '../../lib/format'
-import { methodLabel, downloadCsv } from '../../lib/billingApi'
+import { methodLabel, downloadCsv, getDayHeads, HEAD_LABELS } from '../../lib/billingApi'
 
 // The day's tally (0159): every rupee taken — OPD, IPD, account and the
 // pharmacy counter — by who took it and how. Counted against the cash drawer,
@@ -43,6 +43,8 @@ export default function CollectionsPanel({ businessId, seesEveryone }: { busines
   const [changes, setChanges] = useState<Change[]>([])
   const [person, setPerson] = useState('all')
   const [err, setErr] = useState('')
+  // 0225: what was charged in these dates, by head — set beside what was collected.
+  const [heads, setHeads] = useState<Awaited<ReturnType<typeof getDayHeads>>>([])
 
   useEffect(() => {
     setRows(null)
@@ -50,6 +52,8 @@ export default function CollectionsPanel({ businessId, seesEveryone }: { busines
       if (error) { setErr(error.message); setRows([]); return }
       setErr(''); setRows(((data ?? []) as Row[]).map(r => ({ ...r, amount: Number(r.amount) })))
     })
+    if (seesEveryone) getDayHeads(businessId, from, to).then(setHeads).catch(() => setHeads([]))
+    else setHeads([])
     if (seesEveryone) {
       supabase.from('payment_changes').select('id, action, before, after, changed_by_name, changed_at')
         .eq('business_id', businessId)
@@ -160,6 +164,42 @@ export default function CollectionsPanel({ businessId, seesEveryone }: { busines
             </div>
           </>
         )}
+
+      {seesEveryone && heads.length > 0 && rows !== null && (() => {
+        const billed = heads.reduce((s, h) => s + h.amount, 0)
+        const taken = (rows ?? []).reduce((s, r) => s + r.amount, 0)
+        const gap = Math.round((billed - taken) * 100) / 100
+        return (
+          <div className="card shadow-sm p-0 overflow-x-auto">
+            <p className="px-3 pt-3 font-bold text-navy-700 text-sm">Charged in these dates, by head</p>
+            <table className="w-full text-sm">
+              <tbody>
+                {[...heads].sort((a, b) => b.amount - a.amount).map(h => (
+                  <tr key={h.head} className="border-t">
+                    <td className="px-3 py-1.5">{HEAD_LABELS[h.head] ?? h.head}</td>
+                    <td className="text-right text-gray-500 text-xs">{h.lines} {h.head === 'pharmacy' ? (h.lines === 1 ? 'bill' : 'bills') : (h.lines === 1 ? 'line' : 'lines')}</td>
+                    <td className="text-right px-3">{moneyExact(h.amount)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t font-bold"><td className="px-3 py-1.5">Charged</td><td /><td className="text-right px-3">{moneyExact(billed)}</td></tr>
+                <tr className="border-t"><td className="px-3 py-1.5">Collected (everyone, all methods)</td><td /><td className="text-right px-3">{moneyExact(taken)}</td></tr>
+                {Math.abs(gap) > 0.004 && (
+                  <tr className={`border-t ${gap > 0 ? 'text-amber-700' : 'text-gray-500'}`}>
+                    <td className="px-3 py-1.5" colSpan={2}>
+                      {gap > 0 ? 'Charged but no payment recorded' : 'Collected beyond these dates’ charges (advances, earlier dues)'}
+                    </td>
+                    <td className="text-right px-3 font-bold">{moneyExact(Math.abs(gap))}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <p className="text-xs text-gray-400 px-3 py-2">
+              A fee is "charged" when the token or invoice is made, and "collected" only when a payment is recorded against the patient.
+              Charges before discounts given on a bill.
+            </p>
+          </div>
+        )
+      })()}
 
       {seesEveryone && changes.length > 0 && (
         <div className="card shadow-sm p-0 overflow-x-auto">
