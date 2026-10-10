@@ -52,6 +52,8 @@ export interface SendOutcome {
   error?: string
   /** Meta says the number cannot be reached — most often it has no WhatsApp. */
   unreachable?: boolean
+  /** Meta's id for the message, when it went. */
+  id?: string
 }
 
 const envs = (e: string | string[]) => Array.isArray(e) ? e : [e]
@@ -118,7 +120,7 @@ async function viaMeta(t: TemplateSend): Promise<SendOutcome | null> {
     to: t.to, type: 'template',
     template: { name: tpl.name, language: { code: tpl.lang }, components },
   }, t.fromClinic ? Deno.env.get('META_CLINIC_PHONE_NUMBER_ID') ?? undefined : undefined)
-  return { ok: r.ok, provider: 'meta', error: r.error, unreachable: r.unreachable }
+  return { ok: r.ok, provider: 'meta', error: r.error, unreachable: r.unreachable, id: r.id }
 }
 
 /**

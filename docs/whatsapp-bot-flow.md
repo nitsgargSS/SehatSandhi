@@ -220,3 +220,22 @@ MAIN_MENU.
 - No fallback intents are configured on the flow.
 - Two other flows exist and are switched off: "Main Flow Sehatsandhi copy" and
   "Untitled".
+
+## Added after the rebuild: one clinic's patients (0224)
+
+Not part of the AiSensy flow. In `_shared/bot.ts`:
+
+- **A clinic's code in the message** (`SS-XXXXX` — its QR and slip link type it)
+  → that clinic's menu, on either number: `📅 अपॉइंटमेंट बुक` (its doctors;
+  with one doctor, straight to the times), `🔔 अपडेट पाएं` (agree to hear from
+  it — `bot_clinic_optin`), `🔎 और डॉक्टर खोजें` (MAIN_MENU), and its phone
+  number to ring.
+- **On the clinic line** (the second number), with no code: the clinic whose
+  message was replied to; else the only clinic in touch with this number; else,
+  of several, the one in touch within twelve hours if it is the only such;
+  else a list to choose from. Nobody in touch → MAIN_MENU.
+  `sehat_wa_clinic_line` decides.
+- `🏠 Main Menu` on the clinic line returns to the clinic's menu until the
+  patient asks for `🔎 और डॉक्टर खोजें`; a greeting returns to the clinic.
+- Booking uses the same SEARCH / SLOTS / CHECK_SLOT / BOOK calls with the
+  clinic's code as both speciality and area.

@@ -14,7 +14,13 @@
 //   • STOP / START, and a 1–5 rating after a visit, are answered;
 //   • "लिखकर बताएं": for a patient who does not know which doctor to see,
 //     every menu offers to take the problem in their own words (0221 — the
-//     matcher then finds the sub-speciality: "sugar", "piles", "gupt rog").
+//     matcher then finds the sub-speciality: "sugar", "piles", "gupt rog");
+//   • one clinic's patients (0224): a message carrying a clinic's SS-code —
+//     its QR or slip link — goes to that clinic's doctors, on either number.
+//     On the CLINIC LINE, the second number every clinic's messages go out
+//     from, the bot also works out which clinic is meant from the message
+//     being replied to or from who has been in touch, asks when it cannot
+//     tell, and stays with that clinic until the patient asks for more.
 //
 // Nothing here knows about HTTP or Meta — step() takes where the patient is
 // and what they just sent, and returns where they are now and what to send
@@ -41,7 +47,14 @@ export interface Vars {
   lastPatient?: string
   /** What the matcher thinks they meant, waiting on a yes. */
   pending?: { branch: string; code: string; pin: string }
+  /** The clinic this conversation is with (0224). */
+  clinic?: Clinic
+  /** Clinic line: they asked for all of Sehatsandhi — do not steer back to a clinic this conversation. */
+  general?: boolean
 }
+
+/** A clinic as the bot shows it — sehat_wa_clinic_card. */
+export interface Clinic { code: string; name: string; phone?: string; city?: string; doctors?: number }
 
 export interface Session { state: State; vars: Vars }
 
@@ -54,6 +67,10 @@ export interface Inbound {
   fresh?: boolean
   /** They shared a location: the PIN code or town it is in, or null if that could not be worked out. */
   located?: string | null
+  /** Which number was written to: Sehatsandhi's own, or the one clinics' messages come from. */
+  line?: 'main' | 'clinic'
+  /** The id of the message being replied to, when WhatsApp says. */
+  replyTo?: string | null
 }
 
 export type Reply =
@@ -85,6 +102,9 @@ const DESCRIBE = 'अपनी तकलीफ़ या ज़रूरत अ�
 const DESCRIBE_ROW = { id: 'menu:describe', title: '✍️ लिखकर बताएं', description: 'Not sure which doctor? Type your problem' }
 const NOT_UNDERSTOOD = 'माफ़ कीजिए, हम समझ नहीं पाए। 🙏\nआप लिखकर भी बता सकते हैं — जैसे "दांत का डॉक्टर जगाधरी" — या नीचे से चुनें:'
 const PICK_ONE = 'किसके साथ बुक करना है? नीचे से चुनें या नंबर भेजें 👇'
+const ALL_BUTTON = { id: 'nav:all', title: '🔎 और डॉक्टर खोजें' }
+const QR_UNKNOWN = 'यह QR कोड अभी सक्रिय नहीं है। 🙏\nThis clinic code is not active right now.\n\nआप नीचे से चुन सकते हैं:'
+const WHICH_CLINIC = 'नमस्ते! 🙏\nआप किससे बात करना चाहते हैं? नीचे से चुनें 👇\nWho would you like to reach?'
 const FAILED = 'कुछ गड़बड़ हो गई। कृपया थोड़ी देर बाद फिर कोशिश करें।\nSomething went wrong. Please try again in a little while.'
 
 const MAIN_MENU: Reply = {
@@ -184,7 +204,10 @@ const str = (v: unknown) => typeof v === 'string' ? v : ''
 
 /** What outlives a conversation: the area and the patient offered again next time. */
 export function carry(v: Vars): Vars {
-  return { ...(v.lastPin ? { lastPin: v.lastPin } : {}), ...(v.lastPatient ? { lastPatient: v.lastPatient } : {}) }
+  return {
+    ...(v.lastPin ? { lastPin: v.lastPin } : {}), ...(v.lastPatient ? { lastPatient: v.lastPatient } : {}),
+    ...(v.clinic ? { clinic: v.clinic } : {}), ...(v.general ? { general: true } : {}),
+  }
 }
 
 const failed = (v: Vars): Step => ({ session: { state: 'idle', vars: carry(v) }, replies: [{ kind: 'buttons', body: FAILED, buttons: [MENU_BUTTON] }] })
@@ -276,7 +299,9 @@ async function search(vars: Vars, rpc: Rpc): Promise<Step> {
 /** A search answered: a list to pick from, something to read, or a question back. */
 function found(text: string, route: string, vars: Vars): Step {
   if (route === 'list') {
-    return { session: { state: 'ask_selection', vars: { ...vars, lastPin: vars.pin || vars.lastPin } }, replies: pickList(text) }
+    // A clinic's code stands in for the area when its own doctors are listed: not an area to offer again.
+    const lastPin = CLINIC_CODE.test(vars.pin ?? '') ? vars.lastPin : (vars.pin || vars.lastPin)
+    return { session: { state: 'ask_selection', vars: { ...vars, lastPin } }, replies: pickList(text) }
   }
   if (route === 'info') {
     // "Nothing there yet" also comes back as info, so only a PIN code is worth remembering here.
@@ -331,6 +356,80 @@ async function insuranceLead(vars: Vars, pin: string, phone: string, rpc: Rpc): 
   return { session: { state: 'idle', vars: carry(vars) }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON] }] }
 }
 
+// ── One clinic's patients (0224) ──
+
+const CLINIC_CODE = /SS-[A-Z0-9]{5}/i
+
+function asClinic(o: unknown): Clinic | null {
+  const c = o as Record<string, unknown> | null
+  if (!c || typeof c !== 'object' || !str(c.code) || !str(c.name)) return null
+  return { code: str(c.code), name: str(c.name), phone: str(c.phone), city: str(c.city), doctors: Number(c.doctors ?? 0) }
+}
+
+/** Which clinic a message means: by its code, by the message replied to, or by who has been in touch. */
+async function whichClinic(phone: string, code: string, replyTo: string, rpc: Rpc) {
+  const r = await rpc('sehat_wa_clinic_line', { p_phone: phone, p_code: code, p_reply_to: replyTo })
+  if (!r) return null
+  const clinics = (Array.isArray(r.clinics) ? r.clinics : []).map(asClinic).filter((c): c is Clinic => !!c)
+  return { by: str(r.by), chosen: asClinic(r.chosen), clinics }
+}
+
+/** A clinic's own menu: book with it, hear from it, or its number to ring. */
+function clinicHome(v: Vars, c: Clinic): Step {
+  const body = [
+    `🏥 *${c.name}*${c.city ? `\n📍 ${c.city}` : ''}`,
+    `नमस्ते! 🙏 आप Sehatsandhi के ज़रिए *${c.name}* से जुड़े हैं।\nYou are connected to ${c.name} through Sehatsandhi.`,
+    ...(c.phone ? [`📞 बात करने के लिए कॉल करें / To speak to them, call:\n${c.phone}`] : []),
+    'नीचे से चुनें 👇',
+  ].join('\n\n')
+  const { general: _g, ...rest } = carry(v)
+  return {
+    session: { state: 'idle', vars: { ...rest, clinic: c } },
+    replies: [{
+      kind: 'buttons', body, buttons: [
+        ...(c.doctors ? [{ id: `clinic:book:${c.code}`, title: '📅 अपॉइंटमेंट बुक' }] : []),
+        { id: `clinic:optin:${c.code}`, title: '🔔 अपडेट पाएं' },
+        ALL_BUTTON,
+      ],
+    }],
+  }
+}
+
+/** Several clinics know this number: ask which. */
+function clinicChoice(v: Vars, clinics: Clinic[]): Step {
+  return {
+    session: { state: 'idle', vars: carry(v) },
+    replies: [{
+      kind: 'list', header: 'Sehatsandhi', body: WHICH_CLINIC, sectionTitle: 'चुनें / Choose',
+      rows: [
+        ...clinics.slice(0, 9).map(c => ({ id: `clinic:pick:${c.code}`, title: c.name, ...(c.city ? { description: c.city } : {}) })),
+        { id: 'nav:all', title: '🔎 और डॉक्टर खोजें', description: 'All of Sehatsandhi — doctors, labs, pharmacies' },
+      ],
+    }],
+  }
+}
+
+/** The clinic's doctors, to book with — or, when it has one, straight to that doctor's times. */
+async function clinicBook(v: Vars, code: string, rpc: Rpc): Promise<Step> {
+  // The code is both what to look for and where (bot_pincode reads a clinic's area from it).
+  const vars: Vars = { ...carry(v), code, pin: code }
+  const r = await rpc('bot_generic_search_json', { p_type: 'doctor', p_filter_value: code, p_pincode: code })
+  const text = str(r?.text)
+  if (!text) return failed(v)
+  if (str(r?.route) !== 'list') return { session: { state: 'idle', vars: carry(v) }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON] }] }
+  const { items } = parseItems(text)
+  if (items.length !== 1) return found(text, 'list', vars)
+  // One doctor: no list to pick from, but say whose times these are.
+  const next = await slots({ ...vars, selection: '1' }, rpc)
+  const who = [items[0].head, ...items[0].details.filter(d => !/^https?:\/\//.test(d))].join('\n')
+  const first = next.replies[0]
+  if (next.session.state === 'ask_slot' && first?.kind === 'list') next.replies[0] = { ...first, body: `${who}\n\n${first.body}` }
+  return next
+}
+
+/** Back to where this conversation lives: the clinic's menu on the clinic line, else the main menu. */
+const home = (v: Vars, m: Inbound): Step => m.line === 'clinic' && v.clinic && !v.general ? clinicHome(v, v.clinic) : menu(v)
+
 // ── Said in their own words ──
 
 /** Where a matched need goes next. `text` is what the matcher says back. */
@@ -371,9 +470,11 @@ async function freeText(text: string, vars: Vars, phone: string, rpc: Rpc): Prom
 }
 
 /** A tap on a menu row or a navigation button. null: not one of those. */
-function tapped(id: string, s: Session): Step | null {
+function tapped(id: string, s: Session, m: Inbound): Step | null {
   const v = s.vars
-  if (id === 'nav:menu') return menu(v)
+  if (id === 'nav:menu') return home(v, m)
+  // All of Sehatsandhi, from a clinic's menu.
+  if (id === 'nav:all') return menu({ ...v, general: true })
   if (id === 'nav:pin') return v.code ? askPin(v.code, v) : menu(v)
   if (id === 'menu:doctor') return show(v, SPECIALITY_MENU)
   if (id === 'menu:lab') return show(v, TEST_TYPE_MENU)
@@ -394,14 +495,33 @@ function tapped(id: string, s: Session): Step | null {
  */
 export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Promise<Step> {
   const vars = { ...s.vars }
+  // "All of Sehatsandhi" lasts the conversation it was asked in.
+  if (m.fresh) delete vars.general
+  s = { state: s.state, vars }
   let state = s.state
   let text = (m.text ?? '').trim()
   let typed = !m.replyId
 
   if (m.replyId) {
     const id = m.replyId
-    const t = tapped(id, s)
+    const t = tapped(id, s, m)
     if (t) return t
+    // A clinic's own buttons carry its code, so they work from any earlier message.
+    const cm = id.match(/^clinic:(pick|book|optin):(SS-[A-Z0-9]{5})$/)
+    if (cm) {
+      const [, what, code] = cm
+      delete vars.general   // back with a clinic
+      if (what === 'pick') {
+        const w = await whichClinic(phone, code, '', rpc)
+        return w?.chosen ? clinicHome(vars, w.chosen) : menu(vars, QR_UNKNOWN)
+      }
+      if (what === 'book') return clinicBook(vars, code, rpc)
+      // 0143: agreeing to hear from this clinic — asked for, never assumed from a scan.
+      const r = await rpc('bot_generic_search_json', { p_type: 'optin', p_filter_value: code, p_pincode: phone })
+      const out = str(r?.text)
+      if (!out) return failed(vars)
+      return { session: { state: 'idle', vars: carry(vars) }, replies: [{ kind: 'buttons', body: out, buttons: [MENU_BUTTON] }] }
+    }
     // Taps that stand for an answer.
     if (id === 'ft:yes') {
       const p = vars.pending
@@ -417,7 +537,7 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
     // A doctor or a time picked from a list — also from an earlier list, to change one's mind.
     else if (id.startsWith('sel:') && vars.code && vars.pin) { text = id.slice(4); state = 'ask_selection' }
     else if (id.startsWith('slot:') && vars.code && vars.pin && vars.selection) { text = id.slice(5); state = 'ask_slot' }
-    else if (/^(pin|name|sel|slot|loc):/.test(id)) return menu(vars)   // a button from a conversation that is over
+    else if (/^(pin|name|sel|slot|loc|clinic):/.test(id)) return home(vars, m)   // a button from a conversation that is over
     else typed = true                                             // not ours (a template's button): read its words
   }
 
@@ -431,7 +551,30 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
     text = m.located
   }
 
-  if (KEYWORDS.has(text.toUpperCase())) return menu(vars)
+  // 0224: a clinic's code, wherever in the chat it arrives — its QR was scanned.
+  const scanned = typed ? text.match(CLINIC_CODE)?.[0].toUpperCase() : undefined
+  if (scanned) {
+    const w = await whichClinic(phone, scanned, '', rpc)
+    return w?.chosen ? clinicHome(vars, w.chosen) : menu(vars, QR_UNKNOWN)
+  }
+
+  const greeting = KEYWORDS.has(text.toUpperCase())
+  if (m.line === 'clinic' && typed && m.located === undefined && !/^(stop|start)$/i.test(text)) {
+    // On the clinic line a greeting starts over, and leaves "all of Sehatsandhi".
+    if (greeting) { state = 'idle'; delete vars.general }
+    // Not in the middle of a booking: which clinic is this for?
+    if (state === 'idle' && (!vars.general || m.replyTo)) {
+      const w = await whichClinic(phone, '', m.replyTo ?? '', rpc)
+      if (w && !(vars.general && w.by !== 'reply')) {
+        if (w.chosen) return clinicHome(vars, w.chosen)
+        // Several, and none stands out: stay with the one this conversation is with, unless another has written since.
+        if (!m.fresh && vars.clinic && w.clinics[0]?.code === vars.clinic.code) return clinicHome(vars, w.clinics[0])
+        if (w.clinics.length > 1) return clinicChoice(vars, w.clinics)
+      }
+    }
+  }
+
+  if (greeting) return menu(vars)
 
   if (typed && /^(stop|start)$/i.test(text)) {
     // 0173: opting out of, and back into, messages we start.

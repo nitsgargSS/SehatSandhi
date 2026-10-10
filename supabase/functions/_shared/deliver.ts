@@ -114,6 +114,9 @@ export async function sendDocumentLink(
       if (r.ok) {
         sent.push('whatsapp')
         chargedPaise = Number(charge.rate_paise ?? 0)
+        // 0224: so a reply on the shared clinic line is known to be for this clinic.
+        await supabase.rpc('sehat_wa_clinic_sent', { p_phone: t.phone, p_business: t.businessId, p_message_id: r.id ?? null })
+          .then(() => undefined, () => undefined)
       } else {
         errors.push(r.error ?? 'whatsapp: not sent')
         const { error: rErr } = await supabase.rpc('sehat_wallet_refund_direct', { p_tx: charge.tx })
