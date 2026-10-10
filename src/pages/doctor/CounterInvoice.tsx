@@ -223,7 +223,7 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
         <div style={{ fontSize: 12, color: gstin ? BIZ.muted : '#8a5a00' }}>
           {gstin
             ? `GST is added to the rate of each line that carries it. GSTIN ${gstin} prints on the invoice.`
-            : 'This clinic has no GSTIN saved, so none will print on the invoice. GST may only be collected by a registered business — save the GSTIN under Clinic details, or choose "No GST".'}
+            : 'This clinic has no GSTIN saved, so none will print on the invoice. GST may only be collected by a registered business — save it under "GST number" in the clinic's settings, or choose "No GST".'}
         </div>
       )}
 
