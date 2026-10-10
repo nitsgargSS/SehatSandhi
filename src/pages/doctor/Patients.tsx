@@ -55,7 +55,7 @@ import { listBusinessDoctors, BusinessDoctor, setPatientDoctor, getPatientDoctor
 import { inStockMedicines, suggestMedicines, rxFromStock, itemLabel, type StockRow } from '../../lib/pharmacyApi'
 import DoctorSelect from '../../components/DoctorSelect'
 import SendMenu from '../../components/SendMenu'
-import FeeChooser, { FeeChoice, emptyFee, feeToCharge, feeValid } from './FeeChooser'
+import FeeChooser, { FeeChoice, FeePaidChooser, FeePaidNote, PAID_HOW_MISSING, emptyFee, feeDueOf, feeToCharge, feeValid, useFeePaidHow } from './FeeChooser'
 import { opdVisit, opdSlipUrl, patientHistory, HistoryRow, vitalsLine, setTokenStatus } from '../../lib/queueApi'
 import { updatePatientDetails, patientDetailChanges, patientPhones, addPatientPhone, removePatientPhone, type DetailChange, type OtherPhone } from '../../lib/patientsApi'
 import { phoneProblem } from '../../lib/credentials'
@@ -506,7 +506,8 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
   // and a warning when the number already has patients here.
   const [toOpd, setToOpd] = useState(true)
   const [fee, setFee] = useState<FeeChoice>(emptyFee)
-  const [done, setDone] = useState<{ id: string; queueId: string | null; token: number | null } | null>(null)
+  const [paidHow, setPaidHow] = useFeePaidHow()
+  const [done, setDone] = useState<{ id: string; queueId: string | null; token: number | null; fee: number; paid: number } | null>(null)
   const [onNumber, setOnNumber] = useState<PatientSearchResult[]>([])
   useEffect(() => {
     const d = form.phone.replace(/\D/g, '')
@@ -519,6 +520,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
   const opdDoctor = doctors.find(d => d.practitioner_id === opdDoctorId) ?? null
 
   const save = async () => {
+    if (toOpd && feeDueOf(fee, opdDoctor) > 0 && !paidHow) { setErr(PAID_HOW_MISSING); return }
     setBusy(true); setErr('')
     try {
       const id = await registerPatient(businessId, {
@@ -541,8 +543,9 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
       const r = await opdVisit({
         businessId, patientMemberId: id, practitionerId: doc,
         fee: feeToCharge(fee), discountReason: fee.mode === 'full' ? null : fee.reason.trim(),
+        paidMethod: feeDueOf(fee, opdDoctor) > 0 ? paidHow : null,
       })
-      setDone({ id, queueId: r.queue_id, token: r.token_number })
+      setDone({ id, queueId: r.queue_id, token: r.token_number, fee: Number(r.fee ?? 0), paid: Number(r.paid ?? 0) })
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -554,7 +557,8 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
     return (
       <div style={card}>
         <div style={{ fontSize: 14, color: BIZ.ink, marginBottom: 10 }}>
-          ✓ Registered{done.token != null ? ` · Token ${done.token}` : ''}{opdDoctor ? ` for ${opdDoctor.full_name}` : ''}.
+          ✓ Registered{done.token != null ? ` · Token ${done.token}` : ''}{opdDoctor ? ` for ${opdDoctor.full_name}` : ''}.{' '}
+          {done.token != null && <FeePaidNote fee={done.fee} paid={done.paid} />}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {done.queueId && (
@@ -647,6 +651,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
           OPD visit now — give a token{opdDoctor ? ` for ${opdDoctor.full_name}` : ''} and add the fee
         </label>
         {toOpd && <FeeChooser doctor={opdDoctor} value={fee} onChange={setFee} input={input} />}
+        {toOpd && <FeePaidChooser due={feeDueOf(fee, opdDoctor)} value={paidHow} onChange={setPaidHow} />}
 
         {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
 
@@ -3366,10 +3371,11 @@ function OpdVisitCard({ memberId, businessId, practitionerId, onChange }: {
   const [open, setOpen] = useState(false)
   const [doc, setDoc] = useState<string | null>(null)
   const [fee, setFee] = useState<FeeChoice>(emptyFee)
+  const [paidHow, setPaidHow] = useFeePaidHow()
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [issued, setIssued] = useState<{ id: string; token: number } | null>(null)
+  const [issued, setIssued] = useState<{ id: string; token: number; fee: number; paid: number } | null>(null)
 
   const load = useCallback(() => {
     patientHistory(businessId, memberId).then(h => {
@@ -3384,13 +3390,15 @@ function OpdVisitCard({ memberId, businessId, practitionerId, onChange }: {
   const seenBy = Array.from(new Set(history.map(h => h.doctor_name).filter(Boolean)))
 
   const go = async () => {
+    if (feeDueOf(fee, chosen) > 0 && !paidHow) { setErr(PAID_HOW_MISSING); return }
     setBusy(true); setErr('')
     try {
       const r = await opdVisit({
         businessId, patientMemberId: memberId, practitionerId: chosen?.practitioner_id ?? null,
         reason, fee: feeToCharge(fee), discountReason: fee.mode === 'full' ? null : fee.reason.trim(),
+        paidMethod: feeDueOf(fee, chosen) > 0 ? paidHow : null,
       })
-      setIssued({ id: r.queue_id, token: r.token_number })
+      setIssued({ id: r.queue_id, token: r.token_number, fee: Number(r.fee ?? 0), paid: Number(r.paid ?? 0) })
       setOpen(false); setFee(emptyFee); setReason('')
       load(); onChange()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
@@ -3408,8 +3416,9 @@ function OpdVisitCard({ memberId, businessId, practitionerId, onChange }: {
         {!open && <button style={btn(true)} onClick={() => setOpen(true)}>New OPD visit</button>}
       </div>
       {issued && (
-        <div style={{ fontSize: 13, marginTop: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ fontSize: 13, marginTop: 8, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           ✓ Token {issued.token} issued.
+          <FeePaidNote fee={issued.fee} paid={issued.paid} />
           <a href={opdSlipUrl(issued.id)} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>Print OPD slip</a>
         </div>
       )}
@@ -3429,6 +3438,7 @@ function OpdVisitCard({ memberId, businessId, practitionerId, onChange }: {
             <DoctorSelect doctors={doctors} value={doc} onChange={v => { setDoc(v); setFee(emptyFee) }} allLabel="Which doctor?" style={input} />
           )}
           <FeeChooser doctor={chosen} value={fee} onChange={setFee} input={input} />
+          <FeePaidChooser due={feeDueOf(fee, chosen)} value={paidHow} onChange={setPaidHow} />
           <input style={input} placeholder="What have they come for? (optional)" value={reason} onChange={e => setReason(e.target.value)} />
           {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
           <div style={{ display: 'flex', gap: 8 }}>

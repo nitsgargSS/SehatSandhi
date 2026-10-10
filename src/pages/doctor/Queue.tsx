@@ -6,11 +6,9 @@ import {
   getBoard, callNext, setTokenStatus, opdVisit, patientHistory, opdSlipUrl, HistoryRow,
   stillWaiting, inProgress, finished,
   QueueEntry, getVitalsDone, getTodaysVitals, vitalsLine, tokenVisit, reopenToken, visitHasDiagnosis,
-  FEE_PAID_OPTIONS,
 } from '../../lib/queueApi'
-import { moneyExact } from '../../lib/format'
 import { searchPatients, PatientSearchResult, registerPatient, addVital, Vital } from '../../lib/patientsApi'
-import FeeChooser, { FeeChoice, doctorFee, emptyFee, feeToCharge, feeValid } from './FeeChooser'
+import FeeChooser, { FeeChoice, FeePaidChooser, FeePaidNote, PAID_HOW_MISSING, emptyFee, feeDueOf, feeToCharge, feeValid, useFeePaidHow } from './FeeChooser'
 import { listBusinessDoctors, BusinessDoctor } from '../../lib/doctorsApi'
 import DoctorSelect from '../../components/DoctorSelect'
 import { phoneProblem } from '../../lib/credentials'
@@ -382,7 +380,7 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
   const [fee, setFee] = useState<FeeChoice>(emptyFee)
   // 0226: how the fee was paid — asked once, then kept for the next patient,
   // since a desk mostly takes money the same way. '' = not said yet.
-  const [paidHow, setPaidHow] = useState('')
+  const [paidHow, setPaidHow] = useFeePaidHow()
   const [history, setHistory] = useState<HistoryRow[] | null>(null)
   const [adding, setAdding] = useState(false)
   const [np, setNp] = useState({ name: '', phone: '', age: '', gender: '', pin: '' })
@@ -401,7 +399,7 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
 
   const chosenDoctor = doctors.find(d => d.practitioner_id === (forDoctor ?? practitionerId ?? null)) ?? null
   // What this token will charge: the doctor's fee, a discounted one, or nothing.
-  const feeDue = doctorFee(chosenDoctor) <= 0 ? 0 : fee.mode === 'full' ? doctorFee(chosenDoctor) : fee.mode === 'free' ? 0 : Number(fee.price) || 0
+  const feeDue = feeDueOf(fee, chosenDoctor)
 
   const registerNew = async () => {
     setBusy(true)
@@ -434,7 +432,7 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
     if (priority && !why.trim()) { onError('Say why this token goes out of turn.'); return }
     if (doctors.length > 1 && !forDoctor) { onError('Choose which doctor this token is for.'); return }
     if (!feeValid(fee, chosenDoctor)) { onError('For a discount or free visit, enter the amount and say why.'); return }
-    if (feeDue > 0 && !paidHow) { onError('Say how the fee was received — or choose "Not received now".'); return }
+    if (feeDue > 0 && !paidHow) { onError(PAID_HOW_MISSING); return }
     setBusy(true)
     try {
       const r = await opdVisit({
@@ -460,9 +458,7 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
       {issued && (
         <div style={{ fontSize: 13, marginBottom: 10, padding: '8px 10px', borderRadius: 9, background: '#f3faf6', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           ✓ Token {issued.token} issued.
-          {issued.fee > 0 && (issued.paid > 0
-            ? <span style={{ color: BIZ.green }}>{moneyExact(issued.paid)} received.</span>
-            : <span style={{ color: '#8a5a00' }}>{moneyExact(issued.fee)} fee not received yet — take it in the patient's Billing.</span>)}
+          <FeePaidNote fee={issued.fee} paid={issued.paid} />
           <a href={opdSlipUrl(issued.id)} target="_blank" rel="noreferrer" style={{ color: BIZ.green, fontWeight: 700 }}>
             Print OPD slip
           </a>
@@ -560,16 +556,7 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
             <DoctorSelect doctors={doctors} value={forDoctor} onChange={v => { setForDoctor(v); setFee(emptyFee) }} allLabel="Which doctor did they come for?" style={input} />
           )}
           <FeeChooser doctor={chosenDoctor} value={fee} onChange={setFee} input={input} />
-          {feeDue > 0 && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
-              <span style={{ fontWeight: 700, color: BIZ.ink }}>Fee received:</span>
-              {FEE_PAID_OPTIONS.map(([v, l]) => (
-                <label key={v} style={{ display: 'flex', gap: 5, alignItems: 'center', cursor: 'pointer', color: v === 'later' ? BIZ.mutedWarm : BIZ.ink }}>
-                  <input type="radio" name="feePaidHow" checked={paidHow === v} onChange={() => setPaidHow(v)} /> {l}
-                </label>
-              ))}
-            </div>
-          )}
+          <FeePaidChooser due={feeDue} value={paidHow} onChange={setPaidHow} />
           <input style={input} value={reason} onChange={e => setReason(e.target.value)}
             placeholder="What have they come for? (optional)" />
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: BIZ.ink }}>
