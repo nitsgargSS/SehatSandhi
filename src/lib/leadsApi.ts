@@ -21,6 +21,8 @@ export const LEAD_SOURCES: { id: string; label: string }[] = [
   { id: 'video_founder_intro', label: 'Video: founder intro' },
   { id: 'video_doctors_flow', label: 'Video: doctors flow' },
   { id: 'meta_ad', label: 'Meta ad' },
+  // 0223: registered on the website and stopped at the payment screen — made by the database.
+  { id: 'signup_unfinished', label: 'Unfinished registration' },
   { id: 'inbound_call', label: 'Inbound call' },
   { id: 'referral', label: 'Referral' },
   { id: 'other', label: 'Other' },
@@ -30,6 +32,7 @@ export const CONSENT_TYPES: { id: string; label: string }[] = [
   { id: 'called_us', label: 'Called us' },
   { id: 'messaged_us', label: 'Messaged us' },
   { id: 'ad_optin', label: 'Ad opt-in' },
+  { id: 'registered', label: 'Registered with us' },
 ]
 
 export const sourceLabel = (id: string | null) =>
@@ -80,6 +83,8 @@ export interface Lead {
   close_reason: string | null
   email: string | null
   city: string | null
+  /** 0223: the unfinished registration this lead came from, while it exists. */
+  business_id?: string | null
 }
 
 export interface LeadNote {
@@ -143,6 +148,18 @@ export async function updateLead(id: string, patch: Partial<Pick<Lead, 'stage' |
   const { data, error } = await supabase.from('doctor_leads').update(patch).eq('id', id).select('*').single()
   if (error) throw new Error(error.message)
   return data as Lead
+}
+
+/**
+ * 0223, admins only: delete the unfinished registration behind a lead — the
+ * pending business, its payment attempts, and the doctor and login that exist
+ * only because of it — so the same number and email can register afresh. The
+ * lead itself stays. The server refuses anything that has paid or has patients.
+ */
+export async function deleteUnfinishedSignup(businessId: string): Promise<{ name: string; doctors_removed: number; login_removed: boolean }> {
+  const { data, error } = await supabase.rpc('sehat_admin_delete_unfinished_signup', { p_business: businessId })
+  if (error) throw new Error(error.message)
+  return data as { name: string; doctors_removed: number; login_removed: boolean }
 }
 
 export async function listNotes(leadId: string): Promise<LeadNote[]> {

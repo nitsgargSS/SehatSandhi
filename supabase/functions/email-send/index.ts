@@ -11,6 +11,8 @@
 //   doctor_invite        → the new staff member: sign in, set a password; doctors also fill in the profile (0139, 0149)
 //   nurse_unassigned     → the business: a nurse is now linked to no doctor (0149)
 //   wa_broadcast_rejected → the business: why a broadcast was not approved, and the refund (0155)
+//   signup_reminder      → a business that registered and stopped at payment: what joining
+//                          gives it, and the link to finish (0223). payload.n is 1 or 2.
 //
 // Until ZEPTOMAIL_TOKEN is set nothing is sent and rows wait. A welcome still
 // waiting after two days is skipped rather than sent late; the admin alert is
@@ -108,6 +110,17 @@ Deno.serve(async (req) => {
       continue
     }
 
+    if (r.kind === 'signup_reminder') {
+      const res = await sendSignupReminder(db, r.business_id, r.payload, site)
+      if (res === 'skip') { await finish({ status: 'skipped', last_error: 'paid, removed, or no address' }); continue }
+      if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
+      else {
+        const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
+        await finish({ status: giveUp ? 'failed' : 'pending', last_error: res.error }); failed++
+      }
+      continue
+    }
+
     if (r.kind === 'nurse_unassigned') {
       const res = await sendNurseUnassigned(db, r.business_id, r.practitioner_id, r.payload, site)
       if (res === 'skip') { await finish({ status: 'skipped', last_error: 'nurse re-linked, gone, or no address' }); continue }
@@ -172,6 +185,67 @@ Deno.serve(async (req) => {
 function place(b: Biz): string {
   return [b.own_city, b.own_district, b.own_state].filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i).join(', ') + (b.own_pin_code ? ` ${b.own_pin_code}` : '')
+}
+
+// 0223: to a business that registered and did not pay. The first says what
+// joining gives it; the second is shorter and offers a call. Checked again at
+// send time: a business that has paid since, or been removed, is not written to.
+// deno-lint-ignore no-explicit-any
+async function sendSignupReminder(db: any, businessId: string | null, payload: any, site: string): Promise<SendResult | 'skip'> {
+  if (!businessId) return 'skip'
+  const { data: b } = await db.from('businesses').select('id, name, vertical, email, status').eq('id', businessId).maybeSingle()
+  const to = String(b?.email ?? '').trim()
+  if (!b || b.status !== 'pending' || !to.includes('@')) return 'skip'
+  const { data: paid } = await db.from('payments').select('id').eq('business_id', b.id).eq('status', 'paid').limit(1)
+  if (paid?.length) return 'skip'
+  return sendEmail(signupReminder({ name: b.name, vertical: b.vertical, email: to }, Number(payload?.n) === 2 ? 2 : 1, site))
+}
+
+/** What joining gives a business — said plainly, with nothing promised that is not there. */
+export function signupReminder(b: { name: string; vertical: string | null; email: string }, n: 1 | 2, site: string): Email {
+  const login = `${site}/business/login`
+  const clinical = b.vertical === 'clinic' || b.vertical === 'hospital'
+  const benefits: [string, string][] = [
+    ['More patients find you', 'Patients near you search for a doctor on Sehatsandhi\u2019s WhatsApp, app and website and book with you directly \u2014 day or night, without a phone call.'],
+    ['WhatsApp to your own patients \u2014 coming shortly', 'With the WhatsApp add-on you will be able to send your patients a health-camp notice, a festival greeting, news of a new doctor or timings, and their prescriptions and bills \u2014 from Sehatsandhi\u2019s verified WhatsApp number, with your name on every message.'],
+    ...(clinical ? [['Free OPD and IPD software', 'Your listing includes the OPD and IPD system at no extra charge: tokens and queue, patient records, prescriptions, bills, beds and discharge summaries \u2014 on your computer and your phone.'] as [string, string]] : []),
+    ['A verified profile', 'Your own page with your qualifications, timings and fees, and ratings from patients who actually visited.'],
+    ['Less time on the phone', 'Online bookings arrive in your dashboard with the patient\u2019s details, and your staff see the day\u2019s list in one place.'],
+  ]
+  const li = benefits.map(([h, t]) => `<li style="margin-bottom:10px"><b>${h}.</b> ${t}</li>`).join('')
+  const button = `<p style="margin:0 0 18px"><a href="${login}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:bold">Finish joining Sehatsandhi</a></p>`
+  const how = `Log in at <a href="${login}" style="color:#0f6b4a">${login.replace(/^https?:\/\//, '')}</a> with <b>${esc(b.email)}</b> \u2014 choose "Email me a code", no password needed \u2014 and your details are there as you left them.`
+  const stop = `<p style="margin:0;color:#5b6b63;font-size:13px">Did not mean to register, or changed your mind? Reply to this email and we will remove your details.</p>`
+
+  if (n === 2) {
+    const title = `${b.name} is one step from being listed`
+    return {
+      to: b.email, toName: b.name, subject: `Shall we help you finish, ${b.name}?`,
+      html: layout(title, `
+<p style="margin:0 0 14px">You began registering <b>${esc(b.name)}</b> on Sehatsandhi a few days ago and stopped at the last step. Your details are saved; only the plan is left to choose.</p>
+<p style="margin:0 0 14px">If something was unclear \u2014 the price, the WhatsApp add-on, how the OPD software works \u2014 just <b>reply to this email with a good time to call</b> and one of us will ring you.</p>
+<p style="margin:0 0 18px">${how}</p>
+${button}${stop}`),
+      text: [title, '', `You began registering ${b.name} on Sehatsandhi a few days ago and stopped at the last step. Your details are saved; only the plan is left to choose.`, '',
+        'If something was unclear, reply to this email with a good time to call and one of us will ring you.', '',
+        `Finish here: ${login} (log in with ${b.email}, "Email me a code")`, '',
+        'Did not mean to register, or changed your mind? Reply and we will remove your details.'].join('\n'),
+    }
+  }
+
+  const title = `${b.name}: your Sehatsandhi registration is waiting`
+  return {
+    to: b.email, toName: b.name, subject: `Finish joining Sehatsandhi \u2014 ${b.name} is almost listed`,
+    html: layout(title, `
+<p style="margin:0 0 14px">Thank you for starting to register <b>${esc(b.name)}</b>. You stopped just before the last step, so your listing is not live yet. Here is what you get when it is:</p>
+<ul style="margin:0 0 18px;padding-left:20px">${li}</ul>
+<p style="margin:0 0 18px">${how}</p>
+${button}${stop}`),
+    text: [title, '', `Thank you for starting to register ${b.name}. You stopped just before the last step, so your listing is not live yet. What you get when it is:`, '',
+      ...benefits.map(([h, t]) => `- ${h}. ${t}`), '',
+      `Finish here: ${login} (log in with ${b.email}, "Email me a code")`, '',
+      'Did not mean to register, or changed your mind? Reply and we will remove your details.'].join('\n'),
+  }
 }
 
 function welcome(b: Biz, site: string): Email | null {
