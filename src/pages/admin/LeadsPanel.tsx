@@ -8,6 +8,7 @@ import {
   CLOSE_REASONS, ACTIVITY_KINDS, CALL_OUTCOMES, ActivityKind, Assignee, TeamRow,
   sourceLabel, closeLabel, outcomeLabel, normalisePhone, displayPhone,
   listLeads, findLeadByPhone, createLead, updateLead, listNotes, logActivity, listAssignees, teamSummary,
+  deleteUnfinishedSignup,
 } from '../../lib/leadsApi'
 
 // Doctor leads: who to ring next, what happened last time, and who is on it.
@@ -381,7 +382,43 @@ function LeadRow({ lead, today, isAdmin, myUid, team, nameOf, open, onToggle, on
           </button>
         </div>
       </div>
+      {open && lead.business_id && (
+        <UnfinishedSignup lead={lead} isAdmin={isAdmin} onRemoved={() => onSaved({ ...lead, business_id: null })} onError={onError} />
+      )}
       {open && <Timeline lead={lead} initialKind={logKind} saving={saving} onSave={save} />}
+    </div>
+  )
+}
+
+// 0223: this lead registered on the website and stopped at the payment screen.
+// The registration is still there, pending — they can log in and finish, and
+// two reminder emails go to them while the lead is open. An admin can remove
+// it, which frees the number and email to register again; the lead stays.
+function UnfinishedSignup({ lead, isAdmin, onRemoved, onError }: {
+  lead: Lead; isAdmin: boolean; onRemoved: () => void; onError: (m: string) => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const remove = async () => {
+    setBusy(true)
+    try { await deleteUnfinishedSignup(lead.business_id!); onError(''); onRemoved() }
+    catch (e) { onError((e as Error).message) } finally { setBusy(false); setConfirming(false) }
+  }
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-900 space-y-2">
+      <p>
+        <b>Registered but did not pay.</b> Their details are saved as a pending listing; they can log in and finish at any time.
+        While this lead is open they are sent two reminder emails, a day and five days after registering. Close the lead to stop them.
+      </p>
+      {isAdmin && (confirming ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span>Delete the pending listing, its doctor and its login? This cannot be undone. The lead stays.</span>
+          <button disabled={busy} onClick={remove} className="font-semibold px-3 py-1 rounded-full bg-red-500 hover:bg-red-600 text-white disabled:opacity-50">{busy ? 'Removing…' : 'Yes, remove it'}</button>
+          <button onClick={() => setConfirming(false)} className="underline">Cancel</button>
+        </div>
+      ) : (
+        <button onClick={() => setConfirming(true)} className="underline">Remove the unfinished registration…</button>
+      ))}
     </div>
   )
 }
