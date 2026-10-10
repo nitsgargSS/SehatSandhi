@@ -5,7 +5,7 @@ import { shortDate, dateTime } from '../../lib/format'
 import {
   MarketingSettings, WaTemplate, MarketingReportRow, BroadcastForReview, rupees, renderTemplate,
   getMarketingSettings, updateMarketingSettings, listTemplates, updateTemplate, createTemplate,
-  getMarketingReport, getWalletReport, type WalletReport, sendTestMessage, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
+  getMarketingReport, getWalletReport, type WalletReport, getWaCosts, type WaCosts, sendTestMessage, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
   setWaComplimentary, listWaComplimentary,
 } from '../../lib/marketingApi'
 
@@ -71,6 +71,7 @@ export default function WhatsAppMarketingPanel({ businesses, isManager = false }
       </p>
 
       <WalletMoneyCard />
+      <MetaCostCard />
 
       {settings && <SettingsCard settings={settings} onSaved={setSettings} />}
       </>}
@@ -231,6 +232,64 @@ function NewTemplateForm({ onCreated }: { onCreated: () => void }) {
         <button onClick={save} disabled={busy || !f.name.trim()} className="btn-teal text-sm disabled:opacity-50">{busy ? 'Saving…' : 'Save template'}</button>
         <button onClick={() => setOpen(false)} className="text-sm text-gray-500 underline">Cancel</button>
       </div>
+    </div>
+  )
+}
+
+// 0227: what Meta charged for the messages our numbers sent, read from its
+// delivery receipts — by kind, against the month's free allowance, and what
+// the bot spends per patient message and per booking.
+function MetaCostCard() {
+  const [c, setC] = useState<WaCosts | null>(null)
+  const [err, setErr] = useState('')
+  useEffect(() => { getWaCosts().then(setC).catch(e => setErr((e as Error).message)) }, [])
+  const rs = (n: number) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const label = (k: { category: string; type: string }) =>
+    `${k.category.charAt(0).toUpperCase()}${k.category.slice(1)}${k.type ? ` · ${k.type.replace(/_/g, ' ')}` : ''}`
+  const per = (a: number, b: number) => b > 0 ? (a / b).toFixed(1) : '—'
+
+  return (
+    <div className="card shadow-sm">
+      <h3 className="font-bold text-navy-700">What Meta charged, this month</h3>
+      <p className="text-sm text-gray-500 mt-1">
+        Every message our numbers sent, with what Meta's delivery receipt said it was charged as. The rupees are Meta's "billable" verdict times our copy of its rates, before GST; Meta's invoice is the final word.
+      </p>
+      {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
+      {c && c.sent === 0 && <p className="mt-3 text-sm text-gray-500">No messages recorded yet this month.</p>}
+      {c && c.sent > 0 && <>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+          <StatTile label="Messages sent" value={c.sent.toLocaleString('en-IN')} sub={`${c.free.toLocaleString('en-IN')} free · ${c.billable.toLocaleString('en-IN')} charged`} />
+          <StatTile label="Cost (est.)" value={rs(c.cost_rupees)} sub={c.unpriced ? `${c.unpriced} not priced yet` : undefined} />
+          <StatTile label="Bot messages per patient message" value={per(c.bot.messages, c.bot.patient_messages)} sub={c.bot.two_or_more ? `${c.bot.two_or_more} answered with 2 or more` : 'one each, as intended'} tone={c.bot.two_or_more ? 'alert' : 'normal'} />
+          <StatTile label="Bot messages per booking" value={per(c.bot.messages, c.bot.bookings)} sub={`${c.bot.bookings} bookings · ${c.bot.patients} patients`} />
+        </div>
+        {c.free_tier.map(f => (
+          <p key={f.phone_number_id} className="mt-3 text-sm bg-gray-50 rounded-lg px-3 py-2">
+            Number {f.phone_number_id}: <b>{f.free_used.toLocaleString('en-IN')}</b> of {f.free_allowance.toLocaleString('en-IN')} free service messages used this month
+            {f.free_used >= f.free_allowance * 0.8 ? <span className="text-amber-700"> — nearly used up; replies after that are charged.</span> : '.'}
+          </p>
+        ))}
+        <div className="overflow-x-auto mt-3">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-xs text-gray-500">
+              <th className="py-2 pr-3">Charged as</th><th className="pr-3 text-right">Messages</th><th className="pr-3 text-right">Charged</th><th className="text-right">Cost (est.)</th>
+            </tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {c.by_kind.map(k => (
+                <tr key={k.category + k.type}>
+                  <td className="py-2 pr-3 text-navy-700">{label(k)}</td>
+                  <td className="pr-3 text-right">{k.messages.toLocaleString('en-IN')}</td>
+                  <td className="pr-3 text-right">{k.billable.toLocaleString('en-IN')}</td>
+                  <td className="text-right">{rs(k.rupees)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">
+          Rates used, paise per message: service {c.rates.service}, utility {c.rates.utility}, marketing {c.rates.marketing}, authentication {c.rates.authentication}. A message with no receipt yet shows as not priced.
+        </p>
+      </>}
     </div>
   )
 }

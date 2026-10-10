@@ -24,6 +24,10 @@
 // answered too, as the clinic line: the bot works out which clinic the patient
 // means and stays with it. A patient has one conversation per line.
 //
+// WHAT IT COSTS (0227): every message the bot sends is written to wa_sent_log,
+// and every delivery receipt Meta posts here — for any message from our
+// numbers — records what Meta charged it as (`statuses[].pricing`).
+//
 // Auth: ?key=<WA_INBOUND_SECRET> in the URL (AiSensy cannot add headers), and
 // for Meta also its X-Hub-Signature-256 over the body, checked against
 // META_APP_SECRET when that is set. Meta's one-time GET handshake is answered
@@ -178,6 +182,13 @@ async function runBot(db: Any, e: Extracted, line: 'main' | 'clinic'): Promise<s
       for (const message of toMeta(reply)) {
         const r = await graphSend({ to: phone, ...message }, from)
         if (!r.ok) errors.push(r.error ?? 'not sent')
+        // 0227: what was sent, and in answer to which message — its receipts add what it cost.
+        else if (r.id) {
+          await db.rpc('sehat_wa_sent', {
+            p_wamid: r.id, p_phone: phone, p_phone_number_id: from, p_line: line, p_kind: reply.kind,
+            p_in_reply_to: e.id ?? null, p_bot_state: next.session.state,
+          }).then(() => undefined, () => undefined)
+        }
       }
     }
     // The area a shared location came to — a PIN or town, nothing finer — so a lookup that fails shows.
@@ -224,7 +235,17 @@ Deno.serve(async (req) => {
   // deliver it — the clinic gets that message's price back.
   if (signed) {
     for (const entry of payload?.entry ?? []) for (const change of entry?.changes ?? []) for (const st of change?.value?.statuses ?? []) {
-      if (st?.status !== 'failed' || !st?.id) continue
+      if (!st?.id) continue
+      // 0227: where the message has got to, and what Meta charges it as.
+      const at = Number(st.timestamp)
+      await db.rpc('sehat_wa_receipt', {
+        p_wamid: st.id, p_status: String(st.status ?? ''), p_phone: st.recipient_id ?? null,
+        p_phone_number_id: change?.value?.metadata?.phone_number_id ?? null,
+        p_billable: typeof st.pricing?.billable === 'boolean' ? st.pricing.billable : null,
+        p_category: st.pricing?.category ?? null, p_type: st.pricing?.type ?? null,
+        p_at: Number.isFinite(at) && at > 0 ? new Date(at * 1000).toISOString() : null,
+      }).then(() => undefined, () => undefined)
+      if (st.status !== 'failed') continue
       const why = st.errors?.[0]
       await db.rpc('sehat_wa_delivery_failed', {
         p_wa_message_id: st.id, p_error: why ? `${why.title ?? why.message ?? 'not delivered'}${why.code ? ` (${why.code})` : ''}` : 'not delivered',
