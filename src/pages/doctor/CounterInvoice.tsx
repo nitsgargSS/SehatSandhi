@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { moneyExact } from '../../lib/format'
+import { supabase } from '../../lib/supabase'
 import {
   type Charge, type ChargeCategory, type PaymentMethod, type PriceItem,
-  HEAD_LABELS, PAYMENT_METHOD_OPTIONS, counterInvoice, listPriceItems, savePriceItem, retirePriceItem,
+  HEAD_LABELS, INVOICE_GST_RATES, PAYMENT_METHOD_OPTIONS, counterInvoice, listPriceItems, savePriceItem, retirePriceItem,
 } from '../../lib/billingApi'
 
 // An invoice at the counter (0225): the tests done and things sold today —
@@ -14,6 +15,9 @@ import {
 // revenue report count it like everything else.
 //
 // A stay's charges are not offered here: they belong to the IPD bill.
+//
+// GST (0226): 0% unless the biller picks a rate for the line; it is added to
+// the rate. The clinic's GSTIN prints on the bill when it has one saved.
 
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 14, padding: 16 }
 const label: React.CSSProperties = { fontSize: 11, fontWeight: 800, letterSpacing: .4, textTransform: 'uppercase', color: BIZ.mutedWarm }
@@ -29,10 +33,16 @@ const btn = (primary = false): React.CSSProperties => ({
 // What a price-list item or a typed line can be. Bed days are posted from the stay.
 const KINDS: ChargeCategory[] = ['lab', 'procedure', 'product', 'consultation', 'medicine', 'consumable', 'other']
 
-interface Line { key: number; category: ChargeCategory; description: string; quantity: string; unitPrice: string }
-const blank = (key: number): Line => ({ key, category: 'lab', description: '', quantity: '1', unitPrice: '' })
+interface Line { key: number; category: ChargeCategory; description: string; quantity: string; unitPrice: string; gst: number }
+const blank = (key: number): Line => ({ key, category: 'lab', description: '', quantity: '1', unitPrice: '', gst: 0 })
 const num = (s: string) => Number(s) || 0
 const paise = (n: number) => Math.round(n * 100) / 100
+/** A line before tax, its tax, and what the patient pays for it. */
+const lineOf = (l: Line) => {
+  const base = paise(num(l.quantity || '1') * num(l.unitPrice))
+  const total = paise(base * (1 + l.gst / 100))
+  return { base, tax: paise(total - base), total }
+}
 
 export default function CounterInvoice({ memberId, businessId, practitionerId, charges, canManage, onChange }: {
   memberId: string
@@ -57,6 +67,13 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
   const [err, setErr] = useState('')
   const [done, setDone] = useState<{ billNo: string; token: string; net: number; paid: number } | null>(null)
   const [managing, setManaging] = useState(false)
+  // Whether the clinic has a GSTIN saved: undefined until known.
+  const [gstin, setGstin] = useState<string | null | undefined>(undefined)
+  useEffect(() => {
+    if (!open) return
+    supabase.from('businesses').select('gstin').eq('id', businessId).maybeSingle()
+      .then(({ data, error }) => { if (!error) setGstin((data?.gstin as string | null) || null) })
+  }, [open, businessId])
 
   const loadItems = useCallback(() => { listPriceItems(businessId).then(setItems).catch(() => setItems([])) }, [businessId])
   useEffect(() => { if (open) loadItems() }, [open, loadItems])
@@ -65,8 +82,9 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
   const unbilled = charges.filter(c => !c.bill_id && !c.admission_id)
   const carried = unbilled.filter(c => !skip.has(c.id))
   const filled = lines.filter(l => l.description.trim() && l.unitPrice.trim() !== '')
-  const subtotal = paise(filled.reduce((s, l) => s + paise(num(l.quantity || '1') * num(l.unitPrice)), 0)
+  const subtotal = paise(filled.reduce((s, l) => s + lineOf(l).total, 0)
     + carried.reduce((s, c) => s + Number(c.amount), 0))
+  const gstTotal = paise(filled.reduce((s, l) => s + lineOf(l).tax, 0))
   const net = paise(subtotal - num(discount))
   const paying = paid === null ? net : num(paid)
   const valid = (filled.length > 0 || carried.length > 0) && net >= 0 && paying >= 0 && paying <= net
@@ -75,7 +93,7 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
   const set = (key: number, patch: Partial<Line>) => setLines(ls => ls.map(l => l.key === key ? { ...l, ...patch } : l))
   const pick = (key: number, id: string) => {
     const it = items.find(i => i.id === id)
-    if (it) set(key, { category: it.category, description: it.name, unitPrice: String(it.price) })
+    if (it) set(key, { category: it.category, description: it.name, unitPrice: String(it.price), gst: it.gst_rate })
   }
   const reset = () => { setLines([blank(Date.now())]); setSkip(new Set()); setDiscount(''); setReason(''); setPaid(null); setMethod('cash'); setReference('') }
 
@@ -84,7 +102,7 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
     try {
       const r = await counterInvoice({
         businessId, memberId,
-        lines: filled.map(l => ({ category: l.category, description: l.description.trim(), quantity: num(l.quantity || '1') || 1, unitPrice: num(l.unitPrice) })),
+        lines: filled.map(l => ({ category: l.category, description: l.description.trim(), quantity: num(l.quantity || '1') || 1, unitPrice: num(l.unitPrice), gstRate: l.gst })),
         chargeIds: carried.map(c => c.id),
         discount: num(discount), discountReason: reason.trim(),
         paid: paying, method, reference: reference.trim(), recordedBy: practitionerId ?? null,
@@ -154,8 +172,11 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
               value={l.quantity} onChange={e => set(l.key, { quantity: e.target.value.replace(/[^0-9.]/g, '') })} />
             <input style={{ ...input, flex: '0 1 105px' }} inputMode="decimal" placeholder="Rate ₹" aria-label="Rate"
               value={l.unitPrice} onChange={e => set(l.key, { unitPrice: e.target.value.replace(/[^0-9.]/g, '') })} />
+            <select style={{ ...input, flex: '0 1 100px' }} value={l.gst} onChange={e => set(l.key, { gst: Number(e.target.value) })} aria-label="GST">
+              {[...new Set([...INVOICE_GST_RATES, l.gst])].sort((a, b) => a - b).map(r => <option key={r} value={r}>{r === 0 ? 'No GST' : `GST ${r}%`}</option>)}
+            </select>
             <span style={{ flex: '0 0 84px', textAlign: 'right', fontSize: 13.5, fontWeight: 700, color: BIZ.ink }}>
-              {moneyExact(paise(num(l.quantity || '1') * num(l.unitPrice)))}
+              {moneyExact(lineOf(l).total)}
             </span>
             <button aria-label="Remove line" style={{ ...btn(), padding: 6 }} disabled={lines.length === 1}
               onClick={() => setLines(ls => ls.filter(x => x.key !== l.key))}><Trash2 className="w-3.5 h-3.5" /></button>
@@ -192,10 +213,19 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
           <input style={{ ...input, flex: '2 1 200px' }} placeholder="Why the discount" maxLength={200} value={reason} onChange={e => setReason(e.target.value)} />
         )}
         <span style={{ marginLeft: 'auto', fontSize: 13, color: BIZ.muted }}>
+          {gstTotal > 0 && <>GST {moneyExact(gstTotal)} included · </>}
           {num(discount) > 0 && <>Subtotal {moneyExact(subtotal)} · </>}
           Total <b style={{ fontSize: 17, color: BIZ.ink }}>{moneyExact(net)}</b>
         </span>
       </div>
+
+      {gstTotal > 0 && gstin !== undefined && (
+        <div style={{ fontSize: 12, color: gstin ? BIZ.muted : '#8a5a00' }}>
+          {gstin
+            ? `GST is added to the rate of each line that carries it. GSTIN ${gstin} prints on the invoice.`
+            : 'This clinic has no GSTIN saved, so none will print on the invoice. GST may only be collected by a registered business — save the GSTIN under Clinic details, or choose "No GST".'}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 13, color: BIZ.ink, fontWeight: 700 }}>Received now</span>
@@ -221,7 +251,7 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
 // The clinic's price list: what it charges for each test, procedure or thing
 // sold. Kept by the owner and manager. A removed item stays on old invoices.
 function PriceList({ businessId, items, onChange }: { businessId: string; items: PriceItem[]; onChange: () => void }) {
-  const [n, setN] = useState({ name: '', category: 'lab' as ChargeCategory, price: '' })
+  const [n, setN] = useState({ name: '', category: 'lab' as ChargeCategory, price: '', gst: 0 })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const run = async (fn: () => Promise<void>) => {
@@ -230,13 +260,13 @@ function PriceList({ businessId, items, onChange }: { businessId: string; items:
   }
   return (
     <div style={{ background: '#fbfaf7', border: `1px solid ${BIZ.border}`, borderRadius: 10, padding: 12, display: 'grid', gap: 8 }}>
-      <div style={{ fontSize: 12.5, color: BIZ.muted }}>Your price list — tests, procedures and things you sell. Everyone at the counter picks from it.</div>
+      <div style={{ fontSize: 12.5, color: BIZ.muted }}>Your price list — tests, procedures and things you sell. Everyone at the counter picks from it. Prices are before GST.</div>
       {err && <div style={{ color: '#8a2b2b', fontSize: 13 }}>{err}</div>}
       {items.map(i => (
         <div key={i.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, color: BIZ.ink }}>
-          <span style={{ flex: 1 }}>{i.name} <span style={{ color: BIZ.mutedWarm, fontSize: 12 }}>· {HEAD_LABELS[i.category]}</span></span>
+          <span style={{ flex: 1 }}>{i.name} <span style={{ color: BIZ.mutedWarm, fontSize: 12 }}>· {HEAD_LABELS[i.category]}{i.gst_rate > 0 ? ` · + GST ${i.gst_rate}%` : ''}</span></span>
           <input style={{ ...input, width: 110 }} inputMode="decimal" defaultValue={String(i.price)} aria-label={`Price of ${i.name}`}
-            onBlur={e => { const v = Number(e.target.value); if (e.target.value !== '' && v >= 0 && v !== Number(i.price)) run(() => savePriceItem(businessId, { id: i.id, name: i.name, category: i.category, price: v })) }} />
+            onBlur={e => { const v = Number(e.target.value); if (e.target.value !== '' && v >= 0 && v !== Number(i.price)) run(() => savePriceItem(businessId, { id: i.id, name: i.name, category: i.category, price: v, gstRate: i.gst_rate })) }} />
           <button aria-label={`Remove ${i.name}`} style={{ ...btn(), padding: 6 }} disabled={busy} onClick={() => run(() => retirePriceItem(i.id))}><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       ))}
@@ -246,8 +276,11 @@ function PriceList({ businessId, items, onChange }: { businessId: string; items:
           {KINDS.map(k => <option key={k} value={k}>{HEAD_LABELS[k]}</option>)}
         </select>
         <input style={{ ...input, flex: '0 1 110px' }} inputMode="decimal" placeholder="Price ₹" value={n.price} onChange={e => setN({ ...n, price: e.target.value.replace(/[^0-9.]/g, '') })} />
+        <select style={{ ...input, flex: '0 1 105px' }} value={n.gst} onChange={e => setN({ ...n, gst: Number(e.target.value) })} aria-label="GST">
+          {INVOICE_GST_RATES.map(r => <option key={r} value={r}>{r === 0 ? 'No GST' : `+ GST ${r}%`}</option>)}
+        </select>
         <button style={btn(true)} disabled={busy || !n.name.trim() || n.price === ''}
-          onClick={() => run(async () => { await savePriceItem(businessId, { name: n.name.trim(), category: n.category, price: Number(n.price) }); setN({ name: '', category: n.category, price: '' }) })}>Add</button>
+          onClick={() => run(async () => { await savePriceItem(businessId, { name: n.name.trim(), category: n.category, price: Number(n.price), gstRate: n.gst }); setN({ name: '', category: n.category, price: '', gst: n.gst }) })}>Add</button>
       </div>
     </div>
   )

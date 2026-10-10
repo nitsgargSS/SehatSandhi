@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-nat
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSession } from '../../lib/session'
 import { searchPatients, registerPatient, type PatientSearchResult } from '@web/lib/patientsApi'
-import { opdVisit, patientHistory } from '@web/lib/queueApi'
+import { FEE_PAID_OPTIONS, opdVisit, patientHistory } from '@web/lib/queueApi'
 import { printOpdSlip } from '../../lib/printSlip'
 import { listBusinessDoctors, type BusinessDoctor } from '@web/lib/doctorsApi'
 import { setAppointmentStatus } from '@web/lib/appointmentApi'
@@ -40,7 +40,9 @@ export default function NewToken() {
   const [why, setWhy] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [issued, setIssued] = useState<{ token: number; name: string; doctor: string; fee: number; member: string; queue: string } | null>(null)
+  const [issued, setIssued] = useState<{ token: number; name: string; doctor: string; fee: number; paid: number; member: string; queue: string } | null>(null)
+  // 0226: how the fee was paid — asked once, kept for the next patient.
+  const [paidHow, setPaidHow] = useState('')
 
   useEffect(() => {
     if (!biz) return
@@ -96,6 +98,8 @@ export default function NewToken() {
         setErr(`Enter the discounted fee, below ${rs(full)}.`); return
       }
     }
+    const due = full <= 0 ? 0 : fee.mode === 'full' ? full : fee.mode === 'free' ? 0 : Number(fee.price) || 0
+    if (due > 0 && !paidHow) { setErr('Say how the fee was received — or choose "Not received now".'); return }
     setBusy(true)
     try {
       const charge = full <= 0 || fee.mode === 'full' ? null : fee.mode === 'free' ? 0 : Number(fee.price)
@@ -103,9 +107,10 @@ export default function NewToken() {
         businessId: biz, patientMemberId: picked.id, practitionerId: doctor ?? s?.doctorId ?? null,
         fee: charge, discountReason: charge == null ? null : fee.reason.trim(), reason,
         priority: outOfTurn ? 10 : 0, priorityReason: outOfTurn ? why.trim() : null,
+        paidMethod: due > 0 ? paidHow : null,
       })
       if (pre.appointment) await setAppointmentStatus(pre.appointment, 'completed').catch(() => {})
-      setIssued({ token: r.token_number, name: picked.name, doctor: doc?.full_name ?? '', fee: r.fee, member: picked.id, queue: r.queue_id })
+      setIssued({ token: r.token_number, name: picked.name, doctor: doc?.full_name ?? '', fee: r.fee, paid: Number(r.paid ?? 0), member: picked.id, queue: r.queue_id })
       setPicked(null); setQ(''); setReason(''); setFee({ mode: 'full', price: '', reason: '' }); setOutOfTurn(false); setWhy('')
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -116,12 +121,12 @@ export default function NewToken() {
         <Card style={{ borderColor: C.green }}>
           <Text style={st.big}>✓ Token {issued.token}</Text>
           <Text style={st.body}>{issued.name}{issued.doctor ? ` → ${issued.doctor}` : ''}</Text>
-          <Text style={st.meta}>{issued.fee > 0 ? `${rs(issued.fee)} added to their account.` : 'No fee.'}</Text>
+          <Text style={st.meta}>{issued.fee <= 0 ? 'No fee.' : issued.paid > 0 ? `${rs(issued.paid)} received.` : `${rs(issued.fee)} added to their account — not received yet.`}</Text>
           <Note>Print slip opens your phone's print window — a Wi-Fi printer, or Save as PDF to share.</Note>
           <View style={st.row}>
-            {issued.fee > 0 && <Btn small label={`Take ${rs(issued.fee)}`} onPress={() => router.push({ pathname: '/patient/[member]', params: { member: issued.member } })} />}
+            {issued.fee > 0 && issued.paid <= 0 && <Btn small label={`Take ${rs(issued.fee)}`} onPress={() => router.push({ pathname: '/patient/[member]', params: { member: issued.member } })} />}
             <Btn small kind="ghost" label="🖨 Print slip" onPress={() => printOpdSlip(issued.queue).catch(e => setErr((e as Error).message))} />
-            <Btn small kind={issued.fee > 0 ? 'ghost' : 'primary'} label="Next patient" onPress={() => setIssued(null)} />
+            <Btn small kind={issued.fee > 0 && issued.paid <= 0 ? 'ghost' : 'primary'} label="Next patient" onPress={() => setIssued(null)} />
             <Btn small kind="ghost" label="Back to queue" onPress={() => router.back()} />
           </View>
         </Card>
@@ -190,6 +195,12 @@ export default function NewToken() {
                 onChangeText={t => setFee({ ...fee, price: t.replace(/[^0-9.]/g, '') })} />}
               {fee.mode !== 'full' && <Field placeholder="Why? e.g. Doctor's advice — follow-up within 7 days" value={fee.reason}
                 onChangeText={t => setFee({ ...fee, reason: t })} maxLength={300} />}
+              {fee.mode !== 'free' && <>
+                <Label>Fee received</Label>
+                <View style={st.row}>
+                  {FEE_PAID_OPTIONS.map(([v, l]) => <Chip key={v} label={l} on={paidHow === v} onPress={() => setPaidHow(v)} />)}
+                </View>
+              </>}
             </> : <Note>{doc.full_name} has no OPD fee set — no charge will be added.</Note>)}
 
             <View style={st.rowBetween}>

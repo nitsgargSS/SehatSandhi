@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 
   const { data: items } = await supabase
     .from('patient_bill_items')
-    .select('category, description, quantity, unit_price, amount, charged_on')
+    .select('category, description, quantity, unit_price, amount, charged_on, gst_rate, tax_amount')
     .eq('bill_id', bill.id)
     .order('sort_order')
 
