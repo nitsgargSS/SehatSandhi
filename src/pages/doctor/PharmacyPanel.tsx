@@ -3,7 +3,7 @@ import { AlertTriangle, Package, Plus, Printer, Search, Trash2 } from 'lucide-re
 import { moneyExact, shortDate, isoDate } from '../../lib/format'
 import { searchPatients, PatientSearchResult } from '../../lib/patientsApi'
 import {
-  getStock, saveItem, getBatches, adjustStock, recordPurchase, getPurchases, getSuppliers,
+  getStock, saveItem, deleteItem, getBatches, adjustStock, recordPurchase, getPurchases, getSuppliers,
   issueBill, getBills, recordPayment, returnItems, cancelBill, getPrescriptionsForDispensing,
   getSummary, getPharmacySettings, savePharmacySettings, itemLabel, matchItem, ITEM_FORMS,
   getDues, getBillsByIds, getStockMoves, Due, StockMove, PAYMENT_STATUS, payMethodLabel,
@@ -744,6 +744,20 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
   const [batches, setBatches] = useState<Batch[]>([])
   const [filter, setFilter] = useState<'all' | 'low' | 'expiry'>('all')
   const [q, setQ] = useState('')
+  // 0225: deleting a medicine entered by mistake — asked twice, and only with none in hand.
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [delBusy, setDelBusy] = useState(false)
+  const [delNote, setDelNote] = useState<{ id: string | null; ok: boolean; text: string } | null>(null)
+  const remove = async (s: StockRow) => {
+    setDelBusy(true)
+    try {
+      const r = await deleteItem(s.id)
+      setDeleting(null)
+      if (r.deleted) { setOpen(null); setDelNote({ id: null, ok: true, text: `${r.name} was deleted.` }) }
+      else setDelNote({ id: s.id, ok: true, text: `${r.name} is on ${r.kept_for_bills} bill${r.kept_for_bills === 1 ? '' : 's'}, so it is kept for those records and marked "not stocked". It can no longer be sold.` })
+      reload()
+    } catch (e) { setDelNote({ id: s.id, ok: false, text: (e as Error).message }) } finally { setDelBusy(false) }
+  }
 
   useEffect(() => { if (open) getBatches(open).then(setBatches).catch(() => setBatches([])) }, [open])
 
@@ -757,6 +771,7 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
 
   return (
     <div className="space-y-3">
+      {delNote && delNote.id === null && <p className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">{delNote.text}</p>}
       <div className="flex flex-wrap gap-2 items-center justify-between">
         <div className="flex gap-1 flex-wrap">
           {([['all', 'All'], ['low', 'Reorder'], ['expiry', 'Expired / expiring']] as const).map(([k, l]) => (
@@ -796,7 +811,27 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
                   )}
                   <StockHistory itemId={s.id} unit={s.unit} qtyNow={s.qty_available + s.qty_expired} />
                   {canManage && <button onClick={() => setAdding(s)} className="btn-teal text-xs py-1.5 px-3 mr-2">Add stock</button>}
-                  {canManage && <button onClick={() => setEditing(s)} className="btn-outline text-xs py-1.5 px-3">Edit medicine</button>}
+                  {canManage && <button onClick={() => setEditing(s)} className="btn-outline text-xs py-1.5 px-3 mr-2">Edit medicine</button>}
+                  {canManage && deleting !== s.id && (
+                    <button onClick={() => { setDeleting(s.id); setDelNote(null) }} className="btn-outline text-xs py-1.5 px-3 text-red-600">Delete medicine</button>
+                  )}
+                  {canManage && deleting === s.id && (
+                    <div className="mt-2 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-center gap-2 flex-wrap">
+                      {s.qty_available + s.qty_expired > 0 ? (
+                        <>
+                          <span className="text-red-800">{s.qty_available + s.qty_expired} {s.unit} still in hand. Use "Correct count" on each batch to bring it to 0, then delete.</span>
+                          <button onClick={() => setDeleting(null)} className="underline text-gray-600">OK</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-red-800">Delete {s.name}? This cannot be undone.</span>
+                          <button disabled={delBusy} onClick={() => remove(s)} className="font-semibold px-3 py-1 rounded-full bg-red-500 hover:bg-red-600 text-white disabled:opacity-50">{delBusy ? 'Deleting…' : 'Yes, delete'}</button>
+                          <button onClick={() => setDeleting(null)} className="underline text-gray-600">Cancel</button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {delNote?.id === s.id && <p className={`mt-2 text-xs ${delNote.ok ? 'text-amber-700' : 'text-red-600'}`}>{delNote.text}</p>}
                   {adding?.id === s.id && <div className="mt-2"><AddStockForm businessId={businessId} item={s} onCancel={() => setAdding(null)} onDone={() => { setAdding(null); reload() }} /></div>}
                 </div>
               )}

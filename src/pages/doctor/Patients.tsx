@@ -41,6 +41,7 @@ import {
   PAYMENT_METHOD_OPTIONS, methodLabel, downloadCsv,
 } from '../../lib/billingApi'
 import { getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
+import CounterInvoice from './CounterInvoice'
 import {
   clinicalSearch, getSurgeries, recordSurgery, cancelSurgery, SOURCES, ANAESTHESIA,
   ClinicalHit, RecordSource, OtType, Surgery, NewSurgery,
@@ -3350,6 +3351,7 @@ const CHARGE_CATEGORIES: [ChargeCategory, string][] = [
   ['medicine', 'Medicine'],
   ['lab', 'Test'],
   ['consumable', 'Consumable'],
+  ['product', 'Optical / products'],
   ['other', 'Other'],
 ]
 
@@ -3602,8 +3604,13 @@ function BillingPane({
   // 0160: owner, manager and doctor may give money back; reception hands it
   // over but does not decide it. The RPC refuses anyone else regardless.
   const [canRefund, setCanRefund] = useState(false)
+  // 0225: the owner and manager keep the price list the counter invoices from.
+  const [canPrice, setCanPrice] = useState(false)
   useEffect(() => {
-    getMyRole(businessId).then(r => setCanRefund(!r.enforced || ['owner', 'manager', 'doctor'].includes(r.role ?? '')))
+    getMyRole(businessId).then(r => {
+      setCanRefund(!r.enforced || ['owner', 'manager', 'doctor'].includes(r.role ?? ''))
+      setCanPrice(!r.enforced || ['owner', 'manager'].includes(r.role ?? ''))
+    })
   }, [businessId])
   const [refunding, setRefunding] = useState<string | null>(null)
   const [rf, setRf] = useState({ amount: '', method: 'cash' as PaymentMethod, reason: '', chargeId: '' })
@@ -3677,6 +3684,9 @@ function BillingPane({
 
       {err && <div style={{ ...card, color: '#8a2b2b', fontSize: 13 }}>{err}</div>}
       {note && <div style={{ ...card, background: '#f3faf6', borderColor: '#bfe3d0', fontSize: 13 }}>{note}</div>}
+
+      <CounterInvoice memberId={memberId} businessId={businessId} practitionerId={practitionerId}
+        charges={charges} canManage={canPrice} onChange={onChange} />
 
       {openStay && (
         <div style={{ ...card, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>

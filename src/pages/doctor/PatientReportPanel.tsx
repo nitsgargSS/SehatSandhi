@@ -153,7 +153,7 @@ export default function PatientReportPanel({ businessId, onOpenPatient }: { busi
             <StatTile onClick={() => show('all', null, null)} active={req?.kind === 'all'} label="Patients, all time" value={t.all_time} sub={`${t.active_12m.toLocaleString('en-IN')} seen in the last 12 months`} />
             <StatTile onClick={() => show('patients', range[0], range[1])} active={req?.kind === 'patients'} label="Patients in this period" value={t.seen} sub={change(t.seen, t.prev_seen)} />
             <StatTile onClick={() => show('new', range[0], range[1])} active={req?.kind === 'new'} label="New patients" value={t.new} sub={change(t.new, t.prev_new)} />
-            <StatTile onClick={() => show('returning', range[0], range[1])} active={req?.kind === 'returning'} label="Returning patients" value={t.returning} sub={t.seen ? `${Math.round((t.returning / t.seen) * 100)}% of patients came back` : undefined} />
+            <StatTile onClick={() => show('returning', range[0], range[1])} active={req?.kind === 'returning'} label="Returning patients" value={t.returning} sub={t.seen ? `${Math.round((t.returning / t.seen) * 100)}% came again after their first visit` : undefined} />
             <StatTile onClick={() => show('visits', range[0], range[1])} active={req?.kind === 'visits'} label="Visits" value={t.visits} sub={change(t.visits, t.prev_visits)} />
             <StatTile onClick={() => show('admissions', range[0], range[1])} active={req?.kind === 'admissions'} label="Admissions" value={t.admissions} />
             <StatTile label="Billed" value={moneyExact(t.revenue)} sub={t.seen ? `${moneyExact(t.revenue / t.seen)} per patient` : undefined} />
