@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { BusinessDoctor } from '../../lib/doctorsApi'
+import { FEE_PAID_OPTIONS } from '../../lib/queueApi'
 import { moneyExact } from '../../lib/format'
 import { BIZ } from '../business/shared'
 
@@ -14,6 +16,45 @@ export const doctorFee = (d?: BusinessDoctor | null) => d ? (d.discounted_fee ??
 /** What to send: null = the system's fee; a number otherwise. */
 export const feeToCharge = (c: FeeChoice): number | null =>
   c.mode === 'full' ? null : c.mode === 'free' ? 0 : Number(c.price)
+
+/** What this choice will charge: the doctor's fee, a discounted one, or nothing. */
+export const feeDueOf = (c: FeeChoice, d?: BusinessDoctor | null): number => {
+  const fee = doctorFee(d)
+  return fee <= 0 ? 0 : c.mode === 'full' ? fee : c.mode === 'free' ? 0 : Number(c.price) || 0
+}
+
+// 0226: how the fee was received at the desk. Asked once, then kept for the
+// next patient on any of the screens that give a token — a desk mostly takes
+// money the same way. '' = not said yet.
+let lastPaidHow = ''
+export function useFeePaidHow(): [string, (v: string) => void] {
+  const [v, setV] = useState(lastPaidHow)
+  return [v, (n: string) => { lastPaidHow = n; setV(n) }]
+}
+export const PAID_HOW_MISSING = 'Say how the fee was received — or choose "Not received now".'
+
+/** "Fee received: Cash / UPI / … / Not received now" — shown only when there is a fee to take. */
+export function FeePaidChooser({ due, value, onChange }: { due: number; value: string; onChange: (v: string) => void }) {
+  if (!(due > 0)) return null
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
+      <span style={{ fontWeight: 700, color: BIZ.ink }}>Fee received:</span>
+      {FEE_PAID_OPTIONS.map(([v, l]) => (
+        <label key={v} style={{ display: 'flex', gap: 5, alignItems: 'center', cursor: 'pointer', color: v === 'later' ? BIZ.mutedWarm : BIZ.ink }}>
+          <input type="radio" checked={value === v} onChange={() => onChange(v)} /> {l}
+        </label>
+      ))}
+    </div>
+  )
+}
+
+/** "₹200 received." or "₹200 fee not received yet…" after a token is given. */
+export function FeePaidNote({ fee, paid }: { fee: number; paid: number }) {
+  if (!(fee > 0)) return null
+  return paid > 0
+    ? <span style={{ color: BIZ.green }}>{moneyExact(paid)} received.</span>
+    : <span style={{ color: '#8a5a00' }}>{moneyExact(fee)} fee not received yet — take it in the patient's Billing.</span>
+}
 
 export function feeValid(c: FeeChoice, d?: BusinessDoctor | null): boolean {
   const fee = doctorFee(d)
