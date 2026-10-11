@@ -45,6 +45,7 @@ const btn = (primary = false): React.CSSProperties => ({
 const clock = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''
 
+import { getCheckins, closeCheckin, type Checkin } from '../../lib/checkinApi'
 export default function Queue({ businessId, practitionerId, onConsult }: {
   businessId: string
   practitionerId?: string | null
@@ -57,6 +58,11 @@ export default function Queue({ businessId, practitionerId, onConsult }: {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [adding, setAdding] = useState(false)
+  // 0251: patients who registered themselves from the reception QR, and the one being given a token.
+  const [checkins, setCheckins] = useState<Checkin[]>([])
+  const [arrival, setArrival] = useState<Checkin | null>(null)
+  const loadCheckins = useCallback(() => { getCheckins(businessId).then(setCheckins).catch(() => undefined) }, [businessId])
+  useEffect(() => { loadCheckins(); const t = setInterval(loadCheckins, 15000); return () => clearInterval(t) }, [loadCheckins])
   // One line per doctor (0121). A doctor opens on their own line; reception
   // and the owner on everyone's, and either can switch.
   const [doctors, setDoctors] = useState<BusinessDoctor[]>([])
@@ -183,10 +189,36 @@ export default function Queue({ businessId, practitionerId, onConsult }: {
           onSaved={() => { setRecordFor(null); reload() }} />
       )}
 
+      {checkins.length > 0 && (
+        <div style={{ ...card, borderColor: '#e0b252', background: '#fffaf0' }}>
+          <div style={{ ...label, marginBottom: 8 }}>Registered themselves at reception — check, take the fee and give the token</div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {checkins.map(c => (
+              <div key={c.id} style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', fontSize: 14 }}>
+                <div style={{ minWidth: 0 }}>
+                  <b>{c.full_name}</b>{c.age != null ? `, ${c.age}y` : ''} · {c.phone.replace(/^91/, '')}
+                  {c.known && <span style={{ marginLeft: 6, fontSize: 12, color: BIZ.green, fontWeight: 700 }}>number already on your list</span>}
+                  {(c.address || c.pin_code) && <div style={{ fontSize: 12.5, color: BIZ.muted }}>{[c.address, c.pin_code].filter(Boolean).join(' · ')}</div>}
+                </div>
+                <div style={{ display: 'flex', gap: 7 }}>
+                  <button style={btn(true)} onClick={() => { setArrival(c); setAdding(true) }}>Give token</button>
+                  <button style={btn()} onClick={() => closeCheckin(c.id, 'dismissed').then(loadCheckins).catch(e => setErr((e as Error).message))}>Remove</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {adding && (
         <IssueToken
+          key={arrival?.id ?? 'desk'}
           businessId={businessId} practitionerId={practitionerId} doctors={doctors} defaultDoctor={view}
-          onIssued={() => reload()}
+          arrival={arrival}
+          onIssued={() => {
+            reload()
+            if (arrival) { closeCheckin(arrival.id, 'registered').then(loadCheckins).catch(() => undefined); setArrival(null) }
+          }}
           onError={setErr}
         />
       )}
@@ -356,7 +388,9 @@ function Row({ e, busy, act, emphasis, vitalsAt, vitals, onRecord, onConsult, on
 
 // ── Giving a token ──────────────────────────────────────────────────────────
 
-function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssued, onError }: {
+function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, arrival, onIssued, onError }: {
+  /** 0251: a patient who registered themselves — their details are filled in to check. */
+  arrival?: Checkin | null
   businessId: string
   practitionerId?: string | null
   doctors: BusinessDoctor[]
@@ -385,6 +419,23 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, onIssu
   const [adding, setAdding] = useState(false)
   const [np, setNp] = useState({ name: '', phone: '', age: '', gender: '', pin: '' })
   const [issued, setIssued] = useState<{ id: string; token: number; fee: number; paid: number } | null>(null)
+
+  // 0251: someone who registered themselves. The same person on the list is picked;
+  // otherwise their details wait in the new-patient form, with the number's family shown to choose from.
+  useEffect(() => {
+    if (!arrival) return
+    const ten = arrival.phone.replace(/^91/, '')
+    const fill = () => {
+      setNp({ name: arrival.full_name, phone: ten, age: arrival.age != null ? String(arrival.age) : '', gender: '', pin: arrival.pin_code ?? '' })
+      setAdding(true)
+    }
+    searchPatients(ten, businessId).then(rows => {
+      const same = rows.find(r => r.full_name.trim().toLowerCase() === arrival.full_name.trim().toLowerCase())
+      if (same) { setPicked(same); return }
+      fill()
+      if (rows.length) setQuery(ten)
+    }).catch(fill)
+  }, [arrival, businessId])
 
   useEffect(() => {
     if (!picked) { setHistory(null); return }
