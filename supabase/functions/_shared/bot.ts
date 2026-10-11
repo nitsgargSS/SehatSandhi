@@ -39,6 +39,8 @@
 export type State = 'idle' | 'ask_pin' | 'ask_pin_insurance' | 'ask_selection' | 'ask_slot' | 'ask_name'
   /** 0232: they sent a rating as a bare number; what they send next is the review in their words. */
   | 'ask_review'
+  /** 0243: part-way through asking for an ambulance, medicines or an insurance advisor. */
+  | 'req'
 
 export interface Vars {
   /** A speciality code (SKIN, DENT…) or a service kind (pharmacy, lab_booking…). */
@@ -59,6 +61,8 @@ export interface Vars {
   clinic?: Clinic
   /** Clinic line: they asked for all of Sehatsandhi — do not steer back to a clinic this conversation. */
   general?: boolean
+  /** 0243: a request being put together — which one, what was just asked, and the answers so far. */
+  req?: { what: 'ambulance' | 'medicine' | 'insurance'; ask: string; f: Record<string, string> }
 }
 
 /** A clinic as the bot shows it — sehat_wa_clinic_card. */
@@ -79,6 +83,12 @@ export interface Inbound {
   line?: 'main' | 'clinic'
   /** The id of the message being replied to, when WhatsApp says. */
   replyTo?: string | null
+  /** Their WhatsApp profile name. */
+  name?: string | null
+  /** Where a shared location is, for an ambulance's map pin. */
+  coords?: { lat: number; lng: number } | null
+  /** A photo they sent, already saved: a link the pharmacy can open. */
+  image?: string | null
 }
 
 export type Reply =
@@ -503,6 +513,155 @@ async function clinicBook(v: Vars, code: string, rpc: Rpc): Promise<Step> {
   return results(text, 'list', vars, rpc)
 }
 
+// ── Requests: an ambulance, medicines, an insurance advisor (0243) ──
+// What the app's three screens ask, one question a message, and then the same
+// request the app makes: everyone nearby is told, and the first to take it answers.
+
+type Req = NonNullable<Vars['req']>
+const asking = (v: Vars, req: Req, reply: Reply): Step => ({ session: { state: 'req', vars: { ...carry(v), req } }, replies: [reply] })
+const pinOf = (s: string) => s.match(/(?<!\d)[1-9]\d{5}(?!\d)/)?.[0] ?? ''
+
+const AMB_FIRST = '🚨 इमरजेंसी में सबसे पहले *108* पर कॉल करें — मुफ़्त, 24×7।\nIn an emergency call *108* first — it is free.\n\nहम पास की प्राइवेट एम्बुलेंस को भी अलर्ट कर सकते हैं — जो पहले स्वीकार करेगी, वह आपको कॉल करेगी।\nWe can also alert private ambulances near you — the first to accept calls you.'
+const AMB_WHERE = '📍 मरीज़ कहाँ है? नीचे के बटन से लोकेशन भेजें — या PIN कोड के साथ पता लिखें।\nWhere is the patient? Send the location, or type the address with its PIN code.'
+const AMB_NEED = '📅 कब चाहिए, और कहाँ से कहाँ जाना है?\nWhen is it needed, and from where to where?'
+const AMB_PIN = 'हमें PIN कोड नहीं मिला। कृपया 6 अंकों का PIN कोड भेजें, या लोकेशन भेजें। इमरजेंसी हो तो अभी 108 पर कॉल करें।\nWe could not find a PIN code. Send the 6-digit PIN code or your location. If it is urgent, call 108 now.'
+const MED_WHAT = '💊 *दवाई ऑर्डर*\n\nपर्ची की फ़ोटो भेजें 📷 — या दवाइयों के नाम और मात्रा लिखें।\nSend a photo of the prescription, or type the medicines and how many.\n\nपास की फ़ार्मेसी पहले कुल कीमत बताएगी; आपकी हाँ के बाद ही दवाई भेजी जाएगी।'
+const MED_ADDRESS = '🏠 डिलीवरी का पूरा पता लिखें — मकान नं., गली, लैंडमार्क और PIN कोड।\nType the full delivery address, with the PIN code.'
+const INS_COVER: Reply = {
+  kind: 'list', header: '🛡️ हेल्थ इंश्योरेंस',
+  body: 'लाइसेंस वाला बीमा सलाहकार आपको कॉल करेगा। आपका नंबर सिर्फ़ उसी को मिलेगा जो आपका अनुरोध लेगा।\nA licensed advisor near you calls back; only the one who takes your request gets your number.\n\nकौनसा कवर चाहिए? 👇',
+  sectionTitle: 'कवर चुनें / Choose',
+  rows: [
+    { id: 'req:cover:Family floater', title: '👨‍👩‍👧 पूरा परिवार', description: 'Family floater' },
+    { id: 'req:cover:Just me', title: '🙋 सिर्फ़ मेरे लिए', description: 'Just me' },
+    { id: 'req:cover:Parents / senior citizen', title: '👵 माता-पिता / बुज़ुर्ग', description: 'Parents / senior citizen' },
+    { id: 'req:cover:Top-up of existing policy', title: '➕ टॉप-अप', description: 'Top-up of an existing policy' },
+  ],
+}
+const INS_MEMBERS = 'किन्हें कवर करना है, उम्र के साथ लिखें — जैसे "मैं 34, पत्नी 31, 2 बच्चे"।\nWho should be covered, with ages?'
+const INS_TIME: Reply = {
+  kind: 'buttons', body: 'सलाहकार कब कॉल करे?\nWhen should the advisor call?',
+  buttons: [{ id: 'req:time:Morning', title: '🌅 सुबह' }, { id: 'req:time:Afternoon', title: '☀️ दोपहर' }, { id: 'req:time:After 6 pm', title: '🌙 शाम 6 के बाद' }],
+}
+
+/** The first question of a request. `pin`: an area already known for it. */
+function requestStart(what: Req['what'], v: Vars, pin = ''): Step {
+  const f: Record<string, string> = pin ? { pin } : {}
+  if (what === 'ambulance') {
+    return asking(v, { what, ask: 'kind', f }, {
+      kind: 'buttons', body: AMB_FIRST,
+      buttons: [{ id: 'req:kind:emergency', title: '🚨 अभी चाहिए' }, { id: 'req:kind:scheduled', title: '📅 बुकिंग करनी है' }, MENU_BUTTON],
+    })
+  }
+  if (what === 'medicine') return asking(v, { what, ask: 'what', f }, { kind: 'text', body: MED_WHAT })
+  return asking(v, { what, ask: 'cover', f }, INS_COVER)
+}
+
+/** The request itself, and what the database says back (which names the page to follow it on). */
+async function requestSend(v: Vars, req: Req, m: Inbound, phone: string, rpc: Rpc): Promise<Step> {
+  const f = req.f, name = (m.name ?? '').trim() || (v.lastPatient ?? '').split(',')[0].trim()
+  const r = req.what === 'ambulance'
+    ? await rpc('bot_ambulance_request_json', { p_phone: phone, p_pin: f.pin ?? '', p_name: name, p_kind: f.kind ?? 'emergency', p_address: f.address ?? '', p_need: f.need ?? '', p_lat: f.lat ?? '', p_lng: f.lng ?? '' })
+    : req.what === 'medicine'
+      ? await rpc('bot_medicine_order_json', { p_phone: phone, p_pin: f.pin ?? '', p_name: name, p_address: f.address ?? '', p_medicines: f.meds ?? '', p_rx_url: f.rx ?? '' })
+      : await rpc('bot_insurance_lead_json', { p_phone: phone, p_pin: f.pin ?? '', p_name: name, p_cover: f.cover ?? '', p_members: f.members ?? '', p_call_time: f.time ?? '' })
+  const text = str(r?.text)
+  if (!text) return failed(v)
+  // The area did not read as one: ask for it again, keeping the rest.
+  if (r?.ok !== true && !r?.code && /PIN/.test(text) && !f.pinAsked) {
+    return asking(v, { ...req, ask: 'pin', f: { ...f, pin: '', pinAsked: '1' } }, pinQuestion(v, text))
+  }
+  const lastPin = /^\d{6}$/.test(f.pin ?? '') ? f.pin : v.lastPin
+  return { session: { state: 'idle', vars: carry({ ...v, ...(lastPin ? { lastPin } : {}) }) }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON] }] }
+}
+
+/**
+ * One answer in a request. null: they have left it (a menu tap, a greeting,
+ * STOP, a clinic's code) and the message is read as any other.
+ */
+async function requestStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promise<Step | null> {
+  const req = v.req!, f = { ...req.f }
+  const id = m.replyId ?? '', typed = !m.replyId
+  const text = typed ? (m.text ?? '').trim() : ''
+  const next = (ask: string, reply: Reply) => asking(v, { ...req, ask, f }, reply)
+  const send = () => requestSend(v, { ...req, f }, m, phone, rpc)
+  const again = (reply: Reply) => asking(v, { ...req, f }, reply)
+
+  if (id && !/^(req:|pin:last$|loc:ask$)/.test(id)) return null
+  if (typed && text && (KEYWORDS.has(text.toUpperCase()) || /^(stop|start)$/i.test(text) || CLINIC_CODE.test(text))) return null
+  if (id === 'loc:ask') return again({ kind: 'location', body: `${ASK_PIN}\n${OR_LOCATION}` })
+
+  // A shared location answers "where", whichever request is asking.
+  const here = m.located !== undefined
+  if (here && m.coords) { f.lat = String(m.coords.lat); f.lng = String(m.coords.lng) }
+  const area = id === 'pin:last' ? (v.lastPin ?? '') : here ? (m.located ?? '') : ''
+  if (area) f.pin = area
+
+  if (req.what === 'ambulance') {
+    if (req.ask === 'kind') {
+      const k = id.match(/^req:kind:(emergency|scheduled)$/)?.[1]
+      if (!k) return requestStart('ambulance', v, f.pin)
+      f.kind = k
+      return next('where', { kind: 'location', body: AMB_WHERE })
+    }
+    if (req.ask === 'where') {
+      if (area) f.pin = area
+      else if (text) {
+        // A bare PIN code sent after an address adds to it, not replaces it.
+        if (!f.address || !/^\d{6}$/.test(text)) f.address = text.slice(0, 300)
+        f.pin = pinOf(text) || f.pin || ''
+      }
+      // A location whose area we could not name still has its map pin; the PIN code is asked once.
+      if (!f.pin) return f.asked ? send() : asking(v, { ...req, f: { ...f, asked: '1' } }, { kind: 'location', body: AMB_PIN })
+      return f.kind === 'scheduled' ? next('need', { kind: 'text', body: AMB_NEED }) : send()
+    }
+    if (req.ask === 'need') { if (text) f.need = text.slice(0, 300); return send() }
+  }
+
+  if (req.what === 'medicine') {
+    if (req.ask === 'what') {
+      if (m.image) f.rx = m.image
+      else if (text.length >= 3) f.meds = text.slice(0, 1000)
+      else return again({ kind: 'text', body: MED_WHAT })
+      return next('address', { kind: 'text', body: (m.image ? '✅ पर्ची मिल गई। / Prescription received.\n\n' : '') + MED_ADDRESS })
+    }
+    if (req.ask === 'address') {
+      if (m.image && !f.rx) { f.rx = m.image; return again({ kind: 'text', body: '✅ पर्ची मिल गई।\n\n' + MED_ADDRESS }) }
+      if (text.length < 5) return again({ kind: 'text', body: MED_ADDRESS })
+      f.address = text.slice(0, 300)
+      f.pin = pinOf(text) || f.pin || ''
+      return f.pin ? send() : next('pin', pinQuestion(v))
+    }
+  }
+
+  if (req.what === 'insurance') {
+    if (req.ask === 'cover') {
+      const c = id.match(/^req:cover:(.+)$/)?.[1]
+      if (!c) return again(INS_COVER)
+      f.cover = c
+      return next('members', { kind: 'text', body: INS_MEMBERS })
+    }
+    if (req.ask === 'members') {
+      if (!text) return again({ kind: 'text', body: INS_MEMBERS })
+      f.members = text.slice(0, 200)
+      return next('time', INS_TIME)
+    }
+    if (req.ask === 'time') {
+      const at = id.match(/^req:time:(.+)$/)?.[1]
+      if (!at && !text) return again(INS_TIME)
+      f.time = at ?? text.slice(0, 80)
+      return f.pin ? send() : next('pin', pinQuestion(v))
+    }
+  }
+
+  if (req.ask === 'pin') {
+    f.pin = area || text
+    if (!f.pin) return again(pinQuestion(v))
+    return send()
+  }
+  return null
+}
+
 /** Back to where this conversation lives: the clinic's menu on the clinic line, else the main menu. */
 const home = (v: Vars, m: Inbound): Step => m.line === 'clinic' && v.clinic && !v.general ? clinicHome(v, v.clinic) : menu(v)
 
@@ -510,7 +669,9 @@ const home = (v: Vars, m: Inbound): Step => m.line === 'clinic' && v.clinic && !
 
 /** Where a matched need goes next. `text` is what the matcher says back. */
 function follow(branch: string, code: string, pin: string, text: string, vars: Vars): Step {
-  if (branch === 'insurance') return askPinInsurance(vars, text ? `${text}\n\n${ASK_PIN}` : undefined)
+  if (branch === 'insurance') return requestStart('insurance', vars, /^\d{6}$/.test(pin) ? pin : '')
+  if (code === 'pharmacy') return requestStart('medicine', vars, /^\d{6}$/.test(pin) ? pin : '')
+  if (code === 'ambulance') return requestStart('ambulance', vars, /^\d{6}$/.test(pin) ? pin : '')
   if (branch === 'doctor_search' && !code) return show(vars, { ...SPECIALITY_MENU, ...(text ? { body: text } : {}) } as Reply)
   if (!code) return menu(vars)
   return askPin(code, vars, text ? `${text}\n\n${ASK_PIN}` : undefined)
@@ -531,6 +692,11 @@ async function freeText(text: string, vars: Vars, phone: string, rpc: Rpc): Prom
   const pin = str(r.pincode)
 
   if (route === 'emergency') return { session: { state: 'idle', vars: carry(vars) }, replies: [{ kind: 'buttons', body: out, buttons: [MENU_BUTTON] }] }
+  // 0243: these three are requests, not lists — the area the matcher heard goes with them.
+  if (route !== 'confirm') {
+    const what = branch === 'insurance' ? 'insurance' : code === 'pharmacy' ? 'medicine' : code === 'ambulance' ? 'ambulance' : ''
+    if (what) return requestStart(what, vars, /^\d{6}$/.test(pin) ? pin : '')
+  }
   if (route === 'list' || route === 'info') return results(out, route, { ...carry(vars), code, pin }, rpc)
   if (route === 'ask_pin') return askPin(code, vars, out)
   if (route === 'confirm') {
@@ -578,13 +744,22 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
   let text = (m.text ?? '').trim()
   let typed = !m.replyId
 
+  // 0243: an ambulance, medicines, an insurance advisor — asked for as in the app.
+  const asks = (m.replyId ?? '').match(/^menu:(ambulance|pharmacy|insurance)$/)?.[1]
+  if (asks) return requestStart(asks === 'pharmacy' ? 'medicine' : asks as 'ambulance' | 'insurance', vars)
+  if (state === 'req') {
+    const r = vars.req ? await requestStep(vars, m, phone, rpc) : null
+    if (r) return r
+    delete vars.req; state = 'idle'; s = { state, vars }
+  }
+
   if (m.replyId) {
     const id = m.replyId
     // 0227: the area is known — look there at once, and say where; "📍 दूसरा एरिया" changes it.
     // Not for an ambulance or a call back: those act on the area, so it is asked.
     const wanted = /^spec:(?!more2?$)/.test(id) ? id.slice(5)
       : id.startsWith('test:') && id !== 'test:other' ? 'lab_booking'
-      : id === 'menu:pharmacy' || id === 'menu:camps' ? id.slice(5) : ''
+      : id === 'menu:camps' ? id.slice(5) : ''
     if (wanted && vars.lastPin) return search({ ...carry(vars), code: wanted, pin: vars.lastPin }, rpc, `📍 ${vars.lastPin}`)
     // 0232: the rating button on a booking confirmation, and the stars picked after it.
     const stars = id.match(/^rate:score:([1-5])$/)
