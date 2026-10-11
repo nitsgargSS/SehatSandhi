@@ -62,7 +62,7 @@ export interface Vars {
 }
 
 /** A clinic as the bot shows it — sehat_wa_clinic_card. */
-export interface Clinic { code: string; name: string; phone?: string; city?: string; doctors?: number }
+export interface Clinic { code: string; name: string; phone?: string; city?: string; doctors?: number; /** 0241: this number said STOP to its updates. */ stopped?: boolean }
 
 export interface Session { state: State; vars: Vars }
 
@@ -448,8 +448,12 @@ function asClinic(o: unknown): Clinic | null {
 async function whichClinic(phone: string, code: string, replyTo: string, rpc: Rpc) {
   const r = await rpc('sehat_wa_clinic_line', { p_phone: phone, p_code: code, p_reply_to: replyTo })
   if (!r) return null
-  const clinics = (Array.isArray(r.clinics) ? r.clinics : []).map(asClinic).filter((c): c is Clinic => !!c)
-  return { by: str(r.by), chosen: asClinic(r.chosen), clinics }
+  // 0241: which of them this number said STOP to, so its menu can offer the updates again.
+  const s = await rpc('sehat_wa_stopped_clinics', { p_phone: phone })
+  const off = new Set((Array.isArray(s?.codes) ? s.codes : []).map(x => str(x)))
+  const mark = (c: Clinic | null): Clinic | null => c && (s?.all === true || off.has(c.code)) ? { ...c, stopped: true } : c
+  const clinics = (Array.isArray(r.clinics) ? r.clinics : []).map(asClinic).filter((c): c is Clinic => !!c).map(c => mark(c) as Clinic)
+  return { by: str(r.by), chosen: mark(asClinic(r.chosen)), clinics }
 }
 
 /** A clinic's own menu: book with it, hear from it, or its number to ring. */
@@ -458,6 +462,7 @@ function clinicHome(v: Vars, c: Clinic): Step {
     `🏥 *${c.name}*${c.city ? `\n📍 ${c.city}` : ''}`,
     `नमस्ते! 🙏 आप Sehatsandhi के ज़रिए *${c.name}* से जुड़े हैं।\nYou are connected to ${c.name} through Sehatsandhi.`,
     ...(c.phone ? [`📞 बात करने के लिए कॉल करें / To speak to them, call:\n${c.phone}`] : []),
+    ...(c.stopped ? [`🔕 आपने इस क्लिनिक के अपडेट बंद किए हैं। दोबारा पाने के लिए *अपडेट पाएं* दबाएं — या सीधे अपॉइंटमेंट बुक करें।\nYou stopped updates from this clinic. Tap *अपडेट पाएं* to get them again — or just book an appointment.`] : []),
     'नीचे से चुनें 👇',
   ].join('\n\n')
   const { general: _g, ...rest } = carry(v)
