@@ -65,8 +65,13 @@ export interface Vars {
   general?: boolean
   /** 0243: a request being put together — which one, what was just asked, and the answers so far. */
   req?: { what: 'ambulance' | 'medicine' | 'insurance'; ask: string; f: Record<string, string> }
+  /** 0245: the kind of test being looked for ('pathology' | 'radiology' | '' for any), and its name as chosen ("MRI"). */
+  labKind?: string
+  labWant?: string
   /** 0244: a lab booking being put together. */
   lab?: {
+    /** 0245: the kind of test, and what was asked for; a scan is always at the centre. */
+    kind?: string; want?: string; visit?: boolean; cats?: Record<string, string>
     ask: 'items' | 'more' | 'how' | 'address' | 'slot' | 'name'
     biz: string; name: string; fee: number; menu: boolean
     /** 'p:<id>' / 't:<id>' chosen so far, and their names. */
@@ -259,8 +264,9 @@ function pinQuestion(v: Vars, body = ASK_PIN): Reply {
     ? { kind: 'buttons', body, buttons: [{ id: 'pin:last', title: `📍 ${v.lastPin}` }, LOCATION_BUTTON] }
     : { kind: 'location', body: `${body}\n${OR_LOCATION}` }
 }
+const labKept = (v: Vars): Vars => ({ ...(v.labKind !== undefined ? { labKind: v.labKind } : {}), ...(v.labWant ? { labWant: v.labWant } : {}) })
 const askPin = (code: string, v: Vars, body?: string): Step =>
-  ({ session: { state: 'ask_pin', vars: { ...carry(v), code } }, replies: [pinQuestion(v, body)] })
+  ({ session: { state: 'ask_pin', vars: { ...carry(v), code, ...(code === 'lab_booking' ? labKept(v) : {}) } }, replies: [pinQuestion(v, body)] })
 const askPinInsurance = (v: Vars, body?: string): Step =>
   ({ session: { state: 'ask_pin_insurance', vars: carry(v) }, replies: [pinQuestion(v, body)] })
 
@@ -329,6 +335,8 @@ function slotList(text: string, again = false): Reply[] {
 
 /** `note`: a line to put above the results — the area that was assumed, when it was not asked. */
 async function search(vars: Vars, rpc: Rpc, note?: string): Promise<Step> {
+  // 0245: labs have their own list — only those that do the kind of test asked for.
+  if (vars.code === 'lab_booking') return labList(vars, rpc, note)
   // p_type is always 'doctor'; the service kind travels in p_filter_value (0105).
   const r = await rpc('bot_generic_search_json', { p_type: 'doctor', p_filter_value: vars.code ?? '', p_pincode: vars.pin ?? '' })
   const text = str(r?.text)
@@ -685,8 +693,46 @@ async function requestStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promis
 // tests in words.
 
 type Lab = NonNullable<Vars['lab']>
+
+/** What a row of the test menu stands for. A scan is radiology; blood is pathology; "other" may be either. */
+const TESTS: Record<string, { kind: string; want: string }> = {
+  'test:blood': { kind: 'pathology', want: '' }, 'test:mri': { kind: 'radiology', want: 'MRI' }, 'test:ct': { kind: 'radiology', want: 'CT Scan' },
+  'test:xray': { kind: 'radiology', want: 'X-Ray' }, 'test:ultrasound': { kind: 'radiology', want: 'Ultrasound' }, 'test:other': { kind: '', want: '' },
+}
+const testOf = (id: string): Vars => ({ labKind: TESTS[id]?.kind ?? '', labWant: TESTS[id]?.want ?? '' })
+/** The same, from what they typed. */
+function testSaid(text: string): Vars {
+  const scan = text.match(/\bmri\b|एमआरआई|\bct\b|सीटी|x[- ]?ray|एक्स[- ]?रे|ultra ?sound|अल्ट्रासाउंड|sonograph|सोनोग्राफी|\bscan\b|स्कैन|mammogra|\becho\b|\becg\b|ईसीजी/i)?.[0]
+  if (scan) return { labKind: /echo|ecg|ईसीजी/i.test(scan) ? '' : 'radiology', labWant: '' }
+  return /blood|खून|ब्लड|\bcbc\b|sugar|शुगर|thyroid|थायर|urine|पेशाब|lipid|vitamin|hba1c|\blft\b|\bkft\b/i.test(text) ? { labKind: 'pathology', labWant: '' } : { labKind: '', labWant: '' }
+}
+const KIND_HI: Record<string, string> = { pathology: 'खून / पेशाब की जांच (पैथोलॉजी)', radiology: 'स्कैन / एक्स-रे (रेडियोलॉजी)' }
+const isScan = (lab: Lab) => lab.kind === 'radiology' || lab.kind === 'cardiology' || lab.visit === true
+
+/** The labs near them that do this kind of test. */
+async function labList(v: Vars, rpc: Rpc, note?: string): Promise<Step> {
+  const kept: Vars = { ...carry(v), code: 'lab_booking', ...labKept(v) }
+  const r = await rpc('bot_lab_list_json', { p_pincode: v.pin ?? '', p_kind: v.labKind ?? '' })
+  if (!r) return failed(v)
+  if (r.ok !== true) return { session: { state: 'ask_pin', vars: kept }, replies: [pinQuestion(v, NO_PLACE)] }
+  const pin = str(r.pin), rows = rowsOf(r)
+  const what = KIND_HI[v.labKind ?? ''] ?? 'जांच'
+  if (!rows.length) {
+    return { session: { state: 'idle', vars: { ...kept, pin } }, replies: [{
+      kind: 'buttons', body: `${note ? `${note}\n\n` : ''}माफ़ कीजिए, इस एरिया में अभी ${what} के लिए कोई लैब हमारे साथ नहीं है। 🙏\nNo lab for this near you yet.`, buttons: [MENU_BUTTON, PIN_BUTTON],
+    }] }
+  }
+  return { session: { state: 'idle', vars: { ...kept, pin, lastPin: /^\d{6}$/.test(v.pin ?? '') ? v.pin : pin } }, replies: [{
+    kind: 'list', header: v.labWant ? `🔬 ${v.labWant}` : '🔬 लैब',
+    body: `${note ? `${note}\n\n` : ''}${what} — आपके एरिया की लैब 👇\nकिसके साथ बुक करना है? चुनें।`,
+    sectionTitle: 'लैब चुनें',
+    rows: [...rows.slice(0, 9).map(({ id, title, description }) => ({ id, title, ...(description ? { description } : {}) })), AREA_ROW],
+  }] }
+}
 const labAsk = (v: Vars, lab: Lab, reply: Reply): Step => ({ session: { state: 'lab', vars: { ...carry(v), lab } }, replies: [reply] })
-const LAB_TYPE = 'कौनसे टेस्ट करवाने हैं? नाम लिखकर भेजें — जैसे "CBC, थायरॉइड, शुगर"।\nWhich tests do you need? Type their names.'
+const LAB_TYPE = 'कौनसे टेस्ट करवाने हैं? नाम लिखकर भेजें — जैसे "CBC, थायरॉइड, शुगर"।\nWhich tests do you need? Type their names.\n\nलैब आपको सही पैकेज और कीमत बताएगी।\nThe lab will tell you the right package and its price.'
+const LAB_TYPE_SCAN = (want: string) => `${want ? `*${want}* — ` : ''}शरीर के किस हिस्से का, और डॉक्टर ने क्या लिखा है? लिखकर भेजें — जैसे "${want || 'MRI'} घुटना" या "पेट का अल्ट्रासाउंड"।\nWhich part of the body, and what did the doctor write? Type it.\n\nस्कैन सेंटर पर ही होता है; सेंटर कीमत और तैयारी बताएगा।\nA scan is done at the centre; it will tell you the price and how to prepare.`
+const PATHOLOGY_NOTE = 'Blood / pathology tests — the lab will advise the tests or package'
 const LAB_ADDRESS = '🏠 सैंपल कहाँ से लेना है? पूरा पता लिखें — मकान नं., गली, लैंडमार्क।\nType the full address for the home collection.'
 const rupee = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
 
@@ -698,8 +744,8 @@ const rowsOf = (r: Record<string, unknown> | null): (Row & { name: string })[] =
 
 /** The lab's list, or what matched `query`, as rows to tap. */
 async function labItems(v: Vars, lab: Lab, rpc: Rpc, query = ''): Promise<Step> {
-  if (!lab.menu) return labAsk(v, { ...lab, ask: 'items' }, { kind: 'text', body: `🔬 *${lab.name}*\n\n${LAB_TYPE}` })
-  const r = await rpc('bot_lab_menu_json', { p_pincode: '', p_selection: lab.biz, p_query: query })
+  if (!lab.menu) return labAsk(v, { ...lab, ask: 'items' }, { kind: 'text', body: `🔬 *${lab.name}*\n\n${isScan(lab) ? LAB_TYPE_SCAN(lab.want ?? '') : LAB_TYPE}` })
+  const r = await rpc('bot_lab_menu_json', { p_pincode: '', p_selection: lab.biz, p_query: query, p_kind: lab.kind ?? '' })
   const rows = rowsOf(r).filter(x => !lab.items.includes(x.id.slice(6)))
   const chosen = lab.names.length ? `\n\n✅ चुने गए: ${lab.names.join(', ')}` : ''
   if (!rows.length) {
@@ -709,15 +755,21 @@ async function labItems(v: Vars, lab: Lab, rpc: Rpc, query = ''): Promise<Step> 
       : { kind: 'text', body })
   }
   const more = Number(r?.total ?? 0) > rows.length
-  return labAsk(v, { ...lab, ask: 'items', shown: Object.fromEntries(rows.map(x => [x.id, x.name])) }, {
+  const eg = isScan(lab) ? 'MRI brain' : 'thyroid'
+  const cats = Object.fromEntries((Array.isArray(r?.rows) ? r.rows : []).map(x => x as Record<string, unknown>).map(x => [str(x.id), str(x.cat)]))
+  return labAsk(v, { ...lab, ask: 'items', shown: Object.fromEntries(rows.map(x => [x.id, x.name])), cats }, {
     kind: 'list', header: lab.name.slice(0, 60),
-    body: `🧪 टेस्ट या पैकेज चुनें 👇${more || !query ? '\nसूची में न दिखे तो टेस्ट का नाम लिखकर भेजें — जैसे "thyroid"।\nNot in the list? Type the test\'s name.' : ''}${chosen}`,
+    body: `🧪 ${isScan(lab) ? 'स्कैन चुनें' : 'टेस्ट या पैकेज चुनें'} 👇${more || !query ? '\nसूची में न दिखे तो नाम लिखकर भेजें — जैसे "' + eg + '"।\nNot in the list? Type the test\'s name.' : ''}${chosen}`,
     sectionTitle: 'टेस्ट चुनें', rows: rows.map(({ id, title, description }) => ({ id, title, ...(description ? { description } : {}) })),
   })
 }
 
+/** Lab or home — but a scan is at the centre, so that is not asked. */
+const labWhere = (v: Vars, lab: Lab, rpc: Rpc): Step | Promise<Step> => isScan(lab) ? labSlots(v, { ...lab, how: 'lab' }, rpc) : labHow(v, lab)
 const labHow = (v: Vars, lab: Lab): Step => labAsk(v, { ...lab, ask: 'how' }, {
-  kind: 'buttons', body: `🧪 ${lab.menu ? lab.names.join(', ') : lab.note}\n\nसैंपल कहाँ देंगे?\nWhere will the sample be given?`,
+  kind: 'buttons', body: `🔬 *${lab.name}*\n${lab.note === PATHOLOGY_NOTE
+    ? 'लैब आपको सही टेस्ट / पैकेज और कीमत बताएगी।\nThe lab will advise the right tests or package, and the price.'
+    : `🧪 ${lab.names.length ? lab.names.join(', ') : lab.note}`}\n\nसैंपल कहाँ देंगे?\nWhere will the sample be given?`,
   buttons: [{ id: 'lab:how:lab', title: '🏥 लैब पर' }, { id: 'lab:how:home', title: lab.fee > 0 ? `🏠 घर से (+${rupee(lab.fee)})`.slice(0, 20) : '🏠 घर से सैंपल' }],
 })
 
@@ -738,9 +790,14 @@ const labName = (v: Vars, lab: Lab, note = ''): Step => labAsk(v, { ...lab, ask:
 
 /** A lab picked from the list: its tests to choose from. null if it is not one we can take an order for. */
 async function labStart(v: Vars, rpc: Rpc): Promise<Step | null> {
-  const r = await rpc('bot_lab_menu_json', { p_pincode: v.pin ?? '', p_selection: v.selection ?? '', p_query: '' })
+  const r = await rpc('bot_lab_menu_json', { p_pincode: v.pin ?? '', p_selection: v.selection ?? '', p_query: '', p_kind: v.labKind ?? '' })
   if (r?.ok !== true || !str(r.business)) return null
-  const lab: Lab = { ask: 'items', biz: str(r.business), name: str(r.name), fee: Number(r.home_fee ?? 0), menu: r.has_menu === true, items: [], names: [] }
+  const lab: Lab = {
+    ask: 'items', biz: str(r.business), name: str(r.name), fee: Number(r.home_fee ?? 0), menu: r.has_menu === true, items: [], names: [],
+    ...(v.labKind ? { kind: v.labKind } : {}), ...(v.labWant ? { want: v.labWant } : {}),
+  }
+  // 0245: blood tests are mostly packages the lab advises — which test is not asked.
+  if (lab.kind === 'pathology') return labHow(v, { ...lab, note: PATHOLOGY_NOTE })
   return labItems(v, lab, rpc)
 }
 
@@ -757,22 +814,24 @@ async function labStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promise<St
   if (item && lab.menu) {
     const items = lab.items.includes(item) ? lab.items : [...lab.items, item].slice(0, 12)
     const names = lab.items.includes(item) ? lab.names : [...lab.names, lab.shown?.[id] ?? (m.text ?? 'Test')].slice(0, 12)
-    return labAsk(v, { ...lab, items, names, ask: 'more' }, {
+    const visit = lab.visit || /^(radiology|cardiology)$/.test(lab.cats?.[id] ?? '')
+    return labAsk(v, { ...lab, items, names, ask: 'more', ...(visit ? { visit: true } : {}) }, {
       kind: 'buttons', body: `✅ ${names.join(', ')}\n\nऔर टेस्ट जोड़ने हैं?\nAdd another test?`,
       buttons: [{ id: 'lab:more', title: '➕ और टेस्ट' }, { id: 'lab:next', title: '✅ आगे बढ़ें' }],
     })
   }
   if (id === 'lab:more') return labItems(v, lab, rpc)
-  if (id === 'lab:next') return lab.items.length || lab.note ? labHow(v, lab) : labItems(v, lab, rpc)
+  if (id === 'lab:next') return lab.items.length || lab.note ? labWhere(v, lab, rpc) : labItems(v, lab, rpc)
 
   if (lab.ask === 'items' || lab.ask === 'more') {
     if (!typed) return labItems(v, lab, rpc)
     if (lab.menu) return labItems(v, lab, rpc, text.slice(0, 40))
     if (text.length < 2) return labItems(v, lab, rpc)
-    return labHow(v, { ...lab, note: text.slice(0, 300) })
+    return labWhere(v, { ...lab, note: (isScan(lab) && lab.want && !text.toLowerCase().includes(lab.want.toLowerCase()) ? `${lab.want}: ` : '') + text.slice(0, 280) }, rpc)
   }
   const how = id.match(/^lab:how:(lab|home)$/)?.[1] as 'lab' | 'home' | undefined
   if (how) {
+    if (how === 'home' && isScan(lab)) return labSlots(v, { ...lab, how: 'lab' }, rpc, 'स्कैन सेंटर पर ही होता है। / A scan is done at the centre.')
     const next = { ...lab, how }
     return how === 'home' ? labAsk(v, { ...next, ask: 'address' }, { kind: 'text', body: LAB_ADDRESS }) : labSlots(v, next, rpc)
   }
@@ -789,7 +848,7 @@ async function labStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promise<St
     if (who.length < 2 || !lab.slot || !lab.how) return labName(v, lab)
     const r = await rpc('bot_lab_order_json', {
       p_phone: phone, p_business: lab.biz, p_items: lab.items.join(','), p_collection: lab.how, p_slot: lab.slot,
-      p_patient_info: who, p_address: lab.address ?? '', p_note: lab.note ?? '',
+      p_patient_info: who, p_address: lab.address ?? '', p_note: lab.note ?? '', p_kind: lab.kind ?? '',
     })
     const out = str(r?.text)
     if (!out) return failed(v)
@@ -797,6 +856,7 @@ async function labStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promise<St
       // Said in the database's words; a time that has gone is chosen again, a name asked again.
       if (r?.again === 'slot') return labSlots(v, lab, rpc, out)
       if (r?.again === 'name') return labName(v, lab, out)
+      if (r?.again === 'how') return labSlots(v, { ...lab, how: 'lab', visit: true }, rpc, out)
       return { session: { state: 'idle', vars: carry(v) }, replies: [{ kind: 'buttons', body: out, buttons: [MENU_BUTTON] }] }
     }
     return { session: { state: 'idle', vars: carry({ ...v, lastPatient: who }) }, replies: [{ kind: 'buttons', body: out, buttons: [MENU_BUTTON] }] }
@@ -839,6 +899,11 @@ async function freeText(text: string, vars: Vars, phone: string, rpc: Rpc): Prom
     const what = branch === 'insurance' ? 'insurance' : code === 'pharmacy' ? 'medicine' : code === 'ambulance' ? 'ambulance' : ''
     if (what) return requestStart(what, vars, /^\d{6}$/.test(pin) ? pin : '')
   }
+  // 0245: a test asked for in words goes to the labs that do that kind.
+  if (code === 'lab_booking' && route !== 'confirm') {
+    const kept = { ...carry(vars), ...testSaid(text) }
+    return /^\d{6}$/.test(pin) ? search({ ...kept, code, pin }, rpc) : askPin(code, kept, out || undefined)
+  }
   if (route === 'list' || route === 'info') return results(out, route, { ...carry(vars), code, pin }, rpc)
   if (route === 'ask_pin') return askPin(code, vars, out)
   if (route === 'confirm') {
@@ -869,7 +934,7 @@ function tapped(id: string, s: Session, m: Inbound): Step | null {
   if (id === 'spec:more2') return show(v, THIRD_SPECIALITY_MENU)
   if (id.startsWith('spec:')) return askPin(id.slice(5), v)
   // The test type itself is not kept: a named test books, anything else gets a call back.
-  if (id.startsWith('test:')) return askPin(id === 'test:other' ? 'lab_callback' : 'lab_booking', v)
+  if (id.startsWith('test:')) return askPin('lab_booking', { ...v, ...testOf(id) })
   return null
 }
 
@@ -894,6 +959,9 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
     if (r) return r
     delete vars.req; state = 'idle'; s = { state, vars }
   }
+  // 0245: a lab tapped in the list of labs.
+  const lab = (m.replyId ?? '').match(/^lab:b:([0-9a-f-]{36})$/)?.[1]
+  if (lab) return (await labStart({ ...vars, selection: lab }, rpc)) ?? menu(vars)
   // 0244: choosing tests at a lab.
   if (state === 'lab') {
     const r = vars.lab ? await labStep(vars, m, phone, rpc) : null
@@ -906,9 +974,9 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
     // 0227: the area is known — look there at once, and say where; "📍 दूसरा एरिया" changes it.
     // Not for an ambulance or a call back: those act on the area, so it is asked.
     const wanted = /^spec:(?!more2?$)/.test(id) ? id.slice(5)
-      : id.startsWith('test:') && id !== 'test:other' ? 'lab_booking'
+      : id.startsWith('test:') ? 'lab_booking'
       : id === 'menu:camps' ? id.slice(5) : ''
-    if (wanted && vars.lastPin) return search({ ...carry(vars), code: wanted, pin: vars.lastPin }, rpc, `📍 ${vars.lastPin}`)
+    if (wanted && vars.lastPin) return search({ ...carry(vars), code: wanted, pin: vars.lastPin, ...(wanted === 'lab_booking' ? testOf(id) : {}) }, rpc, `📍 ${vars.lastPin}`)
     // 0232: the rating button on a booking confirmation, and the stars picked after it.
     const stars = id.match(/^rate:score:([1-5])$/)
     if (stars) return (await rate(stars[1], vars, phone, rpc)) ?? menu(vars)
