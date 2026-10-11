@@ -149,7 +149,9 @@ RESTYLED = {
 for _t in list(TEMPLATES[CLINICS]):
     _new = RESTYLED.get((_t['name'], _t['language']))
     if _new:
-        TEMPLATES[CLINICS].append({**_t, 'name': _t['name'] + '_2',
+        # Meta wants one category per name across languages: take the English one's.
+        _cat = next((x['category'] for x in TEMPLATES[CLINICS] if x['name'] == _t['name'] and x['language'] == 'en'), _t['category'])
+        TEMPLATES[CLINICS].append({**_t, 'name': _t['name'] + '_2', 'category': _cat,
                                    'components': [({**c, 'text': _new} if c['type'] == 'BODY' else c) for c in _t['components']]})
 
 TEST, TEST_PHONE_ID = '28803655879267940', '1441687965687612'
