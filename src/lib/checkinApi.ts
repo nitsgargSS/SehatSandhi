@@ -33,7 +33,8 @@ export async function getCheckins(businessId: string): Promise<Checkin[]> {
   return (data ?? []) as Checkin[]
 }
 
-export async function closeCheckin(id: string, status: 'registered' | 'dismissed'): Promise<void> {
-  const { error } = await supabase.rpc('sehat_clinic_checkin_close', { p_id: id, p_status: status })
+/** memberId (0252): the patient the entry became — their address from the form is kept on their record. */
+export async function closeCheckin(id: string, status: 'registered' | 'dismissed', memberId?: string): Promise<void> {
+  const { error } = await supabase.rpc('sehat_clinic_checkin_close', { p_id: id, p_status: status, p_member: memberId ?? null })
   if (error) throw new Error(error.message)
 }
