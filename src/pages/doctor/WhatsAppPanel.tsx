@@ -13,7 +13,7 @@ import {
   getAudiencePins, getAudience, listTemplates, listBroadcasts, createBroadcast, topUpWallet,
   acceptWaTerms, sendTestMessage, uploadBroadcastPicture, broadcastPictureUrl,
 } from '../../lib/marketingApi'
-import { WA_TERMS, WA_TERMS_VERSION } from '../../lib/waTerms'
+import { WA_TERMS, WA_TERMS_VERSION, PICTURE_RULES, templateRules } from '../../lib/waTerms'
 
 // 0155: what each broadcast status means to the clinic.
 const BROADCAST_STATUS: Record<string, string> = {
@@ -422,6 +422,8 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
   const [params, setParams] = useState<string[]>([])
   const [picBusy, setPicBusy] = useState(false)
   const [picErr, setPicErr] = useState('')
+  // A picture's rules are confirmed each time one is sent: a picture can say what the words do not.
+  const [picOk, setPicOk] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -438,7 +440,7 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
   }, [businessId, chosenPins])
 
   const tpl = templates.find(t => t.id === templateId)
-  useEffect(() => { setParams(tpl ? Array(Math.max(tpl.placeholders.length - 1, 0)).fill('') : []) }, [templateId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setParams(tpl ? Array(Math.max(tpl.placeholders.length - 1, 0)).fill('') : []); setPicOk(false); setPicErr('') }, [templateId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const count = ticked.size
   const cost = count * settings.per_message_paise
@@ -451,6 +453,7 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
     : !count ? 'Choose at least one patient.'
     : !tpl ? 'Choose a message.'
     : blanks ? 'Fill in every blank in the message.'
+    : tpl?.header_image && !picOk ? 'Tick the box confirming the picture rules.'
     : short ? `This needs ${rupees(cost)}; your wallet has ${rupees(balance)}. Top up to send.`
     : null
 
@@ -562,7 +565,7 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
                       setPicBusy(true); setPicErr('')
                       try {
                         const path = await uploadBroadcastPicture(businessId, f)
-                        setParams(ps => ps.map((p, j) => j === i ? path : p))
+                        setParams(ps => ps.map((p, j) => j === i ? path : p)); setPicOk(false)   // a new picture is confirmed afresh
                       } catch (x) { setPicErr((x as Error).message) } finally { setPicBusy(false) }
                     }} />
                   {picBusy && <span className="font-normal text-gray-500">Uploading…</span>}
@@ -570,6 +573,22 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
                 </label>
               )
             })}
+            {templateRules(tpl.code).length > 0 && (
+              <div className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+                <b className="text-gray-700">For this kind of message:</b>
+                <ul className="list-disc pl-4 mt-1 space-y-0.5">{templateRules(tpl.code).map(r => <li key={r}>{r}</li>)}</ul>
+              </div>
+            )}
+            {tpl.header_image && (
+              <div className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <b>Before you send a picture.</b> A picture is read as carefully as the words, and one that breaks these rules is refused and refunded.
+                <ul className="list-disc pl-4 mt-1 space-y-0.5">{PICTURE_RULES.map(r => <li key={r}>{r}</li>)}</ul>
+                <label className="flex items-start gap-2 mt-2 font-semibold cursor-pointer">
+                  <input type="checkbox" className="mt-0.5" checked={picOk} onChange={e => setPicOk(e.target.checked)} />
+                  I confirm all of the above for this picture.
+                </label>
+              </div>
+            )}
             <div className="bg-[#e7f6ef] rounded-lg px-3 py-2 text-sm text-gray-800 whitespace-pre-wrap">
               {tpl.header_image && (params[params.length - 1]
                 ? <img src={broadcastPictureUrl(params[params.length - 1])} alt="The picture that will be sent" className="rounded-md mb-2 max-h-64" />
@@ -594,7 +613,7 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
           <button onClick={() => setConfirming(true)} disabled={!!reason} className="btn-teal text-sm disabled:opacity-50">
             Send to {count} patient{count === 1 ? '' : 's'}
           </button>
-          <button onClick={sendTest} disabled={testing || !tpl || !tpl.approved || blanks} className="btn-outline text-sm disabled:opacity-50"
+          <button onClick={sendTest} disabled={testing || !tpl || !tpl.approved || blanks || (!!tpl.header_image && !picOk)} className="btn-outline text-sm disabled:opacity-50"
             title="Sends this message to your clinic's own WhatsApp number, so you can see it before your patients do.">
             {testing ? 'Sending test…' : `Send a test to my clinic's number · ${rupees(settings.per_message_paise)}`}
           </button>
