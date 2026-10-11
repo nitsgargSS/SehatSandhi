@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       to: i.recipient_phone.replace(/[^0-9]/g, ''),
       userName: i.recipient_name ?? 'Business',
       // Order must match the approved template's variable order.
-      params: [i.invoice_number, money(i.total_amount), link],
+      params: [i.invoice_number, money(i.total_amount), link], fromClinic: true,
     })
     if (r.ok) {
       whatsapp = 'sent'

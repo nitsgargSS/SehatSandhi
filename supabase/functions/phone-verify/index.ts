@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
     // its only variable. Never log the code.
     const sent = await sendTemplate({
       campaignEnv: 'AISENSY_LOGIN_CAMPAIGN', to: `91${phone}`, userName: 'Sehatsandhi',
-      source: 'signup-phone-verify', params: [code], otp: true,
+      source: 'signup-phone-verify', params: [code], otp: true, fromClinic: true,
     })
     if (!sent.ok) {
       console.error(`phone-verify: ${sent.provider ?? 'whatsapp'}: ${sent.error}`)

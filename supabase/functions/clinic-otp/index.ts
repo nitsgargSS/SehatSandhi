@@ -78,7 +78,7 @@ type SendResult = {
  */
 async function sendCode(phone: string, code: string): Promise<SendResult> {
   const r = await sendTemplate({
-    campaignEnv: 'AISENSY_LOGIN_CAMPAIGN', to: phone, userName: 'Sehatsandhi', params: [code], otp: true,
+    campaignEnv: 'AISENSY_LOGIN_CAMPAIGN', to: phone, userName: 'Sehatsandhi', params: [code], otp: true, fromClinic: true,
   })
   if (r.ok) return { sent: true }
   // Nothing was even attempted: no provider has credentials. Worth separating
