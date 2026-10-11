@@ -548,15 +548,14 @@ type Req = NonNullable<Vars['req']>
 const asking = (v: Vars, req: Req, reply: Reply): Step => ({ session: { state: 'req', vars: { ...carry(v), req } }, replies: [reply] })
 const pinOf = (s: string) => s.match(/(?<!\d)[1-9]\d{5}(?!\d)/)?.[0] ?? ''
 
-const AMB_FIRST = '🚨 इमरजेंसी में सबसे पहले *108* पर कॉल करें — मुफ़्त, 24×7।\nIn an emergency call *108* first — it is free.\n\nहम पास की प्राइवेट एम्बुलेंस को भी अलर्ट कर सकते हैं — जो पहले स्वीकार करेगी, वह आपको कॉल करेगी।\nWe can also alert private ambulances near you — the first to accept calls you.'
-const AMB_WHERE = '📍 मरीज़ कहाँ है? नीचे के बटन से लोकेशन भेजें — या PIN कोड के साथ पता लिखें।\nWhere is the patient? Send the location, or type the address with its PIN code.'
-const AMB_NEED = '📅 कब चाहिए, और कहाँ से कहाँ जाना है?\nWhen is it needed, and from where to where?'
+const AMB_FIRST = '🚨 इमरजेंसी में पहले *108* पर कॉल करें — मुफ़्त।\\nIn an emergency call *108* first.\\n\\nहम पास की एम्बुलेंस को भी अलर्ट कर देंगे — जो पहले स्वीकार करेगी, आपको कॉल करेगी।'
+const AMB_WHERE = '📍 मरीज़ कहाँ है? लोकेशन भेजें, या PIN कोड के साथ पता लिखें।\\nWhere is the patient?'
 const AMB_PIN = 'हमें PIN कोड नहीं मिला। कृपया 6 अंकों का PIN कोड भेजें, या लोकेशन भेजें। इमरजेंसी हो तो अभी 108 पर कॉल करें।\nWe could not find a PIN code. Send the 6-digit PIN code or your location. If it is urgent, call 108 now.'
-const MED_WHAT = '💊 *दवाई ऑर्डर*\n\nपर्ची की फ़ोटो भेजें 📷 — या दवाइयों के नाम और मात्रा लिखें।\nSend a photo of the prescription, or type the medicines and how many.\n\nपास की फ़ार्मेसी पहले कुल कीमत बताएगी; आपकी हाँ के बाद ही दवाई भेजी जाएगी।'
-const MED_ADDRESS = '🏠 डिलीवरी का पूरा पता लिखें — मकान नं., गली, लैंडमार्क और PIN कोड।\nType the full delivery address, with the PIN code.'
+const MED_WHAT = '💊 पर्ची की फ़ोटो भेजें 📷 — या दवाइयों के नाम लिखें।\\nSend the prescription photo, or type the medicines.'
+const MED_ADDRESS = '🏠 डिलीवरी का पूरा पता, PIN कोड के साथ लिखें।\\nType the delivery address with its PIN code.'
 const INS_COVER: Reply = {
   kind: 'list', header: '🛡️ हेल्थ इंश्योरेंस',
-  body: 'लाइसेंस वाला बीमा सलाहकार आपको कॉल करेगा। आपका नंबर सिर्फ़ उसी को मिलेगा जो आपका अनुरोध लेगा।\nA licensed advisor near you calls back; only the one who takes your request gets your number.\n\nकौनसा कवर चाहिए? 👇',
+  body: 'लाइसेंस वाला सलाहकार आपको कॉल करेगा।\nA licensed advisor will call you.\n\nकौनसा कवर चाहिए? 👇',
   sectionTitle: 'कवर चुनें / Choose',
   rows: [
     { id: 'req:cover:Family floater', title: '👨‍👩‍👧 पूरा परिवार', description: 'Family floater' },
@@ -640,7 +639,8 @@ async function requestStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promis
       }
       // A location whose area we could not name still has its map pin; the PIN code is asked once.
       if (!f.pin) return f.asked ? send() : asking(v, { ...req, f: { ...f, asked: '1' } }, { kind: 'location', body: AMB_PIN })
-      return f.kind === 'scheduled' ? next('need', { kind: 'text', body: AMB_NEED }) : send()
+      // 0247: a booking is not asked "when, from where to where" — the service that takes it calls and asks.
+      return send()
     }
     if (req.ask === 'need') { if (text) f.need = text.slice(0, 300); return send() }
   }
@@ -666,7 +666,9 @@ async function requestStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promis
       const c = id.match(/^req:cover:(.+)$/)?.[1]
       if (!c) return again(INS_COVER)
       f.cover = c
-      return next('members', { kind: 'text', body: INS_MEMBERS })
+      // 0247: who and when to call are the advisor's to ask on the call. The area last searched is used if known.
+      if (!f.pin && /^\d{6}$/.test(v.lastPin ?? '')) f.pin = v.lastPin!
+      return f.pin ? send() : next('pin', pinQuestion(v))
     }
     if (req.ask === 'members') {
       if (!text) return again({ kind: 'text', body: INS_MEMBERS })
