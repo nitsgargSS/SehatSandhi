@@ -22,7 +22,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
-import { sendTemplate } from '../_shared/whatsapp.ts'
 import { emailConfigured, esc, layout, sendEmail } from '../_shared/email.ts'
 
 const money = (n: number | null) =>
@@ -67,30 +66,11 @@ Deno.serve(async (req) => {
   const link = `${siteUrl}/invoice/${token}`
   const errors: string[] = []
 
-  // ── WhatsApp, via AISensy ──
-  let whatsapp = 'skipped'
-  if (i.sent_whatsapp_at) {
-    whatsapp = 'already sent'
-  } else if (!i.recipient_phone) {
-    whatsapp = 'skipped: no phone on the invoice'
-  } else {
-    const r = await sendTemplate({
-      campaignEnv: 'AISENSY_INVOICE_CAMPAIGN',
-      to: i.recipient_phone.replace(/[^0-9]/g, ''),
-      userName: i.recipient_name ?? 'Business',
-      // Order must match the approved template's variable order.
-      params: [i.invoice_number, money(i.total_amount), link], fromClinic: true,
-    })
-    if (r.ok) {
-      whatsapp = 'sent'
-      await supabase.from('invoices').update({ sent_whatsapp_at: new Date().toISOString() }).eq('id', i.id)
-    } else if (!r.provider) {
-      whatsapp = `skipped: ${r.error}`
-    } else {
-      whatsapp = 'failed'
-      errors.push(r.error ?? 'whatsapp: not sent')
-    }
-  }
+  // ── WhatsApp: not pushed (0234) ──
+  // A message we start is a paid template. The invoice goes by email; a
+  // business that wants it on WhatsApp writes "invoice" to the Sehatsandhi
+  // number and the bot answers with the link (bot_business_ask_json).
+  const whatsapp = i.sent_whatsapp_at ? 'already sent' : 'not pushed: sent on request'
 
   // ── Email, from no-reply@ via ZeptoMail (_shared/email.ts) ──
   let email = 'skipped'

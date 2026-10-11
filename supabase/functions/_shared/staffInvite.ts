@@ -21,7 +21,6 @@
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { esc, layout, sendEmail } from './email.ts'
-import { sendTemplate } from './whatsapp.ts'
 
 export const LINK_DAYS = 7
 
@@ -146,15 +145,10 @@ export async function sendStaffInvite(
     emailRes = r.ok ? 'sent' : r.error
   }
 
-  let wa: InviteSent['whatsapp'] = 'not configured'
-  if (!phone) wa = 'no number'
-  else if (!send) wa = 'not sent'
-  else {
-    const r = await sendTemplate({
-      campaignEnv: 'AISENSY_STAFF_INVITE_CAMPAIGN', to: phone, userName: name, params: [name, clinic, link], fromClinic: true,
-    })
-    if (r.provider) wa = r.ok ? 'sent' : (r.error ?? 'whatsapp: not sent')
-  }
+  // 0234: no WhatsApp template is pushed — it is a paid message. The clinic
+  // forwards the link from its own WhatsApp (the screen offers that), and the
+  // staff member can write "login" to the Sehatsandhi number for the sign-in page.
+  const wa: InviteSent['whatsapp'] = !phone ? 'no number' : !send ? 'not sent' : 'not configured'
 
   return { link, setUp, name, clinic, email: emailRes, whatsapp: wa, phone }
 }

@@ -2073,6 +2073,13 @@ export default function DoctorDashboard() {
                             Open invoice
                           </a>
                         )}
+                        {/* 0234: not pushed on WhatsApp — asked for, in a chat the business opens. */}
+                        {b.public_token && (
+                          <a href={`https://wa.me/917988620804?text=${encodeURIComponent('invoice')}`} target="_blank" rel="noreferrer"
+                             className="inline-block ml-2 text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700">
+                            Get it on WhatsApp
+                          </a>
+                        )}
                       </div>
                     )
                   })}

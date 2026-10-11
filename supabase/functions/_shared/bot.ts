@@ -655,6 +655,18 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
     }
   }
 
+  // 0234: a business asking for its invoice, or a staff member for where to
+  // sign in — answered here, in the conversation they opened, and only to a
+  // number that is one. Anyone else falls through as if nothing was asked.
+  if (typed && state === 'idle') {
+    const what = /\binvoices?\b|\breceipt\b|इनवॉइस|इन्वॉइस|रसीद/i.test(text) ? 'invoice'
+      : /\b(log ?in|sign ?in|join(ing)?|invite)\b|लॉगिन|लॉग इन|जॉइन/i.test(text) ? 'login' : ''
+    if (what) {
+      const r = await rpc('bot_business_ask_json', { p_phone: phone, p_what: what })
+      if (r?.found === true && str(r.text)) return { session: { state: 'idle', vars: carry(vars) }, replies: [{ kind: 'text', body: str(r.text) }] }
+    }
+  }
+
   // 0224: a clinic's code, wherever in the chat it arrives — its QR was scanned.
   const scanned = typed ? text.match(CLINIC_CODE)?.[0].toUpperCase() : undefined
   if (scanned) {
