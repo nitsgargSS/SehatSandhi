@@ -82,6 +82,8 @@ interface Extracted {
   replyTo?: string | null
   /** Meta only: a location they shared. */
   location?: { latitude: number; longitude: number } | null
+  /** Meta only: a photo or document they sent. */
+  media?: { id: string; mime: string } | null
 }
 
 function extract(p: Any): Extracted {
@@ -98,6 +100,9 @@ function extract(p: Any): Extracted {
       toPhoneId: v.metadata?.phone_number_id ?? null,
       replyTo: m.context?.id ?? null,
       location: m.type === 'location' && m.location ? { latitude: Number(m.location.latitude), longitude: Number(m.location.longitude) } : null,
+      // 0243: a photo or PDF — a prescription, when a medicine order is asking for one.
+      media: m.type === 'image' && m.image?.id ? { id: String(m.image.id), mime: String(m.image.mime_type ?? 'image/jpeg') }
+        : m.type === 'document' && m.document?.id ? { id: String(m.document.id), mime: String(m.document.mime_type ?? '') } : null,
     }
   }
   // AiSensy / generic: skip what the business sent, and receipts.
@@ -146,6 +151,33 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 const SESSION_IDLE_MS = 3_600_000
 
+const KEEP_MIME: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' }
+
+/**
+ * Fetch a photo the patient sent from Meta and keep it where the app keeps
+ * prescription photos; the link, good for 14 days, goes on the order. null if
+ * it could not be kept — the order then asks for the medicines in words.
+ */
+async function keepPrescription(db: Any, media: { id: string; mime: string }, phone: string): Promise<string | null> {
+  try {
+    const token = Deno.env.get('META_ACCESS_TOKEN')
+    const ext = KEEP_MIME[media.mime.split(';')[0].trim().toLowerCase()]
+    if (!token || !ext) return null
+    const meta = await fetch(`https://graph.facebook.com/v25.0/${media.id}`, { headers: { Authorization: `Bearer ${token}` } })
+    const url = meta.ok ? (await meta.json())?.url : null
+    if (!url) return null
+    const file = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!file.ok) return null
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    if (!bytes.length || bytes.length > 10 * 1024 * 1024) return null
+    const path = `whatsapp/${phone}/${Date.now()}.${ext}`
+    const { error } = await db.storage.from('patient-uploads').upload(path, bytes, { contentType: media.mime.split(';')[0], upsert: false })
+    if (error) { console.error(`whatsapp-inbound: keep prescription: ${error.message}`); return null }
+    const { data } = await db.storage.from('patient-uploads').createSignedUrl(path, 14 * 86400)
+    return data?.signedUrl ?? null
+  } catch (x) { console.error(`whatsapp-inbound: keep prescription: ${(x as Error).message}`); return null }
+}
+
 /**
  * Answer one message. Returns a note for the inbound log. Never throws: the
  * webhook must still answer 200, or Meta retries and then switches it off.
@@ -172,7 +204,15 @@ async function runBot(db: Any, e: Extracted, line: 'main' | 'clinic'): Promise<s
     // A shared location becomes the PIN code (or town) it is in.
     const where = e.location ? await locate(e.location.latitude, e.location.longitude) : undefined
     const located = where === undefined ? undefined : (where?.pin ?? where?.place ?? null)
-    const next = await step(session, { text: e.text, replyId: e.replyId ?? null, fresh, line, replyTo: e.replyTo ?? null, ...(located !== undefined ? { located } : {}) }, phone, async (fn, args) => {
+    // 0243: a prescription photo, kept only while a medicine order is asking for one.
+    const wantsPhoto = session.state === 'req' && session.vars.req?.what === 'medicine' && !session.vars.req.f.rx
+    const image = e.media && wantsPhoto ? await keepPrescription(db, e.media, phone) : null
+    const next = await step(session, {
+      text: e.text, replyId: e.replyId ?? null, fresh, line, replyTo: e.replyTo ?? null, name: e.name,
+      ...(located !== undefined ? { located } : {}),
+      ...(e.location ? { coords: { lat: e.location.latitude, lng: e.location.longitude } } : {}),
+      ...(image ? { image } : {}),
+    }, phone, async (fn, args) => {
       const { data, error } = await db.rpc(fn, args)
       if (error) { console.error(`whatsapp-inbound: ${fn}: ${error.message}`); return null }
       return data
