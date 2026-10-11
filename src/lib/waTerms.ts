@@ -23,8 +23,8 @@ export const WA_TERMS: { title: string; text: string }[] = [
     text: 'Messages go only to your own patients who agreed to hear from your clinic. You will not add numbers of people who did not agree, and anyone who replies STOP is never messaged again.',
   },
   {
-    title: 'Sehatsandhi reads every message first',
-    text: 'Each broadcast, with any picture, is read by Sehatsandhi before it goes out. We may refuse a message that is misleading, off-topic, or not from your clinic. A refused broadcast is refunded to your wallet in full, with the reason.',
+    title: 'What is checked, and when',
+    text: 'A broadcast with a picture is read by Sehatsandhi before it goes out; if it is refused, it is refunded to your wallet in full, with the reason. A text broadcast goes out as soon as you send it, without being read first — so check it yourself, because it cannot be called back. Sehatsandhi may read any message afterwards and act on one that breaks these terms.',
   },
   {
     title: 'What you may not send',
@@ -101,7 +101,7 @@ const TEMPLATE_RULES_BY_CODE: Record<string, string[]> = {
   ],
   clinic_message: [
     'Your own words, about your clinic’s healthcare services only.',
-    'Everything in "What you may not send" applies. Sehatsandhi reads this one most closely, so a vague or promotional message may be sent back.',
+    'Everything in "What you may not send" applies. It goes out as you wrote it, so read it once more before sending.',
   ],
   clinic_image: [
     'Your own words, about your clinic’s healthcare services only, with one picture.',

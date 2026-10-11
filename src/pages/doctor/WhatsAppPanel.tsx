@@ -478,8 +478,9 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
     setBusy(true); setErr(''); setMsg('')
     try {
       const r = await createBroadcast({ businessId, templateId, params, memberIds: [...ticked], pins: chosenPins })
-      // 0155: every broadcast is reviewed by Sehatsandhi before it goes out.
-      setMsg(`Sent for approval: ${r.recipients} patients · ${rupees(r.cost_paise)} held from your wallet (balance ${rupees(r.balance_paise)}). Sehatsandhi reviews it before it goes out; if it is not approved the money comes back and we email you why.`)
+      // 0238: only a picture waits for Sehatsandhi's approval; a set template goes out at once.
+      if (r.status === 'queued') setMsg(`Sending now: ${r.recipients} patients · ${rupees(r.cost_paise)} taken from your wallet (balance ${rupees(r.balance_paise)}). A message that is not delivered is refunded.`)
+      else setMsg(`Sent for approval: ${r.recipients} patients · ${rupees(r.cost_paise)} held from your wallet (balance ${rupees(r.balance_paise)}). Sehatsandhi reviews it before it goes out; if it is not approved the money comes back and we email you why.`)
       setConfirming(false); setChosenPins([]); setTemplateId(''); onSent()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -622,7 +623,8 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
         </div>
       ) : (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm space-y-2">
-          <p>Send this message to <b>{count}</b> patients? <b>{rupees(cost)}</b> will be taken from the wallet.</p>
+          <p>Send this message to <b>{count}</b> patients? <b>{rupees(cost)}</b> will be taken from the wallet.{' '}
+            {tpl?.needs_review ? 'Because it carries a picture, Sehatsandhi reads it first; it goes out once approved.' : 'It goes out straight away and cannot be called back.'}</p>
           <div className="flex gap-2">
             <button onClick={send} disabled={busy} className="btn-teal text-sm disabled:opacity-50">{busy ? 'Sending…' : 'Yes, send'}</button>
             <button onClick={() => setConfirming(false)} className="btn-outline text-sm">Cancel</button>

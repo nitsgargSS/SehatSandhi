@@ -55,6 +55,8 @@ export interface WaTemplate {
   sort_order: number
   /** 0235: the message carries a picture; its last placeholder is the picture. */
   header_image?: boolean
+  /** 0238: a broadcast on this template waits for Sehatsandhi's approval; the rest go out at once. */
+  needs_review?: boolean
 }
 
 // ── A picture for a broadcast (0235) ──
@@ -219,13 +221,13 @@ export async function listBroadcasts(businessId: string): Promise<Broadcast[]> {
 
 export async function createBroadcast(args: {
   businessId: string; templateId: string; params: string[]; memberIds: string[]; pins: string[]
-}): Promise<{ broadcast_id: string; recipients: number; cost_paise: number; balance_paise: number }> {
+}): Promise<{ broadcast_id: string; recipients: number; cost_paise: number; balance_paise: number; status?: 'pending_approval' | 'queued' }> {
   const { data, error } = await supabase.rpc('sehat_create_wa_broadcast', {
     p_business: args.businessId, p_template: args.templateId, p_params: args.params,
     p_members: args.memberIds, p_pins: args.pins,
   })
   oops(error)
-  return data as { broadcast_id: string; recipients: number; cost_paise: number; balance_paise: number }
+  return data as { broadcast_id: string; recipients: number; cost_paise: number; balance_paise: number; status?: 'pending_approval' | 'queued' }
 }
 
 /**
