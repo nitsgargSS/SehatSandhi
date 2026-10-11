@@ -4,6 +4,12 @@ review stands — instead of typing nineteen of them into WhatsApp Manager.
 
     python3 scripts/wa-templates.py            create the missing ones, then show all
     python3 scripts/wa-templates.py status     only show how each stands
+    python3 scripts/wa-templates.py preview 98XXXXXXXX        send every template, with its sample
+                                               words, to that phone from the REAL numbers (Meta bills these)
+    python3 scripts/wa-templates.py preview 98XXXXXXXX test   the same from Meta's TEST number, free: the
+                                               templates are first created in the test account, and only
+                                               those Meta has approved there are sent. The phone must be
+                                               on the test number's list of allowed recipients.
 
 A template lives in a messaging account and can be sent only from that
 account's number, so which account holds which is the point of this file:
@@ -85,9 +91,30 @@ TEMPLATES = {
     ],
 }
 NAMES = {MAIN: 'MAIN  (+91 70153 99355)', CLINICS: 'CLINICS  (+91 79886 20804)'}
+# Which number sends each account's templates; and Meta's test number with its own account.
+PHONE_IDS = {MAIN: '1302831736238429', CLINICS: '1347090528485985'}
+TEST, TEST_PHONE_ID = '28803655879267940', '1441687965687612'
+
+def to_send(t, to):
+    """The message that sends template `t` to `to`, filled with its own sample words."""
+    comps = []
+    if t['category'] == 'AUTHENTICATION':
+        comps = [{'type': 'body', 'parameters': [{'type': 'text', 'text': '123456'}]},
+                 {'type': 'button', 'sub_type': 'url', 'index': 0, 'parameters': [{'type': 'text', 'text': '123456'}]}]
+    else:
+        b = [c for c in t['components'] if c['type'] == 'BODY'][0]
+        ex = b.get('example', {}).get('body_text', [[]])[0]
+        if ex: comps = [{'type': 'body', 'parameters': [{'type': 'text', 'text': x} for x in ex]}]
+    return {'messaging_product': 'whatsapp', 'to': to, 'type': 'template',
+            'template': {'name': t['name'], 'language': {'code': t['language']}, 'components': comps}}
 
 def main():
     only_status = len(sys.argv) > 1 and sys.argv[1] == 'status'
+    preview = len(sys.argv) > 2 and sys.argv[1] == 'preview'
+    on_test = preview and len(sys.argv) > 3 and sys.argv[3] == 'test'
+    to = '91' + ''.join(ch for ch in (sys.argv[2] if preview else '') if ch.isdigit())[-10:]
+    if preview and len(to) != 12:
+        print('Give the 10-digit phone to send to:  preview 98XXXXXXXX [test]'); return
     print('Paste each value and press Enter. Nothing you paste is shown.')
     token = ''.join(getpass.getpass('1/2  Meta system user token (starts with EAA): ').split())
     secret = ''.join(getpass.getpass('2/2  Meta app secret: ').split())
@@ -109,6 +136,36 @@ def main():
     def why(r):
         e = r.get('error', {})
         return ' — '.join(str(x) for x in (e.get('error_user_title'), e.get('error_user_msg') or e.get('message')) if x)
+
+    if preview:
+        if on_test:
+            # One of each name, created in the test account if missing, sent from the test number.
+            seen, plan = set(), []
+            for ts in TEMPLATES.values():
+                for t in ts:
+                    if (t['name'], t['language']) not in seen: seen.add((t['name'], t['language'])); plan.append(t)
+            groups = [(TEST, TEST_PHONE_ID, 'TEST number (free)', plan)]
+        else:
+            groups = [(w, PHONE_IDS[w], NAMES[w] + ' — real messages, billed by Meta', ts) for w, ts in TEMPLATES.items()]
+        for waba, phone_id, label, wanted in groups:
+            print(f'\n── {label} → +{to} ──')
+            have = call('GET', f'{waba}/message_templates', query={'fields': 'name,language,status', 'limit': 200})
+            if 'error' in have:
+                print('  ✗ could not read this account:', why(have)); continue
+            there = {(t['name'], t['language']): t['status'] for t in have.get('data', [])}
+            for t in wanted:
+                key = (t['name'], t['language'])
+                if key not in there and on_test:
+                    r = call('POST', f'{waba}/message_templates', t)
+                    if 'error' in r:
+                        print(f"  ✗ {t['name']:22} could not be created in the test account: {why(r)}"); continue
+                    there[key] = r.get('status', 'PENDING')
+                if there.get(key) != 'APPROVED':
+                    print(f"  … {t['name']:22} {there.get(key, 'missing')} — not sent; run this again once Meta approves it"); continue
+                r = call('POST', f'{phone_id}/messages', to_send(t, to))
+                print(f"  ✓ {t['name']:22} sent" if 'error' not in r else f"  ✗ {t['name']:22} not sent: {why(r)}")
+        print('\nCopy everything from the first "──" line down and send it. It contains no secret.')
+        return
 
     for waba, wanted in TEMPLATES.items():
         print(f'\n── {NAMES[waba]} ──')
