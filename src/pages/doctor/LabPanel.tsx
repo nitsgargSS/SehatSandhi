@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { moneyExact } from '../../lib/format'
 import { searchPatients, registerPatient, PatientSearchResult } from '../../lib/patientsApi'
 import {
-  getLabSettings, saveLabSettings, importCatalogue, getTests, getTestParameters, saveTest, getPackages, savePackage,
+  getLabSettings, saveLabSettings, saveLabOffer, importCatalogue, getTests, getTestParameters, saveTest, getPackages, savePackage,
   createOrder, getOrders, getOrder, markCollected, assignCollector, cancelOrder, getResults, getPreviousValues,
   saveResults, approveOrder, sendReport, rangeText, STATUS_LABEL,
   getFollowups, followupAction, getCrmSummary, getSegment, setRepeatDays, reminderLink,
@@ -1061,17 +1061,22 @@ function Settings({ businessId }: { businessId: string }) {
   const [fee, setFee] = useState('')
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
-  useEffect(() => { getLabSettings(businessId).then(s => setFee(String(s.homeFee))) }, [businessId])
+  const [offer, setOffer] = useState('')
+  useEffect(() => { getLabSettings(businessId).then(s => { setFee(String(s.homeFee)); setOffer(s.offer) }) }, [businessId])
   return (
     <div className="card shadow-sm space-y-3 max-w-lg">
       <h3 className="font-bold text-navy-700">Lab settings</h3>
       <label className="text-xs text-gray-500 block">Home sample collection fee (₹) — added to the bill of every home collection; can be changed on each order. 0 = free.
         <input type="number" min={0} className="input-field mt-1" value={fee} onChange={e => setFee(e.target.value)} />
       </label>
+      <label className="text-xs text-gray-500 block">Offer line (optional) — one line patients see with your lab's name on WhatsApp, e.g. "10% off on MRI and CT scans". Prices of scans are not shown there: the patient says which scan and you tell them the price.
+        <input className="input-field mt-1" maxLength={60} value={offer} onChange={e => setOffer(e.target.value)} placeholder="10% off on MRI and CT scans" />
+        <span className="text-[11px] text-gray-400">{offer.length}/60 · It must be a real offer, honoured for every patient who books.</span>
+      </label>
       <p className="text-xs text-gray-500">Reports are approved by a doctor on your staff — add pathologists and radiologists as doctors (speciality Pathology or Radiology). Lab technicians join with the Nurse role. Reports go to patients on WhatsApp automatically when approved.</p>
       {msg && <p className="text-sm text-green-700">{msg}</p>}
       <Err msg={err} />
-      <button onClick={async () => { setErr(''); try { await saveLabSettings(businessId, Number(fee) || 0); setMsg('Saved.') } catch (e) { setErr((e as Error).message) } }} className="btn-teal text-sm">Save</button>
+      <button onClick={async () => { setErr(''); try { await saveLabSettings(businessId, Number(fee) || 0); await saveLabOffer(businessId, offer); setMsg('Saved.') } catch (e) { setErr((e as Error).message) } }} className="btn-teal text-sm">Save</button>
     </div>
   )
 }
