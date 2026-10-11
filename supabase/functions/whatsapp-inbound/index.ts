@@ -156,6 +156,12 @@ async function runBot(db: Any, e: Extracted, line: 'main' | 'clinic'): Promise<s
     const { data: row } = await db.from('wa_bot_sessions')
       .select('state, vars, last_message_id, updated_at').eq('phone', phone).eq('line', line).maybeSingle()
     if (row && e.id && row.last_message_id === e.id) return 'bot: redelivery, already answered'
+    // 0229: claimed before it is answered — two copies arriving in the same
+    // instant (a number on two accounts, or Meta redelivering) get one answer.
+    if (e.id) {
+      const { data: mine, error: cErr } = await db.rpc('sehat_wa_claim_message', { p_message_id: e.id, p_line: line })
+      if (!cErr && mine === false) return 'bot: another copy of this message is being answered'
+    }
 
     // Blue ticks and "typing…" while the database is asked.
     if (e.id) await graphSend({ status: 'read', message_id: e.id, typing_indicator: { type: 'text' } }, from)
