@@ -12,6 +12,7 @@
 //   nurse_unassigned     → the business: a nurse is now linked to no doctor (0149)
 //   wa_broadcast_rejected → the business: why a broadcast was not approved, and the refund (0155)
 //   wa_broadcast_waiting  → ADMIN_EMAIL: a picture broadcast is waiting for approval (0247)
+//   clinic_booking_cancelled → the clinic and the doctor: the patient cancelled (0248)
 //   signup_reminder      → a business that registered and stopped at payment: what joining
 //                          gives it, and the link to finish (0223). payload.n is 1 or 2.
 //
@@ -137,6 +138,18 @@ Deno.serve(async (req) => {
     if (r.kind === 'nurse_unassigned') {
       const res = await sendNurseUnassigned(db, r.business_id, r.practitioner_id, r.payload, site)
       if (res === 'skip') { await finish({ status: 'skipped', last_error: 'nurse re-linked, gone, or no address' }); continue }
+      if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
+      else {
+        const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
+        await finish({ status: giveUp ? 'failed' : 'pending', last_error: res.error }); failed++
+      }
+      continue
+    }
+
+    // 0248: the patient cancelled — tell the clinic and the doctor.
+    if (r.kind === 'clinic_booking_cancelled') {
+      const res = await sendCancelled(db, r.appointment_id, site)
+      if (res === 'skip') { await finish({ status: 'skipped', last_error: 'appointment gone, not cancelled, or no address' }); continue }
       if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
       else {
         const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
@@ -325,6 +338,48 @@ ${rows.map(([k, v]) => `<tr><td style="padding:6px 10px 6px 0;color:#5b6b63;vert
 // own address. Until WhatsApp works this is how a clinic hears about a bot
 // booking without keeping the dashboard open.
 // deno-lint-ignore no-explicit-any
+// 0248: to the clinic and the doctor — a patient cancelled a booking that was still to come.
+// deno-lint-ignore no-explicit-any
+async function sendCancelled(db: any, appointmentId: string | null, site: string): Promise<SendResult | 'skip'> {
+  if (!appointmentId) return 'skip'
+  const { data: a } = await db.from('appointments')
+    .select('id, business_id, practitioner_id, slot_datetime, patient_name, patient_phone, patient_age, status, cancel_reason, last_actor_detail')
+    .eq('id', appointmentId).maybeSingle()
+  if (!a || a.status !== 'cancelled') return 'skip'
+  const { data: b } = await db.from('businesses').select('name, email').eq('id', a.business_id).maybeSingle()
+  const { data: p } = a.practitioner_id
+    ? await db.from('practitioners').select('full_name, email').eq('id', a.practitioner_id).maybeSingle()
+    : { data: null }
+  const recipients = Array.from(new Set([b?.email, p?.email].map(e => (e ?? '').trim().toLowerCase()).filter(e => e.includes('@') && !e.endsWith('@wa.sehatsandhi.in'))))
+  if (!recipients.length) return 'skip'
+
+  const when = new Date(a.slot_datetime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
+  const via = /whatsapp/.test(a.last_actor_detail ?? '') ? 'WhatsApp' : a.last_actor_detail === 'app' ? 'the app' : a.last_actor_detail === 'website' ? 'the website' : ''
+  const rows: [string, string][] = [
+    ['Was booked for', when],
+    ['Patient', `${a.patient_name ?? '—'}${a.patient_age ? `, ${a.patient_age}y` : ''}`],
+    ['Mobile', a.patient_phone ?? '—'],
+    ['Doctor', p?.full_name ?? 'Any doctor'],
+    ...(via ? [['Cancelled on', via] as [string, string]] : []),
+    ...(a.cancel_reason ? [['Reason given', String(a.cancel_reason)] as [string, string]] : []),
+  ]
+  const dash = `${site}/business/dashboard`
+  const html = layout(`Appointment cancelled: ${when}`, `
+<p style="margin:0 0 12px">The patient has cancelled this appointment. The time is free again for other patients.</p>
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:14px;border-collapse:collapse">
+${rows.map(([k, v]) => `<tr><td style="padding:6px 10px 6px 0;color:#5b6b63;white-space:nowrap">${esc(k)}</td><td style="padding:6px 0;border-bottom:1px solid #eef2ef">${esc(v)}</td></tr>`).join('')}
+</table>
+<p style="margin:16px 0 0"><a href="${dash}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:bold">Open your dashboard</a></p>`)
+  const text = [`Appointment cancelled by the patient at ${b?.name ?? 'your clinic'}`, '', ...rows.map(([k, v]) => `${k}: ${v}`), '', `Dashboard: ${dash}`].join('\n')
+
+  let last: SendResult = { ok: true }
+  for (const addr of recipients) {
+    last = await sendEmail({ to: addr, toName: b?.name ?? undefined, subject: `Appointment cancelled — ${a.patient_name ?? 'patient'}, ${when}`, html, text })
+    if (!last.ok) return last
+  }
+  return last
+}
+
 async function sendBooking(db: any, appointmentId: string | null, site: string): Promise<SendResult | 'skip'> {
   if (!appointmentId) return 'skip'
   const { data: a } = await db.from('appointments')
