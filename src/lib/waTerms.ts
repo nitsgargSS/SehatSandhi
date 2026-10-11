@@ -19,8 +19,8 @@ export const WA_TERMS_VERSION = '2026-10-11'
 
 export const WA_TERMS: { title: string; text: string }[] = [
   {
-    title: 'Only patients who agreed',
-    text: 'Messages go only to your own patients who agreed to hear from your clinic. You will not add numbers of people who did not agree, and anyone who replies STOP is never messaged again.',
+    title: 'Only your own patients, until they say STOP',
+    text: 'Messages go only to your clinic’s own patients, on the number they gave your clinic. No other numbers can be added. Every broadcast tells the patient how to stop; anyone who replies STOP, or asks your staff to stop, is taken off your list and is not messaged again unless they ask to be.',
   },
   {
     title: 'What is checked, and when',
