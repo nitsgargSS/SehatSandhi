@@ -28,6 +28,7 @@ const QrPosterPage = lazy(() => import('./pages/doctor/QrPosterPage'))
 const PharmacyBillPage = lazy(() => import('./pages/doctor/PharmacyBillPage'))
 const LabReportPage = lazy(() => import('./pages/LabReportPage'))
 const OrderTrack = lazy(() => import('./pages/OrderTrack'))
+const CheckinPage = lazy(() => import('./pages/CheckinPage'))
 const AmbulanceTrack = lazy(() => import('./pages/AmbulanceTrack'))
 const InsuranceTrack = lazy(() => import('./pages/InsuranceTrack'))
 const LabFilePage = lazy(() => import('./pages/LabFilePage'))
@@ -134,7 +135,7 @@ const FLOAT_HIDDEN_PATHS = ['/business/register', '/doctor/register', '/business
 // so tracking these would hand every one of them to Google Analytics, where
 // anyone with report access could open a patient's medicines, their hospital
 // stay, or what they were charged for it.
-const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/', '/ds/', '/bill/', '/lab/', '/my']
+const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/', '/ds/', '/bill/', '/lab/', '/my', '/c/']
 
 const PageViewTracker = () => {
   const { pathname } = useLocation()
@@ -238,6 +239,8 @@ export default function App() {
           <Route path="/lab/file/:token" element={<LabFilePage />} />
           <Route path="/lab/:token" element={<LabReportPage />} />
           <Route path="/o/:token" element={<OrderTrack />} />
+          {/* 0251: the form a clinic's reception QR opens. */}
+          <Route path="/c/:code" element={<CheckinPage />} />
           <Route path="/a/:token" element={<AmbulanceTrack />} />
           <Route path="/i/:token" element={<InsuranceTrack />} />
 
