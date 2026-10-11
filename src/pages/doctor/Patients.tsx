@@ -1592,12 +1592,13 @@ function RegisteredUnder({ businessId, memberId }: { businessId: string; memberI
 
 // ── Consent, and the toggle that depends on it ──────────────────────────────
 
-// WhatsApp updates from THIS clinic (0116). Per clinic, not per phone: a
-// patient who agreed to hear from one clinic has not agreed to hear from all.
+// WhatsApp updates from THIS clinic (0116). Per clinic, not per phone.
+// 0239: a patient is on the clinic's list until they say stop — by replying
+// STOP, or by telling the desk, which is what the button here records.
 function MarketingConsent({ memberId, businessId }: { memberId: string; businessId: string }) {
   const [state, setState] = useState<{ granted: boolean; at: string | null } | null>(null)
   const [asking, setAsking] = useState(false)
-  const [basis, setBasis] = useState('Asked at the front desk and agreed')
+  const [basis, setBasis] = useState('Asked at the front desk to get updates again')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -1605,10 +1606,10 @@ function MarketingConsent({ memberId, businessId }: { memberId: string; business
   useEffect(() => { load() }, [memberId, businessId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async (granted: boolean) => {
-    if (granted && !basis.trim()) { setErr('Say how the patient agreed — it is the evidence.'); return }
+    if (granted && !basis.trim()) { setErr('Say how the patient asked — it is the evidence.'); return }
     setBusy(true); setErr('')
     try {
-      await setMarketingConsent(memberId, businessId, granted, granted ? basis.trim() : 'withdrawn by patient')
+      await setMarketingConsent(memberId, businessId, granted, granted ? basis.trim() : 'Patient asked the clinic to stop')
       setAsking(false); await load()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -1622,22 +1623,22 @@ function MarketingConsent({ memberId, businessId }: { memberId: string; business
           <MessageCircle className="w-4 h-4" style={{ color: on ? BIZ.green : BIZ.mutedWarm }} />
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: BIZ.ink }}>
-              WhatsApp updates from this clinic {on ? 'allowed' : 'not allowed'}
+              WhatsApp updates from this clinic {on ? 'on' : 'stopped'}
             </div>
             <div style={{ fontSize: 12.5, color: BIZ.muted, marginTop: 2, maxWidth: 560 }}>
               {on
-                ? `Agreed ${state.at ? shortDate(state.at) : ''}. They can receive your camp, notice and health-tip broadcasts.`
-                : 'Ask before adding them: only patients who agreed receive your broadcasts.'}
+                ? 'They receive your camp, notice and health-tip broadcasts. They can stop any time by replying STOP; if they ask at the desk, stop it here.'
+                : `Stopped${state.at ? ` ${shortDate(state.at)}` : ''}. They receive no broadcasts from you. Turn it back on only if they ask.`}
             </div>
           </div>
         </div>
         {on
-          ? <button onClick={() => save(false)} disabled={busy} style={btn()}>Withdraw</button>
-          : <button onClick={() => setAsking(a => !a)} style={btn(true)}>Patient agreed…</button>}
+          ? <button onClick={() => save(false)} disabled={busy} style={btn()}>Stop for this patient</button>
+          : <button onClick={() => setAsking(a => !a)} style={btn(true)}>Patient asked to start again…</button>}
       </div>
       {asking && !on && (
         <div style={{ marginTop: 13, display: 'grid', gap: 8 }}>
-          <div style={label}>How did they agree?</div>
+          <div style={label}>How did they ask?</div>
           <input value={basis} onChange={e => setBasis(e.target.value)} style={input}
             placeholder="e.g. asked at the desk and agreed, or signed form no. 412" />
           <div style={{ display: 'flex', gap: 8 }}>
@@ -1704,7 +1705,7 @@ function RecordingConsent({ summary, businessId, onChange }: {
 
       {asking && !on && (
         <div style={{ marginTop: 13, display: 'grid', gap: 8 }}>
-          <div style={label}>How did they agree?</div>
+          <div style={label}>How did they ask?</div>
           <input value={basis} onChange={e => setBasis(e.target.value)} style={input}
             placeholder="e.g. asked verbally and agreed, or signed form no. 412" />
           <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>

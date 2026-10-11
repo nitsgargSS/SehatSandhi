@@ -22,7 +22,7 @@ const BROADCAST_STATUS: Record<string, string> = {
 }
 
 // A clinic's WhatsApp marketing (0116): its wallet, and broadcasts to the
-// patients who agreed to hear from it.
+// its own patients, until they say STOP (0239).
 //
 // Pick PIN codes, and the matching patients load as a checklist, all ticked;
 // untick anyone. The total updates as you go and is checked against the wallet
@@ -85,7 +85,7 @@ export default function WhatsAppPanel({ businessId, businessName, prefill, busin
             <><b>WhatsApp marketing is paused.</b> Your WhatsApp plan ended on {access.expires_on ? shortDate(access.expires_on) : '—'} and
             was not renewed. Renew below to pick up where you left off — your wallet balance, patients and past broadcasts are all kept.</>
           ) : (
-            <><b>Add WhatsApp to your plan</b> to send camp, notice and health-tip messages to patients who agreed to hear from you.
+            <><b>Add WhatsApp to your plan</b> to send camp, notice and health-tip messages to your patients.
             It is charged with your plan every term; each message is paid separately from a wallet.</>
           )}
         </div>
@@ -158,7 +158,7 @@ function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn
       <div className={`rounded-xl px-4 py-3 text-sm border ${locked ? 'bg-red-50 border-red-200 text-red-800' : 'bg-teal-50 border-teal-200 text-teal-900'}`}>
         {locked
           ? <><b>WhatsApp marketing is paused.</b> It ended on {expiresOn ? shortDate(expiresOn) : '—'}. Add it again below — your wallet, patients and past broadcasts are all kept.</>
-          : <><b>Add WhatsApp to your plan</b> to send camp, notice and health-tip messages to patients who agreed to hear from you. Each message is paid separately from a wallet.</>}
+          : <><b>Add WhatsApp to your plan</b> to send camp, notice and health-tip messages to your patients. Each message is paid separately from a wallet.</>}
       </div>
       <div className="card shadow-sm max-w-xl space-y-3">
         <h3 className="font-bold text-navy-700">Add WhatsApp messaging</h3>
@@ -232,7 +232,7 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
             <p className="text-sm text-gray-500 mt-1">
               {business.vertical === 'insurance'
                 ? <>Send approved messages to the people whose leads you accepted in the last 90 days — they asked to hear about cover. Anyone who sends STOP is never messaged.</>
-                : <>Send approved messages — camps, notices, health tips — to patients who agreed to hear from {businessName}.</>}
+                : <>Send approved messages — camps, notices, health tips — to {businessName}’s patients. Anyone who replies STOP is taken off the list.</>}
             </p>
           </div>
           <div className="text-xs text-gray-500 text-right">
@@ -495,8 +495,7 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
           <p className="text-sm text-gray-500">
             {insurance
               ? 'Nobody to message yet. Leads you accept appear here for 90 days.'
-              : <>No patients have agreed to WhatsApp updates yet. Open a patient's record and use
-            "Patient agreed…" under WhatsApp updates to add them.</>}
+              : <>No patients to message yet. Every patient you register with a mobile number appears here, until they reply STOP.</>}
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">

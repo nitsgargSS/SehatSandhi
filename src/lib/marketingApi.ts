@@ -292,7 +292,8 @@ export async function getMarketingConsent(memberId: string, businessId: string):
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
   oops(error)
   const row = data as { action: string; created_at: string; expires_at: string | null } | null
-  const live = !!row && row.action === 'granted' && (!row.expires_at || new Date(row.expires_at) > new Date())
+  // 0239: a clinic's patient is on its list until the newest word on record is a stop.
+  const live = !row || (row.action !== 'withdrawn' && row.action !== 'refused')
   return { granted: live, at: row?.created_at ?? null }
 }
 
