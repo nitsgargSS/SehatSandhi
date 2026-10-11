@@ -49,12 +49,21 @@ const throttled = (error?: string) => /\((4|80007|130429|131048|131056)\)/.test(
 
 const fromNumber = () => Deno.env.get('META_CLINIC_PHONE_NUMBER_ID') ?? Deno.env.get('META_PHONE_NUMBER_ID')
 
-function templateMessage(to: string, name: string, lang: string, params: unknown[]) {
+/** A picture template's last param is the picture's path in the public bucket (0235). */
+const pictureUrl = (path: unknown) =>
+  `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/wa-broadcast-images/${String(path ?? '').split('/').map(encodeURIComponent).join('/')}`
+
+function templateMessage(to: string, name: string, lang: string, params: unknown[], headerImage = false) {
+  // With a picture: the last param is the picture, the rest fill the body.
+  const body = headerImage ? params.slice(0, -1) : params
   return {
     to, type: 'template',
     template: {
       name, language: { code: lang || 'en' },
-      components: [{ type: 'body', parameters: params.map(p => ({ type: 'text', text: oneLine(p) })) }],
+      components: [
+        ...(headerImage ? [{ type: 'header', parameters: [{ type: 'image', image: { link: pictureUrl(params[params.length - 1]) } }] }] : []),
+        { type: 'body', parameters: body.map(p => ({ type: 'text', text: oneLine(p) })) },
+      ],
     },
   }
 }
@@ -77,7 +86,7 @@ async function drain(db: Any) {
     if (b.status === 'queued') await db.from('wa_broadcasts').update({ status: 'sending' }).eq('id', b.id).eq('status', 'queued')
 
     const [{ data: tpl }, { data: biz }] = await Promise.all([
-      db.from('wa_message_templates').select('code, meta_name, meta_language').eq('id', b.template_id).maybeSingle(),
+      db.from('wa_message_templates').select('code, meta_name, meta_language, header_image').eq('id', b.template_id).maybeSingle(),
       db.from('businesses').select('name').eq('id', b.business_id).maybeSingle(),
     ])
     // {{1}} is the clinic's name (0116); the clinic filled {{2}} onwards.
@@ -97,7 +106,7 @@ async function drain(db: Any) {
       budget--
 
       const res = tpl
-        ? await graphSend(templateMessage(r.phone, tpl.meta_name ?? tpl.code, tpl.meta_language, params), from)
+        ? await graphSend(templateMessage(r.phone, tpl.meta_name ?? tpl.code, tpl.meta_language, params, !!tpl.header_image), from)
         : { ok: false, error: 'the template no longer exists' }
 
       if (res.ok) {
@@ -135,7 +144,14 @@ async function test(who: NonNullable<ReturnType<typeof caller>>, body: Any) {
     })
   if (error) return json({ ok: false, message: error.message })
 
-  const res = await graphSend(templateMessage(plan.to, plan.meta_name, plan.meta_language, plan.params ?? []), from)
+  // A test of a picture template: the picture must be this clinic's own (a waiting broadcast's already is).
+  const pic = String((plan.params ?? []).slice(-1)[0] ?? '')
+  if (plan.header_image && typeof body.broadcastId !== 'string'
+      && !new RegExp(`^${String(body.businessId ?? '').replace(/[^0-9a-f-]/gi, '')}/[A-Za-z0-9._-]+\\.(jpg|jpeg|png)$`).test(pic)) {
+    if (plan.tx) await who.asService.rpc('sehat_wallet_refund_direct', { p_tx: plan.tx }).then(() => undefined, () => undefined)
+    return json({ ok: false, message: 'Choose a JPG or PNG picture first.' })
+  }
+  const res = await graphSend(templateMessage(plan.to, plan.meta_name, plan.meta_language, plan.params ?? [], !!plan.header_image), from)
   if (!res.ok) {
     if (plan.tx) {
       const { error: rErr } = await who.asService.rpc('sehat_wallet_refund_direct', { p_tx: plan.tx })

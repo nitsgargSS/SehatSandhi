@@ -53,6 +53,32 @@ export interface WaTemplate {
   approved: boolean
   is_active: boolean
   sort_order: number
+  /** 0235: the message carries a picture; its last placeholder is the picture. */
+  header_image?: boolean
+}
+
+// ── A picture for a broadcast (0235) ──
+// Kept in the public bucket 'wa-broadcast-images' under the business's id: it
+// is sent to patients, so it is public by its purpose.
+
+const PICTURE = /^[0-9a-f-]{36}\/[A-Za-z0-9._-]+\.(jpg|jpeg|png)$/i
+/** The picture's path if these params end with one, else null. */
+export const broadcastPicture = (params: string[] | null | undefined): string | null => {
+  const last = params?.[params.length - 1] ?? ''
+  return PICTURE.test(last) ? last : null
+}
+export const broadcastPictureUrl = (path: string): string =>
+  supabase.storage.from('wa-broadcast-images').getPublicUrl(path).data.publicUrl
+
+/** Upload a clinic's picture; returns its path, which goes in as the template's last blank. */
+export async function uploadBroadcastPicture(businessId: string, f: File): Promise<string> {
+  if (!/^image\/(jpeg|png)$/.test(f.type)) throw new Error('Choose a JPG or PNG picture.')
+  if (f.size > 5 * 1024 * 1024) throw new Error('That picture is over 5 MB. WhatsApp does not take a larger one.')
+  const ext = f.type === 'image/png' ? 'png' : 'jpg'
+  const path = `${businessId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+  const { error } = await supabase.storage.from('wa-broadcast-images').upload(path, f, { contentType: f.type, upsert: false })
+  if (error) throw new Error(error.message)
+  return path
 }
 
 export interface AudienceMember {

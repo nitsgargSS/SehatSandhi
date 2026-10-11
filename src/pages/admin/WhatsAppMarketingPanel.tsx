@@ -5,7 +5,7 @@ import { shortDate, dateTime } from '../../lib/format'
 import {
   MarketingSettings, WaTemplate, MarketingReportRow, BroadcastForReview, rupees, renderTemplate,
   getMarketingSettings, updateMarketingSettings, listTemplates, updateTemplate, createTemplate,
-  getMarketingReport, getWalletReport, type WalletReport, getWaCosts, type WaCosts, sendTestMessage, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
+  getMarketingReport, getWalletReport, type WalletReport, getWaCosts, type WaCosts, sendTestMessage, broadcastPicture, broadcastPictureUrl, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
   setWaComplimentary, listWaComplimentary,
 } from '../../lib/marketingApi'
 
@@ -153,7 +153,15 @@ function ReviewCard() {
               <span className="font-semibold text-navy-700">{b.business_name}{b.business_city ? `, ${b.business_city}` : ''}</span>
               <span className="text-gray-500">{b.template_name} · {b.category} · {b.recipient_count} patients · {rupees(b.total_cost_paise)} · {dateTime(b.created_at)}</span>
             </div>
-            <div className="bg-[#e7f7ec] rounded-lg p-3 text-sm my-2 whitespace-pre-wrap">{renderTemplate(b.body, b.business_name, b.params)}</div>
+            <div className="bg-[#e7f7ec] rounded-lg p-3 text-sm my-2 whitespace-pre-wrap">
+              {/* 0235: the picture the clinic attached — read it as carefully as the words. */}
+              {broadcastPicture(b.params) && (
+                <a href={broadcastPictureUrl(broadcastPicture(b.params)!)} target="_blank" rel="noreferrer">
+                  <img src={broadcastPictureUrl(broadcastPicture(b.params)!)} alt="The picture attached to this broadcast" className="rounded-md mb-2 max-h-72" />
+                </a>
+              )}
+              {renderTemplate(b.body, b.business_name, b.params)}
+            </div>
             {rejecting === b.id ? (
               <div className="flex flex-wrap gap-2">
                 <input className="input-field text-sm flex-1 min-w-[14rem]" autoFocus placeholder="Why? The clinic will read this."
