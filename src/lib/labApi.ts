@@ -131,16 +131,23 @@ const oops = (e: { message: string } | null) => { if (e) throw new Error(e.messa
 
 // ── Settings & catalogue ────────────────────────────────────────────────────
 
-export async function getLabSettings(businessId: string): Promise<{ on: boolean; homeFee: number }> {
+export async function getLabSettings(businessId: string): Promise<{ on: boolean; homeFee: number; offer: string }> {
   const [{ data: on }, { data: b }] = await Promise.all([
     supabase.rpc('sehat_lab_on', { p_business: businessId }),
-    supabase.from('businesses').select('lab_home_fee').eq('id', businessId).maybeSingle(),
+    supabase.from('businesses').select('lab_home_fee, lab_offer').eq('id', businessId).maybeSingle(),
   ])
-  return { on: Boolean(on), homeFee: Number((b as { lab_home_fee?: number } | null)?.lab_home_fee ?? 0) }
+  const row = b as { lab_home_fee?: number; lab_offer?: string | null } | null
+  return { on: Boolean(on), homeFee: Number(row?.lab_home_fee ?? 0), offer: row?.lab_offer ?? '' }
 }
 
 export async function saveLabSettings(businessId: string, homeFee: number) {
   const { error } = await supabase.rpc('sehat_lab_settings', { p_business: businessId, p_home_fee: homeFee })
+  oops(error)
+}
+
+/** 0246: the one line patients see with this lab on WhatsApp, e.g. "10% off on MRI and CT scans". Empty clears it. */
+export async function saveLabOffer(businessId: string, offer: string) {
+  const { error } = await supabase.rpc('sehat_lab_offer_save', { p_business: businessId, p_offer: offer })
   oops(error)
 }
 

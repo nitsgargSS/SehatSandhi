@@ -72,6 +72,8 @@ export interface Vars {
   lab?: {
     /** 0245: the kind of test, and what was asked for; a scan is always at the centre. */
     kind?: string; want?: string; visit?: boolean; cats?: Record<string, string>
+    /** 0246: the centre's own one-line offer ("10% off on MRI"). */
+    offer?: string
     ask: 'items' | 'more' | 'how' | 'address' | 'slot' | 'name'
     biz: string; name: string; fee: number; menu: boolean
     /** 'p:<id>' / 't:<id>' chosen so far, and their names. */
@@ -744,7 +746,7 @@ const rowsOf = (r: Record<string, unknown> | null): (Row & { name: string })[] =
 
 /** The lab's list, or what matched `query`, as rows to tap. */
 async function labItems(v: Vars, lab: Lab, rpc: Rpc, query = ''): Promise<Step> {
-  if (!lab.menu) return labAsk(v, { ...lab, ask: 'items' }, { kind: 'text', body: `🔬 *${lab.name}*\n\n${isScan(lab) ? LAB_TYPE_SCAN(lab.want ?? '') : LAB_TYPE}` })
+  if (!lab.menu) return labAsk(v, { ...lab, ask: 'items' }, { kind: 'text', body: `🔬 *${lab.name}*${lab.offer ? `\n🏷 ${lab.offer}` : ''}\n\n${isScan(lab) ? LAB_TYPE_SCAN(lab.want ?? '') : LAB_TYPE}` })
   const r = await rpc('bot_lab_menu_json', { p_pincode: '', p_selection: lab.biz, p_query: query, p_kind: lab.kind ?? '' })
   const rows = rowsOf(r).filter(x => !lab.items.includes(x.id.slice(6)))
   const chosen = lab.names.length ? `\n\n✅ चुने गए: ${lab.names.join(', ')}` : ''
@@ -794,7 +796,9 @@ async function labStart(v: Vars, rpc: Rpc): Promise<Step | null> {
   if (r?.ok !== true || !str(r.business)) return null
   const lab: Lab = {
     ask: 'items', biz: str(r.business), name: str(r.name), fee: Number(r.home_fee ?? 0), menu: r.has_menu === true, items: [], names: [],
-    ...(v.labKind ? { kind: v.labKind } : {}), ...(v.labWant ? { want: v.labWant } : {}),
+    // 0246: a centre that only does scans is asked about a scan, whatever brought them here.
+    ...(v.labKind ? { kind: v.labKind } : r.only_scans === true ? { kind: 'radiology' } : {}), ...(v.labWant ? { want: v.labWant } : {}),
+    ...(str(r.offer) ? { offer: str(r.offer) } : {}),
   }
   // 0245: blood tests are mostly packages the lab advises — which test is not asked.
   if (lab.kind === 'pathology') return labHow(v, { ...lab, note: PATHOLOGY_NOTE })
@@ -827,6 +831,7 @@ async function labStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promise<St
     if (!typed) return labItems(v, lab, rpc)
     if (lab.menu) return labItems(v, lab, rpc, text.slice(0, 40))
     if (text.length < 2) return labItems(v, lab, rpc)
+    if (/\b(mri|ct|x-?ray|ultra ?sound|scan|echo|ecg)\b|एमआरआई|सीटी|एक्स|स्कैन|अल्ट्रासाउंड/i.test(text)) lab.visit = true   // a scan asked for in words
     return labWhere(v, { ...lab, note: (isScan(lab) && lab.want && !text.toLowerCase().includes(lab.want.toLowerCase()) ? `${lab.want}: ` : '') + text.slice(0, 280) }, rpc)
   }
   const how = id.match(/^lab:how:(lab|home)$/)?.[1] as 'lab' | 'home' | undefined
