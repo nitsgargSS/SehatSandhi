@@ -127,6 +127,8 @@ Deno.serve(async (req) => {
     const wa = await sendTemplate({
       campaignEnv: 'AISENSY_APPOINTMENT_CAMPAIGN', to: phone,
       userName: String(payload.patient_name ?? 'Patient'), params: [text],
+      // A clinic's alert goes from the number kept for businesses; a patient's from the main one.
+      fromClinic: recipient !== 'patient',
     })
     if (wa.provider) waProvider = wa.provider
     if (wa.ok) { ok = true; channel = 'whatsapp' }

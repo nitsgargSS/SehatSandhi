@@ -37,9 +37,12 @@ export interface TemplateSend {
   /** AiSensy's free-text source tag. */
   source?: string
   /**
-   * Something a clinic sends its patient (a prescription, a bill): Meta sends
-   * it from the number kept for clinics, META_CLINIC_PHONE_NUMBER_ID, when
-   * that is set. Everything else goes from META_PHONE_NUMBER_ID.
+   * Sent from the number kept for businesses, META_CLINIC_PHONE_NUMBER_ID,
+   * when that is set: what a clinic sends its patient (a prescription, a
+   * bill), and what Sehatsandhi sends a business (its login code, a booking
+   * alert, an invoice, a staff invite). The main number, META_PHONE_NUMBER_ID,
+   * is kept for patients — decided 9 Oct 2026. The template has to exist in
+   * the sending number's own messaging account.
    */
   fromClinic?: boolean
 }

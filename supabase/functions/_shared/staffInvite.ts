@@ -151,7 +151,7 @@ export async function sendStaffInvite(
   else if (!send) wa = 'not sent'
   else {
     const r = await sendTemplate({
-      campaignEnv: 'AISENSY_STAFF_INVITE_CAMPAIGN', to: phone, userName: name, params: [name, clinic, link],
+      campaignEnv: 'AISENSY_STAFF_INVITE_CAMPAIGN', to: phone, userName: name, params: [name, clinic, link], fromClinic: true,
     })
     if (r.provider) wa = r.ok ? 'sent' : (r.error ?? 'whatsapp: not sent')
   }
