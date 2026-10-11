@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, Wallet, Send, CheckSquare, Square } from 'lucide-react'
 import { shortDate, dateTime } from '../../lib/format'
 import PayListingPanel from './PayListingPanel'
@@ -410,6 +410,16 @@ function TermsCard({ businessId, account, onAccepted }: { businessId: string; ac
   )
 }
 
+// Emoji a clinic is likely to want: greetings, health, time and place, festivals.
+const EMOJI = ['🙏', '😊', '👍', '❤️', '🌸', '✨', '🎉', '🪔', '🎊', '🌙', '🎄', '🇮🇳', '🏥', '🩺', '👩‍⚕️', '👨‍⚕️', '💊', '💉', '🦷', '👁️', '🫀', '🦴', '🤰', '👶',
+  '🧘', '🥗', '🍎', '💧', '🚭', '😷', '🌿', '📅', '🗓', '🕒', '📍', '📞', '✅', '📢', '🆓', '⚠️']
+
+/** A message as WhatsApp shows it: *bold* in bold, line breaks kept. */
+function WaText({ text }: { text: string }) {
+  return <>{text.split(/(\*[^*\n]+\*)/g).map((part, i) =>
+    /^\*[^*\n]+\*$/.test(part) ? <b key={i}>{part.slice(1, -1)}</b> : <span key={i}>{part}</span>)}</>
+}
+
 function Composer({ insurance = false, businessId, businessName, settings, balance, blocker, templates, pins, onSent }: {
   insurance?: boolean
   businessId: string; businessName: string; settings: MarketingSettings; balance: number
@@ -424,6 +434,18 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
   const [params, setParams] = useState<string[]>([])
   const [picBusy, setPicBusy] = useState(false)
   const [picErr, setPicErr] = useState('')
+  // The emoji tray, open under one blank at a time; and the boxes, to put an emoji where the cursor is.
+  const [emojiFor, setEmojiFor] = useState<number | null>(null)
+  const boxes = useRef<(HTMLTextAreaElement | null)[]>([])
+  const setBlank = (i: number, v: string) => setParams(ps => ps.map((p, j) => j === i ? v : p))
+  const addEmoji = (i: number, e: string) => {
+    const el = boxes.current[i]
+    const cur = params[i] ?? ''
+    const at = el?.selectionStart ?? cur.length
+    if (cur.length + e.length > 300) return
+    setBlank(i, cur.slice(0, at) + e + cur.slice(at))
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(at + e.length, at + e.length) })
+  }
   // A picture's rules are confirmed each time one is sent: a picture can say what the words do not.
   const [picOk, setPicOk] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -442,7 +464,7 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
   }, [businessId, chosenPins])
 
   const tpl = templates.find(t => t.id === templateId)
-  useEffect(() => { setParams(tpl ? Array(Math.max(tpl.placeholders.length - 1, 0)).fill('') : []); setPicOk(false); setPicErr('') }, [templateId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setParams(tpl ? Array(Math.max(tpl.placeholders.length - 1, 0)).fill('') : []); setPicOk(false); setPicErr(''); setEmojiFor(null) }, [templateId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const count = ticked.size
   const cost = count * settings.per_message_paise
@@ -552,11 +574,28 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
               // 0235: a picture template's last blank is the picture itself.
               const isPicture = !!tpl.header_image && i === tpl.placeholders.length - 2
               if (!isPicture) return (
-                <label key={i} className="block text-xs font-semibold text-gray-500">{ph}
-                  <input value={params[i] ?? ''} maxLength={300}
-                    onChange={e => setParams(ps => ps.map((p, j) => j === i ? e.target.value : p))}
-                    className="input-field mt-1 text-sm" />
-                </label>
+                <div key={i}>
+                  <label className="block text-xs font-semibold text-gray-500">{ph}
+                    {/* WhatsApp allows no line break inside a blank, so Enter is not a new line here: the box only wraps. */}
+                    <textarea ref={el => { boxes.current[i] = el }} value={params[i] ?? ''} maxLength={300} rows={3}
+                      onChange={e => setBlank(i, e.target.value.replace(/[\r\n\t]+/g, ' '))}
+                      onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                      className="input-field mt-1 text-sm leading-relaxed resize-y" />
+                  </label>
+                  <div className="flex items-center justify-between mt-1">
+                    <button type="button" onClick={() => setEmojiFor(emojiFor === i ? null : i)}
+                      className="text-xs text-teal-700 font-semibold hover:underline">😊 Add emoji</button>
+                    <span className="text-[11px] text-gray-400">{(params[i] ?? '').length}/300</span>
+                  </div>
+                  {emojiFor === i && (
+                    <div className="mt-1 flex flex-wrap gap-1 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                      {EMOJI.map(e => (
+                        <button key={e} type="button" onClick={() => addEmoji(i, e)}
+                          className="w-8 h-8 text-lg rounded hover:bg-white hover:shadow-sm" aria-label={`Add ${e}`}>{e}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )
               return (
                 <label key={i} className="block text-xs font-semibold text-gray-500">{ph}
@@ -595,7 +634,7 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
               {tpl.header_image && (params[params.length - 1]
                 ? <img src={broadcastPictureUrl(params[params.length - 1])} alt="The picture that will be sent" className="rounded-md mb-2 max-h-64" />
                 : <div className="rounded-md mb-2 h-24 bg-white/70 border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400">Your picture appears here</div>)}
-              {preview}
+              <WaText text={preview} />
             </div>
           </div>
         )}

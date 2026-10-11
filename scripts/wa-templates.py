@@ -121,6 +121,37 @@ TEMPLATES = {
 NAMES = {MAIN: 'MAIN  (+91 70153 99355)', CLINICS: 'CLINICS  (+91 79886 20804)'}
 # Which number sends each account's templates; and Meta's test number with its own account.
 PHONE_IDS = {MAIN: '1302831736238429', CLINICS: '1347090528485985'}
+# 0242: the same broadcasts laid out for WhatsApp — the clinic's name in bold on
+# top, each detail on its own line, a few emoji. A new name ('…_2') beside the
+# plain one, so the plain one keeps working until Meta approves its successor.
+RESTYLED = {
+    ('appointment_reminder', 'en'): '🏥 *{{1}}*\n\nNamaste 🙏 This is a reminder to book your follow-up visit.\n\n📋 {{2}}\n\nReply here or call us to book.',
+    ('clinic_notice', 'en'): '📢 *{{1}}*\n\nNamaste 🙏 Please note:\n\n{{2}}\n\nThank you.',
+    ('health_camp', 'en'): '🏥 *{{1}}*\n\nNamaste 🙏 You are invited to our *{{2}}*.\n\n🗓 {{3}}\n📍 {{4}}\n\nAll are welcome.',
+    ('new_service', 'en'): '✨ *{{1}}*\n\nNamaste 🙏 We now offer:\n\n✅ {{2}}\n\nReply here to know more or to book.',
+    ('health_advice', 'en'): '🌿 *Health tip from {{1}}*\n\n{{2}}\n\nStay well 🙏',
+    ('festival_greeting', 'en'): '🎉 *{{1}}*\n\nNamaste 🙏 Wishing you and your family a very happy *{{2}}*!\n\n{{3}}\n\nWarm regards 🌸',
+    ('new_speciality', 'en'): '🏥 *{{1}}*\n\nNamaste 🙏 We have added *{{2}}* at our clinic.\n\n🕒 {{3}}\n\nReply here to know more or to book.',
+    ('new_doctor', 'en'): '🩺 *{{1}}*\n\nNamaste 🙏 *{{2}}* ({{3}}) has joined us.\n\n🕒 Available: {{4}}\n\nReply here to book an appointment.',
+    ('clinic_message', 'en'): '💬 *{{1}}*\n\n{{2}}\n\nTo book or to ask a question, reply here 🙏',
+    ('clinic_image', 'en'): '💬 *{{1}}*\n\n{{2}}\n\nTo book or to ask a question, reply here 🙏',
+    ('appointment_reminder', 'hi'): '🏥 *{{1}}*\n\nनमस्ते 🙏 यह आपकी फ़ॉलो-अप विज़िट बुक करने का रिमाइंडर है।\n\n📋 {{2}}\n\nबुक करने के लिए यहीं जवाब दें या हमें कॉल करें।',
+    ('clinic_notice', 'hi'): '📢 *{{1}}*\n\nनमस्ते 🙏 कृपया ध्यान दें:\n\n{{2}}\n\nधन्यवाद।',
+    ('health_camp', 'hi'): '🏥 *{{1}}*\n\nनमस्ते 🙏 आप हमारे *{{2}}* में आमंत्रित हैं।\n\n🗓 {{3}}\n📍 {{4}}\n\nआप सभी का स्वागत है।',
+    ('new_service', 'hi'): '✨ *{{1}}*\n\nनमस्ते 🙏 अब हमारे यहाँ यह सुविधा उपलब्ध है:\n\n✅ {{2}}\n\nअधिक जानकारी या बुकिंग के लिए यहीं जवाब दें।',
+    ('health_advice', 'hi'): '🌿 *सेहत की सलाह — {{1}}*\n\n{{2}}\n\nस्वस्थ रहें 🙏',
+    ('festival_greeting', 'hi'): '🎉 *{{1}}*\n\nनमस्ते 🙏 आपको और आपके परिवार को *{{2}}* की हार्दिक शुभकामनाएँ!\n\n{{3}}\n\nसादर 🌸',
+    ('new_speciality', 'hi'): '🏥 *{{1}}*\n\nनमस्ते 🙏 हमारे यहाँ अब *{{2}}* शुरू हो गया है।\n\n🕒 {{3}}\n\nअधिक जानकारी या बुकिंग के लिए यहीं जवाब दें।',
+    ('new_doctor', 'hi'): '🩺 *{{1}}*\n\nनमस्ते 🙏 *{{2}}* ({{3}}) हमारे साथ जुड़ गए हैं।\n\n🕒 उपलब्ध: {{4}}\n\nअपॉइंटमेंट के लिए यहीं जवाब दें।',
+    ('clinic_message', 'hi'): '💬 *{{1}}*\n\n{{2}}\n\nबुकिंग या किसी सवाल के लिए यहीं जवाब दें 🙏',
+    ('clinic_image', 'hi'): '💬 *{{1}}*\n\n{{2}}\n\nबुकिंग या किसी सवाल के लिए यहीं जवाब दें 🙏',
+}
+for _t in list(TEMPLATES[CLINICS]):
+    _new = RESTYLED.get((_t['name'], _t['language']))
+    if _new:
+        TEMPLATES[CLINICS].append({**_t, 'name': _t['name'] + '_2',
+                                   'components': [({**c, 'text': _new} if c['type'] == 'BODY' else c) for c in _t['components']]})
+
 TEST, TEST_PHONE_ID = '28803655879267940', '1441687965687612'
 
 def to_send(t, to):
