@@ -707,7 +707,8 @@ const testOf = (id: string): Vars => ({ labKind: TESTS[id]?.kind ?? '', labWant:
 /** The same, from what they typed. */
 function testSaid(text: string): Vars {
   const scan = text.match(/\bmri\b|एमआरआई|\bct\b|सीटी|x[- ]?ray|एक्स[- ]?रे|ultra ?sound|अल्ट्रासाउंड|sonograph|सोनोग्राफी|\bscan\b|स्कैन|mammogra|\becho\b|\becg\b|ईसीजी/i)?.[0]
-  if (scan) return { labKind: /echo|ecg|ईसीजी/i.test(scan) ? '' : 'radiology', labWant: '' }
+  // What they typed is what the centre is told ("MRI brain").
+  if (scan) return { labKind: /echo|ecg|ईसीजी/i.test(scan) ? '' : 'radiology', labWant: text.replace(/\s+/g, ' ').slice(0, 80) }
   return /blood|खून|ब्लड|\bcbc\b|sugar|शुगर|thyroid|थायर|urine|पेशाब|lipid|vitamin|hba1c|\blft\b|\bkft\b/i.test(text) ? { labKind: 'pathology', labWant: '' } : { labKind: '', labWant: '' }
 }
 const KIND_HI: Record<string, string> = { pathology: 'खून / पेशाब की जांच (पैथोलॉजी)', radiology: 'स्कैन / एक्स-रे (रेडियोलॉजी)' }
@@ -783,7 +784,7 @@ async function labSlots(v: Vars, lab: Lab, rpc: Rpc, note = ''): Promise<Step> {
     return { session: { state: 'idle', vars: carry(v) }, replies: [{ kind: 'buttons', body: `${lab.name} के पास अगले 7 दिन कोई समय खाली नहीं है। कृपया दूसरी लैब चुनें।\nThis lab has no open time in the next 7 days.`, buttons: [MENU_BUTTON] }] }
   }
   return labAsk(v, { ...lab, ask: 'slot' }, {
-    kind: 'list', body: `${note ? `${note}\n\n` : ''}🗓 ${lab.how === 'home' ? 'सैंपल लेने कब आएँ?' : 'लैब पर कब आएँगे?'} समय चुनें 👇`, sectionTitle: 'समय चुनें',
+    kind: 'list', body: `${note ? `${note}\n\n` : ''}🗓 ${lab.how === 'home' ? 'सैंपल लेने कब आएँ?' : isScan(lab) ? 'सेंटर पर कब आएँगे?' : 'लैब पर कब आएँगे?'} समय चुनें 👇`, sectionTitle: 'समय चुनें',
     rows: rows.map(({ id, title, description }) => ({ id, title, ...(description ? { description } : {}) })),
   })
 }
@@ -804,6 +805,11 @@ async function labStart(v: Vars, rpc: Rpc): Promise<Step | null> {
   }
   // 0245: blood tests are mostly packages the lab advises — which test is not asked.
   if (lab.kind === 'pathology') return labHow(v, { ...lab, note: PATHOLOGY_NOTE })
+  // 0247: nor which scan or part — the scan chosen is what the centre is told, and it asks the rest.
+  if (isScan(lab)) {
+    return labSlots(v, { ...lab, how: 'lab', note: lab.want || 'Scan / imaging — the centre will ask which' }, rpc,
+      `🔬 *${lab.name}*${lab.want ? ` — ${lab.want}` : ''}${lab.offer ? `\n🏷 ${lab.offer}` : ''}`)
+  }
   return labItems(v, lab, rpc)
 }
 
