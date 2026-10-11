@@ -11,7 +11,7 @@ import {
   MarketingSettings, WaAccount, WalletTx, WaTemplate, AudienceMember, Broadcast,
   rupees, renderTemplate, getMarketingSettings, getWaAccount, getWallet, getBroadcastBlocker,
   getAudiencePins, getAudience, listTemplates, listBroadcasts, createBroadcast, topUpWallet,
-  acceptWaTerms, sendTestMessage,
+  acceptWaTerms, sendTestMessage, uploadBroadcastPicture, broadcastPictureUrl,
 } from '../../lib/marketingApi'
 import { WA_TERMS, WA_TERMS_VERSION } from '../../lib/waTerms'
 
@@ -420,6 +420,8 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
   const [loadingAud, setLoadingAud] = useState(false)
   const [templateId, setTemplateId] = useState('')
   const [params, setParams] = useState<string[]>([])
+  const [picBusy, setPicBusy] = useState(false)
+  const [picErr, setPicErr] = useState('')
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -541,14 +543,39 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
         </select>
         {tpl && (
           <div className="mt-3 space-y-2">
-            {tpl.placeholders.slice(1).map((ph, i) => (
-              <label key={i} className="block text-xs font-semibold text-gray-500">{ph}
-                <input value={params[i] ?? ''} maxLength={300}
-                  onChange={e => setParams(ps => ps.map((p, j) => j === i ? e.target.value : p))}
-                  className="input-field mt-1 text-sm" />
-              </label>
-            ))}
-            <div className="bg-[#e7f6ef] rounded-lg px-3 py-2 text-sm text-gray-800 whitespace-pre-wrap">{preview}</div>
+            {tpl.placeholders.slice(1).map((ph, i) => {
+              // 0235: a picture template's last blank is the picture itself.
+              const isPicture = !!tpl.header_image && i === tpl.placeholders.length - 2
+              if (!isPicture) return (
+                <label key={i} className="block text-xs font-semibold text-gray-500">{ph}
+                  <input value={params[i] ?? ''} maxLength={300}
+                    onChange={e => setParams(ps => ps.map((p, j) => j === i ? e.target.value : p))}
+                    className="input-field mt-1 text-sm" />
+                </label>
+              )
+              return (
+                <label key={i} className="block text-xs font-semibold text-gray-500">{ph}
+                  <input type="file" accept="image/jpeg,image/png" disabled={picBusy} className="block mt-1 text-sm font-normal"
+                    onChange={async e => {
+                      const f = e.target.files?.[0]
+                      if (!f) return
+                      setPicBusy(true); setPicErr('')
+                      try {
+                        const path = await uploadBroadcastPicture(businessId, f)
+                        setParams(ps => ps.map((p, j) => j === i ? path : p))
+                      } catch (x) { setPicErr((x as Error).message) } finally { setPicBusy(false) }
+                    }} />
+                  {picBusy && <span className="font-normal text-gray-500">Uploading…</span>}
+                  {picErr && <span className="font-normal text-red-600">{picErr}</span>}
+                </label>
+              )
+            })}
+            <div className="bg-[#e7f6ef] rounded-lg px-3 py-2 text-sm text-gray-800 whitespace-pre-wrap">
+              {tpl.header_image && (params[params.length - 1]
+                ? <img src={broadcastPictureUrl(params[params.length - 1])} alt="The picture that will be sent" className="rounded-md mb-2 max-h-64" />
+                : <div className="rounded-md mb-2 h-24 bg-white/70 border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400">Your picture appears here</div>)}
+              {preview}
+            </div>
           </div>
         )}
       </div>

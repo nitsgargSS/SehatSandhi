@@ -25,11 +25,17 @@ Wording and variable order are what the code sends (docs/whatsapp-templates.md).
 A template that exists is left alone. Asks for the system user token and the
 app secret with hidden input; prints neither.
 """
-import getpass, hashlib, hmac, json, sys, urllib.error, urllib.parse, urllib.request
+import getpass, hashlib, hmac, json, os, sys, urllib.error, urllib.parse, urllib.request
 
 GRAPH = 'https://graph.facebook.com/v25.0'
 MAIN, CLINICS = '1461510652560252', '1953329202322425'
 STOP = 'Reply STOP to stop these messages'
+STOP_HI = 'ये संदेश रोकने के लिए STOP भेजें'
+APP_ID = '2239815556798206'
+# The picture Meta is shown as a sample for a picture template, and the one a preview sends.
+SAMPLE_PICTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'public', 'logo-tight.png')
+SAMPLE_PICTURE_URL = 'https://www.sehatsandhi.com/logo-tight.png'
+PICTURE_HEADER = {'type': 'HEADER', 'format': 'IMAGE'}
 PRIVATE = '\n\nThis link is private to you. Please do not share it.'
 
 def body(text, *examples, footer=None):
@@ -52,6 +58,15 @@ def link(name, what, sample_from, sample_link):
 
 def broadcast(name, category, text, *examples):
     return dict(name=name, language='en', category=category, components=body(text, 'Family Health Clinic', *examples, footer=STOP))
+
+def broadcast_hi(name, category, text, *examples):
+    """The Hindi twin of a broadcast: the same name at Meta, language 'hi' (0235)."""
+    return dict(name=name, language='hi', category=category, components=body(text, 'फ़ैमिली हेल्थ क्लिनिक', *examples, footer=STOP_HI))
+
+def picture(language, text, example, footer):
+    """A broadcast with the clinic's own picture above its words (0235)."""
+    return dict(name='clinic_image', language=language, category='MARKETING',
+                components=[dict(PICTURE_HEADER)] + body(text, 'Family Health Clinic' if language == 'en' else 'फ़ैमिली हेल्थ क्लिनिक', example, footer=footer))
 
 TEMPLATES = {
     MAIN: [
@@ -88,6 +103,19 @@ TEMPLATES = {
         broadcast('new_speciality', 'MARKETING', 'Namaste from {{1}}. We have added {{2}} at our clinic. {{3}} Reply here to know more or to book.', 'a skin (dermatology) OPD', 'Open Monday to Saturday, 10 am to 1 pm.'),
         broadcast('new_doctor', 'MARKETING', 'Namaste from {{1}}. {{2}} ({{3}}) has joined us and is available {{4}}. Reply here to book an appointment.', 'Dr. Anita Verma', 'MD, skin specialist', 'Monday to Friday, 5 pm to 8 pm'),
         broadcast('clinic_message', 'MARKETING', 'A message from {{1}}: {{2}} To book or to ask a question, reply here.', 'Our clinic has moved to the first floor of the same building from 15 October.'),
+        # 0235: the same nine in Hindi.
+        broadcast_hi('appointment_reminder', 'UTILITY', 'नमस्ते, {{1}} की ओर से। यह आपकी फ़ॉलो-अप विज़िट बुक करने का रिमाइंडर है। {{2}} बुक करने के लिए यहीं जवाब दें या हमें कॉल करें।', 'आपका चेक-अप इस महीने होना है।'),
+        broadcast_hi('clinic_notice', 'MARKETING', 'नमस्ते, {{1}} की ओर से। कृपया ध्यान दें: {{2}} धन्यवाद।', '2 अक्टूबर को गांधी जयंती पर क्लिनिक बंद रहेगा।'),
+        broadcast_hi('health_camp', 'MARKETING', 'नमस्ते, {{1}} की ओर से। हम {{2}} का आयोजन कर रहे हैं — {{3}}, स्थान: {{4}}। आप सभी का स्वागत है।', 'मुफ़्त आँखों की जाँच शिविर', 'रविवार 12 अक्टूबर, सुबह 10 से दोपहर 2 बजे', 'जगाधरी रोड पर हमारा क्लिनिक'),
+        broadcast_hi('new_service', 'MARKETING', 'नमस्ते, {{1}} की ओर से। अब हमारे यहाँ {{2}} की सुविधा उपलब्ध है। अधिक जानकारी या बुकिंग के लिए यहीं जवाब दें।', 'हर शनिवार फिजियोथेरेपी'),
+        broadcast_hi('health_advice', 'MARKETING', 'सेहत की सलाह, {{1}} की ओर से: {{2}} स्वस्थ रहें।', 'बरसात में पानी उबालकर पिएँ।'),
+        broadcast_hi('festival_greeting', 'MARKETING', 'नमस्ते, {{1}} की ओर से। आपको और आपके परिवार को {{2}} की हार्दिक शुभकामनाएँ। {{3}} सादर।', 'दिवाली', 'यह पर्व आपके जीवन में सेहत और खुशियाँ लाए।'),
+        broadcast_hi('new_speciality', 'MARKETING', 'नमस्ते, {{1}} की ओर से। हमारे यहाँ अब {{2}} शुरू हो गया है। {{3}} अधिक जानकारी या बुकिंग के लिए यहीं जवाब दें।', 'त्वचा रोग (स्किन) ओपीडी', 'सोमवार से शनिवार, सुबह 10 से दोपहर 1 बजे तक।'),
+        broadcast_hi('new_doctor', 'MARKETING', 'नमस्ते, {{1}} की ओर से। {{2}} ({{3}}) हमारे साथ जुड़ गए हैं और {{4}} उपलब्ध हैं। अपॉइंटमेंट के लिए यहीं जवाब दें।', 'डॉ. अनीता वर्मा', 'एमडी, त्वचा रोग विशेषज्ञ', 'सोमवार से शुक्रवार, शाम 5 से 8 बजे'),
+        broadcast_hi('clinic_message', 'MARKETING', 'संदेश, {{1}} की ओर से: {{2}} बुकिंग या किसी सवाल के लिए यहीं जवाब दें।', 'हमारा क्लिनिक 15 अक्टूबर से उसी बिल्डिंग की पहली मंज़िल पर आ गया है।'),
+        # 0235: a picture the clinic uploads, with its words under it.
+        picture('en', 'A message from {{1}}: {{2}} To book or to ask a question, reply here.', 'Free eye check-up camp this Sunday, 10 am to 2 pm. Details are in the picture.', STOP),
+        picture('hi', 'संदेश, {{1}} की ओर से: {{2}} बुकिंग या किसी सवाल के लिए यहीं जवाब दें।', 'इस रविवार सुबह 10 से 2 बजे तक मुफ़्त आँखों की जाँच शिविर। जानकारी तस्वीर में है।', STOP_HI),
     ],
 }
 NAMES = {MAIN: 'MAIN  (+91 70153 99355)', CLINICS: 'CLINICS  (+91 79886 20804)'}
@@ -104,7 +132,9 @@ def to_send(t, to):
     else:
         b = [c for c in t['components'] if c['type'] == 'BODY'][0]
         ex = b.get('example', {}).get('body_text', [[]])[0]
-        if ex: comps = [{'type': 'body', 'parameters': [{'type': 'text', 'text': x} for x in ex]}]
+        if any(c.get('format') == 'IMAGE' for c in t['components']):
+            comps.append({'type': 'header', 'parameters': [{'type': 'image', 'image': {'link': SAMPLE_PICTURE_URL}}]})
+        if ex: comps.append({'type': 'body', 'parameters': [{'type': 'text', 'text': x} for x in ex]})
     return {'messaging_product': 'whatsapp', 'to': to, 'type': 'template',
             'template': {'name': t['name'], 'language': {'code': t['language']}, 'components': comps}}
 
@@ -133,6 +163,27 @@ def main():
         except Exception as e:
             return {'error': {'message': str(e)}}
 
+    handle = {}
+    def with_picture(t):
+        """A picture template needs a sample picture's handle: upload it to Meta once, then fill it in."""
+        if not any(c.get('format') == 'IMAGE' for c in t['components']): return t
+        if 'h' not in handle:
+            data = open(SAMPLE_PICTURE, 'rb').read()
+            sess = call('POST', f'{APP_ID}/uploads', query={'file_name': 'sample.png', 'file_length': len(data), 'file_type': 'image/png'})
+            if 'id' not in sess: return {'error': {'message': 'the sample picture could not be uploaded: ' + why(sess)}}
+            req = urllib.request.Request(f"{GRAPH}/{sess['id']}", method='POST', data=data,
+                                         headers={'Authorization': f'OAuth {token}', 'file_offset': '0'})
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r: up = json.load(r)
+            except urllib.error.HTTPError as e:
+                try: up = json.load(e)
+                except Exception: up = {'error': {'message': f'HTTP {e.code}'}}
+            except Exception as e:
+                up = {'error': {'message': str(e)}}
+            if 'h' not in up: return {'error': {'message': 'the sample picture could not be uploaded: ' + why(up)}}
+            handle['h'] = up['h']
+        return {**t, 'components': [({**c, 'example': {'header_handle': [handle['h']]}} if c.get('format') == 'IMAGE' else c) for c in t['components']]}
+
     def why(r):
         e = r.get('error', {})
         return ' — '.join(str(x) for x in (e.get('error_user_title'), e.get('error_user_msg') or e.get('message')) if x)
@@ -156,7 +207,8 @@ def main():
             for t in wanted:
                 key = (t['name'], t['language'])
                 if key not in there and on_test:
-                    r = call('POST', f'{waba}/message_templates', t)
+                    ready = with_picture(t)
+                    r = ready if 'error' in ready else call('POST', f'{waba}/message_templates', ready)
                     if 'error' in r:
                         print(f"  ✗ {t['name']:22} could not be created in the test account: {why(r)}"); continue
                     there[key] = r.get('status', 'PENDING')
@@ -176,7 +228,8 @@ def main():
         for t in wanted:
             key = (t['name'], t['language'])
             if key not in there and not only_status:
-                r = call('POST', f'{waba}/message_templates', t)
+                ready = with_picture(t)
+                r = ready if 'error' in ready else call('POST', f'{waba}/message_templates', ready)
                 if 'error' in r:
                     print(f"  ✗ {t['name']:22} not created: {why(r)}"); continue
                 there[key] = {'status': r.get('status', 'PENDING'), 'category': r.get('category', t['category']), 'new': True}
