@@ -11,6 +11,7 @@
 //   doctor_invite        → the new staff member: sign in, set a password; doctors also fill in the profile (0139, 0149)
 //   nurse_unassigned     → the business: a nurse is now linked to no doctor (0149)
 //   wa_broadcast_rejected → the business: why a broadcast was not approved, and the refund (0155)
+//   wa_broadcast_waiting  → ADMIN_EMAIL: a picture broadcast is waiting for approval (0247)
 //   signup_reminder      → a business that registered and stopped at payment: what joining
 //                          gives it, and the link to finish (0223). payload.n is 1 or 2.
 //
@@ -102,6 +103,18 @@ Deno.serve(async (req) => {
     if (r.kind === 'wa_broadcast_rejected') {
       const res = await sendBroadcastRejected(db, r.business_id, r.payload, site)
       if (res === 'skip') { await finish({ status: 'skipped', last_error: 'business gone or no address' }); continue }
+      if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
+      else {
+        const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
+        await finish({ status: giveUp ? 'failed' : 'pending', last_error: res.error }); failed++
+      }
+      continue
+    }
+
+    // 0247: a picture broadcast is waiting — tell Sehatsandhi's admin.
+    if (r.kind === 'wa_broadcast_waiting') {
+      const res = await sendBroadcastWaiting(db, r.business_id, r.payload, site)
+      if (res === 'skip') { await finish({ status: 'skipped', last_error: 'already reviewed, or the business is gone' }); continue }
       if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
       else {
         const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
@@ -393,6 +406,30 @@ async function sendNurseUnassigned(db: any, businessId: string | null, nurseId: 
 
 /** 0155: a broadcast Sehatsandhi did not approve — why, and that the money is back. */
 // deno-lint-ignore no-explicit-any
+// 0247: to Sehatsandhi's admin — a picture broadcast is waiting to be read.
+// deno-lint-ignore no-explicit-any
+async function sendBroadcastWaiting(db: any, businessId: string | null, payload: any, site: string): Promise<SendResult | 'skip'> {
+  if (!businessId) return 'skip'
+  const { data: b } = await db.from('businesses').select('name, own_city').eq('id', businessId).maybeSingle()
+  if (!b) return 'skip'
+  // Reviewed already (someone was at the panel): nothing to tell.
+  const { data: w } = await db.from('wa_broadcasts').select('status').eq('id', payload?.broadcast_id ?? '').maybeSingle()
+  if (!w || w.status !== 'pending_approval') return 'skip'
+  const panel = `${site}/${Deno.env.get('ADMIN_PATH') ?? 'ng-ctrl-2026'}`
+  const picture = /^[0-9a-f-]{36}\/[A-Za-z0-9._-]+\.(jpe?g|png)$/i.test(String(payload?.picture ?? ''))
+    ? `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/wa-broadcast-images/${payload.picture}` : ''
+  const words = String(payload?.words ?? '')
+  const n = Number(payload?.recipients ?? 0)
+  const html = layout('A WhatsApp picture broadcast is waiting', `
+<p style="margin:0 0 12px"><b>${esc(b.name)}</b>${b.own_city ? `, ${esc(b.own_city)}` : ''} wants to send a picture to <b>${n}</b> patient${n === 1 ? '' : 's'} on WhatsApp. It will not go out until it is approved.</p>
+<p style="margin:0 0 12px"><b>Their words:</b> ${esc(words)}</p>
+${picture ? `<p style="margin:0 0 14px"><a href="${picture}"><img src="${picture}" alt="The picture" style="max-width:320px;width:100%;border-radius:8px;border:1px solid #e5e7eb"></a></p>` : ''}
+<p style="margin:0 0 14px;color:#555">Read the picture as carefully as the words: no patient or report in it, no "before and after", no promise of a cure, no "best" or "No. 1".</p>
+<p style="margin:0"><a href="${panel}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold">Open the admin panel to approve or reject</a></p>`)
+  const text = `${b.name} wants to send a picture to ${n} patients on WhatsApp. It waits for approval.\nTheir words: ${words}\n${picture ? `Picture: ${picture}\n` : ''}Approve or reject: ${panel}`
+  return sendEmail({ to: ADMIN_EMAIL, toName: 'Sehatsandhi Admin', subject: `WhatsApp picture waiting for approval — ${b.name}`, html, text })
+}
+
 async function sendBroadcastRejected(db: any, businessId: string | null, payload: any, site: string): Promise<SendResult | 'skip'> {
   if (!businessId) return 'skip'
   const { data: b } = await db.from('businesses').select('name, email').eq('id', businessId).maybeSingle()
