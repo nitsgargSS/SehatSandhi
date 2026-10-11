@@ -7,7 +7,7 @@ import {
   stillWaiting, inProgress, finished,
   QueueEntry, getVitalsDone, getTodaysVitals, vitalsLine, tokenVisit, reopenToken, visitHasDiagnosis,
 } from '../../lib/queueApi'
-import { searchPatients, PatientSearchResult, registerPatient, addVital, Vital } from '../../lib/patientsApi'
+import { searchPatients, PatientSearchResult, registerPatient, setPatientAddress, addVital, Vital } from '../../lib/patientsApi'
 import FeeChooser, { FeeChoice, FeePaidChooser, FeePaidNote, PAID_HOW_MISSING, emptyFee, feeDueOf, feeToCharge, feeValid, useFeePaidHow } from './FeeChooser'
 import { listBusinessDoctors, BusinessDoctor } from '../../lib/doctorsApi'
 import DoctorSelect from '../../components/DoctorSelect'
@@ -498,6 +498,10 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, arriva
         paidMethod: feeDue > 0 ? paidHow : null,
       })
       setIssued({ id: r.queue_id, token: r.token_number, fee: Number(r.fee ?? 0), paid: Number(r.paid ?? 0) })
+      // 0251: the address they typed on the reception form goes on their record. Best effort — the token stands either way.
+      if (arrival?.address) {
+        setPatientAddress(businessId, picked.patient_member_id, arrival.address, undefined, arrival.pin_code ?? undefined).catch(() => undefined)
+      }
       setPicked(null); setQuery(''); setFee(emptyFee); setReason(''); setPriority(false); setWhy('')
       onIssued()
     } catch (e) { onError((e as Error).message) } finally { setBusy(false) }
