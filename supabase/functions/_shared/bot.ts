@@ -548,11 +548,11 @@ type Req = NonNullable<Vars['req']>
 const asking = (v: Vars, req: Req, reply: Reply): Step => ({ session: { state: 'req', vars: { ...carry(v), req } }, replies: [reply] })
 const pinOf = (s: string) => s.match(/(?<!\d)[1-9]\d{5}(?!\d)/)?.[0] ?? ''
 
-const AMB_FIRST = '🚨 इमरजेंसी में पहले *108* पर कॉल करें — मुफ़्त।\\nIn an emergency call *108* first.\\n\\nहम पास की एम्बुलेंस को भी अलर्ट कर देंगे — जो पहले स्वीकार करेगी, आपको कॉल करेगी।'
-const AMB_WHERE = '📍 मरीज़ कहाँ है? लोकेशन भेजें, या PIN कोड के साथ पता लिखें।\\nWhere is the patient?'
+const AMB_FIRST = '🚨 इमरजेंसी में पहले *108* पर कॉल करें — मुफ़्त।\nIn an emergency call *108* first.\n\nहम पास की एम्बुलेंस को भी अलर्ट कर देंगे — जो पहले स्वीकार करेगी, आपको कॉल करेगी।'
+const AMB_WHERE = '📍 मरीज़ कहाँ है? लोकेशन भेजें, या PIN कोड के साथ पता लिखें।\nWhere is the patient?'
 const AMB_PIN = 'हमें PIN कोड नहीं मिला। कृपया 6 अंकों का PIN कोड भेजें, या लोकेशन भेजें। इमरजेंसी हो तो अभी 108 पर कॉल करें।\nWe could not find a PIN code. Send the 6-digit PIN code or your location. If it is urgent, call 108 now.'
-const MED_WHAT = '💊 पर्ची की फ़ोटो भेजें 📷 — या दवाइयों के नाम लिखें।\\nSend the prescription photo, or type the medicines.'
-const MED_ADDRESS = '🏠 डिलीवरी का पूरा पता, PIN कोड के साथ लिखें।\\nType the delivery address with its PIN code.'
+const MED_WHAT = '💊 पर्ची की फ़ोटो भेजें 📷 — या दवाइयों के नाम लिखें।\nSend the prescription photo, or type the medicines.'
+const MED_ADDRESS = '🏠 डिलीवरी का पूरा पता, PIN कोड के साथ लिखें।\nType the delivery address with its PIN code.'
 const INS_COVER: Reply = {
   kind: 'list', header: '🛡️ हेल्थ इंश्योरेंस',
   body: 'लाइसेंस वाला सलाहकार आपको कॉल करेगा।\nA licensed advisor will call you.\n\nकौनसा कवर चाहिए? 👇',
