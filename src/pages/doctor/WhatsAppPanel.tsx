@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, Wallet, Send, CheckSquare, Square } from 'lucide-react'
 import { shortDate, dateTime } from '../../lib/format'
 import PayListingPanel from './PayListingPanel'
@@ -410,9 +410,9 @@ function TermsCard({ businessId, account, onAccepted }: { businessId: string; ac
   )
 }
 
-// Emoji a clinic is likely to want: greetings, health, time and place, festivals.
-const EMOJI = ['🙏', '😊', '👍', '❤️', '🌸', '✨', '🎉', '🪔', '🎊', '🌙', '🎄', '🇮🇳', '🏥', '🩺', '👩‍⚕️', '👨‍⚕️', '💊', '💉', '🦷', '👁️', '🫀', '🦴', '🤰', '👶',
-  '🧘', '🥗', '🍎', '💧', '🚭', '😷', '🌿', '📅', '🗓', '🕒', '📍', '📞', '✅', '📢', '🆓', '⚠️']
+// The full emoji keyboard — every emoji, by category, with search and skin tones — loaded
+// only when a clinic opens it. 'native' draws the device's own emoji: no images from elsewhere.
+const EmojiPicker = lazy(() => import('emoji-picker-react'))
 
 /** A message as WhatsApp shows it: *bold* in bold, line breaks kept. */
 function WaText({ text }: { text: string }) {
@@ -588,11 +588,11 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
                     <span className="text-[11px] text-gray-400">{(params[i] ?? '').length}/300</span>
                   </div>
                   {emojiFor === i && (
-                    <div className="mt-1 flex flex-wrap gap-1 bg-gray-50 border border-gray-200 rounded-lg p-2">
-                      {EMOJI.map(e => (
-                        <button key={e} type="button" onClick={() => addEmoji(i, e)}
-                          className="w-8 h-8 text-lg rounded hover:bg-white hover:shadow-sm" aria-label={`Add ${e}`}>{e}</button>
-                      ))}
+                    <div className="mt-1">
+                      <Suspense fallback={<p className="text-xs text-gray-500 py-2">Loading emoji…</p>}>
+                        <EmojiPicker onEmojiClick={d => addEmoji(i, d.emoji)} emojiStyle="native" width="100%" height={380}
+                          lazyLoadEmojis previewConfig={{ showPreview: false }} searchPlaceholder="Search emoji" />
+                      </Suspense>
                     </div>
                   )}
                 </div>
