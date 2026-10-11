@@ -22,6 +22,12 @@
 //     being replied to or from who has been in touch, asks when it cannot
 //     tell, and stays with that clinic until the patient asks for more.
 //
+// EVERY MESSAGE COSTS (0227): Meta prices each one we send, so a turn is ONE
+// message. A long result list is one tappable list, not a text and then a
+// list; a patient whose area is known is not asked for it again; a search
+// that finds one doctor goes straight to that doctor's times; and the app is
+// offered inside a message being sent anyway, never as one of its own.
+//
 // Nothing here knows about HTTP or Meta — step() takes where the patient is
 // and what they just sent, and returns where they are now and what to send
 // back. whatsapp-inbound does the rest.
@@ -102,6 +108,10 @@ const DESCRIBE = 'अपनी तकलीफ़ या ज़रूरत अ�
 const DESCRIBE_ROW = { id: 'menu:describe', title: '✍️ लिखकर बताएं', description: 'Not sure which doctor? Type your problem' }
 const NOT_UNDERSTOOD = 'माफ़ कीजिए, हम समझ नहीं पाए। 🙏\nआप लिखकर भी बता सकते हैं — जैसे "दांत का डॉक्टर जगाधरी" — या नीचे से चुनें:'
 const PICK_ONE = 'किसके साथ बुक करना है? नीचे से चुनें या नंबर भेजें 👇'
+const AREA_ROW = { id: 'nav:pin', title: '📍 दूसरा एरिया', description: 'Search in another area' }
+const TYPE_IT = 'सीधे लिखकर भी बता सकते हैं — जैसे "दांत का डॉक्टर जगाधरी"।'
+const APP_WELCOME = '📱 Sehatsandhi ऐप में अपॉइंटमेंट ट्रैक करें, पर्चे और रिपोर्ट एक जगह रखें — मुफ़्त:'
+const APP_BOOKED = '📱 ऐप में यह अपॉइंटमेंट देखें, रिमाइंडर पाएं और अपने पर्चे-रिपोर्ट सुरक्षित रखें — मुफ़्त:'
 const ALL_BUTTON = { id: 'nav:all', title: '🔎 और डॉक्टर खोजें' }
 const QR_UNKNOWN = 'यह QR कोड अभी सक्रिय नहीं है। 🙏\nThis clinic code is not active right now.\n\nआप नीचे से चुन सकते हैं:'
 const WHICH_CLINIC = 'नमस्ते! 🙏\nआप किससे बात करना चाहते हैं? नीचे से चुनें 👇\nWho would you like to reach?'
@@ -110,7 +120,7 @@ const FAILED = 'कुछ गड़बड़ हो गई। कृपया �
 const MAIN_MENU: Reply = {
   kind: 'list',
   header: 'Sehatsandhi',
-  body: 'नमस्ते! 🙏\nSehatsandhi में आपका स्वागत है —आपके एरिया के\nवेरिफाइड डॉक्टरों, फार्मेसी, लैब, एम्बुलेंस और इंश्योरेंस\nसे जुड़ें, बिल्कुल फ्री।\n\nआपको क्या चाहिए?',
+  body: `नमस्ते! 🙏\nSehatsandhi में आपका स्वागत है —आपके एरिया के\nवेरिफाइड डॉक्टरों, फार्मेसी, लैब, एम्बुलेंस और इंश्योरेंस\nसे जुड़ें, बिल्कुल फ्री।\n\nआपको क्या चाहिए? नीचे से चुनें।\n${TYPE_IT}`,
   footer: 'Please select one option',
   sectionTitle: 'Please select one option',
   rows: [
@@ -254,20 +264,24 @@ function parseItems(text: string): { intro: string; items: Item[] } {
  * The search results, to pick a doctor or centre from. `again`: the text is
  * the database asking for another pick, and already says so.
  */
-function pickList(text: string, again = false): Reply[] {
-  const { items } = parseItems(text)
+function pickList(text: string, again = false, o: { note?: string; areaRow?: boolean } = {}): Reply[] {
+  const { intro, items } = parseItems(text)
   if (!items.length) return [{ kind: 'text', body: again ? text : `${text}\n\n${ASK_SELECTION}` }]
-  const list = (body: string): Reply => ({
-    kind: 'list', body, sectionTitle: 'डॉक्टर / सेंटर चुनें',
-    rows: items.slice(0, 10).map(i => {
-      const [name, ...rest] = i.head.split(' — ')
-      const more = [rest.join(' — '), ...i.details.filter(d => !/^https?:\/\//.test(d))].filter(Boolean).join(' · ')
-      return { id: `sel:${i.n}`, title: `${i.n}. ${name}`, ...(more ? { description: more } : {}) }
-    }),
+  const rows = items.slice(0, o.areaRow ? 9 : 10).map(i => {
+    const [name, ...rest] = i.head.split(' — ')
+    const more = [rest.join(' — '), ...i.details.filter(d => !/^https?:\/\//.test(d))].filter(Boolean).join(' · ')
+    return { id: `sel:${i.n}`, title: `${i.n}. ${name}`, ...(more ? { description: more } : {}) }
   })
-  const whole = again ? text : `${text}\n\n${PICK_ONE}`
-  // The full text carries the profile links; a list body holds 1,024 characters.
-  return whole.length <= 1024 ? [list(whole)] : [{ kind: 'text', body: text }, list(PICK_ONE)]
+  const note = o.note ? `${o.note}\n\n` : ''
+  const whole = note + (again ? text : `${text}\n\n${PICK_ONE}`)
+  // One message, always (0227). The full text carries the profile links; a
+  // list body holds 1,024 characters, so a long list keeps its rows — each
+  // has the name, fee and rating — and drops the text above them.
+  const short = `${note}${intro ? `${intro}\n\n` : ''}${items.length} विकल्प मिले${items.length > rows.length ? ` — पहले ${rows.length} नीचे हैं, बाक़ी sehatsandhi.com पर` : ''}।\n\n${PICK_ONE}`
+  return [{
+    kind: 'list', body: whole.length <= 1024 ? whole : short, sectionTitle: 'डॉक्टर / सेंटर चुनें',
+    rows: o.areaRow ? [...rows, AREA_ROW] : rows,
+  }]
 }
 
 /** The open times, to pick one from. `again`: as for pickList. */
@@ -283,33 +297,53 @@ function slotList(text: string, again = false): Reply[] {
         : { id: `slot:${i.n}`, title: i.head.slice(at + 3), description: i.head.slice(0, at) }
     }),
   }
-  return items.length > 10 ? [{ kind: 'text', body: text }, list] : [list]
+  // One message (0227): the first ten times; a later one can still be asked for by its number.
+  return [items.length > 10 ? { ...list, body: `${list.body}\n(पहले 10 समय नीचे हैं)` } : list]
 }
 
 // ── The five calls ──
 
-async function search(vars: Vars, rpc: Rpc): Promise<Step> {
+/** `note`: a line to put above the results — the area that was assumed, when it was not asked. */
+async function search(vars: Vars, rpc: Rpc, note?: string): Promise<Step> {
   // p_type is always 'doctor'; the service kind travels in p_filter_value (0105).
   const r = await rpc('bot_generic_search_json', { p_type: 'doctor', p_filter_value: vars.code ?? '', p_pincode: vars.pin ?? '' })
   const text = str(r?.text)
   if (!text) return failed(vars)
-  return found(text, str(r?.route), vars)
+  return results(text, str(r?.route), vars, rpc, note)
 }
 
 /** A search answered: a list to pick from, something to read, or a question back. */
-function found(text: string, route: string, vars: Vars): Step {
+function found(text: string, route: string, vars: Vars, note?: string): Step {
+  const above = note ? `${note}\n\n` : ''
+  // A clinic's code stands in for the area when its own doctors are listed: not an area to offer again.
+  const ofClinic = CLINIC_CODE.test(vars.pin ?? '')
   if (route === 'list') {
-    // A clinic's code stands in for the area when its own doctors are listed: not an area to offer again.
-    const lastPin = CLINIC_CODE.test(vars.pin ?? '') ? vars.lastPin : (vars.pin || vars.lastPin)
-    return { session: { state: 'ask_selection', vars: { ...vars, lastPin } }, replies: pickList(text) }
+    const lastPin = ofClinic ? vars.lastPin : (vars.pin || vars.lastPin)
+    return { session: { state: 'ask_selection', vars: { ...vars, lastPin } }, replies: pickList(text, false, { note, areaRow: !ofClinic }) }
   }
   if (route === 'info') {
     // "Nothing there yet" also comes back as info, so only a PIN code is worth remembering here.
     const lastPin = /^\d{6}$/.test(vars.pin ?? '') ? vars.pin : vars.lastPin
-    return { session: { state: 'idle', vars: { ...vars, lastPin } }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON, PIN_BUTTON] }] }
+    return { session: { state: 'idle', vars: { ...vars, lastPin } }, replies: [{ kind: 'buttons', body: above + text, buttons: [MENU_BUTTON, PIN_BUTTON] }] }
   }
   // The text asks again; the answer is another city or PIN.
-  return { session: { state: 'ask_pin', vars }, replies: [{ kind: 'text', body: text }] }
+  return { session: { state: 'ask_pin', vars }, replies: [{ kind: 'text', body: above + text }] }
+}
+
+/**
+ * found(), and one step saved (0227): a search that finds exactly one doctor
+ * goes straight to that doctor's times, saying whose they are.
+ */
+async function results(text: string, route: string, vars: Vars, rpc: Rpc, note?: string): Promise<Step> {
+  const step = found(text, route, vars, note)
+  const { items } = route === 'list' ? parseItems(text) : { items: [] }
+  if (items.length !== 1) return step
+  const next = await slots({ ...step.session.vars, selection: '1' }, rpc)
+  const first = next.replies[0]
+  if (next.session.state !== 'ask_slot' || first?.kind !== 'list') return step      // no times: show the doctor as found
+  const who = [items[0].head, ...items[0].details.filter(d => !/^https?:\/\//.test(d))].join('\n')
+  next.replies[0] = { ...first, body: `${note ? `${note}\n\n` : ''}${who}\n\n${first.body}` }
+  return next
 }
 
 async function slots(vars: Vars, rpc: Rpc): Promise<Step> {
@@ -346,7 +380,22 @@ async function book(vars: Vars, patientInfo: string, phone: string, rpc: Rpc): P
   const text = str(r?.text)
   if (!text) return failed(vars)
   const kept = carry(r?.booked === true ? { ...vars, lastPatient: patientInfo } : vars)
-  return { session: { state: 'idle', vars: kept }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON] }] }
+  // 0227: the app, offered once, inside the confirmation — never a message of its own.
+  const app = r?.booked === true ? await appOffer(phone, 'booked', rpc) : ''
+  const body = app && `${text}\n\n${APP_BOOKED}\n${app}`.length <= 1024 ? `${text}\n\n${APP_BOOKED}\n${app}` : text
+  return { session: { state: 'idle', vars: kept }, replies: [{ kind: 'buttons', body, buttons: [MENU_BUTTON] }] }
+}
+
+/** The app's link if this patient has not been offered it at this moment before, else ''. */
+async function appOffer(phone: string, moment: 'welcome' | 'booked', rpc: Rpc): Promise<string> {
+  const r = await rpc('sehat_wa_app_offer', { p_phone: phone, p_moment: moment })
+  return str(r?.link)
+}
+
+/** The main menu to someone starting a conversation — with the app offered, the first time. */
+async function welcome(v: Vars, phone: string, rpc: Rpc): Promise<Step> {
+  const app = await appOffer(phone, 'welcome', rpc)
+  return app ? menu(v, `${MAIN_MENU.body}\n\n${APP_WELCOME}\n${app}`) : menu(v)
 }
 
 async function insuranceLead(vars: Vars, pin: string, phone: string, rpc: Rpc): Promise<Step> {
@@ -417,14 +466,7 @@ async function clinicBook(v: Vars, code: string, rpc: Rpc): Promise<Step> {
   const text = str(r?.text)
   if (!text) return failed(v)
   if (str(r?.route) !== 'list') return { session: { state: 'idle', vars: carry(v) }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON] }] }
-  const { items } = parseItems(text)
-  if (items.length !== 1) return found(text, 'list', vars)
-  // One doctor: no list to pick from, but say whose times these are.
-  const next = await slots({ ...vars, selection: '1' }, rpc)
-  const who = [items[0].head, ...items[0].details.filter(d => !/^https?:\/\//.test(d))].join('\n')
-  const first = next.replies[0]
-  if (next.session.state === 'ask_slot' && first?.kind === 'list') next.replies[0] = { ...first, body: `${who}\n\n${first.body}` }
-  return next
+  return results(text, 'list', vars, rpc)
 }
 
 /** Back to where this conversation lives: the clinic's menu on the clinic line, else the main menu. */
@@ -455,7 +497,7 @@ async function freeText(text: string, vars: Vars, phone: string, rpc: Rpc): Prom
   const pin = str(r.pincode)
 
   if (route === 'emergency') return { session: { state: 'idle', vars: carry(vars) }, replies: [{ kind: 'buttons', body: out, buttons: [MENU_BUTTON] }] }
-  if (route === 'list' || route === 'info') return found(out, route, { ...carry(vars), code, pin })
+  if (route === 'list' || route === 'info') return results(out, route, { ...carry(vars), code, pin }, rpc)
   if (route === 'ask_pin') return askPin(code, vars, out)
   if (route === 'confirm') {
     return {
@@ -504,6 +546,12 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
 
   if (m.replyId) {
     const id = m.replyId
+    // 0227: the area is known — look there at once, and say where; "📍 दूसरा एरिया" changes it.
+    // Not for an ambulance or a call back: those act on the area, so it is asked.
+    const wanted = /^spec:(?!more2?$)/.test(id) ? id.slice(5)
+      : id.startsWith('test:') && id !== 'test:other' ? 'lab_booking'
+      : id === 'menu:pharmacy' || id === 'menu:camps' ? id.slice(5) : ''
+    if (wanted && vars.lastPin) return search({ ...carry(vars), code: wanted, pin: vars.lastPin }, rpc, `📍 ${vars.lastPin}`)
     const t = tapped(id, s, m)
     if (t) return t
     // A clinic's own buttons carry its code, so they work from any earlier message.
@@ -574,7 +622,7 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
     }
   }
 
-  if (greeting) return menu(vars)
+  if (greeting) return m.fresh ? welcome(vars, phone, rpc) : menu(vars)
 
   if (typed && /^(stop|start)$/i.test(text)) {
     // 0173: opting out of, and back into, messages we start.
@@ -608,7 +656,7 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
   }
 
   // Not in the middle of anything.
-  if (!text) return menu(vars)
+  if (!text) return m.fresh ? welcome(vars, phone, rpc) : menu(vars)
   if (/^[1-5]$/.test(text)) {
     // 0164 / 0215: a rating after a visit, or the answer to the question after it.
     const r = await rpc('bot_record_rating_json', { p_phone: phone, p_message: text })
@@ -620,7 +668,7 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
   const f = await freeText(text, vars, phone, rpc)
   if (f) return f
   // A greeting gets the welcome; anything else mid-chat, the matcher's "did not understand".
-  return m.fresh ? menu(vars) : menu(vars, NOT_UNDERSTOOD)
+  return m.fresh ? welcome(vars, phone, rpc) : menu(vars, NOT_UNDERSTOOD)
 }
 
 // ── Meta's message shapes ──

@@ -326,6 +326,23 @@ export interface WalletReport {
   wallets_with_balance: number
 }
 
+/** 0227: what Meta charged for the messages we sent, from its delivery receipts. */
+export interface WaCosts {
+  from: string; to: string
+  sent: number; billable: number; free: number; unpriced: number; cost_rupees: number
+  by_kind: { category: string; type: string; messages: number; billable: number; rupees: number }[]
+  by_day: { day: string; messages: number; billable: number; rupees: number }[]
+  bot: { messages: number; patient_messages: number; two_or_more: number; bookings: number; patients: number }
+  free_tier: { phone_number_id: string; service_messages: number; free_used: number; free_allowance: number }[]
+  rates: { service: number; utility: number; marketing: number; authentication: number }
+}
+
+export async function getWaCosts(from?: string, to?: string): Promise<WaCosts> {
+  const { data, error } = await supabase.rpc('sehat_admin_wa_costs', { p_from: from ?? null, p_to: to ?? null })
+  oops(error)
+  return data as WaCosts
+}
+
 export async function getWalletReport(months = 6): Promise<WalletReport> {
   const { data, error } = await supabase.rpc('sehat_admin_wallet_report', { p_months: months })
   oops(error)
