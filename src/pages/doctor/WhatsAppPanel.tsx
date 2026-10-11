@@ -236,7 +236,9 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
             </p>
           </div>
           <div className="text-xs text-gray-500 text-right">
-            <div>Number: <b>{account?.whatsapp_number || 'not connected'}</b> · {STATUS_TEXT[account?.status ?? 'pending']}</div>
+            {/* 0237: every clinic sends from Sehatsandhi's number for clinics; a clinic has none of its own to set up. */}
+            <div>Sent from: <b>{account?.whatsapp_number || 'Sehatsandhi’s WhatsApp number for clinics'}</b>, with your clinic’s name in each message
+              {account?.status === 'suspended' ? <> · <b className="text-red-600">{STATUS_TEXT.suspended}</b></> : null}</div>
             <div>WhatsApp add-on: <b>{account && account.subscription_status !== 'inactive'
               ? `${STATUS_TEXT[account.subscription_status]}${account.next_billing_date ? ` until ${shortDate(account.next_billing_date)}` : ''}`
               : 'not added'}</b></div>
