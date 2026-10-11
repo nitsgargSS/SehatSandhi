@@ -37,6 +37,8 @@
 // answer with the text to show and a route. This file shows it and follows.
 
 export type State = 'idle' | 'ask_pin' | 'ask_pin_insurance' | 'ask_selection' | 'ask_slot' | 'ask_name'
+  /** 0232: they sent a rating as a bare number; what they send next is the review in their words. */
+  | 'ask_review'
 
 export interface Vars {
   /** A speciality code (SKIN, DENT…) or a service kind (pharmacy, lab_booking…). */
@@ -383,7 +385,34 @@ async function book(vars: Vars, patientInfo: string, phone: string, rpc: Rpc): P
   // 0227: the app, offered once, inside the confirmation — never a message of its own.
   const app = r?.booked === true ? await appOffer(phone, 'booked', rpc) : ''
   const body = app && `${text}\n\n${APP_BOOKED}\n${app}`.length <= 1024 ? `${text}\n\n${APP_BOOKED}\n${app}` : text
-  return { session: { state: 'idle', vars: kept }, replies: [{ kind: 'buttons', body, buttons: [MENU_BUTTON] }] }
+  // 0232: a button to rate the visit, good for a day — a tap and our answer cost nothing in that time.
+  const buttons = r?.booked === true ? [{ id: `rate:${Date.now()}`, title: '⭐ रेटिंग दें' }, MENU_BUTTON] : [MENU_BUTTON]
+  return { session: { state: 'idle', vars: kept }, replies: [{ kind: 'buttons', body, buttons }] }
+}
+
+// ── Rating a visit (0232) ──
+
+const RATE_BUTTON_MS = 24 * 3_600_000
+const RATE_EXPIRED = 'यह बटन बुकिंग के 24 घंटे तक ही चलता है। डॉक्टर से मिलने के बाद रेटिंग देने के लिए यहीं 1 से 5 तक एक नंबर भेजें।'
+const RATE_WORDS = 'अपना अनुभव एक-दो लाइन में लिखकर भी भेज सकते हैं।'
+const RATE_LIST: Reply = {
+  kind: 'list', header: 'रेटिंग दें', body: 'आपकी विज़िट कैसी रही? नीचे से चुनें 👇', sectionTitle: 'रेटिंग चुनें',
+  rows: [
+    { id: 'rate:score:5', title: '⭐⭐⭐⭐⭐', description: 'बहुत अच्छा / Excellent' },
+    { id: 'rate:score:4', title: '⭐⭐⭐⭐', description: 'अच्छा / Good' },
+    { id: 'rate:score:3', title: '⭐⭐⭐', description: 'ठीक-ठाक / Average' },
+    { id: 'rate:score:2', title: '⭐⭐', description: 'खराब / Poor' },
+    { id: 'rate:score:1', title: '⭐', description: 'बहुत खराब / Very poor' },
+  ],
+}
+
+/** Their rating, recorded by the database if there is a visit to rate. null: there was not. */
+async function rate(score: string, vars: Vars, phone: string, rpc: Rpc): Promise<Step | null> {
+  const r = await rpc('bot_record_rating_json', { p_phone: phone, p_message: score })
+  if (r?.recorded !== true || !str(r.text)) return null
+  // A number alone: what they write next is kept as their review.
+  const text = str(r.text)
+  return { session: { state: 'ask_review', vars: carry(vars) }, replies: [{ kind: 'text', body: /लिखकर/.test(text) ? text : `${text}\n\n${RATE_WORDS}` }] }
 }
 
 /** The app's link if this patient has not been offered it at this moment before, else ''. */
@@ -552,6 +581,18 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
       : id.startsWith('test:') && id !== 'test:other' ? 'lab_booking'
       : id === 'menu:pharmacy' || id === 'menu:camps' ? id.slice(5) : ''
     if (wanted && vars.lastPin) return search({ ...carry(vars), code: wanted, pin: vars.lastPin }, rpc, `📍 ${vars.lastPin}`)
+    // 0232: the rating button on a booking confirmation, and the stars picked after it.
+    const stars = id.match(/^rate:score:([1-5])$/)
+    if (stars) return (await rate(stars[1], vars, phone, rpc)) ?? menu(vars)
+    const rateAt = id.match(/^rate:(\d{10,})$/)
+    if (rateAt) {
+      const idle = (body: string): Step => ({ session: { state: 'idle', vars: carry(vars) }, replies: [{ kind: 'buttons', body, buttons: [MENU_BUTTON] }] })
+      if (Date.now() - Number(rateAt[1]) > RATE_BUTTON_MS) return idle(RATE_EXPIRED)
+      const ready = await rpc('bot_rating_ready_json', { p_phone: phone })
+      if (!ready) return failed(vars)
+      // Only after the visit time: before it there is nothing to rate.
+      return ready.ready === true ? { session: { state: 'idle', vars: carry(vars) }, replies: [RATE_LIST] } : idle(str(ready.text))
+    }
     const t = tapped(id, s, m)
     if (t) return t
     // A clinic's own buttons carry its code, so they work from any earlier message.
@@ -597,6 +638,21 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
       return menu({ ...vars, lastPin: m.located })
     }
     text = m.located
+  }
+
+  // 0232: a rating — the answer to a clinic's "how was your visit?" — on
+  // either number, before the clinic line works out who they mean.
+  if (typed && state === 'idle' && /^[1-5]$/.test(text)) {
+    const done = await rate(text, vars, phone, rpc)
+    if (done) return done
+  }
+  if (state === 'ask_review' && typed) {
+    state = 'idle'
+    // Their words, kept as the review. A tap, a greeting or a number is not one.
+    if (text.length >= 3 && !KEYWORDS.has(text.toUpperCase()) && !/^(stop|start|\d+)$/i.test(text) && !CLINIC_CODE.test(text)) {
+      const r = await rpc('sehat_rating_add_review', { p_phone: phone, p_text: text })
+      if (r?.saved === true) return { session: { state: 'idle', vars: carry(vars) }, replies: [{ kind: 'buttons', body: str(r.text), buttons: [MENU_BUTTON] }] }
+    }
   }
 
   // 0224: a clinic's code, wherever in the chat it arrives — its QR was scanned.

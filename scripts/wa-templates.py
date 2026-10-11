@@ -66,6 +66,10 @@ TEMPLATES = {
         link('bill_link', 'bill', 'Family Health Clinic', 'https://www.sehatsandhi.com/bill/abc123'),
         link('lab_report_link', 'report', 'City Diagnostics', 'https://www.sehatsandhi.com/report/abc123'),
         link('discharge_link', 'discharge summary', 'Yamuna City Hospital', 'https://www.sehatsandhi.com/discharge/abc123'),
+        # A clinic asks its own patient for a review, from its panel, on its wallet (0232).
+        dict(name='rating_request', language='hi', category='UTILITY', components=body(
+            'नमस्ते {{1}} 🙏 {{2}} के साथ {{3}} की आपकी विज़िट कैसी रही? 1 (खराब) से 5 (बहुत अच्छा) तक एक नंबर भेजें। आपकी रेटिंग दूसरे मरीज़ों को सही डॉक्टर चुनने में मदद करती है।',
+            'Sunita', 'Dr. Anita Verma', '20 सितंबर')),
         dict(name='order_update', language='hi', category='UTILITY', components=body(
             'Sehatsandhi पर आपका दवाई ऑर्डर:\n\n{{1}}\n\nकोई सवाल हो तो यहीं जवाब दें।',
             '24x7 Chemist ने आपका ऑर्डर देख लिया है। कुल ₹240, डिलीवरी शाम 6 बजे तक।')),

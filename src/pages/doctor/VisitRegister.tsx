@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Download, Search } from 'lucide-react'
 import { visitRegister, type RegisterKind, type RegisterRow } from '../../lib/patientsApi'
+import { askForReviews } from '../../lib/sendApi'
 import { listBusinessDoctors, type BusinessDoctor } from '../../lib/doctorsApi'
 import { downloadCsv } from '../../lib/billingApi'
 import { isoDate, shortDate } from '../../lib/format'
@@ -49,6 +50,27 @@ export default function VisitRegister({ businessId, defaultDoctorId = null, requ
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const box = useRef<HTMLDivElement>(null)
+
+  // 0232: ask the patients listed for a review on WhatsApp — the clinic's own
+  // message, from its wallet. The patient writes the review; nobody else can.
+  const [asking, setAsking] = useState(false)
+  const [confirmAll, setConfirmAll] = useState(false)
+  const [asked, setAsked] = useState<Record<string, string>>({})        // member → what happened
+  const [askNote, setAskNote] = useState<{ ok: boolean; text: string } | null>(null)
+  const ask = async (members: string[]) => {
+    setAsking(true); setAskNote(null); setConfirmAll(false)
+    try {
+      const r = await askForReviews(businessId, members)
+      const why = Object.fromEntries(r.skipped.map(s => [s.memberId, s.why]))
+      setAsked(a => ({ ...a, ...Object.fromEntries(members.map(m => [m, why[m] ?? (r.needsPlan || r.walletShort ? (a[m] ?? '') : 'Asked')])) }))
+      const parts = [
+        r.sent ? `${r.sent} ${r.sent === 1 ? 'patient' : 'patients'} asked on WhatsApp.` : '',
+        r.skipped.length ? `${r.skipped.length} not asked${members.length === 1 ? `: ${r.skipped[0].why}` : ' (the reason is beside each).'}` : '',
+        r.message ?? '',
+      ].filter(Boolean)
+      setAskNote({ ok: r.sent > 0 && !r.message, text: parts.join(' ') || 'Nobody was asked.' })
+    } catch (e) { setAskNote({ ok: false, text: (e as Error).message }) } finally { setAsking(false) }
+  }
 
   useEffect(() => { listBusinessDoctors(businessId).then(setDoctors).catch(() => setDoctors([])) }, [businessId])
 
@@ -135,6 +157,26 @@ export default function VisitRegister({ businessId, defaultDoctorId = null, requ
         </p>
       )}
 
+      {rows && rows.length > 0 && (() => {
+        const members = [...new Set(rows.filter(r => r.phone).map(r => r.patient_member_id))].filter(m => !asked[m]).slice(0, 100)
+        return (
+          <div className="text-sm bg-teal-50 border border-teal-100 rounded-lg px-3 py-2 flex items-center gap-2 flex-wrap">
+            <span className="text-navy-700"><b>Reviews:</b> ask these patients on WhatsApp how their visit was. They reply 1 to 5 and can add a line; it shows on your profile. Each request is one WhatsApp message from your wallet.</span>
+            {confirmAll ? (
+              <>
+                <button disabled={asking} onClick={() => ask(members)} className="btn-teal text-xs py-1.5 px-3 disabled:opacity-50">{asking ? 'Asking…' : `Yes, ask ${members.length}`}</button>
+                <button onClick={() => setConfirmAll(false)} className="text-xs text-gray-600 underline">Cancel</button>
+              </>
+            ) : (
+              <button disabled={asking || !members.length} onClick={() => setConfirmAll(true)} className="btn-outline text-xs py-1.5 px-3 disabled:opacity-50">
+                Ask all {members.length} listed{rows.length > members.length && members.length === 100 ? ' (first 100)' : ''}
+              </button>
+            )}
+            {askNote && <span className={askNote.ok ? 'text-teal-700' : 'text-amber-700'}>{askNote.text}</span>}
+          </div>
+        )
+      })()}
+
       {rows && rows.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -161,6 +203,9 @@ export default function VisitRegister({ businessId, defaultDoctorId = null, requ
                     <button onClick={() => onOpen(r.patient_member_id, r.visit_id)} className="text-teal-700 font-semibold text-sm underline">
                       {r.visit_id ? 'Open visit' : 'Open'}
                     </button>
+                    {r.phone && (asked[r.patient_member_id]
+                      ? <span className={`ml-3 text-xs ${asked[r.patient_member_id] === 'Asked' ? 'text-teal-700' : 'text-gray-500'}`}>{asked[r.patient_member_id] === 'Asked' ? '✓ Review asked' : asked[r.patient_member_id]}</span>
+                      : <button disabled={asking} onClick={() => ask([r.patient_member_id])} className="ml-3 text-xs text-gray-600 underline disabled:opacity-50">Ask for review</button>)}
                   </td>
                 </tr>
               ))}

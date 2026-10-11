@@ -38,6 +38,23 @@ async function call(kind: DocKind, id: string, extra: Record<string, unknown>) {
   return body
 }
 
+/** 0232: ask patients of this clinic for a review on WhatsApp, each paid from the clinic's wallet. */
+export interface ReviewAsk { ok: boolean; sent: number; skipped: { memberId: string; why: string }[]; needsPlan?: boolean; walletShort?: boolean; message?: string }
+export async function askForReviews(businessId: string, memberIds: string[]): Promise<ReviewAsk> {
+  const { url, anon } = activeConfig()
+  if (!url || !anon) throw new Error('Not configured for sending.')
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Please sign in again.')
+  const res = await fetch(`${url}/functions/v1/rating-ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, apikey: anon },
+    body: JSON.stringify({ businessId, memberIds }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok && !('sent' in body)) throw new Error(body.message ?? body.error ?? 'Could not ask.')
+  return { sent: 0, skipped: [], ...body } as ReviewAsk
+}
+
 export interface Sent {
   whatsapp: boolean
   email: boolean
