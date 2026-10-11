@@ -40,7 +40,18 @@ type Kind = 'hospital' | 'lab' | 'pharmacy' | 'ambulance' | 'insurance'
 type Place = {
   business_id: string; title: string; phone: string | null; address: string | null
   avg_rating: number | null; total_reviews: number | null; slots: string[]; slotDay: number
+  /** 0249: a lab's own one-line offer. */
+  offer?: string | null
 }
+// 0249: a blood test and a scan are different labs. '' = any.
+const LAB_KIND_CHIPS = [
+  { label: '🩸 Blood & urine tests', say: '__lab__pathology' }, { label: '🩻 Scans & X-ray', say: '__lab__radiology' }, { label: 'All labs', say: '__lab__all' },
+]
+const LAB_KIND_WORD: Record<string, string> = { pathology: 'labs for blood and urine tests', radiology: 'scan and X-ray centres', '': 'labs' }
+/** The kind of lab a test asked for in words needs; undefined if it does not say. */
+const labKindSaid = (s?: string): string | undefined => !s ? undefined
+  : /mri|\bct\b|x-?ray|ultra ?sound|sonograph|scan|mammo/i.test(s) ? 'radiology'
+  : /blood|cbc|sugar|thyroid|urine|lipid|vitamin|hba1c|lft|kft|path/i.test(s) ? 'pathology' : undefined
 const KINDS: { id: Kind; label: string; en: string; hi: string }[] = [
   { id: 'hospital', label: '🏥 Hospital', en: 'Hospital', hi: 'अस्पताल' },
   { id: 'lab', label: '🧪 Lab test', en: 'Lab test', hi: 'जांच लैब' },
@@ -84,7 +95,7 @@ export default function Find() {
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
-  const ctx = useRef<{ speciality?: string; sub?: string; kind?: Kind; pin?: string; area?: string; day: number; hint?: string }>({ day: 0 })
+  const ctx = useRef<{ speciality?: string; sub?: string; kind?: Kind; pin?: string; area?: string; day: number; hint?: string; labKind?: string }>({ day: 0 })
   const scroll = useRef<ScrollView>(null)
   const n = useRef(0)
   const push = (m: NewMsg) => setMsgs(x => [...x, { ...m, id: ++n.current } as Msg])
@@ -151,12 +162,15 @@ export default function Find() {
   const searchPlaces = async () => {
     const { kind, pin, area } = ctx.current
     if (!kind || !pin) return
-    const { data, error } = await supabase.rpc('bot_bookable', { p_kind: 'business', p_filter: kind, p_pincode: pin })
+    // 0249: labs are listed by the kind of test asked for.
+    const { data, error } = kind === 'lab'
+      ? await supabase.rpc('sehat_labs_near', { p_pincode: pin, p_kind: ctx.current.labKind ?? '' })
+      : await supabase.rpc('bot_bookable', { p_kind: 'business', p_filter: kind, p_pincode: pin })
     if (error) { bot('Sorry, the search did not work just now. Please try again.'); return }
     const rows = ((data ?? []) as Omit<Place, 'slots' | 'slotDay'>[]).slice(0, 20)
     if (!rows.length) {
       supabase.rpc('sehat_note_unmet', { p_speciality: kind, p_pin: pin }).then(() => undefined, () => undefined)
-      bot(`No ${KIND_WORD[kind]} near ${area ?? pin} have joined Sehatsandhi yet. We are growing across India and will be in your area soon. Try a nearby town or PIN code.`,
+      bot(`No ${kind === 'lab' ? LAB_KIND_WORD[ctx.current.labKind ?? ''] : KIND_WORD[kind]} near ${area ?? pin} have joined Sehatsandhi yet. We are growing across India and will be in your area soon. Try a nearby town or PIN code.`,
         kind === 'ambulance' ? [{ label: '📞 Call 108', say: '__tel__108' }] : undefined)
       return
     }
@@ -166,7 +180,9 @@ export default function Find() {
     if (kind === 'ambulance') bot('In an emergency call 108 first — it is free.', [{ label: '📞 Call 108', say: '__tel__108' }])
     push({ from: 'bot', places, kind })
     const next: Record<Kind, { text: string; chips: { label: string; say: string }[] }> = {
-      lab: { text: 'Tap "Choose tests & book" — sample at the lab or at home, at a time that suits you.', chips: [] },
+      lab: ctx.current.labKind === 'radiology'
+        ? { text: 'Tap "Choose tests & book" and pick a time to visit the centre.', chips: [] }
+        : { text: 'Tap "Choose tests & book" — sample at the lab or at home, at a time that suits you.', chips: [] },
       pharmacy: { text: 'Want medicines delivered? Send the prescription photo — a pharmacy near you tells you the total first.', chips: [{ label: '💊 Order medicines', say: '__go__/me/order' }] },
       ambulance: { text: 'Or alert all of them at once — the first to accept calls you and sees where you are.', chips: [{ label: '🚑 Alert ambulances near me', say: '__go__/me/ambulance' }] },
       insurance: { text: 'Tell us the cover you want and one of these advisors calls you back. Only the advisor who takes it gets your number.', chips: [{ label: '🛡️ Ask for an advisor', say: '__go__/me/insurance' }] },
@@ -211,6 +227,7 @@ export default function Find() {
     if (m.intent === 'camps') { bot('Free health camps and special offers near you:', [{ label: '🎁 Camps & offers', say: '__go__/camps' }]); return }
     bot(`आपने खोजा: ${summary(m)}`, m.secondary_intents?.filter(x => SECONDARY_HI[x]).map(x => ({ label: SECONDARY_HI[x], say: SECONDARY_SAY[x] })))
     await understood({
+      said,
       speciality: m.intent === 'doctor' ? m.speciality ?? undefined : undefined,
       sub: m.intent === 'doctor' ? m.sub_speciality ?? undefined : undefined,
       kind: KIND_OF[m.intent], doctorAny: m.intent === 'doctor' && !m.speciality,
@@ -238,11 +255,15 @@ export default function Find() {
     }
   }
 
-  const understood = async (u: { speciality?: string; sub?: string; kind?: Kind; doctorAny?: boolean; pin?: string; area?: string; place?: string; day?: number; hint?: string }) => {
+  const understood = async (u: { speciality?: string; sub?: string; kind?: Kind; doctorAny?: boolean; pin?: string; area?: string; place?: string; day?: number; hint?: string; said?: string }) => {
     setBusy(true)
     try {
       // Pharmacies, labs, hospitals, ambulances and advisors: listed here too.
-      if (u.kind) { ctx.current.kind = u.kind; ctx.current.speciality = undefined }
+      if (u.kind) {
+        ctx.current.kind = u.kind; ctx.current.speciality = undefined
+        // A new lab search starts with its own kind of test — said in words, or asked below.
+        if (u.kind === 'lab') ctx.current.labKind = labKindSaid(u.hint) ?? labKindSaid(u.said)
+      }
       // A new speciality forgets the last problem named, unless this one names its own.
       if (u.speciality) { ctx.current.speciality = u.speciality; ctx.current.sub = u.sub; ctx.current.kind = undefined }
       if (u.doctorAny) { ctx.current.kind = undefined }
@@ -257,8 +278,9 @@ export default function Find() {
       if (u.pin || ctx.current.pin) remember({ pin: ctx.current.pin!, label: ctx.current.area ?? ctx.current.pin! })
       if (ctx.current.kind && !ctx.current.speciality) {
         const k = ctx.current.kind
+        if (k === 'lab' && ctx.current.labKind === undefined) { bot('Which kind of test do you need?', LAB_KIND_CHIPS); return }
         if (!ctx.current.pin) { bot(`${KINDS.find(x => x.id === k)!.en} — got it. Which area? Type your PIN code or town, or tap 📍.`); return }
-        bot(`Looking for ${KIND_WORD[k]} near ${ctx.current.area ?? ctx.current.pin}…`)
+        bot(`Looking for ${k === 'lab' ? LAB_KIND_WORD[ctx.current.labKind ?? ''] : KIND_WORD[k]} near ${ctx.current.area ?? ctx.current.pin}…`)
         await searchPlaces()
         return
       }
@@ -284,6 +306,13 @@ export default function Find() {
     if (say.startsWith('__kind__')) {
       const k = say.slice(8) as Kind
       handle(KINDS.find(x => x.id === k)!.en, k)
+      return
+    }
+    if (say.startsWith('__lab__')) {
+      const k = say.slice(7)
+      push({ from: 'me', text: LAB_KIND_CHIPS.find(c => c.say === say)?.label ?? k })
+      ctx.current.kind = 'lab'; ctx.current.labKind = k === 'all' ? '' : k
+      understood({})
       return
     }
     if (say.startsWith('__wa__')) { Linking.openURL(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(say.slice(6))}`); return }
@@ -350,11 +379,12 @@ export default function Find() {
                 <View key={pl.business_id} style={st.doc}>
                   <Text style={st.docName}>{pl.title}</Text>
                   {!!pl.address && <Text style={st.meta} numberOfLines={2}>{pl.address}</Text>}
+                  {!!pl.offer && <Text style={[st.meta, { color: '#0f6b4a', fontWeight: '700' }]}>🏷 {pl.offer}</Text>}
                   <Text style={st.meta}>{pl.avg_rating != null ? `★ ${pl.avg_rating} · ${pl.total_reviews} reviews` : 'New on Sehatsandhi'}</Text>
                   {/* 0207: tests, prices, lab or home, a time — on the lab's own screen. */}
                   {m.kind === 'lab' && (
                     <Pressable style={[st.slot, { alignSelf: 'flex-start', marginTop: 6 }]}
-                      onPress={() => router.push({ pathname: '/lab/[id]', params: { id: pl.business_id, hint: ctx.current.hint ?? '' } })}>
+                      onPress={() => router.push({ pathname: '/lab/[id]', params: { id: pl.business_id, hint: ctx.current.hint ?? '', kind: ctx.current.labKind ?? '' } })}>
                       <Text style={st.slotText}>🧪 Choose tests & book</Text>
                     </Pressable>
                   )}

@@ -31,10 +31,11 @@ const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { weekday: '
 const rs = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
 
 export default function LabBooking() {
-  const { id, hint } = useLocalSearchParams<{ id: string; hint?: string }>()
+  // kind (0249): the kind of test they were looking for — it opens that part of the list.
+  const { id, hint, kind: asked } = useLocalSearchParams<{ id: string; hint?: string; kind?: string }>()
   const [menu, setMenu] = useState<Menu | null | undefined>(undefined)
   const [q, setQ] = useState(HINT_WORDS[hint ?? ''] ?? '')
-  const [kind, setKind] = useState('')
+  const [kind, setKind] = useState(asked === 'pathology' || asked === 'radiology' ? asked : '')
   const [tests, setTests] = useState<string[]>([])
   const [packs, setPacks] = useState<string[]>([])
   const [note, setNote] = useState('')
@@ -68,6 +69,9 @@ export default function LabBooking() {
   }, [id, day])
 
   const hasMenu = !!menu && (menu.tests.length > 0 || menu.packages.length > 0)
+  // 0249: a scan is done at the centre — never a home collection.
+  const scan = asked === 'radiology' || (menu?.tests ?? []).some(t => tests.includes(t.id) && (t.category === 'radiology' || t.category === 'cardiology'))
+  useEffect(() => { if (scan && where === 'home') setWhere('lab') }, [scan, where])
   const shown = useMemo(() => (menu?.tests ?? []).filter(t => (!kind || t.category === kind)
     && (!q.trim() || t.name.toLowerCase().includes(q.trim().toLowerCase()))), [menu, kind, q])
   const total = (menu?.packages ?? []).filter(p => packs.includes(p.id)).reduce((a, p) => a + p.price, 0)
@@ -171,11 +175,12 @@ export default function LabBooking() {
       )}
 
       <Card>
-        <Label>Where should the sample be taken?</Label>
+        <Label>{scan ? 'Where is it done?' : 'Where should the sample be taken?'}</Label>
         <View style={st.row}>
-          <Chip label="🏥 At the lab" on={where === 'lab'} onPress={() => setWhere('lab')} />
-          <Chip label={`🏠 At home${menu.home_fee > 0 ? ` (+${rs(menu.home_fee)})` : ' (free)'}`} on={where === 'home'} onPress={() => setWhere('home')} />
+          <Chip label={scan ? '🏥 At the centre' : '🏥 At the lab'} on={where === 'lab'} onPress={() => setWhere('lab')} />
+          {!scan && <Chip label={`🏠 At home${menu.home_fee > 0 ? ` (+${rs(menu.home_fee)})` : ' (free)'}`} on={where === 'home'} onPress={() => setWhere('home')} />}
         </View>
+        {scan && <Note>Scans and X-rays are done at the centre. The centre will tell you how to prepare.</Note>}
         {where === 'home' && <Field label="Address for the collection" value={address} onChangeText={setAddress} multiline placeholder="House, street, landmark, area" />}
         <Label>{where === 'home' ? 'When should they come?' : 'When will you come?'}</Label>
         <View style={st.row}>{DAYS.map((d, i) => <Chip key={d} label={d} on={day === i} onPress={() => setDay(i)} />)}</View>
