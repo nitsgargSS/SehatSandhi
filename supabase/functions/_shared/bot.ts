@@ -142,7 +142,6 @@ const PICK_ONE = 'किसके साथ बुक करना है? न�
 const AREA_ROW = { id: 'nav:pin', title: '📍 दूसरा एरिया', description: 'Search in another area' }
 const TYPE_IT = 'सीधे लिखकर भी बता सकते हैं — जैसे "दांत का डॉक्टर जगाधरी"।'
 const APP_WELCOME = '📱 Sehatsandhi ऐप में अपॉइंटमेंट ट्रैक करें, पर्चे और रिपोर्ट एक जगह रखें — मुफ़्त:'
-const APP_BOOKED = '📱 ऐप में यह अपॉइंटमेंट देखें, रिमाइंडर पाएं और अपने पर्चे-रिपोर्ट सुरक्षित रखें — मुफ़्त:'
 const ALL_BUTTON = { id: 'nav:all', title: '🔎 और डॉक्टर खोजें' }
 const QR_UNKNOWN = 'यह QR कोड अभी सक्रिय नहीं है। 🙏\nThis clinic code is not active right now.\n\nआप नीचे से चुन सकते हैं:'
 const WHICH_CLINIC = 'नमस्ते! 🙏\nआप किससे बात करना चाहते हैं? नीचे से चुनें 👇\nWho would you like to reach?'
@@ -419,12 +418,10 @@ async function book(vars: Vars, patientInfo: string, phone: string, rpc: Rpc): P
   const text = str(r?.text)
   if (!text) return failed(vars)
   const kept = carry(r?.booked === true ? { ...vars, lastPatient: patientInfo } : vars)
-  // 0227: the app, offered once, inside the confirmation — never a message of its own.
-  const app = r?.booked === true ? await appOffer(phone, 'booked', rpc) : ''
-  const body = app && `${text}\n\n${APP_BOOKED}\n${app}`.length <= 1024 ? `${text}\n\n${APP_BOOKED}\n${app}` : text
   // 0232: a button to rate the visit, good for a day — a tap and our answer cost nothing in that time.
   const buttons = r?.booked === true ? [{ id: `rate:${Date.now()}`, title: '⭐ रेटिंग दें' }, MENU_BUTTON] : [MENU_BUTTON]
-  return { session: { state: 'idle', vars: kept }, replies: [{ kind: 'buttons', body, buttons }] }
+  const done: Step = { session: { state: 'idle', vars: kept }, replies: [{ kind: 'buttons', body: text, buttons }] }
+  return r?.booked === true ? invited(done, phone, rpc) : done
 }
 
 // ── Rating a visit (0232) ──
@@ -453,7 +450,22 @@ async function rate(score: string, vars: Vars, phone: string, rpc: Rpc): Promise
 }
 
 /** The app's link if this patient has not been offered it at this moment before, else ''. */
-async function appOffer(phone: string, moment: 'welcome' | 'booked', rpc: Rpc): Promise<string> {
+/**
+ * 0250: something was finished here — say what the app adds, with its store
+ * links. In the confirmation when it fits, else straight after it. The
+ * database decides whether (no link yet, has the app, invited this week: no).
+ */
+async function invited(step: Step, phone: string, rpc: Rpc): Promise<Step> {
+  const pitch = str((await rpc('sehat_wa_app_pitch', { p_phone: phone, p_moment: 'done' }))?.text)
+  const last = step.replies[step.replies.length - 1]
+  if (!pitch || !last) return step
+  if (last.kind === 'buttons' && `${last.body}\n\n${pitch}`.length <= 1024) {
+    return { ...step, replies: [...step.replies.slice(0, -1), { ...last, body: `${last.body}\n\n${pitch}` }] }
+  }
+  return { ...step, replies: [...step.replies, { kind: 'text', body: pitch }] }
+}
+
+async function appOffer(phone: string, moment: 'welcome', rpc: Rpc): Promise<string> {
   const r = await rpc('sehat_wa_app_offer', { p_phone: phone, p_moment: moment })
   return str(r?.link)
 }
@@ -598,7 +610,9 @@ async function requestSend(v: Vars, req: Req, m: Inbound, phone: string, rpc: Rp
     return asking(v, { ...req, ask: 'pin', f: { ...f, pin: '', pinAsked: '1' } }, pinQuestion(v, text))
   }
   const lastPin = /^\d{6}$/.test(f.pin ?? '') ? f.pin : v.lastPin
-  return { session: { state: 'idle', vars: carry({ ...v, ...(lastPin ? { lastPin } : {}) }) }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON] }] }
+  const sent: Step = { session: { state: 'idle', vars: carry({ ...v, ...(lastPin ? { lastPin } : {}) }) }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON] }] }
+  // 0250: the app, after an order or a request — not after an ambulance call.
+  return r?.ok === true && req.what !== 'ambulance' ? invited(sent, phone, rpc) : sent
 }
 
 /**
@@ -872,7 +886,7 @@ async function labStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promise<St
       if (r?.again === 'how') return labSlots(v, { ...lab, how: 'lab', visit: true }, rpc, out)
       return { session: { state: 'idle', vars: carry(v) }, replies: [{ kind: 'buttons', body: out, buttons: [MENU_BUTTON] }] }
     }
-    return { session: { state: 'idle', vars: carry({ ...v, lastPatient: who }) }, replies: [{ kind: 'buttons', body: out, buttons: [MENU_BUTTON] }] }
+    return invited({ session: { state: 'idle', vars: carry({ ...v, lastPatient: who }) }, replies: [{ kind: 'buttons', body: out, buttons: [MENU_BUTTON] }] }, phone, rpc)
   }
   return null
 }
