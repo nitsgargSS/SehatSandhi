@@ -20,6 +20,7 @@ import {
 } from '../../lib/businessApi'
 import { registerBusiness, registerPractitioner, attachPractitioner } from '../../lib/identityApi'
 import { recordBusinessFirstTouch } from '../../lib/firstTouch'
+import { HEARD_FROM, saveHeardFrom } from '../../lib/partnersApi'
 import { isValidEmail, isValidPhone, isValidRegNumber, normEmail, passwordProblem, passwordSaveError } from '../../lib/credentials'
 import { markPasswordChanged } from '../../lib/passwordState'
 import EmailAndPassword, { EmailPasswordState } from './EmailAndPassword'
@@ -593,6 +594,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         await supabase.rpc('sehat_signup_set_category', { p_business: businessId, p_category: category })
           .then(() => undefined, () => undefined)
       }
+      // 0255: how they heard of Sehatsandhi — what the admin goes on when crediting a marketing partner.
+      if (form.heard) await saveHeardFrom(businessId, form.heard, form.heard_detail)
       // 0214: where this partner first came from (the website's first touch).
       await recordBusinessFirstTouch(businessId)
       return businessId
@@ -990,6 +993,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               {categoryOptions(vertical).map(c => <option key={c} value={c}>{c}</option>)}
                               {vertical !== 'lab' && <option value={OTHER_CATEGORY}>Other (type it in)</option>}
                             </select>
+                            {/* (0255's question follows this block.) */}
                             {form.category === OTHER_CATEGORY && (
                               <input value={form.category_other ?? ''} onChange={e => upd('category_other', e.target.value)}
                                 placeholder="Type your category" maxLength={80}
@@ -997,6 +1001,22 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             )}
                           </div>
                         )}
+                        {/* 0255: how they heard of us — optional, and what a marketing partner's credit rests on. */}
+                        <div style={{ marginTop: 14 }}>
+                          <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: BIZ.ink, marginBottom: 6 }}>
+                            How did you hear about Sehatsandhi? <span style={{ fontWeight: 400, color: BIZ.mutedWarm }}>(optional)</span>
+                          </label>
+                          <select value={form.heard ?? ''} onChange={e => upd('heard', e.target.value)}
+                            style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1px solid ${BIZ.inputBorder}`, fontFamily: 'inherit', fontSize: 16, color: form.heard ? BIZ.ink : BIZ.mutedWarm, background: '#fdfbf6' }}>
+                            <option value="">Choose…</option>
+                            {HEARD_FROM.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                          </select>
+                          {(form.heard === 'other' || form.heard === 'sehatsandhi_person' || form.heard === 'another_doctor') && (
+                            <input value={form.heard_detail ?? ''} onChange={e => upd('heard_detail', e.target.value)} maxLength={120}
+                              placeholder={form.heard === 'other' ? 'Where?' : 'Their name, if you remember'}
+                              style={{ width: '100%', marginTop: 8, padding: '12px 14px', border: `1px solid ${BIZ.inputBorder}`, borderRadius: 12, fontSize: 16, fontFamily: 'inherit', outline: 'none', background: '#fdfbf6' }} />
+                          )}
+                        </div>
                         {/* Doctors search the Indian Medical Register by name and
                             get their own registration number back, which is
                             easier than finding the certificate. A business types

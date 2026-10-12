@@ -15,6 +15,7 @@ import { useLanguage } from '../../i18n/LanguageContext'
 import LanguageSwitcher from '../../components/LanguageSwitcher'
 import SandboxPanel from './SandboxPanel'
 import GstFilingPanel from './GstFilingPanel'
+import PartnersPanel from './PartnersPanel'
 import InsightsPanel from './InsightsPanel'
 import LeadsPanel from './LeadsPanel'
 import WhatsAppMarketingPanel from './WhatsAppMarketingPanel'
@@ -39,7 +40,7 @@ interface BusinessRow extends Business {
   verification_notes?: string | null
 }
 
-type Tab = 'pending' | 'all' | 'leads' | 'privacy' | 'whatsapp' | 'camps' | 'coupons' | 'billing' | 'reports'
+type Tab = 'pending' | 'all' | 'leads' | 'privacy' | 'whatsapp' | 'camps' | 'coupons' | 'billing' | 'reports' | 'partners'
   | 'insights' | 'gst' | 'team' | 'account' | 'sandbox' | 'messages'
 
 // 0145: what a manager's panel shows. Billing is view-only for them. WhatsApp
@@ -834,6 +835,7 @@ export default function AdminDashboard() {
               { id: 'reports', label: 'Reports', count: 0, badge: false },
               { id: 'insights', label: 'Insights', count: 0, badge: false },
               { id: 'gst', label: 'GST', count: 0, badge: false },
+              { id: 'partners', label: 'Partners', count: 0, badge: false },
               { id: 'team', label: 'Team', count: 0, badge: false },
               { id: 'account', label: 'Account', count: 0, badge: false },
               // Only reachable while pointed at the sandbox backend — the purge
@@ -2046,6 +2048,8 @@ export default function AdminDashboard() {
           {tab === 'insights' && <InsightsPanel />}
 
           {tab === 'gst' && <GstFilingPanel />}
+          {/* 0255: marketing partners and their incentives — admins only (the database refuses managers too). */}
+          {tab === 'partners' && !isManager && <PartnersPanel />}
 
           {tab === 'account' && (
             <div className="space-y-6 max-w-xl">
