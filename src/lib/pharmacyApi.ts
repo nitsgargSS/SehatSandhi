@@ -223,6 +223,17 @@ export async function deleteItem(itemId: string): Promise<{ deleted: boolean; ke
   return data as { deleted: boolean; kept_for_bills?: number; name: string }
 }
 
+/**
+ * 0253: count a medicine loose — 1 strip = `perPack` tablets — so part of a
+ * strip can be billed. Stock, prices and past bills are re-counted together;
+ * no amount changes. Once per medicine.
+ */
+export async function splitPack(itemId: string, perPack: number, unit: string): Promise<{ unit: string; pack_size: number }> {
+  const { data, error } = await supabase.rpc('sehat_pharmacy_split_pack', { p_item: itemId, p_per_pack: perPack, p_unit: unit })
+  oops(error)
+  return data as { unit: string; pack_size: number }
+}
+
 export async function getBatches(itemId: string): Promise<Batch[]> {
   const { data, error } = await supabase.from('pharmacy_batches').select('*')
     .eq('item_id', itemId).order('expiry_date')
