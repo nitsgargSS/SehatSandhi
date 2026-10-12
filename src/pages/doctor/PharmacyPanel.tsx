@@ -3,7 +3,7 @@ import { AlertTriangle, Package, Plus, Printer, Search, Trash2 } from 'lucide-re
 import { moneyExact, shortDate, isoDate } from '../../lib/format'
 import { searchPatients, PatientSearchResult } from '../../lib/patientsApi'
 import {
-  getStock, saveItem, deleteItem, getBatches, adjustStock, recordPurchase, getPurchases, getSuppliers,
+  getStock, saveItem, deleteItem, splitPack, getBatches, adjustStock, recordPurchase, getPurchases, getSuppliers,
   issueBill, getBills, recordPayment, returnItems, cancelBill, getPrescriptionsForDispensing,
   getSummary, getPharmacySettings, savePharmacySettings, itemLabel, matchItem, ITEM_FORMS,
   getDues, getBillsByIds, getStockMoves, Due, StockMove, PAYMENT_STATUS, payMethodLabel,
@@ -309,6 +309,13 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
                   <td>
                     <input type="number" min={1} className="w-20 border border-gray-300 rounded px-2 py-1" value={l.qty}
                       onChange={e => setLines(ls => ls.map(x => x.key === l.key ? { ...x, qty: Math.max(1, parseInt(e.target.value, 10) || 1) } : x))} />
+                    {/* 0253: counted loose — the number is tablets; a full strip is one tap. */}
+                    {l.item.pack_size > 1 && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">
+                        {l.item.unit}s · <button type="button" className="underline text-teal-700"
+                          onClick={() => setLines(ls => ls.map(x => x.key === l.key ? { ...x, qty: l.item.pack_size } : x))}>full strip ({l.item.pack_size})</button>
+                      </div>
+                    )}
                   </td>
                   <td className="text-right">{l.item.unit_mrp ? moneyExact(l.item.unit_mrp) : '—'}</td>
                   <td className="text-right">{moneyExact(l.qty * (l.item.unit_mrp ?? 0))}</td>
@@ -746,6 +753,19 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
   const [q, setQ] = useState('')
   // 0225: deleting a medicine entered by mistake — asked twice, and only with none in hand.
   const [deleting, setDeleting] = useState<string | null>(null)
+  // 0253: opening a strip — counting one medicine in tablets, so part of a strip can be billed.
+  const [splitting, setSplitting] = useState<string | null>(null)
+  const [perPack, setPerPack] = useState('10')
+  const [looseUnit, setLooseUnit] = useState('tablet')
+  const [splitBusy, setSplitBusy] = useState(false)
+  const [splitErr, setSplitErr] = useState('')
+  const split = async (s: StockRow) => {
+    setSplitBusy(true); setSplitErr('')
+    try {
+      await splitPack(s.id, parseInt(perPack, 10) || 0, looseUnit)
+      setSplitting(null); reload(); getBatches(s.id).then(setBatches)
+    } catch (e) { setSplitErr((e as Error).message) } finally { setSplitBusy(false) }
+  }
   const [delBusy, setDelBusy] = useState(false)
   const [delNote, setDelNote] = useState<{ id: string | null; ok: boolean; text: string } | null>(null)
   const remove = async (s: StockRow) => {
@@ -812,6 +832,41 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
                   <StockHistory itemId={s.id} unit={s.unit} qtyNow={s.qty_available + s.qty_expired} />
                   {canManage && <button onClick={() => setAdding(s)} className="btn-teal text-xs py-1.5 px-3 mr-2">Add stock</button>}
                   {canManage && <button onClick={() => setEditing(s)} className="btn-outline text-xs py-1.5 px-3 mr-2">Edit medicine</button>}
+                  {canManage && s.pack_size <= 1 && splitting !== s.id && (
+                    <button onClick={() => { setSplitting(s.id); setSplitErr(''); setPerPack('10'); setLooseUnit(/cap/i.test(s.form ?? '') ? 'capsule' : 'tablet') }}
+                      className="btn-outline text-xs py-1.5 px-3 mr-2">Sell loose (by tablet)</button>
+                  )}
+                  {s.pack_size > 1 && <span className="text-xs text-gray-500 mr-2">Counted loose · {s.pack_size} {s.unit}s in a strip</span>}
+                  {canManage && splitting === s.id && (() => {
+                    const n = parseInt(perPack, 10) || 0
+                    const all = s.qty_available + s.qty_expired
+                    return (
+                      <div className="mt-2 mb-2 text-xs bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 space-y-2">
+                        <p className="text-gray-700">
+                          Use this when you entered <b>strips</b> but give patients <b>part of a strip</b>. The stock, the price and your past bills for {s.name} are
+                          re-counted in single {looseUnit}s — no bill amount changes. It is done once and cannot be undone.
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>One strip / pack has</span>
+                          <input type="number" min={2} max={1000} className="w-20 border border-gray-300 rounded px-2 py-1" value={perPack} onChange={e => setPerPack(e.target.value)} />
+                          <select className="border border-gray-300 rounded px-2 py-1" value={looseUnit} onChange={e => setLooseUnit(e.target.value)}>
+                            <option value="tablet">tablets</option><option value="capsule">capsules</option><option value="piece">pieces</option><option value="sachet">sachets</option>
+                          </select>
+                        </div>
+                        {n >= 2 && (
+                          <p className="text-gray-800">
+                            Stock: <b>{all} {s.unit}</b> → <b>{all * n} {looseUnit}s</b>
+                            {s.unit_mrp ? <> · MRP: <b>{moneyExact(s.unit_mrp)}</b> a strip → <b>{moneyExact(Number(s.unit_mrp) / n)}</b> a {looseUnit}</> : null}
+                          </p>
+                        )}
+                        {splitErr && <p className="text-red-600">{splitErr}</p>}
+                        <div className="flex gap-2">
+                          <button disabled={splitBusy || n < 2} onClick={() => split(s)} className="btn-teal text-xs py-1.5 px-3 disabled:opacity-50">{splitBusy ? 'Re-counting…' : `Yes, count in ${looseUnit}s`}</button>
+                          <button onClick={() => setSplitting(null)} className="underline text-gray-600">Cancel</button>
+                        </div>
+                      </div>
+                    )
+                  })()}
                   {canManage && deleting !== s.id && (
                     <button onClick={() => { setDeleting(s.id); setDelNote(null) }} className="btn-outline text-xs py-1.5 px-3 text-red-600">Delete medicine</button>
                   )}
