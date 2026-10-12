@@ -1090,6 +1090,17 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
     }
   }
 
+  // 0254: the clinic's review QR — "Review SS-XXXXX". A walk-in rates their visit; only a
+  // number the clinic's records show visiting lately is asked for stars.
+  const reviewing = typed && /review|rating|रिव्यू|रेटिंग|समीक्षा/i.test(text) ? text.match(CLINIC_CODE)?.[0].toUpperCase() : undefined
+  if (reviewing) {
+    const r = await rpc('bot_review_start_json', { p_phone: phone, p_code: reviewing })
+    if (!r || !str(r.text)) return failed(vars)
+    return r.ok === true
+      ? { session: { state: 'idle', vars: carry(vars) }, replies: [{ ...RATE_LIST, body: str(r.text) } as Reply] }
+      : { session: { state: 'idle', vars: carry(vars) }, replies: [{ kind: 'buttons', body: str(r.text), buttons: [MENU_BUTTON] }] }
+  }
+
   // 0224: a clinic's code, wherever in the chat it arrives — its QR was scanned.
   const scanned = typed ? text.match(CLINIC_CODE)?.[0].toUpperCase() : undefined
   if (scanned) {

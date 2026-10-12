@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { clinicWaLink, qrDataUrl } from '../../lib/qr'
+import { clinicWaLink, reviewWaLink, qrDataUrl } from '../../lib/qr'
 import { checkinLink } from '../../lib/checkinApi'
 
 // Clinic → Patient QR code (0141). Patients scan it at reception or from the
@@ -11,6 +11,9 @@ export default function ClinicQrCard({ businessId, name, code }: { businessId: s
   const [wa, setWa] = useState<string | null>(null)
   const [img, setImg] = useState<string | null>(null)
   // 0251: the second code — it opens the register-yourself form, not WhatsApp.
+  // 0254: the third code — a walk-in patient rates their visit.
+  const [rev, setRev] = useState<string | null>(null)
+  useEffect(() => { if (wa && code) qrDataUrl(reviewWaLink(wa, code, name)).then(setRev) }, [wa, code, name])
   const [desk, setDesk] = useState<string | null>(null)
   useEffect(() => { if (code) qrDataUrl(checkinLink(code)).then(setDesk) }, [code])
 
@@ -60,6 +63,24 @@ export default function ClinicQrCard({ businessId, name, code }: { businessId: s
             <div className="flex gap-2 flex-wrap">
               {desk && <a href={desk} download={`${code}-reception-qr.png`} className="btn-teal text-sm px-4 py-2">Download QR image</a>}
               <a href={checkinLink(code)} target="_blank" rel="noreferrer" className="text-teal-700 underline self-center">Try it</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* 0254 */}
+      <div className="border-t pt-3">
+        <h3 className="font-bold text-navy-700">Review QR — walk-in patients rate their visit</h3>
+        <p className="text-sm text-gray-500">
+          Keep this one where patients leave — the billing counter or the pharmacy. They scan it, WhatsApp opens, and they give stars and a line in their own words.
+          It costs you nothing. Only a number your records show visiting in the last 30 days can rate, once — so every review is a real patient's.
+        </p>
+        <div className="flex gap-5 items-center flex-wrap mt-2">
+          {rev ? <img src={rev} alt={`Review QR code for ${name}`} className="w-40 h-40 border rounded-lg" /> : <div className="w-40 h-40 border rounded-lg bg-gray-50" />}
+          <div className="space-y-2 text-sm">
+            <div className="text-gray-500">The patient must write from the number they gave at reception.</div>
+            <div className="flex gap-2 flex-wrap">
+              {rev && <a href={rev} download={`${code}-review-qr.png`} className="btn-teal text-sm px-4 py-2">Download QR image</a>}
+              {wa && <a href={reviewWaLink(wa, code, name)} target="_blank" rel="noreferrer" className="text-teal-700 underline self-center">Try it</a>}
             </div>
           </div>
         </div>

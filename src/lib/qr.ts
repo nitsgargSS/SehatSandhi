@@ -7,5 +7,9 @@ import QRCode from 'qrcode'
 export const clinicWaLink = (waNumber: string, code: string, name: string): string =>
   `https://wa.me/${waNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${code} (${name}) — I want to book an appointment`)}`
 
+/** 0254: the review QR — WhatsApp opens with "Review <code>", and the bot asks a walk-in for their rating. */
+export const reviewWaLink = (waNumber: string, code: string, name: string): string =>
+  `https://wa.me/${waNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Review ${code} (${name}) — मैं अपनी विज़िट की रेटिंग देना चाहता/चाहती हूँ`)}`
+
 export const qrDataUrl = (text: string, width = 600): Promise<string> =>
   QRCode.toDataURL(text, { width, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#0b3d2c', light: '#ffffff' } })
