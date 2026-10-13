@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { Spinner } from '../../components/Loading'
 import {
   searchPatients, getPatientSummary, getVisits, getVitals, getAllergies,
-  getConditions, getMedications, addVisit, updateVisit, staffNames, setPatientAddress, addVital, addAllergy, addCondition,
+  getConditions, getMedications, addVisit, updateVisit, staffNames, setPatientAddress, addVital, addAllergy, addCondition, resolveCondition, HISTORY_SUGGESTIONS,
   addMedication, stopMedication, registerPatient, grantRecordingConsent, withdrawRecordingConsent,
   getSpecialityFields, getFindings, saveFindings, getPractitionerSpeciality,
   SpecialityField, Finding,
@@ -875,7 +875,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
           a patient with no history rather than a permission you do not have. */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {([
-          ['history', 'Visits', true], ['clinical', 'Allergies & medicines', true],
+          ['history', 'Visits', true], ['clinical', 'Medical history', true],
           ['vitals', 'Vitals', false], ['rx', 'Prescriptions', true],
           ['docs', 'Documents', true], ['ipd', 'Admissions', false], ['ot', 'Operations', true],
           ...(labOn ? [['lab', 'Lab tests', true] as const] : []),
@@ -2173,6 +2173,7 @@ function ClinicalPane({ memberId, businessId, allergies, conditions, meds, onCha
 }) {
   const [allergy, setAllergy] = useState({ substance: '', reaction: '', severity: '' })
   const [cond, setCond] = useState('')
+  const [condNote, setCondNote] = useState('')
   const [med, setMed] = useState({ drug_name: '', strength: '', dosage: '', duration: '' })
   const [err, setErr] = useState('')
 
@@ -2219,20 +2220,32 @@ function ClinicalPane({ memberId, businessId, allergies, conditions, meds, onCha
       </div>
 
       <div style={card}>
-        <div style={{ ...label, marginBottom: 9 }}>Ongoing conditions</div>
+        <div style={{ ...label, marginBottom: 4 }}>Medical history</div>
+        <div style={{ fontSize: 12.5, color: BIZ.muted, marginBottom: 9 }}>Long-term illnesses and past procedures — blood pressure, diabetes, a heart stent, an operation. Shown on top of the record at every visit.</div>
         {conditions.filter(c => c.status === 'active').map(c => (
-          <div key={c.id} style={{ fontSize: 13.5, color: BIZ.ink, marginBottom: 4 }}>{c.condition}</div>
+          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13.5, color: BIZ.ink, marginBottom: 5, alignItems: 'center' }}>
+            <span><strong>{c.condition}</strong>{c.notes ? <span style={{ color: BIZ.muted }}> · {c.notes}</span> : null}</span>
+            <button style={{ ...btn(), fontSize: 11.5, padding: '4px 9px' }} onClick={() => guard(() => resolveCondition(c.id))}>Remove</button>
+          </div>
         ))}
         {conditions.filter(c => c.status === 'active').length === 0 && (
-          <div style={{ fontSize: 13, color: BIZ.muted }}>None recorded.</div>
+          <div style={{ fontSize: 13, color: BIZ.muted }}>None recorded. That is not the same as none — ask.</div>
         )}
-        <div style={{ display: 'flex', gap: 7, marginTop: 11 }}>
-          <input style={{ ...input, flex: 1 }} placeholder="e.g. Type 2 Diabetes"
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 11 }}>
+          {HISTORY_SUGGESTIONS.filter(s => !conditions.some(c => c.status === 'active' && c.condition.toLowerCase() === s.toLowerCase())).map(s => (
+            <button key={s} type="button" onClick={() => setCond(s)}
+              style={{ fontFamily: 'inherit', fontSize: 12, padding: '4px 10px', borderRadius: 999, cursor: 'pointer', border: `1px solid ${cond === s ? BIZ.green : BIZ.inputBorder}`, background: cond === s ? '#f3faf6' : '#fff', color: BIZ.ink }}>{s}</button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
+          <input style={{ ...input, flex: '2 1 180px' }} placeholder="Illness or procedure — tap one above or type"
             value={cond} onChange={e => setCond(e.target.value)} />
+          <input style={{ ...input, flex: '2 1 180px' }} placeholder="Since when / details (optional) — e.g. 10 years, stent 2021"
+            value={condNote} onChange={e => setCondNote(e.target.value)} maxLength={200} />
           <button style={btn(true)} disabled={!cond.trim()}
             onClick={() => guard(async () => {
-              await addCondition(memberId, businessId, { condition: cond })
-              setCond('')
+              await addCondition(memberId, businessId, { condition: cond.trim(), notes: condNote.trim() || undefined })
+              setCond(''); setCondNote('')
             })}>Add</button>
         </div>
       </div>

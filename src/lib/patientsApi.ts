@@ -339,6 +339,24 @@ export async function addCondition(
   oops(error)
 }
 
+/**
+ * Medical history offered as one tap when it is first taken — the long-term
+ * illnesses and past procedures a doctor asks every new patient about. Anything
+ * else is typed. Kept as patient_conditions, with "since when" in the notes.
+ */
+export const HISTORY_SUGGESTIONS = [
+  'High blood pressure', 'Diabetes', 'Heart disease', 'Heart stent', 'Bypass surgery', 'Stroke', 'Asthma / COPD',
+  'Thyroid', 'Kidney disease', 'Epilepsy', 'Tuberculosis (past)', 'Cancer', 'Blood thinner use', 'Previous surgery', 'Pregnancy',
+]
+
+/** Take an entry off the history (entered by mistake, or no longer true). Kept on file as resolved. */
+export async function resolveCondition(id: string) {
+  const { data, error } = await supabase.from('patient_conditions')
+    .update({ status: 'resolved', resolved_date: new Date().toISOString().slice(0, 10) }).eq('id', id).select('id')
+  oops(error)
+  if (!data?.length) throw new Error('You cannot change this patient\'s history.')
+}
+
 export async function addMedication(
   memberId: string, businessId: string,
   m: { drug_name: string; strength?: string; dosage?: string; duration?: string; instructions?: string; visit_id?: string },
