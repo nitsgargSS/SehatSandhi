@@ -71,6 +71,7 @@ import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../compon
 import { headcountFor, marginalDoctorCost, describeHeadcount } from '../../../supabase/functions/_shared/headcount'
 import StaffCodeModal from './StaffCodeModal'
 import LabKindPicker from './LabKindPicker'
+import ReviewsCard from './ReviewsCard'
 import AddonsPanel from './AddonsPanel'
 import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from './NurseLinks'
 import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
@@ -1493,6 +1494,9 @@ export default function DoctorDashboard() {
                 </div>
               )}
             </div>
+
+            {/* What patients said — the stars and words on the public profile. */}
+            {doctor && <ReviewsCard businessId={doctor.id} />}
 
             <div className="card shadow-sm">
               <h3 className="font-bold text-navy-700 mb-4">{t('dashboardPage.recentAppointments')}</h3>
