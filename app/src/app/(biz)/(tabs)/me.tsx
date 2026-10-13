@@ -9,6 +9,7 @@ import NewPassword from '../../../ui/NewPassword'
 import { C } from '../../../ui/theme'
 
 // Who is signed in, which clinic (switch if more than one), log out.
+import ReviewsCard from '../../../ui/ReviewsCard'
 export default function Me() {
   const { s, pick, push } = useSession()
   const [pw, setPw] = useState<'closed' | 'open' | 'saved'>('closed')
@@ -27,6 +28,7 @@ export default function Me() {
           {s!.clinics.map(c => <Chip key={c.id} label={c.name} on={c.id === s!.clinic?.id} onPress={() => pick(c.id)} />)}
         </Card>
       )}
+      {!!s?.clinic?.id && <ReviewsCard biz={s.clinic.id} />}
       <Card>
         <Label>Alerts on this phone</Label>
         <Text style={st.meta}>{push.state === 'on' ? '✓ On — new patients in your queue and new appointments.'
