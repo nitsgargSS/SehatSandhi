@@ -1190,7 +1190,10 @@ export default function DoctorDashboard() {
   // This is the screen, not the database: the listing is not public while
   // pending anyway, and the API still answers a determined caller.
   const PAY_WINDOW_DAYS = 7
-  const owesFee = !!doctor && doctor.status === 'pending'
+  // The demo clinic for the app stores' reviewers (0206) is kept 'pending' on purpose so
+  // patients never see it; it owes nothing and must not lock while a review is under way.
+  const isReviewDemo = (doctor?.email ?? '').toLowerCase() === 'nits.garg+playreview@gmail.com'
+  const owesFee = !!doctor && doctor.status === 'pending' && !isReviewDemo
     && monthlyAppliesTo(pricingPlan, pricingVerticals.find(v => v.vertical === doctor.vertical))
   const payDaysLeft = doctor
     ? Math.ceil(PAY_WINDOW_DAYS - (Date.now() - new Date(doctor.created_at).getTime()) / 86_400_000)
