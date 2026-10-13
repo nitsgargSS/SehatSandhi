@@ -10,6 +10,7 @@ import { getPrescriptions, getDocuments, documentUrl, type Prescription, type Pa
 import { takePhoto, pickPhoto, pickFile, type Picked } from '../../../lib/patient'
 import { uploadPatientFile, DOC_KINDS } from '../../../lib/staffUpload'
 import BillCard from '../../../ui/BillCard'
+import InvoiceCard from '../../../ui/InvoiceCard'
 import SendSheet from '../../../ui/SendSheet'
 import { Btn, Card, Chip, Err, Field, Label, Note, toDmy } from '../../../ui/kit'
 import { C } from '../../../ui/theme'
@@ -48,6 +49,8 @@ export default function PatientScreen() {
   const [editing, setEditing] = useState(false)
   const [det, setDet] = useState({ name: '', age: '', gender: '' })
   const [detMsg, setDetMsg] = useState('')
+  // An invoice made below changes what is owed: the bill card reads the account again.
+  const [billTick, setBillTick] = useState(0)
   const loadDocs = () => { if (biz && member) getDocuments(member, biz).then(setDocs).catch(() => {}) }
   const choose = async (f: () => Promise<Picked | null>) => { setErr(''); try { const x = await f(); if (x) setPicked(x) } catch (e) { setErr((e as Error).message) } }
   const save = async () => {
@@ -134,7 +137,8 @@ export default function PatientScreen() {
           busy={busy} onPress={consultNow} />
       )}
       <Err msg={err} />
-      {!!biz && !!member && <BillCard biz={biz} member={member} recordedBy={s?.practitionerId ?? null} />}
+      {!!biz && !!member && <BillCard key={billTick} biz={biz} member={member} recordedBy={s?.practitionerId ?? null} />}
+      {!!biz && !!member && <InvoiceCard biz={biz} member={member} recordedBy={s?.practitionerId ?? null} onDone={() => setBillTick(n => n + 1)} />}
       {!s?.clinical ? <Note>Your role does not open the medical record.</Note> : (
         <>
           <Card>
