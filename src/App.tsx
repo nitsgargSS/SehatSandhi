@@ -50,6 +50,7 @@ const Contact = lazy(() => import('./pages/Contact'))
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'))
 const Terms = lazy(() => import('./pages/Terms'))
 const RefundPolicy = lazy(() => import('./pages/RefundPolicy'))
+const DeleteAccount = lazy(() => import('./pages/DeleteAccount'))
 // Patients on the website (sehatsandhi.com/my) — the app's patient side.
 const MyHome = lazy(() => import('./pages/my/MyHome'))
 const MyRequests = lazy(() => import('./pages/my/MyHome').then(m => ({ default: m.MyRequests })))
@@ -276,6 +277,8 @@ export default function App() {
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/refund" element={<RefundPolicy />} />
+          {/* The page the app stores ask for: how to have an account and its data deleted. */}
+          <Route path="/delete-account" element={<DeleteAccount />} />
           {/* Aliases. The catch-all below sends an unknown path to the homepage,
               so a reviewer typing the long form of one of these would land on a
               landing page and conclude the policy does not exist. */}
