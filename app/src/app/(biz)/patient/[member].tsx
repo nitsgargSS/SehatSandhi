@@ -11,6 +11,7 @@ import { takePhoto, pickPhoto, pickFile, type Picked } from '../../../lib/patien
 import { uploadPatientFile, DOC_KINDS } from '../../../lib/staffUpload'
 import BillCard from '../../../ui/BillCard'
 import InvoiceCard from '../../../ui/InvoiceCard'
+import HistoryCard from '../../../ui/HistoryCard'
 import SendSheet from '../../../ui/SendSheet'
 import { Btn, Card, Chip, Err, Field, Label, Note, toDmy } from '../../../ui/kit'
 import { C } from '../../../ui/theme'
@@ -141,6 +142,7 @@ export default function PatientScreen() {
       {!!biz && !!member && <InvoiceCard biz={biz} member={member} recordedBy={s?.practitionerId ?? null} onDone={() => setBillTick(n => n + 1)} />}
       {!s?.clinical ? <Note>Your role does not open the medical record.</Note> : (
         <>
+          <HistoryCard biz={biz} member={member} onChange={load} />
           <Card>
             <Label>Visits</Label>
             {visits.length === 0 ? <Note>{live ? 'No visits yet — start the consultation above.' : 'No visits recorded here.'}</Note> : visits.map(v => (
