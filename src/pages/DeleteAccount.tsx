@@ -23,7 +23,7 @@ export default function DeleteAccount() {
           <li>Open our <Link to="/contact?topic=privacy" className="text-teal-700 underline">Contact page</Link> and choose <b>“My personal data”</b>, <i>or</i> email <a href="mailto:contact@sehatsandhi.com?subject=Privacy%20request%20-%20delete%20my%20account" className="text-teal-700 underline">contact@sehatsandhi.com</a> with the subject “Privacy request – delete my account”.</li>
           <li>Tell us the <b>mobile number</b> (patients) or <b>email address</b> (clinic staff) you use to sign in.</li>
           <li>We confirm the request with you on that number or address, so nobody else can delete your account.</li>
-          <li>We delete the account and tell you when it is done — within <b>30 days</b>, usually much sooner.</li>
+          <li>We acknowledge your request within 24 hours, delete the account, and tell you when it is done — within <b>15 days</b>.</li>
         </ol>
 
         <h2 className={h}>What is deleted</h2>
@@ -36,8 +36,8 @@ export default function DeleteAccount() {
 
         <h2 className={h}>What is kept, and why</h2>
         <ul className="list-disc pl-6 text-gray-700 leading-relaxed space-y-1 mb-3">
-          <li><b>Your medical record at a clinic</b> — visits, prescriptions, reports and bills a clinic made for you — belongs to that clinic, which the law requires to keep medical records for a period (generally at least 3 years, longer for some records). We pass your request to the clinic; it decides what it may remove.</li>
-          <li><b>Bills, payments and tax invoices</b> are kept for as long as tax and accounting law requires (generally 8 years).</li>
+          <li><b>Your medical record at a clinic</b> — visits, prescriptions, reports and bills a clinic made for you — belongs to that clinic, which the law requires to keep medical records for a period. We pass your request to the clinic; it decides what it may remove and when.</li>
+          <li><b>Bills, payments and tax invoices</b> are kept for as long as tax and accounting law requires, then deleted or made anonymous.</li>
           <li><b>Reviews</b> you wrote stay, without your name or number attached.</li>
           <li>A record that you asked for deletion, and when, so we can show it was done.</li>
         </ul>
