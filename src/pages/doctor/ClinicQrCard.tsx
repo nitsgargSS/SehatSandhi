@@ -61,7 +61,8 @@ export default function ClinicQrCard({ businessId, name, code }: { businessId: s
           <div className="space-y-2 text-sm">
             <div className="text-gray-500">Opens a short form — not WhatsApp, no app needed.</div>
             <div className="flex gap-2 flex-wrap">
-              {desk && <a href={desk} download={`${code}-reception-qr.png`} className="btn-teal text-sm px-4 py-2">Download QR image</a>}
+              <a href={`/business/print/qr/${businessId}?kind=reception`} target="_blank" rel="noreferrer" className="btn-teal text-sm px-4 py-2">Print poster</a>
+              {desk && <a href={desk} download={`${code}-reception-qr.png`} className="btn-outline text-sm px-4 py-2">Download QR image</a>}
               <a href={checkinLink(code)} target="_blank" rel="noreferrer" className="text-teal-700 underline self-center">Try it</a>
             </div>
           </div>
@@ -79,7 +80,8 @@ export default function ClinicQrCard({ businessId, name, code }: { businessId: s
           <div className="space-y-2 text-sm">
             <div className="text-gray-500">The patient must write from the number they gave at reception.</div>
             <div className="flex gap-2 flex-wrap">
-              {rev && <a href={rev} download={`${code}-review-qr.png`} className="btn-teal text-sm px-4 py-2">Download QR image</a>}
+              <a href={`/business/print/qr/${businessId}?kind=review`} target="_blank" rel="noreferrer" className="btn-teal text-sm px-4 py-2">Print poster</a>
+              {rev && <a href={rev} download={`${code}-review-qr.png`} className="btn-outline text-sm px-4 py-2">Download QR image</a>}
               {wa && <a href={reviewWaLink(wa, code, name)} target="_blank" rel="noreferrer" className="text-teal-700 underline self-center">Try it</a>}
             </div>
           </div>
