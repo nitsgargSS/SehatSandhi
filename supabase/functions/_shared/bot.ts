@@ -1075,6 +1075,8 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
     if (text.length >= 3 && !KEYWORDS.has(text.toUpperCase()) && !/^(stop|start|\d+)$/i.test(text) && !CLINIC_CODE.test(text)) {
       const r = await rpc('sehat_rating_add_review', { p_phone: phone, p_text: text })
       if (r?.saved === true) return { session: { state: 'idle', vars: carry(vars) }, replies: [{ kind: 'buttons', body: str(r.text), buttons: [MENU_BUTTON] }] }
+      // 0256: abusive words are not published — they are asked to say it another way, and what they send next is the review.
+      if (r?.held === true && str(r.text)) return { session: { state: 'ask_review', vars: carry(vars) }, replies: [{ kind: 'text', body: str(r.text) }] }
     }
   }
 
