@@ -281,6 +281,8 @@ export default function AdminDashboard() {
   const [listTotal, setListTotal] = useState(0)
   const [listPage, setListPage] = useState(0)
   const [listStatus, setListStatus] = useState('')
+  // The "New this week" box: the list narrowed to businesses registered in the last 7 days.
+  const [newOnly, setNewOnly] = useState(false)
   const [listVertical, setListVertical] = useState('')
   const [listLoading, setListLoading] = useState(false)
   const [listNonce, setListNonce] = useState(0)
@@ -636,7 +638,7 @@ export default function AdminDashboard() {
   const pendingCamps = camps.filter(c => c.status === 'pending_approval')
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
   const newThisWeek = doctors.filter(d => new Date(d.created_at) >= oneWeekAgo).length
-  const filtered = listRows
+  const filtered = newOnly ? listRows.filter(r => new Date((r as { created_at?: string }).created_at ?? 0) >= oneWeekAgo) : listRows
 
   // Back to the first page whenever what is being asked for changes.
   useEffect(() => { setListPage(0) }, [tab, search, listStatus, listVertical])
@@ -896,15 +898,22 @@ export default function AdminDashboard() {
           {/* Stats — no fake revenue calculation */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {[
-              { label: t('adminDashboardPage.statTotalDoctors'), value: doctors.length, icon: <Users className="w-5 h-5 text-navy-600" /> },
-              { label: t('adminDashboardPage.statPendingApproval'), value: pending.length, icon: <Clock className="w-5 h-5 text-amber-500" />, warn: pending.length > 0 },
-              { label: t('adminDashboardPage.statActiveListed'), value: active.length, icon: <CheckCircle2 className="w-5 h-5 text-teal-500" /> },
-              { label: t('adminDashboardPage.statNewThisWeek'), value: newThisWeek, icon: <TrendingUp className="w-5 h-5 text-teal-500" /> },
+              // Each box opens the list it counts.
+              { label: t('adminDashboardPage.statTotalDoctors'), value: doctors.length, icon: <Users className="w-5 h-5 text-navy-600" />,
+                go: () => { setTab('all'); setListStatus(''); setNewOnly(false) }, on: tab === 'all' && !listStatus && !newOnly },
+              { label: t('adminDashboardPage.statPendingApproval'), value: pending.length, icon: <Clock className="w-5 h-5 text-amber-500" />, warn: pending.length > 0,
+                go: () => { setTab('pending'); setNewOnly(false) }, on: tab === 'pending' },
+              { label: t('adminDashboardPage.statActiveListed'), value: active.length, icon: <CheckCircle2 className="w-5 h-5 text-teal-500" />,
+                go: () => { setTab('all'); setListStatus('active'); setNewOnly(false) }, on: tab === 'all' && listStatus === 'active' && !newOnly },
+              { label: t('adminDashboardPage.statNewThisWeek'), value: newThisWeek, icon: <TrendingUp className="w-5 h-5 text-teal-500" />,
+                go: () => { setTab('all'); setListStatus(''); setNewOnly(true) }, on: tab === 'all' && newOnly },
             ].map(s => (
-              <div key={s.label} className={`card shadow-sm ${s.warn ? 'border-2 border-amber-300' : ''}`}>
+              <button key={s.label} type="button" onClick={s.go}
+                className={`card shadow-sm text-left transition hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${s.warn ? 'border-2 border-amber-300' : ''} ${s.on ? 'ring-2 ring-teal-500' : ''}`}>
                 <div className="flex items-center gap-2 mb-1">{s.icon}<span className="text-xs text-gray-500">{s.label}</span></div>
                 <p className="text-2xl font-bold text-navy-700">{s.value}</p>
-              </div>
+                <p className="text-[11px] text-teal-700 mt-1">View →</p>
+              </button>
             ))}
           </div>
 
@@ -922,6 +931,11 @@ export default function AdminDashboard() {
                 value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="flex flex-wrap items-center gap-2 mb-4 text-sm">
+              {tab === 'all' && newOnly && (
+                <button type="button" onClick={() => setNewOnly(false)} className="px-3 py-1.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200 text-xs font-semibold">
+                  Registered in the last 7 days ✕
+                </button>
+              )}
               {tab === 'all' && (
                 <select className="input-field w-auto text-sm" value={listStatus} onChange={e => setListStatus(e.target.value)}>
                   <option value="">All statuses</option>
