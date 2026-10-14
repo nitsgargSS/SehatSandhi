@@ -11,7 +11,7 @@ Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @Ni
   "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
   "action": "standing confidently facing the camera, warm smile, brings palms together in a gentle namaste, then lowers his hands",
   "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
-  "dialogue": "नमस्ते, मैं नितिन गर्ग, Sehatsandhi का founder। डॉक्टर साहब, अब आपका पूरा clinic एक platform पर।",
+  "dialogue": "नमस्ते, मैं नितिन गर्ग, Sehatsandhi का founder। डॉक्टर sir, अब आपका पूरा clinic एक platform पर।",
   "duration_seconds": 8,
   "dialogue_timing": "calm, natural pace; finishes within 7 seconds with a short pause at the end",
   "audio": "only his voice, clear and close; very soft background music; no other voices",
@@ -206,5 +206,64 @@ Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @Ni
     "no extra or warped fingers",
     "no objects or phone in hands",
     "no exaggerated mouth movement"
+  ]
+}
+
+
+===== ON-SCREEN TEXT — add in your editor (CapCut) over each scene =====
+Scene 1: Nitin Garg · Founder, Sehatsandhi   (name strip, bottom-left, 1–5 s)
+Scene 2: TOKEN · OPD · FEES   (top, 2–7 s)
+Scene 3: QR SELF-REGISTRATION   (top, 2–7 s)
+Scene 4: MEDICAL HISTORY · DIGITAL Rx   (top, 2–7 s)
+Scene 5: INVOICES · GST · DAY'S ACCOUNTS   (top, 2–7 s)
+Scene 6: Rx · BILLS · REPORTS ON WHATSAPP   (top, 2–7 s)
+Scene 7: NEW PATIENTS · REAL REVIEWS   (top, 2–7 s)
+Scene 8: sehatsandhi.com  ·  WhatsApp 7015399355   (bottom strip, whole scene)
+Style: white or cream bold sans-serif (Poppins Bold) on a semi-transparent green (#0F6B4A) bar; Hindi subtitles of his words along the bottom (Noto Sans Devanagari).
+
+===== OPTIONAL: text made by Flow itself — two title cards, no person =====
+Place card 1 after scene 1 and card 2 before scene 8. Text to Video, no @NitinAvatar. Check spelling; if wrong, regenerate or use the editor.
+
+{
+  "scene": "text card 1",
+  "continuity": "new clip — no person, no reference image",
+  "setting": "soft cream (#FAF6EE) studio backdrop with gentle green light gradients and slow out-of-focus light particles",
+  "subject": "text only, no people, no hands, no faces",
+  "text_on_screen": {
+    "main": "YOUR CLINIC",
+    "sub": "ON ONE PLATFORM",
+    "style": "large bold modern sans-serif, deep green (#0F6B4A) main line, navy smaller line below, centred, perfectly spelled, crisp and straight"
+  },
+  "action": "words fade in with a soft upward slide, then hold fully readable for the last 4 seconds; a gentle light sweep passes across",
+  "camera_style": "vertical 9:16, slow cinematic drift",
+  "duration_seconds": 8,
+  "audio": "soft uplifting piano note and a light whoosh, no voice",
+  "negative_constraints": [
+    "no other text",
+    "no logos or symbols",
+    "no misspelled or warped letters",
+    "no people"
+  ]
+}
+
+{
+  "scene": "text card 2",
+  "continuity": "new clip — no person, no reference image",
+  "setting": "soft cream (#FAF6EE) studio backdrop with gentle green light gradients and slow out-of-focus light particles",
+  "subject": "text only, no people, no hands, no faces",
+  "text_on_screen": {
+    "main": "JOIN TODAY",
+    "sub": "sehatsandhi.com",
+    "style": "large bold modern sans-serif, deep green (#0F6B4A) main line, navy smaller line below, centred, perfectly spelled, crisp and straight"
+  },
+  "action": "words fade in with a soft upward slide, then hold fully readable for the last 4 seconds; a gentle light sweep passes across",
+  "camera_style": "vertical 9:16, slow cinematic drift",
+  "duration_seconds": 8,
+  "audio": "soft uplifting piano note and a light whoosh, no voice",
+  "negative_constraints": [
+    "no other text",
+    "no logos or symbols",
+    "no misspelled or warped letters",
+    "no people"
   ]
 }
