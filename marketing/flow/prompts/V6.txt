@@ -1,0 +1,52 @@
+V6 — For insurance advisors
+For: Licensed insurance advisors
+
+Make the clips in this order. For each one, copy ONLY the text between the ===== lines.
+
+CLIP 1 of 5 — founder speaking
+In Flow: Ingredients to Video with your photo
+===== COPY FROM HERE =====
+Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he takes two slow steps towards the camera, stops, smiles, then speaks with one calm open-palm gesture at chest height. Scene: a calm premium office with a wooden desk and warm lamps, completely blurred, empty of people. Camera: slow, smooth push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): "नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। बीमा सलाहकारों के लिए।" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.
+===== COPY UNTIL HERE =====
+He should say: नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। बीमा सलाहकारों के लिए।
+(Meaning: Hello, I'm Nitin Garg, founder of Sehatsandhi. For insurance advisors.)
+If the Hindi comes out wrong, replace the line inside quotes in the prompt with: Namaste, main Nitin Garg, Sehatsandhi ka founder. Beema salaahkaaron ke liye.
+
+
+CLIP 2 of 5 — text card (no person)
+In Flow: Text to Video (new clip, no ingredient)
+===== COPY FROM HERE =====
+A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: "REAL REQUESTS". Below it, smaller dark navy letters spell exactly: "From families near you". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.
+===== COPY UNTIL HERE =====
+Check the words read exactly: REAL REQUESTS / From families near you
+
+
+CLIP 3 of 5 — founder speaking
+In Flow: Extend the previous founder clip (or Ingredients to Video with your photo)
+===== COPY FROM HERE =====
+Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he opens his right palm towards the camera. Scene: a calm premium office with a wooden desk and warm lamps, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): "परिवार कॉल-बैक मांगते हैं, नंबर सिर्फ़ उसी सलाहकार को जो स्वीकार करे।" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.
+===== COPY UNTIL HERE =====
+He should say: परिवार कॉल-बैक मांगते हैं, नंबर सिर्फ़ उसी सलाहकार को जो स्वीकार करे।
+(Meaning: Families ask for a call-back; only the advisor who accepts gets the number.)
+If the Hindi comes out wrong, replace the line inside quotes in the prompt with: Parivaar call-back maangte hain, number sirf usi salaahkaar ko jo sweekar kare.
+
+
+CLIP 4 of 5 — text card (no person)
+In Flow: Text to Video (new clip, no ingredient)
+===== COPY FROM HERE =====
+A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: "FREE LISTING". Below it, smaller dark navy letters spell exactly: "sehatsandhi.com". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.
+===== COPY UNTIL HERE =====
+Check the words read exactly: FREE LISTING / sehatsandhi.com
+
+
+CLIP 5 of 5 — founder speaking
+In Flow: Extend the previous founder clip (or Ingredients to Video with your photo)
+===== COPY FROM HERE =====
+Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he gives a small confident nod with a smile. Scene: a calm premium office with a wooden desk and warm lamps, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): "लिस्टिंग मुफ़्त है। आज ही जुड़िए।" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.
+===== COPY UNTIL HERE =====
+He should say: लिस्टिंग मुफ़्त है। आज ही जुड़िए।
+(Meaning: Listing is free. Join today.)
+If the Hindi comes out wrong, replace the line inside quotes in the prompt with: Listing muft hai. Aaj hi judiye.
+
+
+Then in the editor: put the clips in order 1-2-3-4-5, trim clips 2 and 4 to 4-5 seconds, add your name strip on clip 1, Hindi subtitles, and the end card.
