@@ -1,57 +1,60 @@
-# Sehatsandhi launch films in Google Flow
+# Sehatsandhi launch films in Google Flow — version 2
 
-Seven films, each four 8-second clips (32 s) plus a 4–6 s end card = about 36–38 s.
+Seven films. Each is five clips: **you speaking → a text card → you → a text card → you**, then the end card.
+Three 8 s founder clips + two text cards trimmed to 4–5 s + a 4 s end card ≈ **36–38 seconds**.
 
-| Film | For | File id |
+| Film | For | id |
 |---|---|---|
-| Sehatsandhi — aapki sehat, ek jagah | Everyone (launch film, health records) | V1 |
-| For doctors & clinics | Doctors, clinics, hospitals | V2 |
-| For pharmacies | Chemists | V3 |
-| For diagnostic labs | Labs, scan centres | V4 |
-| Ambulance | Patients and ambulance services | V5 |
-| For insurance advisors | Advisors | V6 |
-| The app for patients | Patients and families | V7 |
+| Aapki sehat, ek jagah (launch) | Everyone — health records in one place | V1 |
+| Doctors & clinics | Doctors, clinics, hospitals | V2 |
+| Pharmacies | Chemists | V3 |
+| Diagnostic labs | Labs, scan centres | V4 |
+| Ambulance | Patients, ambulance services | V5 |
+| Insurance advisors | Advisors | V6 |
+| The patient app | Patients, families | V7 |
 
-Everything you paste is in `sehatsandhi-flow-videos.json`: for each clip, the full **prompt**, the **Hindi line** he speaks, its meaning, and the **text to add in the editor**.
+All prompts are in `sehatsandhi-flow-videos.json`.
 
-## Before you start
+## Why version 2 should look much better
 
-1. **Your photo.** One sharp, front-facing photo, good light, plain background, shoulders visible, no sunglasses. A second photo at a slight angle helps.
-2. **Flow settings.** Open labs.google/flow → New project. Model **Veo 3 – Quality** (the faster models don't do speech/lip-sync well). Aspect ratio **16:9**. Outputs per prompt: **2** (pick the better one).
+Most bad AI video comes from asking for too much at once. Each founder clip now asks for **one thing**:
+- He **stands** (only clip 1 has two slow steps), waist-up, facing the camera.
+- **One** small hand gesture — no finger counting, no phone in hand (hands and objects are where AI fails most).
+- **Empty, blurred backgrounds** — no other people.
+- **Static camera** with a slow push-in.
+- **Short Hindi lines** (about 6 seconds), so he never rushes or mumbles.
 
-## Making one film
+## Text inside the video
 
-**Clip 1**
-1. Choose **Ingredients to Video**, add your photo as the ingredient.
-2. Paste clip 1's `prompt`. Generate.
-3. Pick the take where the face looks most like you and the lips match the words. Regenerate if not — expect 2–4 tries.
+The main points now appear **inside the video**, in their own title-card clips: big green English words on a cream background, e.g. **"TOKEN · OPD · BILLS"** with a small line under it. Veo writes short English words cleanly when nothing else is in the frame; it still struggles with text next to a person and with Hindi script, so we don't ask for that.
 
-**Clips 2, 3, 4**
-1. Hover the clip you chose → **Extend** (or add it to the Scene builder and click **+ → Extend**).
-2. Paste the next clip's `prompt`. Extending carries his look, the suit, the light and the voice forward, which separate generations do not.
-3. If an extension drifts (face changes, voice changes), go back and extend from the last good clip again.
+Always read the words in the generated card. If a letter is wrong, regenerate once; if still wrong, keep the clip and type the words over it in the editor.
 
-**Export** the scene from Flow at 1080p (or download each clip).
+## Settings
 
-## Finishing in an editor (CapCut, Premiere, DaVinci)
+labs.google/flow → New project → **Veo 3 – Quality**, **16:9**, **2 outputs** per prompt.
 
-Do the typography here, not in Flow — AI video garbles text, especially Hindi.
+## Making one film (e.g. V1)
 
-- **Lower third** in clip 1: "Nitin Garg · Founder, Sehatsandhi" — white Poppins SemiBold on a green (#0F6B4A) bar, bottom-left, in at 1 s, out at 5 s.
-- **Feature titles** (the `title` lines): one per clip, top-left or beside him in the empty third of the frame; cream (#FAF6EE) or white, 2–3 s, simple fade or slide. One message per screen.
-- **Hindi subtitles** of his words along the bottom — many people watch muted. Noto Sans Devanagari SemiBold, white with a soft shadow.
-- **Real app screens.** Flow cannot show the real app. Where a clip mentions the app, cut away for 2–3 s to a screen recording of the actual app (or a phone mock-up of it), then back to you. This also keeps the ads truthful.
-- **End card** (make once, reuse): logo on cream, "स्वास्थ्य की नई साझेदारी", sehatsandhi.com. Add the **Google Play badge only after the app is live** on the Play Store.
-- **Music:** keep one soft track across the whole film at −22 dB under his voice; Flow's own music changes between clips, so lower or mute it.
-- **Colour:** apply one grade to all clips so they match.
-- Cuts: 0.2–0.3 s cross-dissolve between clips, or hard cuts on his gestures.
+1. **Clip 1 (you):** *Ingredients to Video* → add your photo → paste clip 1's `prompt` → Generate. Pick the take most like you with good lip-sync. Expect 2–3 tries.
+2. **Clip 3 and clip 5 (you):** hover clip 1 → **Extend** → paste the next founder prompt. Extend keeps your face, suit, light and voice consistent. If it drifts, extend from the last good clip again, or start a new *Ingredients to Video* with your photo.
+3. **Clip 2 and clip 4 (text cards):** *Text to Video* (new clip, no photo) → paste the card's `prompt`. Check spelling.
+4. Download all five clips.
 
-## Things to know
+**Your photo:** sharp, front-facing, good daylight, plain background, shoulders visible, no glasses or cap. This matters more than any prompt.
 
-- **Voice.** Flow invents a voice; it will not be your real voice, and it can change between generations even with Extend. If it bothers you, record the Hindi lines yourself on your phone in a quiet room and lay them over the clips in the editor (mute Flow's audio). That also makes every word exactly right.
-- **Hindi speech.** Veo speaks Hindi, but sometimes slurs or mispronounces. The `dialogue_roman` line is the same text in Latin letters — if the Devanagari version comes out badly, replace the quoted line in the prompt with the roman one and try again.
-- **8 seconds is short.** Each line is written to fit about 7 seconds. If he rushes, remove a few words rather than accept fast speech.
-- **Your face.** Google may refuse some photos of real people, or the likeness may drift. Better light and a clearer photo help most. If a clip refuses, remove words like "exact face" from the prompt and try again.
-- **Label it as AI.** These videos show an AI-generated version of you. When posting, mark them as AI-generated (YouTube and Instagram have a toggle; India's IT rules expect synthetic media to be labelled), and keep a small "AI-generated" note in a corner. It protects the brand's credibility in healthcare.
-- **Claims.** The wording matches what Sehatsandhi does today. Don't add claims like "best", "No. 1", "guaranteed" or prices in the editor.
-- **Ambulance film:** it tells people to call 108 first — keep that line.
+## In the editor (CapCut / Premiere / DaVinci)
+
+- Order: 1 → 2 → 3 → 4 → 5 → end card. Trim text cards to 4–5 s.
+- **Name strip** on clip 1: "Nitin Garg · Founder, Sehatsandhi", white on green (#0F6B4A), bottom-left, 1–5 s.
+- **Hindi subtitles** of his lines (in the JSON) along the bottom — many people watch muted. Noto Sans Devanagari SemiBold.
+- **End card** (make once): logo on cream (#FAF6EE), "स्वास्थ्य की नई साझेदारी", sehatsandhi.com. Google Play badge **only after the app is live**.
+- One music track for the whole film at −22 dB; lower Flow's own music. One colour grade across all clips.
+- Optional: cut away 2 s to a real screen recording of the app when he mentions it.
+
+## Still worth knowing
+
+- **Voice:** Flow's voice is not yours and can change between clips. For a perfect result, record the lines yourself and place them over the clips.
+- **Hindi pronunciation:** if a line comes out slurred, replace the Hindi in the prompt with the `dialogue_roman` version and try again.
+- **Label as AI-generated** when you post (YouTube/Instagram toggle) — important for a healthcare brand.
+- Keep the wording as written: no "best", "No. 1", "guaranteed" or prices. Keep "call 108 first" in the ambulance film.

@@ -1,91 +1,82 @@
 {
-  "project": "Sehatsandhi launch films — Google Flow (Veo)",
-  "read_first": "README.md in this folder: how to make each clip, keep his look and voice consistent, and finish in an editor.",
-  "brand": {
-    "name": "Sehatsandhi",
-    "tagline_hi": "स्वास्थ्य की नई साझेदारी",
-    "website": "sehatsandhi.com",
-    "colours": {
-      "primary_green": "#0F6B4A",
-      "deep_navy": "#12382B",
-      "cream": "#FAF6EE",
-      "accent_red_tie": "#9E1B22"
-    },
-    "fonts_for_editor": {
-      "english": "Poppins SemiBold / Bold",
-      "hindi": "Noto Sans Devanagari SemiBold"
-    }
-  },
-  "character_bible": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent.",
-  "visual_style": "Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third.",
-  "audio_style": "Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices.",
-  "negative": "No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
+  "project": "Sehatsandhi launch films — Google Flow (Veo 3), version 2",
+  "what_changed": [
+    "Founder clips: he stands still (only clip 1 has two steps), one small gesture per clip, waist-up shot, no phone or finger counting, empty backgrounds — the usual causes of bad hands, faces and flicker.",
+    "Shorter Hindi lines (fit in about 6 seconds) so he never rushes.",
+    "Text now inside the video, in separate title-card clips with no person: short English words, which Veo renders far more reliably than text beside a person or Hindi script.",
+    "Structured prompts: Subject → Action → Scene → Camera → Lighting → Dialogue → Audio → Avoid."
+  ],
   "settings_in_flow": {
-    "model": "Veo 3 (Quality) — needed for speech and lip-sync",
-    "aspect_ratio": "16:9 for YouTube/website; make a 9:16 set separately for Reels/Shorts",
-    "outputs_per_prompt": 2,
-    "clip_length": "8 seconds"
+    "model": "Veo 3 – Quality",
+    "aspect_ratio": "16:9 (make a 9:16 set separately for Reels)",
+    "outputs_per_prompt": 2
   },
-  "shared_end_card": {
-    "how": "Make once in the editor, 4–6 seconds, reuse at the end of every film",
-    "content": [
-      "Sehatsandhi logo (from the website) on cream background",
-      "स्वास्थ्य की नई साझेदारी",
-      "sehatsandhi.com",
-      "Google Play badge — ONLY after the app is live on Play"
-    ]
+  "brand": {
+    "green": "#0F6B4A",
+    "navy": "#12382B",
+    "cream": "#FAF6EE",
+    "website": "sehatsandhi.com",
+    "tagline_hi": "स्वास्थ्य की नई साझेदारी"
   },
+  "shared_end_card": "Make once in the editor: logo on cream, स्वास्थ्य की नई साझेदारी, sehatsandhi.com; Google Play badge only after the app is live.",
   "videos": [
     {
       "id": "V1",
-      "title": "Sehatsandhi — aapki sehat, ek jagah (brand + health records)",
-      "for": "Everyone — the launch film",
+      "title": "Aapki sehat, ek jagah (launch film)",
+      "for": "Everyone",
+      "order": "1 founder → 2 text card → 3 founder → 4 text card → 5 founder → end card",
       "clips": [
         {
           "clip": 1,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "New clip — Ingredients to Video with your photo",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks slowly towards the camera, stops, smiles, places his right hand lightly on his chest as he says his name, then opens both palms towards the viewer. Setting: a modern, bright Indian healthtech office with glass walls, green plants and soft warm lights, completely blurred behind him. Camera: slow push-in from medium shot to medium close-up, eye level. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। आज मैं आपको बताने आया हूँ, आपकी सेहत की पूरी कहानी — एक जगह।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। आज मैं आपको बताने आया हूँ, आपकी सेहत की पूरी कहानी — एक जगह।",
-          "dialogue_roman": "Namaste! Main Nitin Garg, Sehatsandhi ka founder. Aaj main aapko batane aaya hoon, aapki sehat ki poori kahani — ek jagah.",
-          "dialogue_english_meaning": "Hello, I'm Nitin Garg, founder of Sehatsandhi. Today: your whole health story, in one place.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Ingredients to Video with your photo",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he takes two slow steps towards the camera, stops, smiles, then speaks with one calm open-palm gesture at chest height. Scene: a modern bright office with glass walls and green plants, completely blurred, empty of people. Camera: slow, smooth push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। आपकी सेहत की पूरी कहानी, अब एक जगह।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। आपकी सेहत की पूरी कहानी, अब एक जगह।",
+          "dialogue_roman": "Namaste, main Nitin Garg, Sehatsandhi ka founder. Aapki sehat ki poori kahani, ab ek jagah.",
+          "meaning_english": "Hello, I'm Nitin Garg, founder of Sehatsandhi. Your whole health story, now in one place.",
+          "add_in_editor": {
             "lower_third": "Nitin Garg · Founder, Sehatsandhi"
           }
         },
         {
           "clip": 2,
-          "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks beside the glass wall, counting on his fingers — one, two, three — then sweeps his hand across in a wide arc as if laying papers on a table. Setting: a modern, bright Indian healthtech office with glass walls, green plants and soft warm lights, completely blurred behind him. Camera: tracking shot moving sideways with him, medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"पर्चे, रिपोर्ट, बिल, जांच — सब अलग-अलग काग़ज़ों में खो जाते हैं।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "पर्चे, रिपोर्ट, बिल, जांच — सब अलग-अलग काग़ज़ों में खो जाते हैं।",
-          "dialogue_roman": "Parche, report, bill, jaanch — sab alag-alag kaagzon mein kho jaate hain.",
-          "dialogue_english_meaning": "Prescriptions, reports, bills, tests — all lost in separate papers.",
-          "on_screen_text_add_in_editor": {
-            "title": "Parche · Reports · Bills"
-          }
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"ALL YOUR HEALTH RECORDS\". Below it, smaller dark navy letters spell exactly: \"In one place\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "ALL YOUR HEALTH RECORDS / In one place",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
         },
         {
           "clip": 3,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He turns to the camera and holds up his phone at chest height, screen facing him, then turns it gently towards the viewer with a reassuring nod. Setting: a warm Indian living room in morning light, an elderly couple on a sofa far behind, blurred. Camera: slow arc around him from left to front, medium close-up. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"सेहतसंधि में आपकी और आपके परिवार की हर जांच, हर पर्चा — फ़ोन में, हमेशा।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "सेहतसंधि में आपकी और आपके परिवार की हर जांच, हर पर्चा — फ़ोन में, हमेशा।",
-          "dialogue_roman": "Sehatsandhi mein aapki aur aapke parivaar ki har jaanch, har parcha — phone mein, hamesha.",
-          "dialogue_english_meaning": "In Sehatsandhi, every test and prescription for you and your family — on your phone, always.",
-          "on_screen_text_add_in_editor": {
-            "title": "Poore parivaar ka health record — ek app mein"
-          }
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he gently opens his right palm towards the camera. Scene: a modern bright office with glass walls and green plants, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"पर्चे, रिपोर्ट और बिल — पूरे परिवार के, आपके फ़ोन में।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "पर्चे, रिपोर्ट और बिल — पूरे परिवार के, आपके फ़ोन में।",
+          "dialogue_roman": "Parche, report aur bill — poore parivaar ke, aapke phone mein.",
+          "meaning_english": "Prescriptions, reports and bills — for the whole family, on your phone."
         },
         {
           "clip": 4,
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"PRESCRIPTIONS · REPORTS · BILLS\". Below it, smaller dark navy letters spell exactly: \"For your whole family\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "PRESCRIPTIONS · REPORTS · BILLS / For your whole family",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
+        },
+        {
+          "clip": 5,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He gestures towards the blurred couple behind him with an open hand, then brings both hands together in a gentle namaste. Setting: a warm Indian living room in morning light, an elderly couple on a sofa far behind, blurred. Camera: static medium shot, very slow push-in. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"किसी भी डॉक्टर को, कभी भी, कहीं भी दिखाइए। सेहतसंधि — स्वास्थ्य की नई साझेदारी।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "किसी भी डॉक्टर को, कभी भी, कहीं भी दिखाइए। सेहतसंधि — स्वास्थ्य की नई साझेदारी।",
-          "dialogue_roman": "Kisi bhi doctor ko, kabhi bhi, kahin bhi dikhaiye. Sehatsandhi — swasthya ki nayi saajhedari.",
-          "dialogue_english_meaning": "Show it to any doctor, any time, anywhere. Sehatsandhi — a new partnership in health.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he brings his palms together in a gentle namaste. Scene: a modern bright office with glass walls and green plants, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"जब चाहें, किसी भी डॉक्टर को दिखाइए। सेहतसंधि।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "जब चाहें, किसी भी डॉक्टर को दिखाइए। सेहतसंधि।",
+          "dialogue_roman": "Jab chahein, kisi bhi doctor ko dikhaiye. Sehatsandhi.",
+          "meaning_english": "Show any doctor, whenever you want. Sehatsandhi.",
+          "add_in_editor": {
             "end_card": "SHARED"
           }
         }
@@ -95,52 +86,59 @@
       "id": "V2",
       "title": "For doctors & clinics",
       "for": "Doctors, clinics, hospitals",
+      "order": "1 founder → 2 text card → 3 founder → 4 text card → 5 founder → end card",
       "clips": [
         {
           "clip": 1,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "New clip — Ingredients to Video with your photo",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks slowly towards the camera, stops, smiles, places his right hand lightly on his chest as he says his name, then opens both palms towards the viewer. Setting: a clean, modern Indian clinic reception and corridor, a doctor in a white coat and a receptionist far behind, fully blurred. Camera: slow push-in, eye level. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। डॉक्टर साहब, यह आपके क्लिनिक के लिए है।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। डॉक्टर साहब, यह आपके क्लिनिक के लिए है।",
-          "dialogue_roman": "Namaste! Main Nitin Garg, Sehatsandhi ka founder. Doctor saahab, yeh aapke clinic ke liye hai.",
-          "dialogue_english_meaning": "Hello, I'm Nitin Garg… Doctors, this is for your clinic.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Ingredients to Video with your photo",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he takes two slow steps towards the camera, stops, smiles, then speaks with one calm open-palm gesture at chest height. Scene: a clean modern clinic corridor in soft white and green tones, completely blurred, empty of people. Camera: slow, smooth push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। डॉक्टर साहब, यह आपके क्लिनिक के लिए है।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। डॉक्टर साहब, यह आपके क्लिनिक के लिए है।",
+          "dialogue_roman": "Namaste, main Nitin Garg, Sehatsandhi ka founder. Doctor saahab, yeh aapke clinic ke liye hai.",
+          "meaning_english": "Hello, I'm Nitin Garg, founder of Sehatsandhi. Doctors, this is for your clinic.",
+          "add_in_editor": {
             "lower_third": "Nitin Garg · Founder, Sehatsandhi"
           }
         },
         {
           "clip": 2,
-          "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks down the corridor and points two fingers towards the blurred reception desk, then makes a small 'one-by-one' stepping gesture with his hand. Setting: a clean, modern Indian clinic reception and corridor, a doctor in a white coat and a receptionist far behind, fully blurred. Camera: walking tracking shot in front of him, medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"टोकन, ओपीडी की लाइन, फ़ीस और बिल — सब फ़ोन से, रिसेप्शन पर एक क्लिक में।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "टोकन, ओपीडी की लाइन, फ़ीस और बिल — सब फ़ोन से, रिसेप्शन पर एक क्लिक में।",
-          "dialogue_roman": "Token, OPD ki line, fees aur bill — sab phone se, reception par ek click mein.",
-          "dialogue_english_meaning": "Tokens, the OPD queue, fees and bills — all from the phone, one click at reception.",
-          "on_screen_text_add_in_editor": {
-            "title": "Token · OPD · Fees · Bills"
-          }
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"TOKEN · OPD · BILLS\". Below it, smaller dark navy letters spell exactly: \"Run your clinic from one screen\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "TOKEN · OPD · BILLS / Run your clinic from one screen",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
         },
         {
           "clip": 3,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He stops, mimes writing in the air with his right hand, then taps his left palm as if sending a message. Setting: a clean, modern Indian clinic reception and corridor, a doctor in a white coat and a receptionist far behind, fully blurred. Camera: slow dolly-in to medium close-up. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"पर्चा लिखिए, मरीज़ की पूरी हिस्ट्री देखिए, और रिपोर्ट सीधे WhatsApp पर भेजिए।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "पर्चा लिखिए, मरीज़ की पूरी हिस्ट्री देखिए, और रिपोर्ट सीधे WhatsApp पर भेजिए।",
-          "dialogue_roman": "Parcha likhiye, mareez ki poori history dekhiye, aur report seedhe WhatsApp par bhejiye.",
-          "dialogue_english_meaning": "Write prescriptions, see the patient's full history, send reports straight to WhatsApp.",
-          "on_screen_text_add_in_editor": {
-            "title": "Prescription · Medical history · WhatsApp"
-          }
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he moves his open hand slowly from left to right. Scene: a clean modern clinic corridor in soft white and green tones, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"टोकन, ओपीडी, पर्चा और बिल — सब एक जगह, फ़ोन से भी।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "टोकन, ओपीडी, पर्चा और बिल — सब एक जगह, फ़ोन से भी।",
+          "dialogue_roman": "Token, OPD, parcha aur bill — sab ek jagah, phone se bhi.",
+          "meaning_english": "Tokens, OPD, prescriptions and bills — all in one place, even from the phone."
         },
         {
           "clip": 4,
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"NEW PATIENTS NEAR YOU\". Below it, smaller dark navy letters spell exactly: \"sehatsandhi.com\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "NEW PATIENTS NEAR YOU / sehatsandhi.com",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
+        },
+        {
+          "clip": 5,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He spreads both hands outward and upward as if showing a growing map, then finishes with a confident nod and a smile. Setting: a clean, modern Indian clinic reception and corridor, a doctor in a white coat and a receptionist far behind, fully blurred. Camera: slow arc to front, medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"और नए मरीज़ आपको अपने एरिया में ढूंढ पाएंगे। आज ही जुड़िए — sehatsandhi.com\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "और नए मरीज़ आपको अपने एरिया में ढूंढ पाएंगे। आज ही जुड़िए — sehatsandhi.com",
-          "dialogue_roman": "Aur naye mareez aapko apne area mein dhoondh paayenge. Aaj hi judiye — sehatsandhi.com",
-          "dialogue_english_meaning": "And new patients will find you in your area. Join today — sehatsandhi.com",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he gives a small confident nod with a slight smile. Scene: a clean modern clinic corridor in soft white and green tones, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"और आपके एरिया के नए मरीज़ आपको ढूंढ पाएंगे।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "और आपके एरिया के नए मरीज़ आपको ढूंढ पाएंगे।",
+          "dialogue_roman": "Aur aapke area ke naye mareez aapko dhoondh paayenge.",
+          "meaning_english": "And new patients in your area will find you.",
+          "add_in_editor": {
             "end_card": "SHARED"
           }
         }
@@ -149,53 +147,60 @@
     {
       "id": "V3",
       "title": "For pharmacies",
-      "for": "Chemists and pharmacies",
+      "for": "Chemists",
+      "order": "1 founder → 2 text card → 3 founder → 4 text card → 5 founder → end card",
       "clips": [
         {
           "clip": 1,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "New clip — Ingredients to Video with your photo",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks slowly towards the camera, stops, smiles, places his right hand lightly on his chest as he says his name, then opens both palms towards the viewer. Setting: a well-lit modern pharmacy with neat shelves of medicine boxes, blurred behind him. Camera: slow push-in, eye level. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। फ़ार्मेसी वालों के लिए एक ख़ास बात।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। फ़ार्मेसी वालों के लिए एक ख़ास बात।",
-          "dialogue_roman": "Namaste! Main Nitin Garg, Sehatsandhi ka founder. Pharmacy waalon ke liye ek khaas baat.",
-          "dialogue_english_meaning": "Hello, I'm Nitin Garg… something special for pharmacies.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Ingredients to Video with your photo",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he takes two slow steps towards the camera, stops, smiles, then speaks with one calm open-palm gesture at chest height. Scene: a modern pharmacy with neat shelves, completely blurred, empty of people. Camera: slow, smooth push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। फ़ार्मेसी वालों के लिए एक ख़ास बात।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। फ़ार्मेसी वालों के लिए एक ख़ास बात।",
+          "dialogue_roman": "Namaste, main Nitin Garg, Sehatsandhi ka founder. Pharmacy waalon ke liye ek khaas baat.",
+          "meaning_english": "Hello, I'm Nitin Garg, founder of Sehatsandhi. Something special for pharmacies.",
+          "add_in_editor": {
             "lower_third": "Nitin Garg · Founder, Sehatsandhi"
           }
         },
         {
           "clip": 2,
-          "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks along the shelves and holds up a phone as if showing a photo, then lowers it with a small 'here it is' gesture. Setting: a well-lit modern pharmacy with neat shelves of medicine boxes, blurred behind him. Camera: tracking shot alongside him, medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"मरीज़ पर्ची की फ़ोटो भेजता है, ऑर्डर सीधे आपके पास आता है।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "मरीज़ पर्ची की फ़ोटो भेजता है, ऑर्डर सीधे आपके पास आता है।",
-          "dialogue_roman": "Mareez parchi ki photo bhejta hai, order seedhe aapke paas aata hai.",
-          "dialogue_english_meaning": "The patient sends a photo of the prescription; the order comes straight to you.",
-          "on_screen_text_add_in_editor": {
-            "title": "Prescription photo → your order"
-          }
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"ORDERS FROM NEARBY\". Below it, smaller dark navy letters spell exactly: \"Prescription photo to your counter\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "ORDERS FROM NEARBY / Prescription photo to your counter",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
         },
         {
           "clip": 3,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He counts with his fingers, then makes a flat 'all in order' gesture with one hand. Setting: a well-lit modern pharmacy with neat shelves of medicine boxes, blurred behind him. Camera: slow dolly-in to medium close-up. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"आप कीमत बताइए, मरीज़ हाँ कहे, फिर डिलीवरी। स्टॉक, बिल और GST — सब एक जगह।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "आप कीमत बताइए, मरीज़ हाँ कहे, फिर डिलीवरी। स्टॉक, बिल और GST — सब एक जगह।",
-          "dialogue_roman": "Aap keemat bataiye, mareez haan kahe, phir delivery. Stock, bill aur GST — sab ek jagah.",
-          "dialogue_english_meaning": "You quote the price, the patient approves, then delivery. Stock, bills and GST — in one place.",
-          "on_screen_text_add_in_editor": {
-            "title": "Quote · Approve · Deliver"
-          }
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he opens his right palm towards the camera. Scene: a modern pharmacy with neat shelves, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"मरीज़ पर्ची की फ़ोटो भेजता है, ऑर्डर सीधे आपके पास।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "मरीज़ पर्ची की फ़ोटो भेजता है, ऑर्डर सीधे आपके पास।",
+          "dialogue_roman": "Mareez parchi ki photo bhejta hai, order seedhe aapke paas.",
+          "meaning_english": "The patient sends a prescription photo; the order comes straight to you."
         },
         {
           "clip": 4,
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"STOCK · BILLS · GST\". Below it, smaller dark navy letters spell exactly: \"One simple system\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "STOCK · BILLS · GST / One simple system",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
+        },
+        {
+          "clip": 5,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He opens his arms slightly towards the shelves, then gives a warm thumbs-up. Setting: a well-lit modern pharmacy with neat shelves of medicine boxes, blurred behind him. Camera: static medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"अपने एरिया के मरीज़ों तक पहुँचिए — सेहतसंधि के साथ।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "अपने एरिया के मरीज़ों तक पहुँचिए — सेहतसंधि के साथ।",
-          "dialogue_roman": "Apne area ke mareezon tak pahunchiye — Sehatsandhi ke saath.",
-          "dialogue_english_meaning": "Reach the patients in your area — with Sehatsandhi.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he gives a small confident nod. Scene: a modern pharmacy with neat shelves, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"स्टॉक, बिल और GST — सब एक जगह।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "स्टॉक, बिल और GST — सब एक जगह।",
+          "dialogue_roman": "Stock, bill aur GST — sab ek jagah.",
+          "meaning_english": "Stock, bills and GST — all in one place.",
+          "add_in_editor": {
             "end_card": "SHARED"
           }
         }
@@ -204,53 +209,60 @@
     {
       "id": "V4",
       "title": "For diagnostic labs",
-      "for": "Pathology labs and imaging centres",
+      "for": "Labs and scan centres",
+      "order": "1 founder → 2 text card → 3 founder → 4 text card → 5 founder → end card",
       "clips": [
         {
           "clip": 1,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "New clip — Ingredients to Video with your photo",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks slowly towards the camera, stops, smiles, places his right hand lightly on his chest as he says his name, then opens both palms towards the viewer. Setting: a modern diagnostic lab with white benches and a sample collection counter, blurred behind him. Camera: slow push-in, eye level. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। लैब और स्कैन सेंटर के लिए।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। लैब और स्कैन सेंटर के लिए।",
-          "dialogue_roman": "Namaste! Main Nitin Garg, Sehatsandhi ka founder. Lab aur scan centre ke liye.",
-          "dialogue_english_meaning": "Hello, I'm Nitin Garg… for labs and scan centres.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Ingredients to Video with your photo",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he takes two slow steps towards the camera, stops, smiles, then speaks with one calm open-palm gesture at chest height. Scene: a modern diagnostic lab with white benches, completely blurred, empty of people. Camera: slow, smooth push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। लैब और स्कैन सेंटर के लिए।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। लैब और स्कैन सेंटर के लिए।",
+          "dialogue_roman": "Namaste, main Nitin Garg, Sehatsandhi ka founder. Lab aur scan centre ke liye.",
+          "meaning_english": "Hello, I'm Nitin Garg, founder of Sehatsandhi. For labs and scan centres.",
+          "add_in_editor": {
             "lower_third": "Nitin Garg · Founder, Sehatsandhi"
           }
         },
         {
           "clip": 2,
-          "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks past the counter and marks two points in the air with his finger, one for 'lab' and one for 'home'. Setting: a modern diagnostic lab with white benches and a sample collection counter, blurred behind him. Camera: tracking shot, medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"ब्लड टेस्ट लैब पर या घर से सैंपल, MRI-CT सेंटर पर — मरीज़ समय चुनकर बुक करता है।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "ब्लड टेस्ट लैब पर या घर से सैंपल, MRI-CT सेंटर पर — मरीज़ समय चुनकर बुक करता है।",
-          "dialogue_roman": "Blood test lab par ya ghar se sample, MRI-CT centre par — mareez samay chunkar book karta hai.",
-          "dialogue_english_meaning": "Blood tests at the lab or from home, MRI and CT at the centre — the patient books a time.",
-          "on_screen_text_add_in_editor": {
-            "title": "Lab visit · Home collection · Scans"
-          }
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"BOOK TESTS ONLINE\". Below it, smaller dark navy letters spell exactly: \"At the lab or from home\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "BOOK TESTS ONLINE / At the lab or from home",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
         },
         {
           "clip": 3,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He mimes uploading with an upward palm, then a sending gesture towards the camera. Setting: a modern diagnostic lab with white benches and a sample collection counter, blurred behind him. Camera: slow dolly-in to medium close-up. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"रिपोर्ट अपलोड कीजिए, मरीज़ को फ़ोन पर तुरंत मिल जाती है।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "रिपोर्ट अपलोड कीजिए, मरीज़ को फ़ोन पर तुरंत मिल जाती है।",
-          "dialogue_roman": "Report upload kijiye, mareez ko phone par turant mil jaati hai.",
-          "dialogue_english_meaning": "Upload the report; the patient gets it on the phone instantly.",
-          "on_screen_text_add_in_editor": {
-            "title": "Reports — straight to the patient"
-          }
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he opens his right palm towards the camera. Scene: a modern diagnostic lab with white benches, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"मरीज़ टेस्ट बुक करता है — लैब पर या घर से सैंपल।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "मरीज़ टेस्ट बुक करता है — लैब पर या घर से सैंपल।",
+          "dialogue_roman": "Mareez test book karta hai — lab par ya ghar se sample.",
+          "meaning_english": "Patients book tests — at the lab or with a home collection."
         },
         {
           "clip": 4,
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"REPORTS, INSTANTLY\". Below it, smaller dark navy letters spell exactly: \"Straight to the patient\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "REPORTS, INSTANTLY / Straight to the patient",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
+        },
+        {
+          "clip": 5,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He gestures confidently with an open hand, then a slight bow of the head. Setting: a modern diagnostic lab with white benches and a sample collection counter, blurred behind him. Camera: static medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"आपकी लैब, आपके एरिया के हर मरीज़ तक — सेहतसंधि पर।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "आपकी लैब, आपके एरिया के हर मरीज़ तक — सेहतसंधि पर।",
-          "dialogue_roman": "Aapki lab, aapke area ke har mareez tak — Sehatsandhi par.",
-          "dialogue_english_meaning": "Your lab, reaching every patient in your area — on Sehatsandhi.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he gives a small confident nod. Scene: a modern diagnostic lab with white benches, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"रिपोर्ट अपलोड कीजिए, मरीज़ को तुरंत मिल जाती है।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "रिपोर्ट अपलोड कीजिए, मरीज़ को तुरंत मिल जाती है।",
+          "dialogue_roman": "Report upload kijiye, mareez ko turant mil jaati hai.",
+          "meaning_english": "Upload the report; the patient gets it instantly.",
+          "add_in_editor": {
             "end_card": "SHARED"
           }
         }
@@ -260,52 +272,59 @@
       "id": "V5",
       "title": "Ambulance",
       "for": "Patients and ambulance services",
+      "order": "1 founder → 2 text card → 3 founder → 4 text card → 5 founder → end card",
       "clips": [
         {
           "clip": 1,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "New clip — Ingredients to Video with your photo",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks slowly towards the camera, stops, with a serious, caring expression, places his right hand lightly on his chest as he says his name, then opens both palms towards the viewer. Setting: the entrance of a hospital at dusk with a white ambulance and its soft blinking light far behind, blurred; no siren. Camera: slow push-in, eye level, cool blue dusk light with a warm rim on him. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। इमरजेंसी में हर मिनट क़ीमती है।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। इमरजेंसी में हर मिनट क़ीमती है।",
-          "dialogue_roman": "Namaste! Main Nitin Garg, Sehatsandhi ka founder. Emergency mein har minute keemti hai.",
-          "dialogue_english_meaning": "Hello, I'm Nitin Garg… in an emergency every minute counts.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Ingredients to Video with your photo",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he takes two slow steps towards the camera, stops, smiles, then speaks with one calm open-palm gesture at chest height. Scene: a hospital entrance at dusk with a white ambulance far behind, completely blurred, soft blue light, empty of people. Camera: slow, smooth push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। इमरजेंसी में हर मिनट क़ीमती है।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। इमरजेंसी में हर मिनट क़ीमती है।",
+          "dialogue_roman": "Namaste, main Nitin Garg, Sehatsandhi ka founder. Emergency mein har minute keemti hai.",
+          "meaning_english": "Hello, I'm Nitin Garg, founder of Sehatsandhi. In an emergency every minute counts.",
+          "add_in_editor": {
             "lower_third": "Nitin Garg · Founder, Sehatsandhi"
           }
         },
         {
           "clip": 2,
-          "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He raises one finger firmly as he says 108, then points to his phone with the other hand. Setting: the entrance of a hospital at dusk with a white ambulance and its soft blinking light far behind, blurred; no siren. Camera: medium close-up, very slow push-in. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"सबसे पहले 108 पर कॉल करें। साथ ही सेहतसंधि पर एक टैप से पास की एम्बुलेंस को अलर्ट करें।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "सबसे पहले 108 पर कॉल करें। साथ ही सेहतसंधि पर एक टैप से पास की एम्बुलेंस को अलर्ट करें।",
-          "dialogue_roman": "Sabse pehle 108 par call karein. Saath hi Sehatsandhi par ek tap se paas ki ambulance ko alert karein.",
-          "dialogue_english_meaning": "First call 108. Alongside, alert ambulances near you with one tap on Sehatsandhi.",
-          "on_screen_text_add_in_editor": {
-            "title": "Call 108 first · Alert nearby ambulances"
-          }
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"CALL 108 FIRST\". Below it, smaller dark navy letters spell exactly: \"Then alert ambulances near you\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "CALL 108 FIRST / Then alert ambulances near you",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
         },
         {
           "clip": 3,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He makes a circular 'nearby' gesture, then points forward as if a vehicle is arriving. Setting: the entrance of a hospital at dusk with a white ambulance and its soft blinking light far behind, blurred; no siren. Camera: slow lateral track, medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"जो पहले स्वीकार करे, वह आपको कॉल करता है — और आपकी लोकेशन उसके पास पहुँच जाती है।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "जो पहले स्वीकार करे, वह आपको कॉल करता है — और आपकी लोकेशन उसके पास पहुँच जाती है।",
-          "dialogue_roman": "Jo pehle sweekar kare, woh aapko call karta hai — aur aapki location uske paas pahunch jaati hai.",
-          "dialogue_english_meaning": "The first to accept calls you — and your location reaches them.",
-          "on_screen_text_add_in_editor": {
-            "title": "Your location → the crew"
-          }
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he raises one hand slightly, palm open, with a serious caring look. Scene: a hospital entrance at dusk with a white ambulance far behind, completely blurred, soft blue light, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"पहले 108 पर कॉल करें, साथ ही पास की एम्बुलेंस को अलर्ट करें।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "पहले 108 पर कॉल करें, साथ ही पास की एम्बुलेंस को अलर्ट करें।",
+          "dialogue_roman": "Pehle 108 par call karein, saath hi paas ki ambulance ko alert karein.",
+          "meaning_english": "First call 108, and alert ambulances nearby too."
         },
         {
           "clip": 4,
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"FASTER HELP\". Below it, smaller dark navy letters spell exactly: \"Your location reaches the crew\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "FASTER HELP / Your location reaches the crew",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
+        },
+        {
+          "clip": 5,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He places his hand on his heart and gives a calm, reassuring nod. Setting: the entrance of a hospital at dusk with a white ambulance and its soft blinking light far behind, blurred; no siren. Camera: static medium close-up. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"एम्बुलेंस सेवा हैं? आज ही जुड़िए और ज़िंदगियाँ बचाइए।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "एम्बुलेंस सेवा हैं? आज ही जुड़िए और ज़िंदगियाँ बचाइए।",
-          "dialogue_roman": "Ambulance seva hain? Aaj hi judiye aur zindagiyaan bachaiye.",
-          "dialogue_english_meaning": "Run an ambulance service? Join today and help save lives.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he places his right hand on his chest. Scene: a hospital entrance at dusk with a white ambulance far behind, completely blurred, soft blue light, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"एम्बुलेंस सेवा हैं? आज ही जुड़िए।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "एम्बुलेंस सेवा हैं? आज ही जुड़िए।",
+          "dialogue_roman": "Ambulance seva hain? Aaj hi judiye.",
+          "meaning_english": "Run an ambulance service? Join today.",
+          "add_in_editor": {
             "end_card": "SHARED"
           }
         }
@@ -314,53 +333,60 @@
     {
       "id": "V6",
       "title": "For insurance advisors",
-      "for": "Licensed health-insurance advisors",
+      "for": "Licensed insurance advisors",
+      "order": "1 founder → 2 text card → 3 founder → 4 text card → 5 founder → end card",
       "clips": [
         {
           "clip": 1,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "New clip — Ingredients to Video with your photo",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks slowly towards the camera, stops, smiles, places his right hand lightly on his chest as he says his name, then opens both palms towards the viewer. Setting: a calm, premium consultation room with a wooden desk, a family seated far behind with an advisor, all blurred. Camera: slow push-in, eye level. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। बीमा सलाहकारों के लिए।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। बीमा सलाहकारों के लिए।",
-          "dialogue_roman": "Namaste! Main Nitin Garg, Sehatsandhi ka founder. Beema salaahkaaron ke liye.",
-          "dialogue_english_meaning": "Hello, I'm Nitin Garg… for insurance advisors.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Ingredients to Video with your photo",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he takes two slow steps towards the camera, stops, smiles, then speaks with one calm open-palm gesture at chest height. Scene: a calm premium office with a wooden desk and warm lamps, completely blurred, empty of people. Camera: slow, smooth push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। बीमा सलाहकारों के लिए।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। बीमा सलाहकारों के लिए।",
+          "dialogue_roman": "Namaste, main Nitin Garg, Sehatsandhi ka founder. Beema salaahkaaron ke liye.",
+          "meaning_english": "Hello, I'm Nitin Garg, founder of Sehatsandhi. For insurance advisors.",
+          "add_in_editor": {
             "lower_third": "Nitin Garg · Founder, Sehatsandhi"
           }
         },
         {
           "clip": 2,
-          "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He gestures towards the blurred family behind him, then brings his hand back to his chest. Setting: a calm, premium consultation room with a wooden desk, a family seated far behind with an advisor, all blurred. Camera: tracking shot, medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"जो परिवार हेल्थ इंश्योरेंस चाहते हैं, वे सेहतसंधि पर कॉल-बैक मांगते हैं।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "जो परिवार हेल्थ इंश्योरेंस चाहते हैं, वे सेहतसंधि पर कॉल-बैक मांगते हैं।",
-          "dialogue_roman": "Jo parivaar health insurance chahte hain, woh Sehatsandhi par call-back maangte hain.",
-          "dialogue_english_meaning": "Families who want health insurance ask for a call-back on Sehatsandhi.",
-          "on_screen_text_add_in_editor": {
-            "title": "Real requests from your area"
-          }
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"REAL REQUESTS\". Below it, smaller dark navy letters spell exactly: \"From families near you\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "REAL REQUESTS / From families near you",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
         },
         {
           "clip": 3,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He holds up one finger for 'only you', then makes a small shield shape with both hands. Setting: a calm, premium consultation room with a wooden desk, a family seated far behind with an advisor, all blurred. Camera: slow dolly-in to medium close-up. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"जो सलाहकार पहले स्वीकार करे, नंबर सिर्फ़ उसी को — मरीज़ की प्राइवेसी सुरक्षित।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "जो सलाहकार पहले स्वीकार करे, नंबर सिर्फ़ उसी को — मरीज़ की प्राइवेसी सुरक्षित।",
-          "dialogue_roman": "Jo salaahkaar pehle sweekar kare, number sirf usi ko — mareez ki privacy surakshit.",
-          "dialogue_english_meaning": "The advisor who accepts first gets the number — only them; the family's privacy is protected.",
-          "on_screen_text_add_in_editor": {
-            "title": "One request · One advisor · Privacy first"
-          }
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he opens his right palm towards the camera. Scene: a calm premium office with a wooden desk and warm lamps, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"परिवार कॉल-बैक मांगते हैं, नंबर सिर्फ़ उसी सलाहकार को जो स्वीकार करे।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "परिवार कॉल-बैक मांगते हैं, नंबर सिर्फ़ उसी सलाहकार को जो स्वीकार करे।",
+          "dialogue_roman": "Parivaar call-back maangte hain, number sirf usi salaahkaar ko jo sweekar kare.",
+          "meaning_english": "Families ask for a call-back; only the advisor who accepts gets the number."
         },
         {
           "clip": 4,
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"FREE LISTING\". Below it, smaller dark navy letters spell exactly: \"sehatsandhi.com\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "FREE LISTING / sehatsandhi.com",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
+        },
+        {
+          "clip": 5,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He opens both palms upward and smiles. Setting: a calm, premium consultation room with a wooden desk, a family seated far behind with an advisor, all blurred. Camera: static medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"लिस्टिंग मुफ़्त है। आज ही जुड़िए — sehatsandhi.com\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "लिस्टिंग मुफ़्त है। आज ही जुड़िए — sehatsandhi.com",
-          "dialogue_roman": "Listing muft hai. Aaj hi judiye — sehatsandhi.com",
-          "dialogue_english_meaning": "Listing is free. Join today — sehatsandhi.com",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he gives a small confident nod with a smile. Scene: a calm premium office with a wooden desk and warm lamps, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"लिस्टिंग मुफ़्त है। आज ही जुड़िए।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "लिस्टिंग मुफ़्त है। आज ही जुड़िए।",
+          "dialogue_roman": "Listing muft hai. Aaj hi judiye.",
+          "meaning_english": "Listing is free. Join today.",
+          "add_in_editor": {
             "end_card": "SHARED"
           }
         }
@@ -370,52 +396,59 @@
       "id": "V7",
       "title": "The app for patients",
       "for": "Patients and families",
+      "order": "1 founder → 2 text card → 3 founder → 4 text card → 5 founder → end card",
       "clips": [
         {
           "clip": 1,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "New clip — Ingredients to Video with your photo",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He walks slowly towards the camera, stops, smiles, places his right hand lightly on his chest as he says his name, then opens both palms towards the viewer. Setting: a warm Indian living room in morning light, an elderly couple on a sofa far behind, blurred. Camera: slow push-in, eye level, warm morning light. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। अब डॉक्टर ढूंढना हुआ आसान।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "नमस्ते! मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। अब डॉक्टर ढूंढना हुआ आसान।",
-          "dialogue_roman": "Namaste! Main Nitin Garg, Sehatsandhi ka founder. Ab doctor dhoondhna hua aasaan.",
-          "dialogue_english_meaning": "Hello, I'm Nitin Garg… finding a doctor just got easy.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Ingredients to Video with your photo",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he takes two slow steps towards the camera, stops, smiles, then speaks with one calm open-palm gesture at chest height. Scene: a warm Indian living room in soft morning light, completely blurred, empty of people. Camera: slow, smooth push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। अब डॉक्टर ढूंढना हुआ आसान।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। अब डॉक्टर ढूंढना हुआ आसान।",
+          "dialogue_roman": "Namaste, main Nitin Garg, Sehatsandhi ka founder. Ab doctor dhoondhna hua aasaan.",
+          "meaning_english": "Hello, I'm Nitin Garg, founder of Sehatsandhi. Finding a doctor just got easy.",
+          "add_in_editor": {
             "lower_third": "Nitin Garg · Founder, Sehatsandhi"
           }
         },
         {
           "clip": 2,
-          "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He holds his phone and mimes typing with his thumb, then looks up and smiles at the camera. Setting: a warm Indian living room in morning light, an elderly couple on a sofa far behind, blurred. Camera: medium close-up, slow arc. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"बस अपनी भाषा में लिखिए — 'आँख का डॉक्टर' या 'बच्चे को बुखार' — और पास का डॉक्टर चुनिए।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "बस अपनी भाषा में लिखिए — 'आँख का डॉक्टर' या 'बच्चे को बुखार' — और पास का डॉक्टर चुनिए।",
-          "dialogue_roman": "Bas apni bhaasha mein likhiye — 'aankh ka doctor' ya 'bachche ko bukhaar' — aur paas ka doctor chuniye.",
-          "dialogue_english_meaning": "Just type in your language — 'eye doctor' or 'child has fever' — and choose a doctor nearby.",
-          "on_screen_text_add_in_editor": {
-            "title": "Type in Hindi or English"
-          }
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"TYPE IN HINDI OR ENGLISH\". Below it, smaller dark navy letters spell exactly: \"Find a doctor near you\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "TYPE IN HINDI OR ENGLISH / Find a doctor near you",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
         },
         {
           "clip": 3,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He counts four items on his fingers, one by one. Setting: a warm Indian living room in morning light, an elderly couple on a sofa far behind, blurred. Camera: tracking shot, medium shot. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"अपॉइंटमेंट, लैब टेस्ट, दवाई और एम्बुलेंस — सब एक ऐप में, बिल्कुल मुफ़्त।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "अपॉइंटमेंट, लैब टेस्ट, दवाई और एम्बुलेंस — सब एक ऐप में, बिल्कुल मुफ़्त।",
-          "dialogue_roman": "Appointment, lab test, dawai aur ambulance — sab ek app mein, bilkul muft.",
-          "dialogue_english_meaning": "Appointments, lab tests, medicines and ambulance — all in one app, completely free.",
-          "on_screen_text_add_in_editor": {
-            "title": "Doctor · Lab · Medicines · Ambulance"
-          }
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he opens his right palm towards the camera. Scene: a warm Indian living room in soft morning light, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"अपनी भाषा में लिखिए — और पास का डॉक्टर चुनिए।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "अपनी भाषा में लिखिए — और पास का डॉक्टर चुनिए।",
+          "dialogue_roman": "Apni bhaasha mein likhiye — aur paas ka doctor chuniye.",
+          "meaning_english": "Type in your own language — and choose a doctor nearby."
         },
         {
           "clip": 4,
+          "type": "text card (no person)",
+          "length_seconds": "8 (trim to 4–5 in the editor)",
+          "make_in_flow": "Text to Video (new clip, no ingredient)",
+          "prompt": "A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: \"DOCTOR · LAB · MEDICINES\". Below it, smaller dark navy letters spell exactly: \"One free app\". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.",
+          "text_must_read": "DOCTOR · LAB · MEDICINES / One free app",
+          "if_spelling_is_wrong": "Regenerate once; if still wrong, use the clip without text and type these words in the editor."
+        },
+        {
+          "clip": 5,
+          "type": "founder speaking",
           "length_seconds": 8,
-          "how_to_make_in_flow": "Extend the previous clip",
-          "prompt": "The man from the reference image — keep his exact face, hairstyle, skin tone and build. He wears a tailored navy-blue two-piece suit, crisp white shirt and a solid deep-red silk tie, polished black shoes; clean-shaven grooming, warm confident expression, natural Indian accent. He turns his phone towards the viewer, then gives a namaste. Setting: a warm Indian living room in morning light, an elderly couple on a sofa far behind, blurred. Camera: static medium shot, slow push-in. Premium commercial look: shot on a cinema camera with a 50mm lens at f/2, shallow depth of field, creamy background blur, soft key light from camera-left with a warm rim light on his shoulders, gentle teal-and-warm colour grade, rich blacks, 4K, smooth stabilised gimbal movement, high-end brand advertisement, refined and uncluttered composition, subject in the left or centre third. He speaks in Hindi, calmly and warmly, lips in sync, saying: \"सेहतसंधि ऐप डाउनलोड कीजिए — सेहत की हर बात, एक जगह।\" Audio: only his voice, clear and close-miked, with a soft modern piano-and-strings bed underneath; no other voices. No on-screen text, no subtitles, no captions, no logos, no watermarks, no extra people talking, no distorted hands or extra fingers, no warped faces, no flickering, no cartoon look, no exaggerated mouth movement.",
-          "dialogue_hindi": "सेहतसंधि ऐप डाउनलोड कीजिए — सेहत की हर बात, एक जगह।",
-          "dialogue_roman": "Sehatsandhi app download kijiye — sehat ki har baat, ek jagah.",
-          "dialogue_english_meaning": "Download the Sehatsandhi app — everything about your health, in one place.",
-          "on_screen_text_add_in_editor": {
+          "make_in_flow": "Extend the previous founder clip (or Ingredients to Video with your photo)",
+          "prompt": "Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he brings his palms together in a gentle namaste. Scene: a warm Indian living room in soft morning light, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): \"डॉक्टर, लैब, दवाई — सब एक ऐप में, मुफ़्त।\" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.",
+          "dialogue_hindi": "डॉक्टर, लैब, दवाई — सब एक ऐप में, मुफ़्त।",
+          "dialogue_roman": "Doctor, lab, dawai — sab ek app mein, muft.",
+          "meaning_english": "Doctor, lab, medicines — all in one app, free.",
+          "add_in_editor": {
             "end_card": "SHARED"
           }
         }
