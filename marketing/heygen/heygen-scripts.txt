@@ -14,7 +14,7 @@ How to use
 FILM 1 — Doctors & clinics
 ==================================================================
 SCRIPT
-नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। डॉक्टर साहब, अब आपका पूरा क्लिनिक एक प्लेटफ़ॉर्म पर।
+नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। डॉक्टर सर, अब आपका पूरा क्लिनिक एक प्लेटफ़ॉर्म पर।
 मरीज़ आया — रिसेप्शन पर टोकन, ओपीडी की लाइन और फ़ीस, सब एक क्लिक में, फ़ोन से भी।
 भीड़ ज़्यादा है? मरीज़ QR स्कैन करके ख़ुद अपना नाम और नंबर भर देता है, रिसेप्शन बस टोकन देता है।
 कंसल्टेशन में मरीज़ की पूरी मेडिकल हिस्ट्री सामने — BP, शुगर, स्टेंट, एलर्जी — और डिजिटल पर्चा।
@@ -32,6 +32,42 @@ ON-SCREEN TEXT (one per line above)
 6 Prescription · Bills · Reports on WhatsApp
 7 New patients · Real reviews
 8 sehatsandhi.com
+
+
+==================================================================
+FILM 1 — Doctors & clinics — VIDEO AGENT PROMPT (paste this whole block into HeyGen Video Agent)
+==================================================================
+Create a 60-second vertical (9:16) premium promotional video for doctors and clinic owners in India, presented by my avatar "NitsAvatar in a business suit" (navy suit, white shirt, red tie, modern clinic office background with a bookshelf). Use my voice "NitsSecondVoice". The avatar speaks in Hindi exactly the script below — do not change, translate or shorten any words. Calm, warm, confident delivery at a natural pace, with subtle professional hand gestures.
+
+Style: high-end healthcare brand advertisement, cinematic soft lighting, clean modern layout. Brand colours: deep green #0F6B4A, navy #12382B, cream #FAF6EE. Font: bold modern sans-serif for English titles. Soft, uplifting background music at low volume under the voice. Smooth, gentle transitions. No logos of other companies, no prices, no extra claims.
+
+Make one scene per script line. Show the avatar in every scene. On each scene add the short English title given below as a clean text banner (green bar, white bold text) near the top, and add Hindi subtitles of the spoken line at the bottom.
+
+Scene 1 — Title: "Nitin Garg · Founder, Sehatsandhi" (as a name strip, bottom-left)
+Script: नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। डॉक्टर सर, अब आपका पूरा क्लिनिक एक प्लेटफ़ॉर्म पर।
+
+Scene 2 — Title: "Token · OPD · Fees"
+Script: मरीज़ आया — रिसेप्शन पर टोकन, ओपीडी की लाइन और फ़ीस, सब एक क्लिक में, फ़ोन से भी।
+
+Scene 3 — Title: "QR self-registration"
+Script: भीड़ ज़्यादा है? मरीज़ QR स्कैन करके ख़ुद अपना नाम और नंबर भर देता है, रिसेप्शन बस टोकन देता है।
+
+Scene 4 — Title: "Medical history · Digital prescription"
+Script: कंसल्टेशन में मरीज़ की पूरी मेडिकल हिस्ट्री सामने — BP, शुगर, स्टेंट, एलर्जी — और डिजिटल पर्चा।
+
+Scene 5 — Title: "Invoices · GST · Day's accounts"
+Script: टेस्ट, चश्मे, दवाई — इनवॉइस बनाइए, GST के साथ या बिना, और शाम को दिन का पूरा हिसाब।
+
+Scene 6 — Title: "Prescription · Bills · Reports on WhatsApp"
+Script: पर्चा, बिल और लैब रिपोर्ट सीधे मरीज़ के WhatsApp पर — काग़ज़ खोने का झंझट ख़त्म।
+
+Scene 7 — Title: "New patients · Real reviews"
+Script: नए मरीज़ आपको अपने एरिया में ढूंढते हैं, और असली मरीज़ों के रिव्यू आपकी पहचान बनाते हैं।
+
+Scene 8 — Title: "sehatsandhi.com · WhatsApp 7015399355"
+Script: आज ही जुड़िए — sehatsandhi.com पर। सेहतसंधि — स्वास्थ्य की नई साझेदारी।
+
+End with a 3-second closing card: cream background, the text "Sehatsandhi" in deep green, below it "स्वास्थ्य की नई साझेदारी" and "sehatsandhi.com".
 
 
 ==================================================================
