@@ -1,13 +1,13 @@
 V2 — Doctors & clinics, full version (8 scenes × 8 s ≈ 64 s)
-Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @NitinAvatar. Scenes 2–8: Extend from the previous scene.
+Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @NitsAvatar. Scenes 2–8: Extend from the previous scene.
 
 ----- SCENE 1 -----
 {
   "scene": 1,
   "continuity": "start of sequence — no previous frame",
   "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
-  "subject": "@NitinAvatar",
-  "identity_lock": "preserve exact facial structure, skin tone, age and features from the reference image with no stylization or alteration",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
   "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
   "action": "standing confidently facing the camera, warm smile, brings palms together in a gentle namaste, then lowers his hands",
   "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
@@ -32,8 +32,8 @@ Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @Ni
   "scene": 2,
   "continuity": "starts from the exact last frame of scene 1",
   "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
-  "subject": "@NitinAvatar",
-  "identity_lock": "preserve exact facial structure, skin tone, age and features from the reference image with no stylization or alteration",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
   "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
   "action": "calm open-palm gesture moving slowly from left to right at chest height",
   "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
@@ -58,8 +58,8 @@ Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @Ni
   "scene": 3,
   "continuity": "starts from the exact last frame of scene 2",
   "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
-  "subject": "@NitinAvatar",
-  "identity_lock": "preserve exact facial structure, skin tone, age and features from the reference image with no stylization or alteration",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
   "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
   "action": "slight forward lean, one hand gently raised as if explaining a simple idea",
   "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
@@ -84,8 +84,8 @@ Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @Ni
   "scene": 4,
   "continuity": "starts from the exact last frame of scene 3",
   "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
-  "subject": "@NitinAvatar",
-  "identity_lock": "preserve exact facial structure, skin tone, age and features from the reference image with no stylization or alteration",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
   "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
   "action": "thoughtful expression, one hand placed lightly on his chest, then opening towards the camera",
   "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
@@ -110,8 +110,8 @@ Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @Ni
   "scene": 5,
   "continuity": "starts from the exact last frame of scene 4",
   "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
-  "subject": "@NitinAvatar",
-  "identity_lock": "preserve exact facial structure, skin tone, age and features from the reference image with no stylization or alteration",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
   "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
   "action": "both hands slightly apart at waist height in a small 'everything together' gesture",
   "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
@@ -136,8 +136,8 @@ Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @Ni
   "scene": 6,
   "continuity": "starts from the exact last frame of scene 5",
   "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
-  "subject": "@NitinAvatar",
-  "identity_lock": "preserve exact facial structure, skin tone, age and features from the reference image with no stylization or alteration",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
   "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
   "action": "confident nod, one open hand extended slightly towards the camera",
   "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
@@ -162,8 +162,8 @@ Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @Ni
   "scene": 7,
   "continuity": "starts from the exact last frame of scene 6",
   "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
-  "subject": "@NitinAvatar",
-  "identity_lock": "preserve exact facial structure, skin tone, age and features from the reference image with no stylization or alteration",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
   "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
   "action": "warm smile, small welcoming gesture with both palms",
   "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
@@ -188,8 +188,8 @@ Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @Ni
   "scene": 8,
   "continuity": "starts from the exact last frame of scene 7",
   "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
-  "subject": "@NitinAvatar",
-  "identity_lock": "preserve exact facial structure, skin tone, age and features from the reference image with no stylization or alteration",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
   "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
   "action": "warm closing smile, namaste with both palms, then a slight nod",
   "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
@@ -222,7 +222,7 @@ Scene 8: sehatsandhi.com  ·  WhatsApp 7015399355   (bottom strip, whole scene)
 Style: white or cream bold sans-serif (Poppins Bold) on a semi-transparent green (#0F6B4A) bar; Hindi subtitles of his words along the bottom (Noto Sans Devanagari).
 
 ===== OPTIONAL: text made by Flow itself — two title cards, no person =====
-Place card 1 after scene 1 and card 2 before scene 8. Text to Video, no @NitinAvatar. Check spelling; if wrong, regenerate or use the editor.
+Place card 1 after scene 1 and card 2 before scene 8. Text to Video, no @NitsAvatar. Check spelling; if wrong, regenerate or use the editor.
 
 {
   "scene": "text card 1",
