@@ -43,6 +43,11 @@ export default function NewToken() {
   const [issued, setIssued] = useState<{ token: number; name: string; doctor: string; fee: number; paid: number; member: string; queue: string } | null>(null)
   // 0226: how the fee was paid — asked once, kept for the next patient.
   const [paidHow, setPaidHow] = useState('')
+  // 0258: who is already registered on the mobile typed for a new patient, so a
+  // returning patient is picked rather than registered again under a new spelling.
+  const [found, setFound] = useState<{ phone: string; rows: PatientSearchResult[] }>({ phone: '', rows: [] })
+  const npDigits = np.phone.replace(/\D/g, '').slice(-10)
+  const onNumber = adding && npDigits.length === 10 && found.phone === npDigits ? found.rows : []
 
   useEffect(() => {
     if (!biz) return
@@ -58,6 +63,14 @@ export default function NewToken() {
     const t = setTimeout(() => { searchPatients(q.trim(), biz).then(setRows).catch(() => setRows([])) }, 250)
     return () => clearTimeout(t)
   }, [q, biz, picked])
+
+  useEffect(() => {
+    if (!biz || !adding || npDigits.length < 10) return
+    let live = true
+    searchPatients(npDigits, biz).then(rows => { if (live) setFound({ phone: npDigits, rows }) }, () => undefined)
+    return () => { live = false }
+  }, [npDigits, adding, biz])
+  const sameName = onNumber.find(r => r.full_name.trim().toLowerCase() === np.name.trim().toLowerCase()) ?? null
 
   const choose = (id: string, name: string, phone: string | null) => {
     setPicked({ id, name, phone }); setErr('')
@@ -150,8 +163,25 @@ export default function NewToken() {
                 <View style={{ flex: 1 }}><Field label="PIN (optional)" value={np.pin} keyboardType="number-pad" onChangeText={t => setNp({ ...np, pin: t.replace(/\D/g, '').slice(0, 6) })} /></View>
               </View>
               <View style={st.row}>{GENDERS.map(([k, l]) => <Chip key={k} label={l} on={np.gender === k} onPress={() => setNp({ ...np, gender: k })} />)}</View>
+              {onNumber.length > 0 && (
+                <View style={st.onNumber}>
+                  <Text style={st.body}>Already registered on this number — tap if it is them:</Text>
+                  {onNumber.map(r => (
+                    <Pressable key={r.patient_member_id} style={st.hit} onPress={() => {
+                      choose(r.patient_member_id, r.full_name, r.phone)
+                      setAdding(false); setNp({ name: '', phone: '', age: '', gender: '', pin: '' })
+                    }}>
+                      <Text style={st.body}>{r.full_name}</Text>
+                      <Text style={st.meta}>{[r.age_years != null ? `${r.age_years}y` : null, r.gender, r.mrn ? `file ${r.mrn}` : null].filter(Boolean).join(' · ')}</Text>
+                    </Pressable>
+                  ))}
+                  <Note>{sameName
+                    ? `${sameName.full_name} is already on this number — tap them above instead of registering again.`
+                    : 'Somebody else in the family? Register them below.'}</Note>
+                </View>
+              )}
               <View style={st.row}>
-                <Btn small label="Register" busy={busy} onPress={register} />
+                <Btn small label={onNumber.length > 0 ? 'Register as new' : 'Register'} busy={busy} onPress={register} />
                 <Btn small kind="ghost" label="Cancel" onPress={() => setAdding(false)} />
               </View>
             </View>
@@ -161,7 +191,7 @@ export default function NewToken() {
               {rows.map(r => (
                 <Pressable key={r.patient_member_id} style={st.hit} onPress={() => choose(r.patient_member_id, r.full_name, r.phone)}>
                   <Text style={st.body}>{r.full_name}</Text>
-                  <Text style={st.meta}>{[r.phone, r.age_years != null ? `${r.age_years}y` : null, r.gender, `${r.visit_count} visit${r.visit_count === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}</Text>
+                  <Text style={st.meta}>{[r.phone, r.age_years != null ? `${r.age_years}y` : null, r.gender, r.mrn ? `file ${r.mrn}` : null, `${r.visit_count} visit${r.visit_count === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}</Text>
                 </Pressable>
               ))}
               {q.trim().length >= 2 && rows.length === 0 && <Note>No one found.</Note>}
@@ -224,6 +254,7 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   hit: { paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#f0ebe1' },
+  onNumber: { backgroundColor: '#fff8eb', borderColor: '#f0dcb0', borderWidth: 1, borderRadius: 9, padding: 10, gap: 2 },
   big: { fontSize: 26, fontWeight: '800', color: C.green },
   name: { fontSize: 16, fontWeight: '800', color: C.ink, flexShrink: 1 },
   body: { fontSize: 15, color: C.ink },
