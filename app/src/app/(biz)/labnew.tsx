@@ -41,6 +41,12 @@ export default function NewLabOrder() {
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  // 0258: who is already registered on the mobile typed for a new patient, so a
+  // returning patient is picked rather than registered again under a new spelling.
+  const [onPhone, setOnPhone] = useState<{ phone: string; rows: PatientSearchResult[] }>({ phone: '', rows: [] })
+  const regDigits = (reg?.phone ?? '').replace(/\D/g, '').slice(-10)
+  const onNumber = reg && regDigits.length === 10 && onPhone.phone === regDigits ? onPhone.rows : []
+  const sameName = onNumber.find(r => r.full_name.trim().toLowerCase() === (reg?.name ?? '').trim().toLowerCase()) ?? null
 
   useEffect(() => {
     if (!biz) return
@@ -55,6 +61,13 @@ export default function NewLabOrder() {
     const t = setTimeout(() => { searchPatients(q.trim(), biz).then(setFound).catch(() => setFound([])) }, 250)
     return () => clearTimeout(t)
   }, [q, biz, patient, reg])
+
+  useEffect(() => {
+    if (!biz || regDigits.length < 10) return
+    let live = true
+    searchPatients(regDigits, biz).then(rows => { if (live) setOnPhone({ phone: regDigits, rows }) }, () => undefined)
+    return () => { live = false }
+  }, [regDigits, biz])
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + i); return d }), [])
   const shown = useMemo(() => {
@@ -107,6 +120,19 @@ export default function NewLabOrder() {
               <Field label="Mobile — 10 digits, or + country code" value={reg.phone} keyboardType="phone-pad" onChangeText={t => setReg({ ...reg, phone: t.replace(/[^\d+ ]/g, '') })} />
               <Field label="Age" value={reg.age} keyboardType="number-pad" onChangeText={t => setReg({ ...reg, age: t.replace(/\D/g, '').slice(0, 3) })} />
               <View style={st.row}>{GENDERS.map(([k, l]) => <Chip key={k} label={l} on={reg.gender === k} onPress={() => setReg({ ...reg, gender: k })} />)}</View>
+              {onNumber.length > 0 && (
+                <View style={st.onNumber}>
+                  <Text style={st.body}>Already registered on this number — tap if it is them:</Text>
+                  {onNumber.map(p => (
+                    <Pressable key={p.patient_member_id} style={st.pick} onPress={() => { setPatient({ id: p.patient_member_id, name: p.full_name, phone: p.phone }); setReg(null) }}>
+                      <Text style={st.body}><Text style={st.b}>{p.full_name}</Text>{[p.age_years != null ? `${p.age_years}y` : null, p.gender, p.mrn ? `file ${p.mrn}` : null].filter(Boolean).map(t => ` · ${t}`).join('')}</Text>
+                    </Pressable>
+                  ))}
+                  <Note>{sameName
+                    ? `${sameName.full_name} is already on this number — tap them above instead of registering again.`
+                    : 'Somebody else in the family? Carry on — they are registered when the order is created.'}</Note>
+                </View>
+              )}
               <Text style={st.link} onPress={() => setReg(null)}>← Search instead</Text>
             </View>
           ) : (
@@ -114,7 +140,7 @@ export default function NewLabOrder() {
               <Field placeholder="Name, mobile or file number" value={q} onChangeText={setQ} autoCorrect={false} />
               {found.slice(0, 8).map(p => (
                 <Pressable key={p.patient_member_id} style={st.pick} onPress={() => { setPatient({ id: p.patient_member_id, name: p.full_name, phone: p.phone }); setFound([]) }}>
-                  <Text style={st.body}><Text style={st.b}>{p.full_name}</Text>{p.age_years != null ? ` · ${p.age_years}y` : ''}{p.phone ? ` · ${p.phone}` : ''}</Text>
+                  <Text style={st.body}><Text style={st.b}>{p.full_name}</Text>{p.age_years != null ? ` · ${p.age_years}y` : ''}{p.phone ? ` · ${p.phone}` : ''}{p.mrn ? ` · file ${p.mrn}` : ''}</Text>
                 </Pressable>
               ))}
               <Text style={st.link} onPress={() => setReg({ name: q.replace(/\d/g, '').trim(), phone: q.replace(/\D/g, ''), age: '', gender: '' })}>+ New patient</Text>
@@ -176,4 +202,5 @@ const st = StyleSheet.create({
   meta: { fontSize: 12.5, color: C.muted },
   link: { color: C.green, fontWeight: '700' },
   pick: { paddingVertical: 9, paddingHorizontal: 10, backgroundColor: '#f4f8f6', borderRadius: 8 },
+  onNumber: { backgroundColor: '#fff8eb', borderColor: '#f0dcb0', borderWidth: 1, borderRadius: 9, padding: 10, gap: 6 },
 })
