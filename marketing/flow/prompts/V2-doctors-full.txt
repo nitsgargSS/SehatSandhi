@@ -1,0 +1,269 @@
+V2 — Doctors & clinics, full version (8 scenes × 8 s ≈ 64 s)
+Paste ONE block at a time into Flow (from { to }). Scene 1: Ingredients with @NitsAvatar. Scenes 2–8: Extend from the previous scene.
+
+----- SCENE 1 -----
+{
+  "scene": 1,
+  "continuity": "start of sequence — no previous frame",
+  "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
+  "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
+  "action": "standing confidently facing the camera, warm smile, brings palms together in a gentle namaste, then lowers his hands",
+  "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
+  "dialogue": "नमस्ते, मैं नितिन गर्ग, Sehatsandhi का founder। डॉक्टर sir, अब आपका पूरा clinic एक platform पर।",
+  "duration_seconds": 8,
+  "dialogue_timing": "calm, natural pace; finishes within 7 seconds with a short pause at the end",
+  "audio": "only his voice, clear and close; very soft background music; no other voices",
+  "negative_constraints": [
+    "no other people in the frame",
+    "no text, captions or subtitles",
+    "no change of room or background from previous scene",
+    "no change in attire",
+    "no altered or distorted face",
+    "no extra or warped fingers",
+    "no objects or phone in hands",
+    "no exaggerated mouth movement"
+  ]
+}
+
+----- SCENE 2 -----
+{
+  "scene": 2,
+  "continuity": "starts from the exact last frame of scene 1",
+  "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
+  "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
+  "action": "calm open-palm gesture moving slowly from left to right at chest height",
+  "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
+  "dialogue": "मरीज़ आया — reception पर token, OPD की लाइन और फ़ीस, सब एक click में, phone से भी।",
+  "duration_seconds": 8,
+  "dialogue_timing": "calm, natural pace; finishes within 7 seconds with a short pause at the end",
+  "audio": "only his voice, clear and close; very soft background music; no other voices",
+  "negative_constraints": [
+    "no other people in the frame",
+    "no text, captions or subtitles",
+    "no change of room or background from previous scene",
+    "no change in attire",
+    "no altered or distorted face",
+    "no extra or warped fingers",
+    "no objects or phone in hands",
+    "no exaggerated mouth movement"
+  ]
+}
+
+----- SCENE 3 -----
+{
+  "scene": 3,
+  "continuity": "starts from the exact last frame of scene 2",
+  "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
+  "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
+  "action": "slight forward lean, one hand gently raised as if explaining a simple idea",
+  "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
+  "dialogue": "भीड़ ज़्यादा है? मरीज़ QR scan करके ख़ुद अपना नाम और नंबर भर देता है, reception बस token देता है।",
+  "duration_seconds": 8,
+  "dialogue_timing": "calm, natural pace; finishes within 7 seconds with a short pause at the end",
+  "audio": "only his voice, clear and close; very soft background music; no other voices",
+  "negative_constraints": [
+    "no other people in the frame",
+    "no text, captions or subtitles",
+    "no change of room or background from previous scene",
+    "no change in attire",
+    "no altered or distorted face",
+    "no extra or warped fingers",
+    "no objects or phone in hands",
+    "no exaggerated mouth movement"
+  ]
+}
+
+----- SCENE 4 -----
+{
+  "scene": 4,
+  "continuity": "starts from the exact last frame of scene 3",
+  "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
+  "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
+  "action": "thoughtful expression, one hand placed lightly on his chest, then opening towards the camera",
+  "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
+  "dialogue": "Consultation में मरीज़ की पूरी medical history सामने — BP, sugar, stent, allergy — और digital पर्चा।",
+  "duration_seconds": 8,
+  "dialogue_timing": "calm, natural pace; finishes within 7 seconds with a short pause at the end",
+  "audio": "only his voice, clear and close; very soft background music; no other voices",
+  "negative_constraints": [
+    "no other people in the frame",
+    "no text, captions or subtitles",
+    "no change of room or background from previous scene",
+    "no change in attire",
+    "no altered or distorted face",
+    "no extra or warped fingers",
+    "no objects or phone in hands",
+    "no exaggerated mouth movement"
+  ]
+}
+
+----- SCENE 5 -----
+{
+  "scene": 5,
+  "continuity": "starts from the exact last frame of scene 4",
+  "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
+  "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
+  "action": "both hands slightly apart at waist height in a small 'everything together' gesture",
+  "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
+  "dialogue": "Tests, चश्मे, दवाई — invoice बनाइए, GST के साथ या बिना, और शाम को दिन का पूरा हिसाब।",
+  "duration_seconds": 8,
+  "dialogue_timing": "calm, natural pace; finishes within 7 seconds with a short pause at the end",
+  "audio": "only his voice, clear and close; very soft background music; no other voices",
+  "negative_constraints": [
+    "no other people in the frame",
+    "no text, captions or subtitles",
+    "no change of room or background from previous scene",
+    "no change in attire",
+    "no altered or distorted face",
+    "no extra or warped fingers",
+    "no objects or phone in hands",
+    "no exaggerated mouth movement"
+  ]
+}
+
+----- SCENE 6 -----
+{
+  "scene": 6,
+  "continuity": "starts from the exact last frame of scene 5",
+  "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
+  "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
+  "action": "confident nod, one open hand extended slightly towards the camera",
+  "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
+  "dialogue": "पर्चा, बिल और lab report सीधे मरीज़ के WhatsApp पर — काग़ज़ खोने का झंझट ख़त्म।",
+  "duration_seconds": 8,
+  "dialogue_timing": "calm, natural pace; finishes within 7 seconds with a short pause at the end",
+  "audio": "only his voice, clear and close; very soft background music; no other voices",
+  "negative_constraints": [
+    "no other people in the frame",
+    "no text, captions or subtitles",
+    "no change of room or background from previous scene",
+    "no change in attire",
+    "no altered or distorted face",
+    "no extra or warped fingers",
+    "no objects or phone in hands",
+    "no exaggerated mouth movement"
+  ]
+}
+
+----- SCENE 7 -----
+{
+  "scene": 7,
+  "continuity": "starts from the exact last frame of scene 6",
+  "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
+  "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
+  "action": "warm smile, small welcoming gesture with both palms",
+  "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
+  "dialogue": "नए मरीज़ आपको अपने area में ढूंढते हैं, और असली मरीज़ों के reviews आपकी पहचान बनाते हैं।",
+  "duration_seconds": 8,
+  "dialogue_timing": "calm, natural pace; finishes within 7 seconds with a short pause at the end",
+  "audio": "only his voice, clear and close; very soft background music; no other voices",
+  "negative_constraints": [
+    "no other people in the frame",
+    "no text, captions or subtitles",
+    "no change of room or background from previous scene",
+    "no change in attire",
+    "no altered or distorted face",
+    "no extra or warped fingers",
+    "no objects or phone in hands",
+    "no exaggerated mouth movement"
+  ]
+}
+
+----- SCENE 8 -----
+{
+  "scene": 8,
+  "continuity": "starts from the exact last frame of scene 7",
+  "setting": "a bright, modern private clinic office: frosted glass partition, a wooden bookshelf and a green plant, warm soft lighting, background softly blurred and completely empty of other people; exactly the same room in every scene",
+  "subject": "@NitsAvatar",
+  "identity_lock": "the same person as @NitsAvatar, consistent appearance across all scenes",
+  "clothing": "tailored dark navy suit, crisp white collared shirt, solid red tie, no logos or text on clothing",
+  "action": "warm closing smile, namaste with both palms, then a slight nod",
+  "camera_style": "vertical 9:16, static camera at chest height, medium shot from the waist up with headroom, subject centred, same framing as previous scene, no handheld movement",
+  "dialogue": "आज ही जुड़िए — sehatsandhi.com पर। Sehatsandhi — स्वास्थ्य की नई साझेदारी।",
+  "duration_seconds": 8,
+  "dialogue_timing": "calm, natural pace; finishes within 7 seconds with a short pause at the end",
+  "audio": "only his voice, clear and close; very soft background music; no other voices",
+  "negative_constraints": [
+    "no other people in the frame",
+    "no text, captions or subtitles",
+    "no change of room or background from previous scene",
+    "no change in attire",
+    "no altered or distorted face",
+    "no extra or warped fingers",
+    "no objects or phone in hands",
+    "no exaggerated mouth movement"
+  ]
+}
+
+
+===== ON-SCREEN TEXT — add in your editor (CapCut) over each scene =====
+Scene 1: Nitin Garg · Founder, Sehatsandhi   (name strip, bottom-left, 1–5 s)
+Scene 2: TOKEN · OPD · FEES   (top, 2–7 s)
+Scene 3: QR SELF-REGISTRATION   (top, 2–7 s)
+Scene 4: MEDICAL HISTORY · DIGITAL Rx   (top, 2–7 s)
+Scene 5: INVOICES · GST · DAY'S ACCOUNTS   (top, 2–7 s)
+Scene 6: Rx · BILLS · REPORTS ON WHATSAPP   (top, 2–7 s)
+Scene 7: NEW PATIENTS · REAL REVIEWS   (top, 2–7 s)
+Scene 8: sehatsandhi.com  ·  WhatsApp 7015399355   (bottom strip, whole scene)
+Style: white or cream bold sans-serif (Poppins Bold) on a semi-transparent green (#0F6B4A) bar; Hindi subtitles of his words along the bottom (Noto Sans Devanagari).
+
+===== OPTIONAL: text made by Flow itself — two title cards, no person =====
+Place card 1 after scene 1 and card 2 before scene 8. Text to Video, no @NitsAvatar. Check spelling; if wrong, regenerate or use the editor.
+
+{
+  "scene": "text card 1",
+  "continuity": "new clip — no person, no reference image",
+  "setting": "soft cream (#FAF6EE) studio backdrop with gentle green light gradients and slow out-of-focus light particles",
+  "subject": "text only, no people, no hands, no faces",
+  "text_on_screen": {
+    "main": "YOUR CLINIC",
+    "sub": "ON ONE PLATFORM",
+    "style": "large bold modern sans-serif, deep green (#0F6B4A) main line, navy smaller line below, centred, perfectly spelled, crisp and straight"
+  },
+  "action": "words fade in with a soft upward slide, then hold fully readable for the last 4 seconds; a gentle light sweep passes across",
+  "camera_style": "vertical 9:16, slow cinematic drift",
+  "duration_seconds": 8,
+  "audio": "soft uplifting piano note and a light whoosh, no voice",
+  "negative_constraints": [
+    "no other text",
+    "no logos or symbols",
+    "no misspelled or warped letters",
+    "no people"
+  ]
+}
+
+{
+  "scene": "text card 2",
+  "continuity": "new clip — no person, no reference image",
+  "setting": "soft cream (#FAF6EE) studio backdrop with gentle green light gradients and slow out-of-focus light particles",
+  "subject": "text only, no people, no hands, no faces",
+  "text_on_screen": {
+    "main": "JOIN TODAY",
+    "sub": "sehatsandhi.com",
+    "style": "large bold modern sans-serif, deep green (#0F6B4A) main line, navy smaller line below, centred, perfectly spelled, crisp and straight"
+  },
+  "action": "words fade in with a soft upward slide, then hold fully readable for the last 4 seconds; a gentle light sweep passes across",
+  "camera_style": "vertical 9:16, slow cinematic drift",
+  "duration_seconds": 8,
+  "audio": "soft uplifting piano note and a light whoosh, no voice",
+  "negative_constraints": [
+    "no other text",
+    "no logos or symbols",
+    "no misspelled or warped letters",
+    "no people"
+  ]
+}

@@ -206,6 +206,59 @@ await expectDeny('another clinic cannot register into this one',
       p_full_name=>'[TEST] Poach', p_relation=>'self', p_gender=>null, p_age_years=>30,
       p_date_of_birth=>null, p_blood_group=>null, p_mrn=>null, p_source=>'walk_in')`, [BIZ.id]))
 if (memberId) {
+  // 0257: a returning patient keeps the file number they were given.
+  const again = (mrn) => perform('reception', `select sehat_register_patient(
+      p_business=>$1, p_phone=>$2, p_full_name=>$3, p_relation=>'self', p_gender=>null,
+      p_age_years=>null, p_date_of_birth=>null, p_blood_group=>null, p_mrn=>$4, p_source=>'walk_in')`,
+    [BIZ.id, phone(STAMP.slice(-9)), `[TEST] Registered ${STAMP}`, mrn])
+  const fileNo = `T${STAMP.slice(-6)}`
+  expectEq('a file number is set where there is none', await again(fileNo).catch(e => e.message), memberId)
+  expectEq('the same file number again is accepted', await again(fileNo.toLowerCase()).catch(e => e.message), memberId)
+  await expectDeny('a different file number does not replace theirs', () => again(`X${STAMP.slice(-6)}`))
+  expectEq('their file number is unchanged', await tryProbe('reception',
+    `select mrn from business_patients where business_id=$1 and patient_member_id=$2`, [BIZ.id, memberId]), fileNo)
+
+  // 0258: the same person registered again on another mobile, then merged.
+  const otherPhone = phone(STAMP.slice(-8) + '1')
+  const dupId = await perform('reception', `select sehat_register_patient(
+      p_business=>$1, p_phone=>$2, p_full_name=>$3, p_relation=>'self', p_gender=>null,
+      p_age_years=>41, p_date_of_birth=>null, p_blood_group=>null, p_mrn=>null, p_source=>'walk_in')`,
+    [BIZ.id, otherPhone, `[TEST] Registered ${STAMP}`]).catch(e => { record('a duplicate on another mobile registers', false, e.message); return null })
+  if (dupId) {
+    await db.query(`insert into patient_vitals (business_id, patient_member_id, pulse) values ($1,$2,72)`, [BIZ.id, dupId])
+    const merged = await db.query(`select sehat_merge_patient_members($1,$2,'test-suite') r`, [memberId, dupId])
+      .then(r => r.rows[0].r, e => { record('the duplicate merges into the kept record', false, e.message); return null })
+    if (merged) {
+      record('the duplicate merges into the kept record', true)
+      const after = (await db.query(`select
+          (select status from patient_members where id=$2) st,
+          (select merged_into from patient_members where id=$2) into_,
+          (select count(*)::int from patient_vitals where patient_member_id=$1 and pulse=72) vitals,
+          (select count(*)::int from business_patients where patient_member_id=$2) links,
+          (select mrn from business_patients where patient_member_id=$1 and business_id=$3) mrn,
+          (select count(*)::int from patient_phones where patient_member_id=$1 and phone=sehat_patient_phone($4)) extra`,
+        [memberId, dupId, BIZ.id, otherPhone])).rows[0]
+      expectEq('the duplicate is marked merged', after.st, 'merged')
+      expectEq('it points at the kept record', after.into_, memberId)
+      expectEq('its vitals moved to the kept record', after.vitals, 1)
+      expectEq('its clinic link is gone', after.links, 0)
+      expectEq('the kept file number stays', after.mrn, fileNo)
+      expectEq('its mobile is an extra number on the kept record', after.extra, 1)
+      const found = await tryProbe('reception', `select count(*)::int from sehat_search_patients($1,$2) where patient_member_id=$3`,
+        [otherPhone.slice(-10), BIZ.id, memberId])
+      expectEq('searching the other mobile finds the kept record', found, 1)
+      const merged2 = await tryProbe('reception', `select count(*)::int from sehat_search_patients($1,$2) where patient_member_id=$3`,
+        [otherPhone.slice(-10), BIZ.id, dupId])
+      expectEq('the merged record no longer comes up', merged2, 0)
+      const picked = await perform('reception', `select sehat_register_patient(
+          p_business=>$1, p_phone=>$2, p_full_name=>$3, p_mrn=>null, p_member=>$4)`,
+        [BIZ.id, otherPhone, 'typed differently', memberId]).catch(e => e.message)
+      expectEq('picking them on the other mobile registers the kept record', picked, memberId)
+    }
+    await expectDeny('clinic staff cannot merge records',
+      () => probe('reception', `select sehat_merge_patient_members($1,$2)`, [memberId, dupId]))
+  }
+
   const seen = await tryProbe('reception', `select count(*)::int from sehat_search_patients($1,$2)`, ['[TEST] Registered', BIZ.id])
   expectTrue('the new patient is searchable by its own clinic', seen > 0, `search returned ${seen}`)
   const cross = await tryProbe('other', `select count(*)::int from sehat_search_patients($1,$2)`, ['[TEST] Registered', BIZ.id])

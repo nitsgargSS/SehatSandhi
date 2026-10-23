@@ -509,13 +509,41 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
   const [paidHow, setPaidHow] = useFeePaidHow()
   const [done, setDone] = useState<{ id: string; queueId: string | null; token: number | null; fee: number; paid: number } | null>(null)
   const [onNumber, setOnNumber] = useState<PatientSearchResult[]>([])
+  // The phone is what tells families apart: once it is typed, reception picks
+  // who on it has come (their details and file number come with them) or says
+  // it is somebody new. Retyping a returning patient is how one person ended
+  // up with two records and two file numbers.
+  const [picked, setPicked] = useState<PatientSearchResult | null>(null)
+  const [newOnNumber, setNewOnNumber] = useState(false)
   useEffect(() => {
+    setPicked(null); setNewOnNumber(false)
     const d = form.phone.replace(/\D/g, '')
     if (d.length < 10) { setOnNumber([]); return }
     let live = true
+    // Ten digits search phones only — the main number and any extra one (0193),
+    // so somebody merged from another number (0258) comes up too.
     searchPatients(d.slice(-10), businessId).then(r => { if (live) setOnNumber(r) }, () => undefined)
     return () => { live = false }
   }, [form.phone, businessId])
+  const choosing = onNumber.length > 0 && !picked && !newOnNumber
+  const sameNameOnNumber = newOnNumber
+    ? onNumber.find(p => p.full_name.trim().toLowerCase() === form.fullName.trim().toLowerCase()) ?? null
+    : null
+
+  const pick = (p: PatientSearchResult) => {
+    setPicked(p); setNewOnNumber(false); setErr('')
+    setForm(f => ({
+      ...f, fullName: p.full_name, relation: p.relation || 'self', gender: p.gender ?? '',
+      age: p.age_years != null ? String(p.age_years) : '', mrn: p.mrn ?? '',
+    }))
+    getPatientSummary(p.patient_member_id, businessId).then(s => {
+      if (s) setForm(f => ({ ...f, bloodGroup: s.blood_group ?? f.bloodGroup, pinCode: s.pin_code ?? f.pinCode }))
+    }, () => undefined)
+  }
+  const addNew = () => {
+    setPicked(null); setNewOnNumber(true); setErr('')
+    setForm(f => ({ ...f, fullName: '', relation: 'self', gender: '', age: '', bloodGroup: '', mrn: '' }))
+  }
   const opdDoctorId = underDoctor ?? (doctors.length === 1 ? doctors[0].practitioner_id : null)
   const opdDoctor = doctors.find(d => d.practitioner_id === opdDoctorId) ?? null
 
@@ -532,6 +560,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
         bloodGroup: form.bloodGroup || undefined,
         mrn: form.mrn.trim() || undefined,
         pinCode: form.pinCode.trim() || undefined,
+        memberId: picked?.patient_member_id ?? null,
       })
       // 0183: the address lives on the family's account; set right after.
       if (form.address.trim() || form.city.trim()) {
@@ -550,7 +579,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
   }
 
   const phoneErr = form.phone.trim() ? phoneProblem(form.phone, true, true) : null
-  const ready = form.fullName.trim().length > 1 && !phoneProblem(form.phone, true, true)
+  const ready = form.fullName.trim().length > 1 && !phoneProblem(form.phone, true, true) && !choosing
     && (!toOpd || feeValid(fee, opdDoctor)) && (!toOpd || doctors.length <= 1 || !!underDoctor)
 
   if (done) {
@@ -573,25 +602,12 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
 
   return (
     <div style={card}>
-      <div style={{ ...label, marginBottom: 10 }}>New patient</div>
-      {onNumber.length > 0 && (
-        <div style={{ fontSize: 13, background: '#fff8eb', border: '1px solid #f0dcb0', borderRadius: 9, padding: '8px 10px', marginBottom: 10 }}>
-          <b>Already registered on this number:</b>
-          {onNumber.slice(0, 5).map(r => (
-            <div key={r.patient_member_id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
-              <span>{r.full_name}{r.age_years != null ? ` · ${r.age_years}y` : ''}</span>
-              <button style={{ ...btn(), fontSize: 12, padding: '3px 9px' }} onClick={() => onDone(r.patient_member_id)}>
-                Open — returning patient
-              </button>
-            </div>
-          ))}
-          <div style={{ color: BIZ.muted, marginTop: 4 }}>A different family member on the same number? Carry on below.</div>
-        </div>
-      )}
+      <div style={{ ...label, marginBottom: 10 }}>{picked ? 'Returning patient' : 'New patient'}</div>
       <div style={{ display: 'grid', gap: 10 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ flex: '2 1 220px' }}><div style={label}>Full name</div>
-            <input style={input} value={form.fullName} autoFocus
+            <input style={{ ...input, ...(picked ? { background: '#f4f4f1' } : {}) }} value={form.fullName} autoFocus
+              readOnly={!!picked}
               onChange={e => setForm({ ...form, fullName: e.target.value })} /></div>
           <div style={{ flex: '1 1 150px' }}><div style={label}>Mobile number</div>
             <input style={{ ...input, ...(phoneErr ? { borderColor: '#d64545' } : {}) }} inputMode="tel" placeholder="10 digits, or +44… for a foreign number"
@@ -599,8 +615,45 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
             {phoneErr && <div style={{ fontSize: 12, color: '#b3261e', marginTop: 3 }}>{phoneErr}</div>}</div>
         </div>
 
+        {choosing && (
+          <div style={{ fontSize: 13, background: '#fff8eb', border: '1px solid #f0dcb0', borderRadius: 9, padding: '10px 12px' }}>
+            <b>Registered on this number — who has come?</b>
+            {onNumber.map(r => (
+              <button key={r.patient_member_id} onClick={() => pick(r)}
+                style={{ ...btn(), display: 'block', width: '100%', textAlign: 'left', marginTop: 6 }}>
+                <b>{r.full_name}</b>
+                {[r.age_years != null ? `${r.age_years}y` : null, r.gender, r.mrn ? `file ${r.mrn}` : null].filter(Boolean).map(t => ` · ${t}`).join('')}
+              </button>
+            ))}
+            <button style={{ ...btn(true), marginTop: 10 }} onClick={addNew}>
+              <Plus size={14} style={{ verticalAlign: -2 }} /> New patient on this number
+            </button>
+          </div>
+        )}
+        {picked && (
+          <div style={{ fontSize: 12.5, color: BIZ.mutedWarm }}>
+            Returning patient — this visit goes on their existing record{picked.mrn ? ` (file ${picked.mrn})` : ''}.
+            To correct their details, open the record.{' '}
+            <button style={{ ...btn(), fontSize: 12, padding: '2px 8px' }} onClick={() => { setPicked(null); setForm(f => ({ ...f, fullName: '', mrn: '' })) }}>
+              Not them
+            </button>
+          </div>
+        )}
+        {newOnNumber && (
+          <div style={{ fontSize: 12.5, color: BIZ.mutedWarm }}>
+            {sameNameOnNumber
+              ? <><b style={{ color: '#8a2b2b' }}>{sameNameOnNumber.full_name} is already registered on this number.</b>{' '}
+                  <button style={{ ...btn(), fontSize: 12, padding: '2px 8px' }} onClick={() => pick(sameNameOnNumber)}>Use their record</button></>
+              : <>A new person on this number.{' '}
+                  <button style={{ ...btn(), fontSize: 12, padding: '2px 8px' }} onClick={() => { setNewOnNumber(false); setForm(f => ({ ...f, fullName: '' })) }}>
+                    Back to the list
+                  </button></>}
+          </div>
+        )}
+
+        {!choosing && (<>
         <div><div style={label}>Whose number is this?</div>
-          <select style={input} value={form.relation}
+          <select style={input} value={form.relation} disabled={!!picked}
             onChange={e => setForm({ ...form, relation: e.target.value })}>
             {RELATIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
@@ -612,10 +665,10 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ flex: '0 1 110px' }}><div style={label}>Age</div>
-            <input style={input} inputMode="numeric" value={form.age}
+            <input style={input} inputMode="numeric" value={form.age} readOnly={!!picked && picked.age_years != null}
               onChange={e => setForm({ ...form, age: e.target.value })} /></div>
           <div style={{ flex: '0 1 130px' }}><div style={label}>Gender</div>
-            <select style={input} value={form.gender}
+            <select style={input} value={form.gender} disabled={!!picked && !!picked.gender}
               onChange={e => setForm({ ...form, gender: e.target.value })}>
               <option value="">—</option><option value="male">Male</option>
               <option value="female">Female</option><option value="other">Other</option>
@@ -628,6 +681,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
             </select></div>
           <div style={{ flex: '1 1 140px' }}><div style={label}>File number (optional)</div>
             <input style={input} value={form.mrn} placeholder="your own numbering"
+              readOnly={!!picked && !!picked.mrn?.trim()}
               onChange={e => setForm({ ...form, mrn: e.target.value })} /></div>
           <div style={{ flex: '1 1 100%' }}><div style={label}>Address</div>
             <input style={input} value={form.address} maxLength={300}
@@ -656,13 +710,14 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
         {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
 
         <div style={{ fontSize: 12, color: BIZ.mutedWarm }}>
-          Registering somebody already on your list is safe — the same name on
-          the same number is treated as them coming back, not as a new record.
+          A file number, once given, stays with the patient — it is not
+          replaced at the counter.
         </div>
+        </>)}
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={btn(true)} disabled={!ready || busy} onClick={save}>
-            {busy ? 'Registering…' : toOpd ? 'Register & give token' : 'Register and open'}
+            {busy ? 'Registering…' : picked ? (toOpd ? 'Give token' : 'Open record') : toOpd ? 'Register & give token' : 'Register and open'}
           </button>
           <button style={btn()} onClick={onCancel}>Cancel</button>
         </div>

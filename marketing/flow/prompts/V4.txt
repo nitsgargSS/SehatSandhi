@@ -1,0 +1,52 @@
+V4 — For diagnostic labs
+For: Labs and scan centres
+
+Make the clips in this order. For each one, copy ONLY the text between the ===== lines.
+
+CLIP 1 of 5 — founder speaking
+In Flow: Ingredients to Video with your photo
+===== COPY FROM HERE =====
+Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he takes two slow steps towards the camera, stops, smiles, then speaks with one calm open-palm gesture at chest height. Scene: a modern diagnostic lab with white benches, completely blurred, empty of people. Camera: slow, smooth push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): "नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। लैब और स्कैन सेंटर के लिए।" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.
+===== COPY UNTIL HERE =====
+He should say: नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। लैब और स्कैन सेंटर के लिए।
+(Meaning: Hello, I'm Nitin Garg, founder of Sehatsandhi. For labs and scan centres.)
+If the Hindi comes out wrong, replace the line inside quotes in the prompt with: Namaste, main Nitin Garg, Sehatsandhi ka founder. Lab aur scan centre ke liye.
+
+
+CLIP 2 of 5 — text card (no person)
+In Flow: Text to Video (new clip, no ingredient)
+===== COPY FROM HERE =====
+A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: "BOOK TESTS ONLINE". Below it, smaller dark navy letters spell exactly: "At the lab or from home". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.
+===== COPY UNTIL HERE =====
+Check the words read exactly: BOOK TESTS ONLINE / At the lab or from home
+
+
+CLIP 3 of 5 — founder speaking
+In Flow: Extend the previous founder clip (or Ingredients to Video with your photo)
+===== COPY FROM HERE =====
+Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he opens his right palm towards the camera. Scene: a modern diagnostic lab with white benches, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): "मरीज़ टेस्ट बुक करता है — लैब पर या घर से सैंपल।" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.
+===== COPY UNTIL HERE =====
+He should say: मरीज़ टेस्ट बुक करता है — लैब पर या घर से सैंपल।
+(Meaning: Patients book tests — at the lab or with a home collection.)
+If the Hindi comes out wrong, replace the line inside quotes in the prompt with: Mareez test book karta hai — lab par ya ghar se sample.
+
+
+CLIP 4 of 5 — text card (no person)
+In Flow: Text to Video (new clip, no ingredient)
+===== COPY FROM HERE =====
+A clean, premium 8-second motion-graphic title card. No people, no hands, no faces. Background: a soft cream (#FAF6EE) studio backdrop with subtle green light gradients and slow floating out-of-focus light particles. In the centre, large bold modern sans-serif letters in deep green (#0F6B4A) spell exactly: "REPORTS, INSTANTLY". Below it, smaller dark navy letters spell exactly: "Straight to the patient". The words fade in one at a time with a soft upward slide, then hold steady and fully readable for the last 4 seconds; a gentle light sweep passes across. Every letter crisp, correctly spelled, evenly spaced, perfectly straight and centred. Only these words — no other text, no logo, no symbols. Slow cinematic camera drift. Audio: soft, uplifting piano note and a light whoosh, no voice.
+===== COPY UNTIL HERE =====
+Check the words read exactly: REPORTS, INSTANTLY / Straight to the patient
+
+
+CLIP 5 of 5 — founder speaking
+In Flow: Extend the previous founder clip (or Ingredients to Video with your photo)
+===== COPY FROM HERE =====
+Subject: the man in the reference photo, same face and hairstyle, wearing a tailored navy-blue suit, white shirt and a solid deep-red tie. Waist-up medium shot, facing the camera, relaxed confident posture. Action: he stands still and speaks naturally with a single slow, small hand gesture: he gives a small confident nod. Scene: a modern diagnostic lab with white benches, completely blurred, empty of people. Camera: static tripod shot with a very slow push-in. Lighting and look: soft cinematic key light from the left, gentle warm rim light, shallow depth of field with a smooth creamy background blur, natural skin tones, premium TV-commercial look, 4K, sharp focus on his face. Dialogue (Hindi, calm, warm, clear Indian accent, lips in sync): "रिपोर्ट अपलोड कीजिए, मरीज़ को तुरंत मिल जाती है।" Audio: only his voice, clean studio quality, very soft background music. Avoid: text, subtitles, captions, logos, watermarks, other people, phones or objects in his hands, finger counting, fast movement, distorted hands, extra fingers, warped face, flicker, exaggerated lip movement.
+===== COPY UNTIL HERE =====
+He should say: रिपोर्ट अपलोड कीजिए, मरीज़ को तुरंत मिल जाती है।
+(Meaning: Upload the report; the patient gets it instantly.)
+If the Hindi comes out wrong, replace the line inside quotes in the prompt with: Report upload kijiye, mareez ko turant mil jaati hai.
+
+
+Then in the editor: put the clips in order 1-2-3-4-5, trim clips 2 and 4 to 4-5 seconds, add your name strip on clip 1, Hindi subtitles, and the end card.

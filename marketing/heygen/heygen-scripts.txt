@@ -1,0 +1,192 @@
+SEHATSANDHI — HEYGEN SCRIPTS (one script = one video, about 50–60 seconds)
+
+How to use
+- In HeyGen: Create video → choose your avatar → paste ONE script below (only the lines under "SCRIPT").
+- Each line is one scene. Press Enter between lines so HeyGen makes a new scene; put the matching on-screen text on that scene.
+- Voice: Hindi (or your cloned voice). Speed 0.95–1.0. If a word is mispronounced, write it the way it sounds (e.g. "सेहतसंधि").
+- Add a 0.4-second pause after each line (HeyGen: insert a pause/break) so it doesn't sound rushed.
+- Format: 9:16 for Reels/WhatsApp Status; 16:9 for YouTube and the website.
+- Last scene: logo, sehatsandhi.com, WhatsApp 7015399355. Add the Google Play badge only after the app is live.
+- Mark the videos as AI-generated when you post them.
+
+
+==================================================================
+FILM 1 — Doctors & clinics
+==================================================================
+SCRIPT
+नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। डॉक्टर सर, अब आपका पूरा क्लिनिक एक प्लेटफ़ॉर्म पर।
+मरीज़ आया — रिसेप्शन पर टोकन, ओपीडी की लाइन और फ़ीस, सब एक क्लिक में, फ़ोन से भी।
+भीड़ ज़्यादा है? मरीज़ QR स्कैन करके ख़ुद अपना नाम और नंबर भर देता है, रिसेप्शन बस टोकन देता है।
+कंसल्टेशन में मरीज़ की पूरी मेडिकल हिस्ट्री सामने — BP, शुगर, स्टेंट, एलर्जी — और डिजिटल पर्चा।
+टेस्ट, चश्मे, दवाई — इनवॉइस बनाइए, GST के साथ या बिना, और शाम को दिन का पूरा हिसाब।
+पर्चा, बिल और लैब रिपोर्ट सीधे मरीज़ के WhatsApp पर — काग़ज़ खोने का झंझट ख़त्म।
+नए मरीज़ आपको अपने एरिया में ढूंढते हैं, और असली मरीज़ों के रिव्यू आपकी पहचान बनाते हैं।
+आज ही जुड़िए — sehatsandhi.com पर। सेहतसंधि — स्वास्थ्य की नई साझेदारी।
+
+ON-SCREEN TEXT (one per line above)
+1 Nitin Garg · Founder, Sehatsandhi
+2 Token · OPD · Fees
+3 QR self-registration
+4 Medical history · Digital prescription
+5 Invoices · GST · Day's accounts
+6 Prescription · Bills · Reports on WhatsApp
+7 New patients · Real reviews
+8 sehatsandhi.com
+
+
+==================================================================
+FILM 1 — Doctors & clinics — VIDEO AGENT PROMPT (paste this whole block into HeyGen Video Agent)
+==================================================================
+Create a 60-second vertical (9:16) premium promotional video for doctors and clinic owners in India, presented by my avatar "NitsAvatar in a business suit" (navy suit, white shirt, red tie, modern clinic office background with a bookshelf). Use my voice "NitsSecondVoice". The avatar speaks in Hindi exactly the script below — do not change, translate or shorten any words. Calm, warm, confident delivery at a natural pace, with subtle professional hand gestures.
+
+Style: high-end healthcare brand advertisement, cinematic soft lighting, clean modern layout. Brand colours: deep green #0F6B4A, navy #12382B, cream #FAF6EE. Font: bold modern sans-serif for English titles. Soft, uplifting background music at low volume under the voice. Smooth, gentle transitions. No logos of other companies, no prices, no extra claims.
+
+Make one scene per script line. Show the avatar in every scene. On each scene add the short English title given below as a clean text banner (green bar, white bold text) near the top, and add Hindi subtitles of the spoken line at the bottom.
+
+Scene 1 — Title: "Nitin Garg · Founder, Sehatsandhi" (as a name strip, bottom-left)
+Script: नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। डॉक्टर सर, अब आपका पूरा क्लिनिक एक प्लेटफ़ॉर्म पर।
+
+Scene 2 — Title: "Token · OPD · Fees"
+Script: मरीज़ आया — रिसेप्शन पर टोकन, ओपीडी की लाइन और फ़ीस, सब एक क्लिक में, फ़ोन से भी।
+
+Scene 3 — Title: "QR self-registration"
+Script: भीड़ ज़्यादा है? मरीज़ QR स्कैन करके ख़ुद अपना नाम और नंबर भर देता है, रिसेप्शन बस टोकन देता है।
+
+Scene 4 — Title: "Medical history · Digital prescription"
+Script: कंसल्टेशन में मरीज़ की पूरी मेडिकल हिस्ट्री सामने — BP, शुगर, स्टेंट, एलर्जी — और डिजिटल पर्चा।
+
+Scene 5 — Title: "Invoices · GST · Day's accounts"
+Script: टेस्ट, चश्मे, दवाई — इनवॉइस बनाइए, GST के साथ या बिना, और शाम को दिन का पूरा हिसाब।
+
+Scene 6 — Title: "Prescription · Bills · Reports on WhatsApp"
+Script: पर्चा, बिल और लैब रिपोर्ट सीधे मरीज़ के WhatsApp पर — काग़ज़ खोने का झंझट ख़त्म।
+
+Scene 7 — Title: "New patients · Real reviews"
+Script: नए मरीज़ आपको अपने एरिया में ढूंढते हैं, और असली मरीज़ों के रिव्यू आपकी पहचान बनाते हैं।
+
+Scene 8 — Title: "sehatsandhi.com · WhatsApp 7015399355"
+Script: आज ही जुड़िए — sehatsandhi.com पर। सेहतसंधि — स्वास्थ्य की नई साझेदारी।
+
+End with a 3-second closing card: cream background, the text "Sehatsandhi" in deep green, below it "स्वास्थ्य की नई साझेदारी" and "sehatsandhi.com".
+
+
+==================================================================
+FILM 2 — Health records in one place (launch film, for everyone)
+==================================================================
+SCRIPT
+नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर।
+आपकी सेहत की कहानी बिखरी हुई है — कहीं पर्चा, कहीं रिपोर्ट, कहीं बिल।
+सेहतसंधि पर यह सब एक जगह — आपके और पूरे परिवार के लिए।
+आपके क्लिनिक से पर्चा, बिल और रिपोर्ट सीधे आपके फ़ोन पर आते हैं।
+कोई सवाल हो तो ऐप से सीधे अपने क्लिनिक को संदेश या फ़ोटो भेजिए।
+अगली बार किसी भी डॉक्टर को, कहीं भी, फ़ोन पर दिखाइए — फ़ाइल ढोने की ज़रूरत नहीं।
+आपका डेटा आपका है — आप जब चाहें, उसे हटवा सकते हैं।
+सेहतसंधि — स्वास्थ्य की नई साझेदारी।
+
+ON-SCREEN TEXT
+1 Nitin Garg · Founder, Sehatsandhi
+2 Prescriptions · Reports · Bills — scattered?
+3 All in one place, for the whole family
+4 Straight from your clinic
+5 Message your clinic from the app
+6 Show any doctor, anywhere
+7 Your data, your control
+8 sehatsandhi.com
+
+
+==================================================================
+FILM 3 — The app for patients
+==================================================================
+SCRIPT
+नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। अब डॉक्टर ढूंढना हुआ आसान।
+बस अपनी भाषा में लिखिए — "आँख का डॉक्टर" या "बच्चे को बुखार"।
+पास के वेरिफ़ाइड डॉक्टर, उनकी फ़ीस और खाली समय सामने — एक टैप में बुकिंग।
+ब्लड टेस्ट लैब पर या घर से सैंपल, और एमआरआई-सीटी सेंटर पर — समय चुनकर बुक कीजिए।
+दवाई चाहिए? पर्ची की फ़ोटो भेजिए, फ़ार्मेसी पहले कीमत बताएगी।
+इमरजेंसी में पहले 108, और साथ में पास की एम्बुलेंस को अलर्ट।
+ये सब मुफ़्त — सेहतसंधि ऐप और WhatsApp पर।
+
+ON-SCREEN TEXT
+1 Nitin Garg · Founder, Sehatsandhi
+2 Type in Hindi or English
+3 Verified doctors · Book in one tap
+4 Lab tests · Home collection · Scans
+5 Medicines — price first
+6 Call 108 first · Alert ambulances
+7 Free · App + WhatsApp 7015399355
+
+
+==================================================================
+FILM 4 — Pharmacies
+==================================================================
+SCRIPT
+नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। फ़ार्मेसी वालों के लिए एक ख़ास बात।
+आपके एरिया के मरीज़ पर्ची की फ़ोटो भेजकर दवाई ऑर्डर करते हैं — ऑर्डर सीधे आपके पास।
+आप कीमत बताइए, मरीज़ हाँ कहे, फिर डिलीवरी — बिना फ़ोन पर बहस के।
+दुकान का स्टॉक, बैच और एक्सपायरी — सब सिस्टम में।
+पत्ते की जगह गोलियाँ गिनकर बेचिए, बिल GST के साथ।
+सेहतसंधि से जुड़िए और अपने एरिया के ग्राहकों तक पहुँचिए।
+
+ON-SCREEN TEXT
+1 Nitin Garg · Founder, Sehatsandhi
+2 Orders from patients near you
+3 Quote · Approve · Deliver
+4 Stock · Batch · Expiry
+5 Sell by strip or by tablet · GST bills
+6 sehatsandhi.com
+
+
+==================================================================
+FILM 5 — Diagnostic labs & scan centres
+==================================================================
+SCRIPT
+नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। लैब और स्कैन सेंटर के लिए।
+मरीज़ अपने एरिया में आपकी लैब ढूंढता है — ब्लड टेस्ट के लिए पैथोलॉजी, स्कैन के लिए इमेजिंग सेंटर।
+ब्लड टेस्ट लैब पर या घर से सैंपल, स्कैन सेंटर पर — मरीज़ ख़ुद समय चुनकर बुक करता है।
+अपनी ऑफ़र लाइन लगाइए — जैसे "एमआरआई पर 10% छूट"।
+रिपोर्ट अपलोड कीजिए, मरीज़ को फ़ोन पर तुरंत मिल जाती है।
+आज ही जुड़िए — sehatsandhi.com पर।
+
+ON-SCREEN TEXT
+1 Nitin Garg · Founder, Sehatsandhi
+2 Found by patients near you
+3 Lab · Home collection · Scans
+4 Your own offer line
+5 Reports, instantly
+6 sehatsandhi.com
+
+
+==================================================================
+FILM 6 — Ambulance
+==================================================================
+SCRIPT
+नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। इमरजेंसी में हर मिनट क़ीमती है।
+सबसे पहले 108 पर कॉल करें — यह मुफ़्त है।
+साथ ही सेहतसंधि पर एक टैप से पास की प्राइवेट एम्बुलेंस को अलर्ट करें।
+जो पहले स्वीकार करे, वह आपको कॉल करता है, और आपकी लोकेशन उसके पास पहुँच जाती है।
+एम्बुलेंस सेवा चलाते हैं? सेहतसंधि से जुड़िए — ज़रूरतमंद तक जल्दी पहुँचिए।
+
+ON-SCREEN TEXT
+1 Nitin Garg · Founder, Sehatsandhi
+2 Call 108 first — free
+3 Alert ambulances near you
+4 Your location reaches the crew
+5 Ambulance services: join at sehatsandhi.com
+
+
+==================================================================
+FILM 7 — Insurance advisors
+==================================================================
+SCRIPT
+नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर। हेल्थ इंश्योरेंस सलाहकारों के लिए।
+जो परिवार हेल्थ इंश्योरेंस चाहते हैं, वे सेहतसंधि पर कॉल-बैक मांगते हैं।
+अनुरोध आपके एरिया के लाइसेंस वाले सलाहकारों के पास जाता है।
+जो पहले स्वीकार करे, नंबर सिर्फ़ उसी को — परिवार की प्राइवेसी सुरक्षित।
+लिस्टिंग मुफ़्त है। आज ही जुड़िए — sehatsandhi.com पर।
+
+ON-SCREEN TEXT
+1 Nitin Garg · Founder, Sehatsandhi
+2 Real requests from families
+3 Sent to licensed advisors near them
+4 One request · One advisor · Privacy first
+5 Free listing · sehatsandhi.com
