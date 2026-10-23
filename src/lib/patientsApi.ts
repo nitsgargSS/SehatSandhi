@@ -691,6 +691,9 @@ export interface NewPatient {
   mrn?: string
   /** Where they live, 6 digits. Optional; feeds "patients by area" (0111). */
   pinCode?: string
+  /** 0258: the returning patient picked at the counter — the visit goes on
+   *  this record whatever spelling or which of their numbers was typed. */
+  memberId?: string | null
 }
 
 /**
@@ -713,6 +716,7 @@ export async function registerPatient(businessId: string, p: NewPatient): Promis
     p_mrn: p.mrn || null,
     p_source: 'walk_in',
     p_pin_code: p.pinCode || null,
+    p_member: p.memberId || null,
   })
   if (error) throw new Error(error.message)
   return data as string
