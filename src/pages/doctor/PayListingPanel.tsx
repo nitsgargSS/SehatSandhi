@@ -46,6 +46,12 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
   const [months, setMonths] = useState(initialMonths)
   // Ticked unless they chose to leave it out (0119): null = never chose.
   const [whatsapp, setWhatsapp] = useState(b.renewal_whatsapp !== false)
+  // 0259: the free messages that come with the add-on, from the one settings row.
+  const [freePerMonth, setFreePerMonth] = useState<number | null>(null)
+  useEffect(() => {
+    supabase.from('whatsapp_marketing_settings').select('free_messages_per_month').eq('id', true).maybeSingle()
+      .then(({ data }) => setFreePerMonth((data as { free_messages_per_month?: number } | null)?.free_messages_per_month ?? null))
+  }, [])
   const [autoRenew, setAutoRenew] = useState(b.auto_renew !== false)
   const [couponInput, setCouponInput] = useState('')
   const [couponCode, setCouponCode] = useState('')
@@ -200,7 +206,9 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
               <input type="checkbox" checked={whatsapp} onChange={e => setWhatsapp(e.target.checked)} className="mt-1" />
               <span>
                 <b>WhatsApp messaging</b> — {inr(terms.find(t => t.months === months)?.whatsapp_price ?? 0)} for this term
-                (WhatsApp Business Verification &amp; Activation Fee). Messages are paid separately from your WhatsApp wallet.
+                (WhatsApp Business Verification &amp; Activation Fee).
+                {freePerMonth ? <> Includes <b>{freePerMonth} free messages a month</b> for prescriptions, bills and reports; after those, and for broadcasts, messages are paid from your WhatsApp wallet.</>
+                  : <> Messages are paid separately from your WhatsApp wallet.</>}
               </span>
             </label>
           )}

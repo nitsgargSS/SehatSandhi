@@ -15,7 +15,7 @@
 // These are the working terms, written to be read in a minute. Have them
 // checked by a lawyer before they are relied on.
 
-export const WA_TERMS_VERSION = '2026-10-11'
+export const WA_TERMS_VERSION = '2026-10-24'
 
 export const WA_TERMS: { title: string; text: string }[] = [
   {
@@ -44,7 +44,7 @@ export const WA_TERMS: { title: string; text: string }[] = [
   },
   {
     title: 'What it costs',
-    text: 'Each message is paid for from your WhatsApp wallet at the price shown before you send: one price for a broadcast message, and a lower one for a one-to-one message such as a prescription, a bill, a report or a request for a review. A message that is not delivered is returned to your wallet automatically. Wallet top-ups are not refundable to a bank account or card (see the Refund Policy).',
+    text: 'While your WhatsApp add-on is active you get free messages every month — 200 at present, the number shown on your WhatsApp tab. They are used first, for one-to-one messages only: a prescription, a bill, a report or a request for a review; not for broadcasts. Your month runs from the day your add-on started; free messages left at its end lapse and cannot be carried over, exchanged or refunded. After them, each message is paid for from your WhatsApp wallet at the price shown before you send: one price for a broadcast message, and a lower one for a one-to-one message. A message that is not delivered is given back automatically — a free message to that month, a paid one to your wallet. Wallet top-ups are not refundable to a bank account or card (see the Refund Policy).',
   },
   {
     title: 'Asking for reviews',

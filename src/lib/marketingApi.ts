@@ -16,6 +16,8 @@ export interface MarketingSettings {
   meta_utility_cost_paise: number
   grace_days: number
   sending_enabled: boolean
+  /** 0259: free one-to-one messages a month with the add-on (default 200). */
+  free_messages_per_month: number
   updated_at: string
 }
 
@@ -344,6 +346,8 @@ export interface WalletMonth {
   lead_fees_paise: number
   refunds_paise: number
   adjustments_paise: number
+  /** 0259: one-to-one messages sent free from the month's allowance — Meta still bills them. */
+  free_messages: number
   /** Estimated from the two Meta rates in the settings. */
   meta_cost_paise: number
   margin_paise: number
@@ -462,4 +466,59 @@ export async function listWaComplimentary(): Promise<Record<string, { on: boolea
   oops(error)
   return Object.fromEntries(((data ?? []) as { business_id: string; complimentary: boolean; complimentary_note: string | null }[])
     .map(r => [r.business_id, { on: r.complimentary, note: r.complimentary_note }]))
+}
+
+// ── 0259: free messages each month ─────────────────────────────────────────
+
+/** This month's free messages for a clinic. Not eligible = WhatsApp is not open to it. */
+export interface WaFreeStatus {
+  eligible: boolean
+  total: number
+  used: number
+  left: number
+  extra?: number
+  period_start?: string
+  period_end?: string
+  renews_on?: string
+}
+
+export interface WaFreeMonth {
+  period_start: string
+  period_end: string
+  allowance: number
+  extra: number
+  used: number
+  grants: { messages: number; reason: string; by: string | null; at: string }[]
+}
+
+export interface WaFreeRow {
+  business_id: string
+  business_name: string
+  blocker: string | null
+  complimentary: boolean
+  /** The clinic's own monthly number; null = the default. */
+  override: number | null
+  override_note: string | null
+  now: WaFreeStatus
+  months: WaFreeMonth[]
+}
+
+export async function getWaFreeOverview(): Promise<WaFreeRow[]> {
+  const { data, error } = await supabase.rpc('sehat_admin_wa_free_overview')
+  oops(error)
+  return (data ?? []) as WaFreeRow[]
+}
+
+/** null puts the clinic back on the default. */
+export async function adminSetWaFree(businessId: string, messages: number | null, note?: string): Promise<WaFreeStatus> {
+  const { data, error } = await supabase.rpc('sehat_admin_wa_free_set', { p_business: businessId, p_messages: messages, p_note: note ?? null })
+  oops(error)
+  return data as WaFreeStatus
+}
+
+/** Extra free messages for the clinic's current month only. */
+export async function adminGrantWaFree(businessId: string, messages: number, reason: string): Promise<WaFreeStatus> {
+  const { data, error } = await supabase.rpc('sehat_admin_wa_free_grant', { p_business: businessId, p_messages: messages, p_reason: reason })
+  oops(error)
+  return data as WaFreeStatus
 }
