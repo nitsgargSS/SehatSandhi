@@ -34,6 +34,28 @@ export interface WaAccount {
   /** 0219: the messaging terms the owner accepted, and when. */
   terms_version?: string | null
   terms_accepted_at?: string | null
+  /** 0261: Basic (our number, by hand) or Pro (the clinic's own number, automatic messages). */
+  plan?: 'basic' | 'pro'
+  /** 0261: the clinic's own number, connected through Meta's Embedded Signup. */
+  phone_number_id?: string | null
+  verified_name?: string | null
+  name_status?: string | null
+  quality_rating?: string | null
+  messaging_limit?: string | null
+  coexistence?: boolean
+  own_status?: 'none' | 'connected' | 'failed' | 'disconnected'
+  own_error?: string | null
+  own_checked_at?: string | null
+  connected_at?: string | null
+}
+
+/** 0261: one of our templates in a clinic's own WhatsApp account. */
+export interface WaClinicTemplate {
+  name: string
+  language: string
+  status: string
+  reason: string | null
+  updated_at: string
 }
 
 export interface WalletTx {
@@ -391,7 +413,7 @@ export async function getMarketingReport(): Promise<MarketingReportRow[]> {
   }))
 }
 
-export async function adminSetWaAccount(businessId: string, patch: Partial<Pick<WaAccount, 'status' | 'subscription_status' | 'whatsapp_number' | 'notes'>>) {
+export async function adminSetWaAccount(businessId: string, patch: Partial<Pick<WaAccount, 'status' | 'subscription_status' | 'whatsapp_number' | 'notes' | 'plan'>>) {
   const extra: Record<string, unknown> = {}
   if (patch.status === 'live') extra.onboarded_at = new Date().toISOString()
   if (patch.subscription_status === 'past_due') extra.past_due_since = new Date().toISOString()
@@ -521,4 +543,40 @@ export async function adminGrantWaFree(businessId: string, messages: number, rea
   const { data, error } = await supabase.rpc('sehat_admin_wa_free_grant', { p_business: businessId, p_messages: messages, p_reason: reason })
   oops(error)
   return data as WaFreeStatus
+}
+
+// ── 0261: the clinic's own WhatsApp number ──────────────────────────────────
+
+export async function listOwnTemplates(businessId: string): Promise<WaClinicTemplate[]> {
+  const { data, error } = await supabase.from('wa_clinic_templates')
+    .select('name, language, status, reason, updated_at').eq('business_id', businessId).order('name')
+  oops(error)
+  return (data ?? []) as WaClinicTemplate[]
+}
+
+/** Connect (after Embedded Signup), look again, or disconnect. The server does all the talking to Meta. */
+export async function waConnect(businessId: string, action: 'connect' | 'refresh' | 'disconnect',
+  extra: { code?: string; wabaId?: string; phoneNumberId?: string; coexistence?: boolean } = {}): Promise<{ ok: boolean; message?: string }> {
+  const { url, anon } = activeConfig()
+  if (!url || !anon) throw new Error('Not configured.')
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Please sign in again.')
+  const res = await fetch(`${url}/functions/v1/wa-connect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, apikey: anon },
+    body: JSON.stringify({ businessId, action, ...extra }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: !!body.ok, message: body.message ?? body.error }
+}
+
+/** 0261: each clinic's WhatsApp plan and own-number state, for the admin table. */
+export async function listWaPlans(): Promise<Record<string, { plan: 'basic' | 'pro'; own: string; number: string | null }>> {
+  const { data, error } = await supabase.from('business_wa_accounts').select('business_id, plan, own_status, whatsapp_number')
+  oops(error)
+  const out: Record<string, { plan: 'basic' | 'pro'; own: string; number: string | null }> = {}
+  for (const r of (data ?? []) as { business_id: string; plan: 'basic' | 'pro' | null; own_status: string | null; whatsapp_number: string | null }[]) {
+    out[r.business_id] = { plan: r.plan ?? 'basic', own: r.own_status ?? 'none', number: r.whatsapp_number }
+  }
+  return out
 }

@@ -45,6 +45,12 @@ export interface TemplateSend {
    * the sending number's own messaging account.
    */
   fromClinic?: boolean
+  /**
+   * 0261: send from a clinic's OWN number (Pro, connected through Embedded
+   * Signup), with the access key Meta gave for its account. Meta only — the
+   * template is the one wa-connect created in that account. Wins over fromClinic.
+   */
+  sender?: { phoneNumberId: string; token: string }
 }
 
 export interface SendOutcome {
@@ -68,7 +74,26 @@ export const metaEnvFor = (campaignEnv: string) =>
 
 export const metaConfigured = () => !!Deno.env.get('META_PHONE_NUMBER_ID') && !!Deno.env.get('META_ACCESS_TOKEN')
 
+/**
+ * 0261: the template each message uses in a clinic's OWN account — always the
+ * ones wa-connect created there (_shared/clinicTemplates.ts), whatever our
+ * own account's secrets say.
+ */
+const OWN_TEMPLATE: Record<string, string> = {
+  AISENSY_PRESCRIPTION_CAMPAIGN: 'prescription_link', AISENSY_BILL_CAMPAIGN: 'bill_link',
+  AISENSY_LAB_REPORT_CAMPAIGN: 'lab_report_link', AISENSY_DISCHARGE_CAMPAIGN: 'discharge_link',
+  AISENSY_APPOINTMENT_CAMPAIGN: 'appointment_update', AISENSY_RATING_CAMPAIGN: 'rating_request:hi',
+  AISENSY_WELCOME_CAMPAIGN: 'welcome_patient', AISENSY_VISIT_SUMMARY_CAMPAIGN: 'visit_summary',
+  AISENSY_FOLLOW_UP_CAMPAIGN: 'follow_up_reminder',
+}
+
 function metaTemplate(t: TemplateSend): { name: string; lang: string } | null {
+  if (t.sender) {
+    const own = envs(t.campaignEnv).map(e => OWN_TEMPLATE[e]).find(Boolean)
+    if (!own) return null
+    const [name, lang] = own.split(':')
+    return { name, lang: lang || 'en' }
+  }
   // META_TEMPLATE_NAME is the login template's older secret; login_code its default.
   const raw = firstSet(envs(t.campaignEnv).map(metaEnvFor))
     ?? (t.otp ? Deno.env.get('META_TEMPLATE_NAME') ?? 'login_code' : null)
@@ -81,7 +106,8 @@ function metaTemplate(t: TemplateSend): { name: string; lang: string } | null {
  * Whether any provider is set up to carry this template — asked before money
  * is taken for a message, so nothing is charged for a send that cannot start.
  */
-export function canSendTemplate(t: Pick<TemplateSend, 'campaignEnv' | 'otp'>): boolean {
+export function canSendTemplate(t: Pick<TemplateSend, 'campaignEnv' | 'otp' | 'sender'>): boolean {
+  if (t.sender) return !!metaTemplate({ ...t, to: '', userName: '', params: [] })
   const aisensy = !!Deno.env.get('AISENSY_API_KEY') && !!firstSet(envs(t.campaignEnv))
   return aisensy || (metaConfigured() && !!metaTemplate({ ...t, to: '', userName: '', params: [] }))
 }
@@ -111,7 +137,7 @@ async function viaAisensy(t: TemplateSend): Promise<SendOutcome | null> {
 
 async function viaMeta(t: TemplateSend): Promise<SendOutcome | null> {
   const tpl = metaTemplate(t)
-  if (!metaConfigured() || !tpl) return null
+  if (!tpl || (!t.sender && !metaConfigured())) return null
   const text = (s: string) => ({ type: 'text', text: s })
   const components: unknown[] = []
   if (t.params.length) components.push({ type: 'body', parameters: t.params.map(text) })
@@ -122,7 +148,7 @@ async function viaMeta(t: TemplateSend): Promise<SendOutcome | null> {
   const r = await graphSend({
     to: t.to, type: 'template',
     template: { name: tpl.name, language: { code: tpl.lang }, components },
-  }, t.fromClinic ? Deno.env.get('META_CLINIC_PHONE_NUMBER_ID') ?? undefined : undefined)
+  }, t.sender?.phoneNumberId ?? (t.fromClinic ? Deno.env.get('META_CLINIC_PHONE_NUMBER_ID') ?? undefined : undefined), t.sender?.token)
   return { ok: r.ok, provider: 'meta', error: r.error, unreachable: r.unreachable, id: r.id }
 }
 
@@ -135,9 +161,11 @@ export async function graphSend(
   message: Record<string, unknown>,
   /** The number to send from. A reply goes out from the number that was written to. */
   fromPhoneId?: string,
+  /** 0261: the key for a clinic's own number; ours otherwise. */
+  accessToken?: string,
 ): Promise<{ ok: boolean; id?: string; error?: string; unreachable?: boolean }> {
   const phoneId = fromPhoneId ?? Deno.env.get('META_PHONE_NUMBER_ID')
-  const token = Deno.env.get('META_ACCESS_TOKEN')
+  const token = accessToken ?? Deno.env.get('META_ACCESS_TOKEN')
   if (!phoneId || !token) return { ok: false, error: 'META_PHONE_NUMBER_ID / META_ACCESS_TOKEN not set' }
   try {
     const res = await fetch(`${GRAPH}/${phoneId}/messages`, {
@@ -166,6 +194,8 @@ export async function graphSend(
  * called this.
  */
 export async function sendTemplate(t: TemplateSend): Promise<SendOutcome> {
+  // A clinic's own number is on Meta and nowhere else.
+  if (t.sender) return await viaMeta(t) ?? { ok: false, provider: null, error: `${envs(t.campaignEnv).join(' / ')} is not set` }
   const want = (Deno.env.get('WA_PROVIDER') ?? '').toLowerCase()
   const metaFirst = want === 'meta' || (want !== 'aisensy' && !Deno.env.get('AISENSY_API_KEY'))
   const order = metaFirst ? [viaMeta, viaAisensy] : [viaAisensy, viaMeta]

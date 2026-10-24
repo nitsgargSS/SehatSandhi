@@ -12,7 +12,9 @@ import {
   rupees, renderTemplate, getMarketingSettings, getWaAccount, getWallet, getBroadcastBlocker,
   getAudiencePins, getAudience, listTemplates, listBroadcasts, createBroadcast, topUpWallet,
   acceptWaTerms, sendTestMessage, uploadBroadcastPicture, broadcastPictureUrl,
+  type WaClinicTemplate, listOwnTemplates, waConnect,
 } from '../../lib/marketingApi'
+import { embeddedSignup, loadFacebookSdk } from '../../lib/embeddedSignup'
 import { WA_TERMS, WA_TERMS_VERSION, PICTURE_RULES, templateRules } from '../../lib/waTerms'
 import { getSendOptions, type SendOptions } from '../../lib/sendApi'
 
@@ -241,7 +243,9 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
           </div>
           <div className="text-xs text-gray-500 text-right">
             {/* 0237: every clinic sends from Sehatsandhi's number for clinics; a clinic has none of its own to set up. */}
-            <div>Sent from: <b>{account?.whatsapp_number || 'Sehatsandhi’s WhatsApp number for clinics'}</b>, with your clinic’s name in each message
+            <div>Sent from: <b>{account?.own_status === 'connected'
+              ? `your own number${account.whatsapp_number ? ` ${account.whatsapp_number}` : ''}`
+              : 'Sehatsandhi’s WhatsApp number for clinics'}</b>{account?.own_status === 'connected' ? null : ', with your clinic’s name in each message'}
               {account?.status === 'suspended' ? <> · <b className="text-red-600">{STATUS_TEXT.suspended}</b></> : null}</div>
             <div>WhatsApp add-on: <b>{account && account.subscription_status !== 'inactive'
               ? `${STATUS_TEXT[account.subscription_status]}${account.next_billing_date ? ` until ${shortDate(account.next_billing_date)}` : ''}`
@@ -259,6 +263,8 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
         {!!send?.free_total && <FreeMessages o={send} />}
         {blocker && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{blocker}</p>}
       </div>
+
+      {account?.plan === 'pro' && <OwnNumberCard businessId={businessId} account={account} onChange={load} />}
 
       <WalletCard businessId={businessId} balance={balance} txs={txs} prefill={prefill} onChange={load} />
 
@@ -703,6 +709,142 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
       {reason && count > 0 && <p className="text-xs text-gray-500">{reason}</p>}
       {msg && <p className="text-sm text-teal-700">{msg}</p>}
       {err && <p className="text-sm text-red-600">{err}</p>}
+    </div>
+  )
+}
+
+// ── 0261: the clinic's own WhatsApp number (Pro) ────────────────────────────
+
+const TEMPLATE_LABEL: Record<string, string> = {
+  prescription_link: 'Prescription', bill_link: 'Bill', lab_report_link: 'Lab report', discharge_link: 'Discharge summary',
+  appointment_update: 'Appointment update', rating_request: 'Rating request', welcome_patient: 'Welcome on registration',
+  visit_summary: 'Prescription and bill after the visit', follow_up_reminder: 'Follow-up reminder',
+}
+const TEMPLATE_STATUS: Record<string, [string, string]> = {
+  APPROVED: ['Approved', 'bg-green-50 text-green-700'], PENDING: ['Waiting for Meta', 'bg-amber-50 text-amber-700'],
+  IN_APPEAL: ['Waiting for Meta', 'bg-amber-50 text-amber-700'], REJECTED: ['Rejected', 'bg-red-50 text-red-700'],
+  PAUSED: ['Paused by Meta', 'bg-red-50 text-red-700'], DISABLED: ['Disabled by Meta', 'bg-red-50 text-red-700'],
+  NOT_CREATED: ['Not created', 'bg-red-50 text-red-700'],
+}
+const QUALITY: Record<string, string> = { GREEN: 'Good', YELLOW: 'Warning — patients are blocking or reporting', RED: 'Poor — Meta may limit this number', UNKNOWN: 'Not rated yet' }
+const LIMIT: Record<string, string> = {
+  TIER_50: '50 patients a day', TIER_250: '250 patients a day', TIER_1K: '1,000 patients a day', TIER_10K: '10,000 patients a day',
+  TIER_100K: '100,000 patients a day', TIER_UNLIMITED: 'No daily limit',
+}
+
+function OwnNumberCard({ businessId, account, onChange }: { businessId: string; account: WaAccount; onChange: () => void }) {
+  const connected = account.own_status === 'connected'
+  const [templates, setTemplates] = useState<WaClinicTemplate[]>([])
+  const [existing, setExisting] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
+
+  useEffect(() => { if (connected) listOwnTemplates(businessId).then(setTemplates).catch(() => setTemplates([])) }, [connected, businessId, account.own_checked_at])
+  // Loaded now, so Connect can open Meta's window straight from the click.
+  useEffect(() => { if (!connected) loadFacebookSdk().catch(() => undefined) }, [connected])
+
+  const connect = async () => {
+    setBusy(true); setNote(null)
+    try {
+      const r = await embeddedSignup(existing)
+      const res = await waConnect(businessId, 'connect', { ...r, coexistence: existing })
+      setNote({ ok: res.ok, text: res.message ?? (res.ok ? 'Connected.' : 'Could not connect.') })
+      if (res.ok) onChange()
+    } catch (e) { setNote({ ok: false, text: (e as Error).message }) } finally { setBusy(false) }
+  }
+  const act = async (action: 'refresh' | 'disconnect') => {
+    if (action === 'disconnect' && !window.confirm('Stop sending from your own number? Messages will go from the Sehatsandhi number again, paid from your wallet.')) return
+    setBusy(true); setNote(null)
+    try {
+      const res = await waConnect(businessId, action)
+      setNote({ ok: res.ok, text: res.message ?? '' })
+      onChange()
+    } catch (e) { setNote({ ok: false, text: (e as Error).message }) } finally { setBusy(false) }
+  }
+
+  const manager = account.waba_id ? `https://business.facebook.com/wa/manage/home/?waba_id=${account.waba_id}` : 'https://business.facebook.com/wa/manage/home/'
+
+  return (
+    <div className="card shadow-sm space-y-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="font-bold text-navy-700 flex items-center gap-2">
+            <MessageCircle className="w-4 h-4 text-teal-600" /> Your own WhatsApp number
+            <span className="text-[11px] font-semibold bg-teal-50 text-teal-700 rounded-full px-2 py-0.5">Pro</span>
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">
+            {connected
+              ? <>Patients get messages from your clinic’s own number and name. Meta charges your card for them directly; nothing is taken from the wallet.</>
+              : <>Connect your clinic’s number and patients get every message from it, in your clinic’s name. You pay Meta for messages directly with your own card. Until then, messages go from the Sehatsandhi number.</>}
+          </p>
+        </div>
+        {connected && (
+          <div className="flex gap-2">
+            <button onClick={() => act('refresh')} disabled={busy} className="btn-secondary text-sm disabled:opacity-50">Refresh</button>
+            <button onClick={() => act('disconnect')} disabled={busy} className="text-sm text-red-600 hover:underline disabled:opacity-50">Disconnect</button>
+          </div>
+        )}
+      </div>
+
+      {!connected ? (
+        <div className="space-y-3">
+          <div className="grid sm:grid-cols-2 gap-2 text-sm">
+            <label className={`border rounded-lg px-3 py-2 cursor-pointer ${!existing ? 'border-teal-500 bg-teal-50' : 'border-gray-200'}`}>
+              <input type="radio" className="mr-2" checked={!existing} onChange={() => setExisting(false)} />
+              <b>A new number</b>
+              <span className="block text-xs text-gray-500 ml-5">A SIM or landline that is not on WhatsApp yet.</span>
+            </label>
+            <label className={`border rounded-lg px-3 py-2 cursor-pointer ${existing ? 'border-teal-500 bg-teal-50' : 'border-gray-200'}`}>
+              <input type="radio" className="mr-2" checked={existing} onChange={() => setExisting(true)} />
+              <b>Our WhatsApp Business app number</b>
+              <span className="block text-xs text-gray-500 ml-5">Keep using the app on the reception phone; automatic messages go from the same number.</span>
+            </label>
+          </div>
+          <ol className="text-xs text-gray-500 list-decimal ml-5 space-y-0.5">
+            <li>Meta’s window opens. Log in with Facebook and choose or create your clinic’s business.</li>
+            <li>Enter your clinic’s name as patients should see it, and the number. Meta sends a code to it.</li>
+            <li>That’s it — we set up the messages. Then add a card in Meta so it can charge for messages.</li>
+          </ol>
+          <button onClick={connect} disabled={busy} className="btn-teal text-sm disabled:opacity-50">
+            {busy ? 'Connecting…' : 'Connect your WhatsApp number'}
+          </button>
+          {account.own_status === 'disconnected' && <p className="text-xs text-gray-500">Your number was disconnected. Connect it again any time.</p>}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+            <Price label="Number" value={account.whatsapp_number ?? '—'} />
+            <Price label="Name patients see" value={`${account.verified_name ?? '—'}${account.name_status && account.name_status !== 'APPROVED' ? ` (${account.name_status.toLowerCase().replace(/_/g, ' ')})` : ''}`} />
+            <Price label="Quality" value={QUALITY[account.quality_rating ?? 'UNKNOWN'] ?? account.quality_rating ?? '—'} />
+            <Price label="Daily limit" value={LIMIT[account.messaging_limit ?? ''] ?? (account.messaging_limit || 'Starts at 250 patients a day')} />
+          </div>
+          {account.coexistence && <p className="text-xs text-gray-500">Connected together with your WhatsApp Business app — keep using the app on your phone as before.</p>}
+          <div>
+            <div className="text-xs font-semibold text-gray-500 mb-1">Messages Meta has to approve</div>
+            {!templates.length ? <p className="text-xs text-gray-400">Being set up…</p> : (
+              <ul className="divide-y divide-gray-100 text-sm">
+                {templates.map(t => {
+                  const [label, cls] = TEMPLATE_STATUS[t.status] ?? [t.status, 'bg-gray-50 text-gray-600']
+                  return (
+                    <li key={`${t.name}:${t.language}`} className="py-1.5 flex items-center justify-between gap-2">
+                      <span>{TEMPLATE_LABEL[t.name] ?? t.name}{t.language === 'hi' ? ' (Hindi)' : ''}
+                        {t.reason && <span className="block text-[11px] text-red-600">{t.reason}</span>}</span>
+                      <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${cls}`}>{label}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <a href={manager} target="_blank" rel="noreferrer" className="text-teal-700 hover:underline">Add your card in Meta →</a>
+            <a href="https://business.facebook.com/settings/security" target="_blank" rel="noreferrer" className="text-teal-700 hover:underline">Verify your business with Meta (raises the daily limit) →</a>
+          </div>
+        </div>
+      )}
+
+      {account.own_error && <p className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{account.own_error}</p>}
+      {note && <p className={`text-sm rounded-lg px-3 py-2 ${note.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>{note.text}</p>}
     </div>
   )
 }

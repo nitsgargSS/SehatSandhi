@@ -20,6 +20,7 @@
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { caller } from '../_shared/caller.ts'
 import { canSendTemplate, sendTemplate } from '../_shared/whatsapp.ts'
+import { ownSender } from '../_shared/deliver.ts'
 
 const CAMPAIGN = 'AISENSY_RATING_CAMPAIGN'
 const rupees = (paise: number) => `₹${(paise / 100).toFixed(2)}`
@@ -40,8 +41,9 @@ Deno.serve(async (req) => {
   if (!businessId || !memberIds.length) return json({ error: 'businessId and memberIds required' }, 400)
   if (memberIds.length > 100) return json({ ok: false, message: 'Ask up to 100 patients at a time.' }, 400)
 
+  const own = await ownSender(who.asService, businessId)
   // No template approved yet: say so before anybody is charged.
-  if (!canSendTemplate({ campaignEnv: CAMPAIGN })) {
+  if (!canSendTemplate({ campaignEnv: CAMPAIGN, sender: own ?? undefined })) {
     return json({ ok: false, sent: 0, skipped: [], message: 'Review requests on WhatsApp are not switched on yet. Sehatsandhi has been told.' })
   }
 
@@ -55,6 +57,21 @@ Deno.serve(async (req) => {
     const close = (ok: boolean, id?: string, tx?: string, err?: string) =>
       who.asService.rpc('sehat_rating_ask_close', { p_ask: open.ask, p_sent: ok, p_message_id: id ?? null, p_tx: tx ?? null, p_error: err ?? null })
         .then(() => undefined, () => undefined)
+
+    // 0261: from the clinic's own number when it has one (Pro) — the clinic
+    // pays Meta for that itself, so nothing is taken from the wallet.
+    if (own) {
+      const r = await sendTemplate({
+        campaignEnv: CAMPAIGN, to: open.phone, userName: open.name || 'Patient',
+        params: [open.name || 'जी', open.doctor, open.visit], sender: own,
+      })
+      await close(r.ok, r.id, undefined, r.ok ? undefined : r.error ?? 'not sent')
+      if (r.ok) {
+        sent++
+        await who.asService.rpc('sehat_wa_clinic_sent', { p_phone: open.phone, p_business: businessId, p_message_id: r.id ?? null }).then(() => undefined, () => undefined)
+      } else skipped.push({ memberId, why: r.unreachable ? 'This number is not on WhatsApp.' : 'WhatsApp did not accept the message.' })
+      continue
+    }
 
     const { data: charge, error: cErr } = await who.asService.rpc('sehat_wallet_charge_direct', {
       p_business: businessId, p_note: `Review request to ${open.name || 'a patient'}`,

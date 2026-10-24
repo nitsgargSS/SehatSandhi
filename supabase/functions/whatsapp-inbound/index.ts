@@ -24,6 +24,12 @@
 // answered too, as the clinic line: the bot works out which clinic the patient
 // means and stays with it. A patient has one conversation per line.
 //
+// A CLINIC'S OWN NUMBER (0261, the Pro plan): a number a clinic connected
+// through Embedded Signup. Answered as the clinic line, pinned to that clinic,
+// and from that number with the clinic's own key. Meta also posts the
+// account's news here — template decisions and quality changes — which are
+// recorded and not answered.
+//
 // WHAT IT COSTS (0227): every message the bot sends is written to wa_sent_log,
 // and every delivery receipt Meta posts here — for any message from our
 // numbers — records what Meta charged it as (`statuses[].pricing`).
@@ -182,7 +188,7 @@ async function keepPrescription(db: Any, media: { id: string; mime: string }, ph
  * Answer one message. Returns a note for the inbound log. Never throws: the
  * webhook must still answer 200, or Meta retries and then switches it off.
  */
-async function runBot(db: Any, e: Extracted, line: 'main' | 'clinic'): Promise<string> {
+async function runBot(db: Any, e: Extracted, line: 'main' | 'clinic', token?: string): Promise<string> {
   try {
     const phone = e.phone!, from = e.toPhoneId!
     const { data: row } = await db.from('wa_bot_sessions')
@@ -196,7 +202,7 @@ async function runBot(db: Any, e: Extracted, line: 'main' | 'clinic'): Promise<s
     }
 
     // Blue ticks and "typing…" while the database is asked.
-    if (e.id) await graphSend({ status: 'read', message_id: e.id, typing_indicator: { type: 'text' } }, from)
+    if (e.id) await graphSend({ status: 'read', message_id: e.id, typing_indicator: { type: 'text' } }, from, token)
 
     const fresh = !row || Date.now() - Date.parse(row.updated_at) > SESSION_IDLE_MS
     // A conversation left for an hour starts again, but the area and patient are remembered.
@@ -226,7 +232,7 @@ async function runBot(db: Any, e: Extracted, line: 'main' | 'clinic'): Promise<s
     const errors: string[] = []
     for (const reply of next.replies) {
       for (const message of toMeta(reply)) {
-        const r = await graphSend({ to: phone, ...message }, from)
+        const r = await graphSend({ to: phone, ...message }, from, token)
         if (!r.ok) errors.push(r.error ?? 'not sent')
         // 0227: what was sent, and in answer to which message — its receipts add what it cost.
         else if (r.id) {
@@ -299,6 +305,35 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 0261: news about a clinic's own WhatsApp account — a template approved or
+  // rejected, the number's quality or daily limit changed. Nothing to answer.
+  if (signed) {
+    let account = false
+    for (const entry of payload?.entry ?? []) for (const change of entry?.changes ?? []) {
+      const v = change?.value ?? {}
+      if (change?.field === 'message_template_status_update') {
+        account = true
+        await db.rpc('sehat_wa_own_template_update', {
+          p_waba: String(entry?.id ?? ''), p_name: v.message_template_name ?? '', p_language: v.message_template_language ?? null,
+          p_status: v.event ?? '', p_reason: v.reason ?? null,
+        }).then(() => undefined, () => undefined)
+      } else if (change?.field === 'phone_number_quality_update') {
+        account = true
+        await db.rpc('sehat_wa_own_quality_update', {
+          p_display_phone: v.display_phone_number ?? '', p_quality: v.event === 'FLAGGED' ? 'YELLOW' : v.event === 'UNFLAGGED' ? 'GREEN' : '',
+          p_limit: v.current_limit ?? '',
+        }).then(() => undefined, () => undefined)
+      } else if (change?.field === 'account_update') {
+        account = true
+      }
+    }
+    if (account) {
+      await db.from('wa_inbound_log').insert({ phone: null, ok: true, note: 'account news (0261)', payload: small(payload) })
+        .then(() => undefined, () => undefined)
+      return json({ ok: true })
+    }
+  }
+
   const e = extract(payload)
   const log = (ok: boolean, note: string) =>
     db.from('wa_inbound_log').insert({ phone: e.phone, ok, note, payload: small(payload) })
@@ -321,8 +356,19 @@ Deno.serve(async (req) => {
   const ids = (v: string | undefined) => (v ?? '').split(',').map(x => x.trim()).filter(Boolean)
   const botIds = ids(Deno.env.get('WA_BOT_PHONE_IDS'))
   const clinicIds = ids(Deno.env.get('WA_CLINIC_PHONE_IDS') ?? Deno.env.get('META_CLINIC_PHONE_NUMBER_ID'))
-  const line = e.toPhoneId && clinicIds.includes(e.toPhoneId) ? 'clinic' : e.toPhoneId && botIds.includes(e.toPhoneId) ? 'main' : null
-  const bot = signed && line ? await runBot(db, e, line) : null
+  // 0261: a clinic's own number. Answered as the clinic line, for that clinic
+  // alone, and from that number with its own key.
+  let own: { business_id: string; token: string } | null = null
+  if (e.toPhoneId && !clinicIds.includes(e.toPhoneId) && !botIds.includes(e.toPhoneId)) {
+    const { data } = await db.rpc('sehat_wa_own_by_phone_id', { p_phone_number_id: e.toPhoneId })
+    if (data?.business_id && data?.token) {
+      own = { business_id: String(data.business_id), token: String(data.token) }
+      await db.rpc('sehat_wa_clinic_sent', { p_phone: e.phone, p_business: own.business_id, p_message_id: null })
+        .then(() => undefined, () => undefined)
+    }
+  }
+  const line = own || (e.toPhoneId && clinicIds.includes(e.toPhoneId)) ? 'clinic' : e.toPhoneId && botIds.includes(e.toPhoneId) ? 'main' : null
+  const bot = signed && line ? await runBot(db, e, line, own?.token) : null
   await log(!error, (error ? `handle_inbound: ${error.message}` : `saved${e.name ? ` (${e.name})` : ''}${optedIn ? ' · opted in to tips' : ''}`)
     + (bot ? ` · ${bot}` : ''))
   return json({ ok: true, saved: !error, optedIn })

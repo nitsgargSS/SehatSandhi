@@ -6,7 +6,7 @@ import {
   MarketingSettings, WaTemplate, MarketingReportRow, BroadcastForReview, rupees, renderTemplate,
   getMarketingSettings, updateMarketingSettings, listTemplates, updateTemplate, createTemplate,
   getMarketingReport, getWalletReport, type WalletReport, getWaCosts, type WaCosts, sendTestMessage, broadcastPicture, broadcastPictureUrl, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
-  setWaComplimentary, listWaComplimentary,
+  setWaComplimentary, listWaComplimentary, listWaPlans,
   getWaFreeOverview, adminSetWaFree, adminGrantWaFree, type WaFreeRow,
 } from '../../lib/marketingApi'
 
@@ -447,6 +447,9 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
   // 0157: clinics given WhatsApp free.
   const [comp, setComp] = useState<Record<string, { on: boolean; note: string | null }>>({})
   useEffect(() => { listWaComplimentary().then(setComp).catch(() => setComp({})) }, [rows])
+  // 0261: Basic or Pro, and whether a Pro clinic has connected its own number.
+  const [plans, setPlans] = useState<Record<string, { plan: 'basic' | 'pro'; own: string; number: string | null }>>({})
+  useEffect(() => { listWaPlans().then(setPlans).catch(() => setPlans({})) }, [rows])
 
   const candidates = useMemo(() => businesses.filter(b => !rows.some(r => r.business_id === b.id)), [businesses, rows])
 
@@ -481,7 +484,7 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-gray-400 border-b border-gray-100">
-              <th className="py-2 pr-3">Clinic</th><th className="pr-3">Number</th><th className="pr-3">Subscription</th>
+              <th className="py-2 pr-3">Clinic</th><th className="pr-3">Plan</th><th className="pr-3">Number</th><th className="pr-3">Subscription</th>
               <th className="pr-3">Opted in</th><th className="pr-3">Sent (month / all)</th><th className="pr-3">Last send</th>
               <th className="pr-3">Wallet</th><th className="pr-3">Recharged / spent</th><th className="pr-3">Free</th><th></th>
             </tr></thead>
@@ -493,6 +496,17 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
                   <td className="py-2.5 pr-3 font-medium text-navy-700">{r.business_name}
                     {neverSent && <div className="text-[11px] text-amber-700">Live but never sent — follow up</div>}
                     {dry && <div className="text-[11px] text-red-600">Empty wallet, no recent top-up</div>}
+                  </td>
+                  <td className="pr-3">
+                    <select value={plans[r.business_id]?.plan ?? 'basic'} className="text-xs border border-gray-200 rounded px-1.5 py-1"
+                      onChange={e => act(() => adminSetWaAccount(r.business_id, { plan: e.target.value as 'basic' | 'pro' }))}>
+                      <option value="basic">Basic</option><option value="pro">Pro</option>
+                    </select>
+                    {plans[r.business_id]?.plan === 'pro' && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">
+                        {plans[r.business_id].own === 'connected' ? `Own number ${plans[r.business_id].number ?? ''}` : 'Own number not connected'}
+                      </div>
+                    )}
                   </td>
                   <td className="pr-3">
                     <select value={r.wa_status ?? 'pending'} className="text-xs border border-gray-200 rounded px-1.5 py-1"
