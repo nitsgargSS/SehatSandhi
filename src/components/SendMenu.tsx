@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { documentLink, getSendOptions, mailtoFor, sendDocument, type DocKind, type SendOptions } from '../lib/sendApi'
+import { canAfford, documentLink, freeLeft, freeNote, getSendOptions, mailtoFor, sendDocument, type DocKind, type SendOptions } from '../lib/sendApi'
 
 // "Send to patient", with the choice of how (0218):
 //
@@ -74,7 +74,8 @@ export default function SendMenu({ kind, id, businessId, children, style, classN
   }
 
   const blocked = options?.whatsapp_blocker ?? null
-  const short = !!options && !blocked && options.balance_paise < options.whatsapp_paise
+  const short = !!options && !blocked && !canAfford(options)
+  const free = freeLeft(options) > 0
 
   return (
     <span ref={box} style={{ position: 'relative', display: 'inline-block' }}>
@@ -96,15 +97,16 @@ export default function SendMenu({ kind, id, businessId, children, style, classN
             ) : short ? (
               <>
                 <button type="button" style={action} onClick={() => { setOpen(false); openTab('whatsapp') }}>WhatsApp — top up your wallet →</button>
-                <span style={hint}>A message costs {rupees(options!.whatsapp_paise)}; your wallet has {rupees(options!.balance_paise)}.</span>
+                <span style={hint}>{freeNote(options) ? `${freeNote(options)} ` : ''}A message costs {rupees(options!.whatsapp_paise)}; your wallet has {rupees(options!.balance_paise)}.</span>
               </>
             ) : (
               <>
                 <button type="button" style={action} disabled={!!busy} onClick={viaWhatsApp}>
-                  {busy === 'whatsapp' ? 'Sending…' : `WhatsApp${options ? ` · ${rupees(options.whatsapp_paise)}` : ''}`}
+                  {busy === 'whatsapp' ? 'Sending…' : `WhatsApp${free ? ' · free' : options ? ` · ${rupees(options.whatsapp_paise)}` : ''}`}
                 </button>
                 <span style={hint}>
-                  To the patient's mobile number.{options ? ` Taken from your wallet (${rupees(options.balance_paise)} left); returned if it is not delivered.` : ''}
+                  To the patient's mobile number.{free ? ` ${freeNote(options)}` : options
+                    ? `${freeNote(options) ? ` ${freeNote(options)}` : ''} Taken from your wallet (${rupees(options.balance_paise)} left); returned if it is not delivered.` : ''}
                 </span>
               </>
             )}

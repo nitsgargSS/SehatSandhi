@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import OptInContactsCard from './OptInContactsCard'
 import { StatTile } from '../../components/Charts'
 import { shortDate, dateTime } from '../../lib/format'
@@ -7,6 +7,7 @@ import {
   getMarketingSettings, updateMarketingSettings, listTemplates, updateTemplate, createTemplate,
   getMarketingReport, getWalletReport, type WalletReport, getWaCosts, type WaCosts, sendTestMessage, broadcastPicture, broadcastPictureUrl, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
   setWaComplimentary, listWaComplimentary,
+  getWaFreeOverview, adminSetWaFree, adminGrantWaFree, type WaFreeRow,
 } from '../../lib/marketingApi'
 
 // Admin side of WhatsApp marketing (0116): the prices every clinic pays, the
@@ -101,6 +102,7 @@ export default function WhatsAppMarketingPanel({ businesses, isManager = false }
       </div>
 
       {!isManager && <ClinicsCard rows={rows} businesses={businesses} onChange={load} onError={setError} />}
+      {!isManager && settings && <FreeMessagesCard perMonth={settings.free_messages_per_month} />}
     </div>
   )
 }
@@ -328,6 +330,7 @@ function WalletMoneyCard() {
                 <th className="py-2 pr-3">Month</th>
                 <th className="pr-3 text-right">Top-ups</th>
                 <th className="pr-3 text-right">Prescriptions, bills, reports</th>
+                <th className="pr-3 text-right">Free messages</th>
                 <th className="pr-3 text-right">Broadcasts</th>
                 <th className="pr-3 text-right">Meta's cost (est.)</th>
                 <th className="text-right">Margin (est.)</th>
@@ -339,6 +342,7 @@ function WalletMoneyCard() {
                   <td className="py-2 pr-3 font-semibold text-navy-700">{monthName(m.month)}</td>
                   <td className="pr-3 text-right">{rupees(m.topups_paise)}</td>
                   <td className="pr-3 text-right">{rupees(m.direct_spent_paise)} <span className="text-xs text-gray-400">· {m.direct_messages.toLocaleString('en-IN')}</span></td>
+                  <td className="pr-3 text-right">{(m.free_messages ?? 0).toLocaleString('en-IN')}</td>
                   <td className="pr-3 text-right">{rupees(m.broadcast_spent_paise)} <span className="text-xs text-gray-400">· {m.broadcast_messages.toLocaleString('en-IN')}</span></td>
                   <td className="pr-3 text-right">{rupees(m.meta_cost_paise)}</td>
                   <td className="text-right font-semibold text-navy-700">{rupees(m.margin_paise)}</td>
@@ -348,7 +352,7 @@ function WalletMoneyCard() {
           </table>
         </div>
         <p className="text-xs text-gray-400 mt-2">
-          The small number beside each amount is how many messages. Messages that were not delivered and were refunded are left out. Lead fees and admin adjustments are not message income and are not counted here.
+          The small number beside each amount is how many messages. Free messages bring in nothing but Meta still bills them, so they are in Meta's cost. Messages that were not delivered and were refunded are left out. Lead fees and admin adjustments are not message income and are not counted here.
         </p>
       </>}
     </div>
@@ -366,6 +370,7 @@ function SettingsCard({ settings, onSaved }: { settings: MarketingSettings; onSa
     metaMarketing: String(settings.meta_marketing_cost_paise / 100),
     metaUtility: String(settings.meta_utility_cost_paise / 100),
     grace: String(settings.grace_days),
+    free: String(settings.free_messages_per_month ?? 200),
   })
   const [sending, setSending] = useState(settings.sending_enabled)
   const [busy, setBusy] = useState(false)
@@ -375,16 +380,18 @@ function SettingsCard({ settings, onSaved }: { settings: MarketingSettings; onSa
   const paise = (v: string) => Math.round(Number(v) * 100)
   const save = async () => {
     setErr(''); setMsg('')
-    const p = { pm: paise(form.perMessage), pd: paise(form.perDirect), g: Number(form.grace) }
+    const p = { pm: paise(form.perMessage), pd: paise(form.perDirect), g: Number(form.grace), f: Number(form.free) }
     if (!Number.isFinite(p.pm) || p.pm <= 0) { setErr('Enter the message price in rupees, e.g. 1.59.'); return }
     if (!Number.isFinite(p.pd) || p.pd <= 0) { setErr('Enter the price of a prescription, bill or report in rupees, e.g. 0.50.'); return }
     if (!Number.isInteger(p.g) || p.g < 0 || p.g > 60) { setErr('Grace period is 0–60 days.'); return }
+    if (!Number.isInteger(p.f) || p.f < 0 || p.f > 100000) { setErr('Free messages a month is a whole number, 0 to 100000.'); return }
     // Meta's rates have fractions of a paisa (₹0.8631), so these are kept to two decimals of a paisa.
     const mm = Math.round(Number(form.metaMarketing) * 10000) / 100, mu = Math.round(Number(form.metaUtility) * 10000) / 100
     if (!Number.isFinite(mm) || mm < 0 || !Number.isFinite(mu) || mu < 0) { setErr('Enter Meta\u2019s two rates in rupees, e.g. 0.8631 and 0.115.'); return }
     setBusy(true)
     try {
       onSaved(await updateMarketingSettings({ per_message_paise: p.pm, direct_message_paise: p.pd, grace_days: p.g, sending_enabled: sending,
+        free_messages_per_month: p.f,
         meta_marketing_cost_paise: mm, meta_utility_cost_paise: mu,
       }))
       setMsg('Saved. The new prices apply from each clinic\u2019s next message.')
@@ -410,6 +417,7 @@ function SettingsCard({ settings, onSaved }: { settings: MarketingSettings; onSa
         {field('perMessage', 'Per broadcast message (₹)')}
         {field('perDirect', 'Per prescription, bill or report (₹)')}
         {field('grace', 'Grace after the add-on ends', 'days')}
+        {field('free', 'Free messages a month with the add-on', 'messages')}
         {field('metaMarketing', 'Meta charges us, per promotion (₹)')}
         {field('metaUtility', 'Meta charges us, per prescription etc. (₹)')}
       </div>
@@ -528,6 +536,120 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
                     )}
                   </td>
                 </tr>
+              )
+            })}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 0259: the add-on's free messages, clinic by clinic — this month's use, a
+// clinic's own monthly number, and extra messages for this month with a reason.
+function FreeMessagesCard({ perMonth }: { perMonth: number }) {
+  const [rows, setRows] = useState<WaFreeRow[] | null>(null)
+  const [err, setErr] = useState('')
+  const [open, setOpen] = useState<string | null>(null)
+  const [form, setForm] = useState({ own: '', ownNote: '', extra: '', reason: '' })
+  const [busy, setBusy] = useState(false)
+
+  const load = () => getWaFreeOverview().then(r => { setRows(r); setErr('') }).catch(e => setErr((e as Error).message))
+  useEffect(() => { load() }, [perMonth])
+
+  const toggle = (r: WaFreeRow) => {
+    setOpen(open === r.business_id ? null : r.business_id)
+    setForm({ own: r.override == null ? '' : String(r.override), ownNote: r.override_note ?? '', extra: '', reason: '' })
+  }
+  const act = async (f: () => Promise<unknown>) => {
+    setBusy(true); setErr('')
+    try { await f(); await load() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  const saveOwn = (id: string) => act(async () => {
+    const v = form.own.trim()
+    if (v !== '' && !(Number.isInteger(Number(v)) && Number(v) >= 0)) throw new Error('A whole number of messages, or empty for the default.')
+    await adminSetWaFree(id, v === '' ? null : Number(v), form.ownNote)
+  })
+  const grant = (id: string) => act(async () => {
+    const n = Number(form.extra)
+    if (!Number.isInteger(n) || n < 1) throw new Error('Enter how many extra messages, e.g. 50.')
+    if (!form.reason.trim()) throw new Error('Say why — it is kept with the grant.')
+    await adminGrantWaFree(id, n, form.reason)
+    setForm(f => ({ ...f, extra: '', reason: '' }))
+  })
+  const monthLabel = (s: string, e: string) => `${shortDate(s)} – ${shortDate(e)}`
+
+  return (
+    <div className="card shadow-sm space-y-3">
+      <h3 className="font-bold text-navy-700">Free messages</h3>
+      <p className="text-sm text-gray-500 -mt-1">
+        Every clinic with the WhatsApp add-on gets <b>{perMonth}</b> free messages a month (change it under Message price), counted from the day its add-on started.
+        They cover prescriptions, bills, reports and review requests — not broadcasts — and are used before the wallet. Unused ones lapse.
+      </p>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {!rows ? <p className="text-sm text-gray-400">Loading…</p> : !rows.length ? <p className="text-sm text-gray-400">No clinic has the WhatsApp add-on yet.</p> : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-xs text-gray-400 border-b border-gray-100">
+              <th className="py-2 pr-3">Clinic</th><th className="pr-3">This month</th><th className="pr-3">Used / total</th>
+              <th className="pr-3">Left</th><th className="pr-3">Monthly</th><th></th>
+            </tr></thead>
+            <tbody>{rows.map(r => {
+              const n = r.now
+              const pct = n.total ? Math.round((n.used / n.total) * 100) : 0
+              return (
+                <Fragment key={r.business_id}>
+                  <tr className="border-b border-gray-50 align-top">
+                    <td className="py-2.5 pr-3 font-medium text-navy-700">{r.business_name}
+                      {r.complimentary && <div className="text-[11px] text-teal-700">Complimentary</div>}
+                      {r.blocker && <div className="text-[11px] text-red-600">{r.blocker}</div>}
+                    </td>
+                    <td className="pr-3 text-xs text-gray-500">{n.eligible && n.period_start && n.period_end ? monthLabel(n.period_start, n.period_end) : '—'}</td>
+                    <td className="pr-3">{n.eligible ? <>{n.used} / {n.total}{n.extra ? <span className="text-xs text-teal-700"> (+{n.extra} extra)</span> : null}</> : '—'}</td>
+                    <td className={`pr-3 font-semibold ${n.eligible && pct >= 80 ? 'text-amber-700' : ''}`}>{n.eligible ? n.left : '—'}</td>
+                    <td className="pr-3 text-xs">{r.override == null ? <span className="text-gray-400">Default ({perMonth})</span> : <b title={r.override_note ?? ''}>{r.override}</b>}</td>
+                    <td className="text-right"><button className="text-xs text-teal-700 font-semibold" onClick={() => toggle(r)}>{open === r.business_id ? 'Close' : 'Manage'}</button></td>
+                  </tr>
+                  {open === r.business_id && (
+                    <tr><td colSpan={6} className="pb-4">
+                      <div className="grid md:grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3">
+                        <div className="space-y-1.5">
+                          <div className="text-xs font-semibold text-gray-500">Their own monthly number</div>
+                          <div className="flex gap-1.5 flex-wrap">
+                            <input value={form.own} onChange={e => setForm({ ...form, own: e.target.value.replace(/\D/g, '') })}
+                              placeholder={`Default ${perMonth}`} className="input-field text-xs w-28" />
+                            <input value={form.ownNote} onChange={e => setForm({ ...form, ownNote: e.target.value })} placeholder="Why (optional)" className="input-field text-xs flex-1 min-w-[8rem]" />
+                            <button disabled={busy} onClick={() => saveOwn(r.business_id)} className="btn-teal text-xs disabled:opacity-50">Save</button>
+                          </div>
+                          <div className="text-[11px] text-gray-400">Empty = the default. 0 = no free messages. Applies to this month too.</div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="text-xs font-semibold text-gray-500">Extra for this month only</div>
+                          <div className="flex gap-1.5 flex-wrap">
+                            <input value={form.extra} onChange={e => setForm({ ...form, extra: e.target.value.replace(/\D/g, '') })} placeholder="e.g. 50" className="input-field text-xs w-20" />
+                            <input value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} placeholder="Reason" className="input-field text-xs flex-1 min-w-[8rem]" />
+                            <button disabled={busy || !n.eligible} onClick={() => grant(r.business_id)} className="btn-teal text-xs disabled:opacity-50">Give</button>
+                          </div>
+                          <div className="text-[11px] text-gray-400">Lapses with the month, like the rest.</div>
+                        </div>
+                        {r.months.length > 0 && (
+                          <div className="md:col-span-2">
+                            <div className="text-xs font-semibold text-gray-500 mb-1">Past months</div>
+                            <table className="w-full text-xs">
+                              <tbody>{r.months.map(m => (
+                                <tr key={m.period_start} className="border-t border-gray-200 align-top">
+                                  <td className="py-1 pr-3 text-gray-600">{monthLabel(m.period_start, m.period_end)}</td>
+                                  <td className="pr-3">{m.used} used of {m.allowance + m.extra}</td>
+                                  <td className="text-gray-500">{m.grants.map(g => `+${g.messages}: ${g.reason}${g.by ? ` (${g.by})` : ''}`).join(' · ')}</td>
+                                </tr>
+                              ))}</tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </td></tr>
+                  )}
+                </Fragment>
               )
             })}</tbody>
           </table>

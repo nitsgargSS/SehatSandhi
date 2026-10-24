@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { KeyboardAvoidingView, Linking, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
-import { documentLink, getSendOptions, mailtoFor, sendDocument, type DocKind, type SendOptions } from '@web/lib/sendApi'
+import { canAfford, documentLink, freeLeft, freeNote, getSendOptions, mailtoFor, sendDocument, type DocKind, type SendOptions } from '@web/lib/sendApi'
 import { Btn, Err, Field, Note } from './kit'
 import { C } from './theme'
 
@@ -45,7 +45,8 @@ export default function SendSheet({ kind, id, biz, label, small = true, onSent }
   const done = (note: string) => { setOpen(false); onSent?.(note) }
   const validEmail = /^\S+@\S+\.\S+$/.test(email.trim())
   const blocked = needsPlan ? 'Add WhatsApp to your plan to send on WhatsApp.' : options?.whatsapp_blocker ?? null
-  const short = !!options && !blocked && options.balance_paise < options.whatsapp_paise
+  const short = !!options && !blocked && !canAfford(options)
+  const free = freeLeft(options) > 0
 
   const viaWhatsApp = async () => {
     setBusy('whatsapp'); setErr(''); setNeedsPlan(false)
@@ -87,11 +88,12 @@ export default function SendSheet({ kind, id, biz, label, small = true, onSent }
                   <Btn kind="ghost" label="See your plan" onPress={() => { setOpen(false); router.push('/plan') }} />
                 </>
               ) : short ? (
-                <Note>WhatsApp: a message costs {rupees(options!.whatsapp_paise)} and your WhatsApp wallet has {rupees(options!.balance_paise)}. Email is free.</Note>
+                <Note>{freeNote(options) ? `${freeNote(options)} ` : ''}WhatsApp: a message costs {rupees(options!.whatsapp_paise)} and your WhatsApp wallet has {rupees(options!.balance_paise)}. Email is free.</Note>
               ) : (
                 <>
-                  <Btn label={`WhatsApp${options ? ` · ${rupees(options.whatsapp_paise)}` : ''}`} busy={busy === 'whatsapp'} disabled={!!busy} onPress={viaWhatsApp} />
-                  <Note>To the patient's mobile number.{options ? ` From your wallet (${rupees(options.balance_paise)} left); returned if it is not delivered.` : ''}</Note>
+                  <Btn label={`WhatsApp${free ? ' · free' : options ? ` · ${rupees(options.whatsapp_paise)}` : ''}`} busy={busy === 'whatsapp'} disabled={!!busy} onPress={viaWhatsApp} />
+                  <Note>To the patient's mobile number.{free ? ` ${freeNote(options)}` : options
+                    ? `${freeNote(options) ? ` ${freeNote(options)}` : ''} From your wallet (${rupees(options.balance_paise)} left); returned if it is not delivered.` : ''}</Note>
                 </>
               )}
             </View>

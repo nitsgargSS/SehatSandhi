@@ -14,6 +14,7 @@ import {
   acceptWaTerms, sendTestMessage, uploadBroadcastPicture, broadcastPictureUrl,
 } from '../../lib/marketingApi'
 import { WA_TERMS, WA_TERMS_VERSION, PICTURE_RULES, templateRules } from '../../lib/waTerms'
+import { getSendOptions, type SendOptions } from '../../lib/sendApi'
 
 // 0155: what each broadcast status means to the clinic.
 const BROADCAST_STATUS: Record<string, string> = {
@@ -202,17 +203,20 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
   const [templates, setTemplates] = useState<WaTemplate[]>([])
   const [history, setHistory] = useState<Broadcast[]>([])
   const [pins, setPins] = useState<{ pin_code: string; patients: number }[]>([])
+  // 0259: this month's free messages.
+  const [send, setSend] = useState<SendOptions | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
   const load = async () => {
     try {
-      const [s, a, w, b, t, h, p] = await Promise.all([
+      const [s, a, w, b, t, h, p, o] = await Promise.all([
         getMarketingSettings(), getWaAccount(businessId), getWallet(businessId),
         getBroadcastBlocker(businessId), listTemplates(), listBroadcasts(businessId), getAudiencePins(businessId),
+        getSendOptions(businessId),
       ])
       setSettings(s); setAccount(a); setBalance(w.balance); setTxs(w.txs); setBlocker(b)
-      setTemplates(t.filter(x => x.is_active)); setHistory(h); setPins(p); setError('')
+      setTemplates(t.filter(x => x.is_active)); setHistory(h); setPins(p); setSend(o); setError('')
     } catch (e) { setError((e as Error).message) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [businessId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -252,6 +256,7 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
             <Price label="Replying to a patient within 24 hours" value="Free" />
           </div>
         )}
+        {!!send?.free_total && <FreeMessages o={send} />}
         {blocker && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{blocker}</p>}
       </div>
 
@@ -290,6 +295,32 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// 0259: the add-on's free messages this month — used first, before the wallet.
+function FreeMessages({ o }: { o: SendOptions }) {
+  const total = o.free_total ?? 0
+  const left = Math.max(0, o.free_left ?? 0)
+  const usedPct = total ? Math.round(((total - left) / total) * 100) : 0
+  const renews = o.free_renews_on ? shortDate(o.free_renews_on) : 'next month'
+  return (
+    <div className="mt-4 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2.5">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div className="text-sm text-navy-700"><b>{left}</b> of {total} free messages left this month</div>
+        <div className="text-xs text-gray-500">Renews {renews} · unused ones do not carry over</div>
+      </div>
+      <div className="mt-2 h-1.5 rounded-full bg-white overflow-hidden">
+        <div className={`h-full ${usedPct >= 80 ? 'bg-amber-500' : 'bg-teal-500'}`} style={{ width: `${usedPct}%` }} />
+      </div>
+      <p className="text-xs text-gray-500 mt-1.5">
+        {left === 0
+          ? <>Used up — prescriptions, bills, reports and review requests now come from your wallet until {renews}.</>
+          : usedPct >= 80
+            ? <>Almost used up. After these, prescriptions, bills, reports and review requests come from your wallet.</>
+            : <>With your WhatsApp add-on: prescriptions, bills, reports and review requests use these first, then your wallet. Broadcasts are always from the wallet.</>}
+      </p>
     </div>
   )
 }

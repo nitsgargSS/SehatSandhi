@@ -1456,6 +1456,55 @@ if (admissionId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0259: free WhatsApp messages each month, before the wallet. All in a
+// rolled-back transaction, so the clinic's real account is left as it was.
+sec('whatsapp free')
+if (!skip()) {
+  await inRollback(async () => {
+    const q1 = async (sql, params = []) => (await db.query(sql, params)).rows[0]
+    await db.query(`insert into business_wa_accounts (business_id, subscription_status, next_billing_date, subscription_started_at, free_messages_override)
+      values ($1, 'active', current_date + 20, now() - interval '40 days', 3)
+      on conflict (business_id) do update set subscription_status = 'active', next_billing_date = current_date + 20,
+        subscription_started_at = now() - interval '40 days', free_messages_override = 3, complimentary = false, past_due_since = null`, [BIZ.id])
+    await db.query(`delete from wa_free_allowances where business_id = $1`, [BIZ.id])
+    await db.query(`insert into business_wallets (business_id, balance_paise) values ($1, 100)
+      on conflict (business_id) do update set balance_paise = 100`, [BIZ.id])
+    const charge = async () => (await q1(`select sehat_wallet_charge_direct($1, 'test') r`, [BIZ.id])).r
+
+    const c = [await charge(), await charge(), await charge()]
+    expectTrue('the first three messages are free', c.every(x => x.ok && x.free && x.rate_paise === 0), JSON.stringify(c))
+    expectEq('free messages left after three of three', c[2].free_left, 0)
+    const paid = await charge()
+    expectTrue('the fourth comes from the wallet', paid.ok && !paid.free && paid.rate_paise > 0, JSON.stringify(paid))
+    expectEq('the wallet paid for it', paid.balance_paise, 100 - paid.rate_paise)
+
+    expectEq('a free message not delivered is given back', (await q1(`select sehat_wallet_refund_direct($1) r`, [c[0].tx])).r, true)
+    expectEq('only once', (await q1(`select sehat_wallet_refund_direct($1) r`, [c[0].tx])).r, false)
+    const st = (await q1(`select sehat_wa_free_status($1) r`, [BIZ.id])).r
+    expectEq('one free message is back for this month', st.left, 1)
+    expectEq('the month started 40 days ago, one month on', st.period_start,
+      (await q1(`select (((now() - interval '40 days') at time zone 'Asia/Kolkata')::date + interval '1 month')::date::text d`)).d)
+    expectEq('the wallet refund still works', (await q1(`select sehat_wallet_refund_direct($1) r`, [paid.tx])).r, true)
+
+    await db.query(`update business_wa_accounts set subscription_started_at = '2026-01-31 10:00+05:30' where business_id = $1`, [BIZ.id])
+    const per = async (d) => { const r = await q1(`select period_start::text s, period_end::text e from sehat_wa_free_period($1, $2::date)`, [BIZ.id, d]); return `${r.s}..${r.e}` }
+    expectEq('a month from the 31st: 27 Feb is still the first', await per('2026-02-27'), '2026-01-31..2026-02-27')
+    expectEq('28 Feb starts the second', await per('2026-02-28'), '2026-02-28..2026-03-30')
+    expectEq('31 Mar starts the third', await per('2026-03-31'), '2026-03-31..2026-04-29')
+
+    await db.query(`update business_wa_accounts set subscription_status = 'inactive' where business_id = $1`, [BIZ.id])
+    expectTrue('without the add-on nothing is free or sent', (await charge()).needs_plan === true)
+    expectEq('and the status says so', (await q1(`select sehat_wa_free_status($1) r`, [BIZ.id])).r.eligible, false)
+  })
+  await expectDeny('a clinic cannot give itself free messages',
+    () => probe('reception', `select sehat_admin_wa_free_grant($1, 100, 'mine')`, [BIZ.id]))
+  await expectDeny('a clinic cannot see every clinic\'s allowance',
+    () => probe('reception', `select sehat_admin_wa_free_overview()`))
+  const so = await tryProbe('reception', `select sehat_send_options($1)`, [BIZ.id])
+  expectTrue('the Send button is told the free messages', so && 'free_left' in so, JSON.stringify(so))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 0102 — the rating request, and the reply that had never been capturable.
 //
 // The send path is exercised inside a transaction that is ALWAYS rolled back.

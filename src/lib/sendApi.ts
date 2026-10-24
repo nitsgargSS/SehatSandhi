@@ -89,6 +89,27 @@ export interface SendOptions {
   whatsapp_blocker: string | null
   whatsapp_paise: number
   balance_paise: number
+  /** 0259: this month's free messages; absent before 0259. */
+  free_total?: number
+  free_left?: number
+  free_renews_on?: string | null
+}
+
+const dayMonth = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+
+/** 0259: free messages left this month (0 before 0259 or without the add-on). */
+export const freeLeft = (o: SendOptions | null) => Math.max(0, o?.free_left ?? 0)
+
+/** Can a WhatsApp message go now — free, or paid from the wallet? */
+export const canAfford = (o: SendOptions) => freeLeft(o) > 0 || o.balance_paise >= o.whatsapp_paise
+
+/** The line under the WhatsApp button about the free messages, or null when the clinic has none this month. */
+export function freeNote(o: SendOptions | null): string | null {
+  if (!o?.free_total) return null
+  const renews = o.free_renews_on ? `renews ${dayMonth(o.free_renews_on)}` : 'renews next month'
+  return freeLeft(o) > 0
+    ? `Free this month: ${freeLeft(o)} of ${o.free_total} left (${renews}). After that, from your wallet.`
+    : `This month's ${o.free_total} free messages are used (${renews}).`
 }
 
 /** null when the database does not know yet (before 0218): the menu then shows WhatsApp without a price. */
