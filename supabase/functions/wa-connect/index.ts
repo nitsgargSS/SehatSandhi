@@ -95,6 +95,12 @@ Deno.serve(async (req) => {
 
   let body: Any
   try { body = await req.json() } catch { return json({ error: 'invalid JSON' }, 400) }
+
+  // 0262: Pro's automatic messages from OUR number need their templates in our
+  // own WhatsApp account too. An admin (or the service role) creates the ones
+  // missing there; { dryRun: true } only looks.
+  if (body.action === 'house-templates') return await houseTemplates(req, body)
+
   const businessId = typeof body.businessId === 'string' ? body.businessId : ''
   const action = ['connect', 'refresh', 'disconnect'].includes(body.action) ? body.action : ''
   if (!businessId || !action) return json({ error: 'businessId and action required' }, 400)
@@ -227,4 +233,62 @@ async function createTemplates(db: Any, businessId: string, wabaId: string, toke
       meta_id: r.body?.id ?? null, reason: r.ok ? null : r.error ?? null, updated_at: new Date().toISOString(),
     }, { onConflict: 'business_id,name,language' })
   }
+}
+
+/**
+ * What our own account needs for clinics' messages from our number: Pro's
+ * automatic messages (0262), and the document links, which our account was
+ * found without on 26 Oct 2026. appointment_update and rating_request are
+ * left out: ours have their own approved wording.
+ */
+const HOUSE_NAMES = new Set(['welcome_patient', 'visit_summary', 'follow_up_reminder',
+  'prescription_link', 'bill_link', 'lab_report_link', 'discharge_link'])
+
+async function houseTemplates(req: Request, body: Any) {
+  const who = caller(req)
+  if (!who) return json({ error: 'Please sign in.' }, 401)
+  if (!who.isServiceRole) {
+    const { data: admin } = await who.asCaller.rpc('sehat_is_admin')
+    if (admin !== true) return json({ error: 'Admins only.' }, 403)
+  }
+  const token = Deno.env.get('META_ACCESS_TOKEN')
+  if (!token) return json({ ok: false, message: 'META_ACCESS_TOKEN is not set.' })
+  const phoneId = Deno.env.get('META_CLINIC_PHONE_NUMBER_ID') || Deno.env.get('META_PHONE_NUMBER_ID') || ''
+
+  // Which account is the number clinics' messages go from in? Given, or found
+  // among the accounts the Sehatsandhi business owns.
+  let wabaId = typeof body.wabaId === 'string' ? body.wabaId.replace(/\D/g, '') : ''
+  const seen: { id: string; name?: string; numbers: string[] }[] = []
+  if (!wabaId) {
+    const biz = Deno.env.get('META_BUSINESS_ID') ?? '866620354123683'
+    const owned = await graph(`${biz}/owned_whatsapp_business_accounts?fields=id,name&limit=50`, token)
+    if (!owned.ok) return json({ ok: false, message: `Could not list our WhatsApp accounts: ${owned.error}` })
+    for (const w of (owned.body.data ?? []) as Any[]) {
+      const nums = await graph(`${w.id}/phone_numbers?fields=id,display_phone_number`, token)
+      const list = ((nums.body?.data ?? []) as Any[])
+      seen.push({ id: String(w.id), name: w.name, numbers: list.map(n => `${n.display_phone_number} (${n.id})`) })
+      if (list.some(n => String(n.id) === phoneId)) wabaId = String(w.id)
+    }
+    if (!wabaId) return json({ ok: false, message: `No account of ours holds the sending number ${phoneId || '(not set)'}.`, accounts: seen })
+  }
+
+  const nums = await graph(`${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name`, token)
+  const numbers = ((nums.body?.data ?? []) as Any[]).map(n => `${n.display_phone_number} ${n.verified_name ?? ''} (${n.id})${String(n.id) === phoneId ? ' ← sends clinics\' messages' : ''}`)
+  const have = await graph(`${wabaId}/message_templates?fields=name,language,status,category,rejected_reason&limit=200`, token)
+  if (!have.ok) return json({ ok: false, numbers, message: `Could not read templates in ${wabaId}: ${have.error}` })
+  const existing = (have.body.data ?? []) as Any[]
+  const created: { name: string; ok: boolean; error?: string }[] = []
+  if (!body.dryRun) {
+    for (const t of CLINIC_TEMPLATES.filter(x => HOUSE_NAMES.has(x.name))) {
+      if (existing.some(e => e.name === t.name && e.language === t.language)) continue
+      const r = await graph(`${wabaId}/message_templates`, token, { method: 'POST', body: templateRequest(t) })
+      created.push({ name: t.name, ok: r.ok, error: r.error })
+    }
+  }
+  const after = body.dryRun ? have : await graph(`${wabaId}/message_templates?fields=name,language,status,category,rejected_reason&limit=200`, token)
+  return json({
+    ok: true, wabaId, phoneId, numbers, accounts: seen, dryRun: !!body.dryRun, created,
+    templates: ((after.body?.data ?? []) as Any[]).map(t => ({ name: t.name, language: t.language, status: t.status, category: t.category,
+      reason: t.rejected_reason && t.rejected_reason !== 'NONE' ? t.rejected_reason : undefined })),
+  })
 }

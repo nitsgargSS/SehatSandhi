@@ -614,3 +614,21 @@ export async function getAutoOverview(businessId: string): Promise<WaAutoOvervie
   oops(error)
   return data as WaAutoOverview
 }
+
+/** 0262: our own WhatsApp account's templates for clinics' messages — checked, or the missing ones created. Admins. */
+export async function houseTemplates(wabaId: string, dryRun: boolean): Promise<{
+  ok: boolean; message?: string; numbers?: string[]; created?: { name: string; ok: boolean; error?: string }[]
+  templates?: { name: string; language: string; status: string; category: string; reason?: string }[]
+}> {
+  const { url, anon } = activeConfig()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!url || !anon || !session) throw new Error('Please sign in again.')
+  const res = await fetch(`${url}/functions/v1/wa-connect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, apikey: anon },
+    body: JSON.stringify({ action: 'house-templates', wabaId, dryRun }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok && !body.message) throw new Error(body.error ?? 'Could not reach Meta.')
+  return body
+}

@@ -56,7 +56,7 @@ export const CLINIC_TEMPLATES: ClinicTemplate[] = [
   // The automatic messages of the Pro plan.
   {
     name: 'welcome_patient', language: 'en', category: 'UTILITY',
-    body: 'Hello {{1}}, you are registered at {{2}}. Your file number is {{3}}.\n\nYour prescriptions, bills and reports from this visit will also be in the Sehatsandhi app: {{4}}',
+    body: 'Hello {{1}}, you are registered at {{2}}. Your file number is {{3}}.\n\nYour prescriptions, bills and reports from this visit will also be in the Sehatsandhi app: {{4}}\n\nThank you for choosing us.',
     samples: ['Sunita Devi', 'Family Health Clinic', 'FHC-1042', 'https://www.sehatsandhi.com/app'],
   },
   {

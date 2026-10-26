@@ -6,7 +6,7 @@ import {
   MarketingSettings, WaTemplate, MarketingReportRow, BroadcastForReview, rupees, renderTemplate,
   getMarketingSettings, updateMarketingSettings, listTemplates, updateTemplate, createTemplate,
   getMarketingReport, getWalletReport, type WalletReport, getWaCosts, type WaCosts, sendTestMessage, broadcastPicture, broadcastPictureUrl, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
-  setWaComplimentary, listWaComplimentary, listWaPlans,
+  setWaComplimentary, listWaComplimentary, listWaPlans, houseTemplates,
   getWaFreeOverview, adminSetWaFree, adminGrantWaFree, type WaFreeRow,
 } from '../../lib/marketingApi'
 
@@ -103,6 +103,7 @@ export default function WhatsAppMarketingPanel({ businesses, isManager = false }
 
       {!isManager && <ClinicsCard rows={rows} businesses={businesses} onChange={load} onError={setError} />}
       {!isManager && settings && <FreeMessagesCard perMonth={settings.free_messages_per_month} />}
+      {!isManager && <HouseTemplatesCard />}
     </div>
   )
 }
@@ -667,6 +668,50 @@ function FreeMessagesCard({ perMonth }: { perMonth: number }) {
               )
             })}</tbody>
           </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 0262: the templates in OUR WhatsApp account that clinics' messages from our
+// number use — including WhatsApp Pro's automatic messages.
+function HouseTemplatesCard() {
+  const [waba, setWaba] = useState('1461510652560252')
+  const [busy, setBusy] = useState(false)
+  const [r, setR] = useState<Awaited<ReturnType<typeof houseTemplates>> | null>(null)
+  const [err, setErr] = useState('')
+  const run = async (dryRun: boolean) => {
+    setBusy(true); setErr('')
+    try { setR(await houseTemplates(waba.trim(), dryRun)) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <div className="card shadow-sm space-y-3">
+      <h3 className="font-bold text-navy-700">Templates in our WhatsApp account</h3>
+      <p className="text-xs text-gray-500">
+        Clinics’ prescriptions, bills, reports and WhatsApp Pro’s automatic messages, when they go from the Sehatsandhi number, need these
+        templates approved in the account that number is in. “Create missing” adds any that are not there; Meta then reviews them.
+      </p>
+      <div className="flex gap-2 flex-wrap items-center">
+        <input value={waba} onChange={e => setWaba(e.target.value)} className="input-field text-sm w-56" aria-label="WhatsApp account id" />
+        <button onClick={() => run(true)} disabled={busy} className="btn-secondary text-sm disabled:opacity-50">Check</button>
+        <button onClick={() => run(false)} disabled={busy} className="btn-teal text-sm disabled:opacity-50">Create missing</button>
+      </div>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {r && (
+        <div className="text-sm space-y-2">
+          {r.message && <p className={r.ok ? 'text-gray-600' : 'text-red-600'}>{r.message}</p>}
+          {!!r.numbers?.length && <p className="text-xs text-gray-500">Numbers: {r.numbers.join(', ')}</p>}
+          {!!r.created?.length && <p className="text-xs">Created: {r.created.map(c => `${c.name}${c.ok ? '' : ` (failed: ${c.error})`}`).join(', ')}</p>}
+          <ul className="divide-y divide-gray-100">
+            {(r.templates ?? []).map(t => (
+              <li key={`${t.name}:${t.language}`} className="py-1 flex justify-between gap-2">
+                <span>{t.name} <span className="text-xs text-gray-400">{t.language} · {t.category?.toLowerCase()}</span>
+                  {t.reason && <span className="block text-[11px] text-red-600">{t.reason}</span>}</span>
+                <span className={`text-xs font-semibold ${t.status === 'APPROVED' ? 'text-green-700' : t.status === 'PENDING' ? 'text-amber-700' : 'text-red-600'}`}>{t.status}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

@@ -87,6 +87,11 @@ const OWN_TEMPLATE: Record<string, string> = {
   AISENSY_FOLLOW_UP_CAMPAIGN: 'follow_up_reminder',
 }
 
+const AUTO_TEMPLATE: Record<string, string> = {
+  AISENSY_WELCOME_CAMPAIGN: 'welcome_patient', AISENSY_VISIT_SUMMARY_CAMPAIGN: 'visit_summary',
+  AISENSY_FOLLOW_UP_CAMPAIGN: 'follow_up_reminder',
+}
+
 function metaTemplate(t: TemplateSend): { name: string; lang: string } | null {
   if (t.sender) {
     const own = envs(t.campaignEnv).map(e => OWN_TEMPLATE[e]).find(Boolean)
@@ -94,10 +99,13 @@ function metaTemplate(t: TemplateSend): { name: string; lang: string } | null {
     const [name, lang] = own.split(':')
     return { name, lang: lang || 'en' }
   }
+  // 0262: the automatic messages' templates have one name everywhere; a
+  // secret may still override it.
+  const fixed = envs(t.campaignEnv).map(e => AUTO_TEMPLATE[e]).find(Boolean)
   // META_TEMPLATE_NAME is the login template's older secret; login_code its default.
   const raw = firstSet(envs(t.campaignEnv).map(metaEnvFor))
     ?? (t.otp ? Deno.env.get('META_TEMPLATE_NAME') ?? 'login_code' : null)
-  if (!raw) return null
+  if (!raw) return fixed ? { name: fixed, lang: 'en' } : null
   const [name, lang] = raw.split(':')
   return { name, lang: lang || Deno.env.get('META_TEMPLATE_LANG') || 'en' }
 }
