@@ -1566,6 +1566,20 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0266 — a name is found by any of its words, titles and dots ignored.
+sec('name search')
+if (!skip()) {
+  const m = async (name, q) => (await raw(`select sehat_name_matches($1, $2) r`, [name, q]))[0].r
+  expectEq('"Anjana Sharma" finds "Mrs. Anjana Kumari Sharma"', await m('Mrs. Anjana Kumari Sharma', 'Anjana Sharma'), true)
+  expectEq('words in any order, and the start of a word', await m('Mrs. Anjana Kumari Sharma', 'sharma anj'), true)
+  expectEq('one title for another', await m('Smt Anjana', 'Mrs Anjana'), true)
+  expectEq('no space after the dot', await m('Mrs.Anjana', 'anjana'), true)
+  expectEq('Kumari as a name is still a name', await m('Kumari Devi', 'kumari'), true)
+  expectEq('a different surname is not a match', await m('Anjana Sharma', 'Anjana Gupta'), false)
+  expectEq('a title alone finds nobody', await m('Mrs. Anjana', 'Mrs'), false)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 0265 — the Today tab: what each person may see of it.
 sec('today')
 if (!skip()) {
