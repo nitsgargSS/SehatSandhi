@@ -224,14 +224,18 @@ export async function getBroadcastBlocker(businessId: string): Promise<string | 
   return data as string | null
 }
 
-export async function getAudiencePins(businessId: string): Promise<{ pin_code: string; patients: number }[]> {
+/** 0264: each PIN with its area name; '' is the patients with no PIN. */
+export interface AudiencePin { pin_code: string; patients: number; area: string | null }
+
+export async function getAudiencePins(businessId: string): Promise<AudiencePin[]> {
   const { data, error } = await supabase.rpc('sehat_marketing_audience_pins', { p_business: businessId })
   oops(error)
-  return ((data ?? []) as { pin_code: string; patients: number }[]).map(r => ({ ...r, patients: Number(r.patients) }))
+  return ((data ?? []) as AudiencePin[]).map(r => ({ ...r, patients: Number(r.patients) }))
 }
 
-export async function getAudience(businessId: string, pins: string[]): Promise<AudienceMember[]> {
-  const { data, error } = await supabase.rpc('sehat_marketing_audience', { p_business: businessId, p_pins: pins })
+/** pins empty = everyone; since (YYYY-MM-DD) = only patients seen at the clinic since that day (0264). */
+export async function getAudience(businessId: string, pins: string[], since?: string): Promise<AudienceMember[]> {
+  const { data, error } = await supabase.rpc('sehat_marketing_audience', { p_business: businessId, p_pins: pins, p_since: since ?? null })
   oops(error)
   return (data ?? []) as AudienceMember[]
 }

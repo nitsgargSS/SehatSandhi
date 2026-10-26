@@ -10,7 +10,7 @@ import {
   WaAccess, getWaAccess,
   MarketingSettings, WaAccount, WalletTx, WaTemplate, AudienceMember, Broadcast,
   rupees, renderTemplate, getMarketingSettings, getWaAccount, getWallet, getBroadcastBlocker,
-  getAudiencePins, getAudience, listTemplates, listBroadcasts, createBroadcast, topUpWallet,
+  getAudiencePins, getAudience, listTemplates, type AudiencePin, listBroadcasts, createBroadcast, topUpWallet,
   acceptWaTerms, sendTestMessage, uploadBroadcastPicture, broadcastPictureUrl,
   type WaClinicTemplate, listOwnTemplates, waConnect,
   type WaAutoSettings, type WaAutoOverview, getAutoSettings, saveAutoSettings, getAutoOverview,
@@ -257,7 +257,7 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
   const [blocker, setBlocker] = useState<string | null>(null)
   const [templates, setTemplates] = useState<WaTemplate[]>([])
   const [history, setHistory] = useState<Broadcast[]>([])
-  const [pins, setPins] = useState<{ pin_code: string; patients: number }[]>([])
+  const [pins, setPins] = useState<AudiencePin[]>([])
   // 0259: this month's free messages.
   const [send, setSend] = useState<SendOptions | null>(null)
   const [error, setError] = useState('')
@@ -517,9 +517,15 @@ function WaText({ text }: { text: string }) {
 function Composer({ insurance = false, businessId, businessName, settings, balance, blocker, templates, pins, onSent }: {
   insurance?: boolean
   businessId: string; businessName: string; settings: MarketingSettings; balance: number
-  blocker: string | null; templates: WaTemplate[]; pins: { pin_code: string; patients: number }[]
+  blocker: string | null; templates: WaTemplate[]; pins: AudiencePin[]
   onSent: () => void
 }) {
+  // 0264: who first — everyone, chosen areas, or recent visitors.
+  const [mode, setMode] = useState<'all' | 'area' | 'recent' | null>(null)
+  const [recentDays, setRecentDays] = useState(90)
+  const [search, setSearch] = useState('')
+  const [allAreas, setAllAreas] = useState(false)
+  const [listOpen, setListOpen] = useState(false)
   const [chosenPins, setChosenPins] = useState<string[]>([])
   const [audience, setAudience] = useState<AudienceMember[]>([])
   const [ticked, setTicked] = useState<Set<string>>(new Set())
@@ -547,15 +553,30 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
 
-  // Reload the checklist whenever the PINs change; everyone starts ticked.
+  // Reload the checklist whenever the choice changes; everyone starts ticked.
   useEffect(() => {
-    if (!chosenPins.length) { setAudience([]); setTicked(new Set()); return }
+    if (!mode || (mode === 'area' && !chosenPins.length)) { setAudience([]); setTicked(new Set()); return }
+    const since = mode === 'recent'
+      ? new Date(Date.now() + 5.5 * 3_600_000 - recentDays * 86_400_000).toISOString().slice(0, 10) : undefined
+    let live = true
     setLoadingAud(true)
-    getAudience(businessId, chosenPins)
-      .then(a => { setAudience(a); setTicked(new Set(a.map(x => x.patient_member_id))) })
+    getAudience(businessId, mode === 'area' ? chosenPins : [], since)
+      .then(a => { if (live) { setAudience(a); setTicked(new Set(a.map(x => x.patient_member_id))) } })
       .catch(e => setErr((e as Error).message))
-      .finally(() => setLoadingAud(false))
-  }, [businessId, chosenPins])
+      .finally(() => { if (live) setLoadingAud(false) })
+    return () => { live = false }
+  }, [businessId, mode, chosenPins, recentDays])
+
+  const everyone = pins.reduce((n, p) => n + p.patients, 0)
+  const areaLabel = (p: AudiencePin) => p.pin_code ? `${p.area ? `${p.area} · ` : ''}${p.pin_code}` : 'Without a PIN code'
+  const matches = useMemo(() => {
+    const t = search.trim().toLowerCase()
+    const list = pins.filter(p => !chosenPins.includes(p.pin_code))
+    if (t) return list.filter(p => p.pin_code.includes(t) || (p.area ?? '').toLowerCase().includes(t) || (!p.pin_code && 'without no pin'.includes(t)))
+    return allAreas ? list : list.slice(0, 6)
+  }, [pins, chosenPins, search, allAreas])
+  const chosenCount = pins.filter(p => chosenPins.includes(p.pin_code)).reduce((n, p) => n + p.patients, 0)
+  const who = insurance ? 'people' : 'patients'
 
   const tpl = templates.find(t => t.id === templateId)
   useEffect(() => { setParams(tpl ? Array(Math.max(tpl.placeholders.length - 1, 0)).fill('') : []); setPicOk(false); setPicErr(''); setEmojiFor(null) }, [templateId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -593,11 +614,11 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
   const send = async () => {
     setBusy(true); setErr(''); setMsg('')
     try {
-      const r = await createBroadcast({ businessId, templateId, params, memberIds: [...ticked], pins: chosenPins })
+      const r = await createBroadcast({ businessId, templateId, params, memberIds: [...ticked], pins: mode === 'area' ? chosenPins : [] })
       // 0238: only a picture waits for Sehatsandhi's approval; a set template goes out at once.
       if (r.status === 'queued') setMsg(`Sending now: ${r.recipients} patients · ${rupees(r.cost_paise)} taken from your wallet (balance ${rupees(r.balance_paise)}). A message that is not delivered is refunded.`)
       else setMsg(`Sent for approval: ${r.recipients} patients · ${rupees(r.cost_paise)} held from your wallet (balance ${rupees(r.balance_paise)}). Sehatsandhi reviews it before it goes out; if it is not approved the money comes back and we email you why.`)
-      setConfirming(false); setChosenPins([]); setTemplateId(''); onSent()
+      setConfirming(false); setChosenPins([]); setMode(null); setSearch(''); setTemplateId(''); onSent()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -606,7 +627,7 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
       <h3 className="font-bold text-navy-700 flex items-center gap-2"><Send className="w-4 h-4 text-teal-600" /> New broadcast</h3>
 
       <div>
-        <p className="text-xs font-semibold text-gray-500 mb-2">1. PIN codes</p>
+        <p className="text-xs font-semibold text-gray-500 mb-2">1. Who gets it</p>
         {!pins.length ? (
           <p className="text-sm text-gray-500">
             {insurance
@@ -614,27 +635,92 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
               : <>No patients to message yet. Every patient you register with a mobile number appears here, until they reply STOP.</>}
           </p>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {pins.map(p => (
-              <button key={p.pin_code || 'none'} onClick={() => togglePin(p.pin_code)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${chosenPins.includes(p.pin_code) ? 'bg-teal-50 border-teal-500 text-teal-700' : 'bg-white border-gray-200 text-gray-600'}`}>
-                {p.pin_code || 'No PIN'} · {p.patients}
-              </button>
-            ))}
+          <div className="space-y-3">
+            <div className="grid sm:grid-cols-3 gap-2">
+              {([
+                ['all', `All my ${who}`, `${everyone}`],
+                ['area', 'By area', 'Choose PIN codes'],
+                ['recent', 'Visited recently', 'Seen in the last few months'],
+              ] as const).map(([k, title, sub]) => (
+                <button key={k} type="button" onClick={() => { setMode(k); setListOpen(false) }}
+                  className={`text-left rounded-lg border px-3 py-2 ${mode === k ? 'border-teal-500 bg-teal-50' : 'border-gray-200 bg-white'}`}>
+                  <div className="text-sm font-semibold text-navy-700">{title}</div>
+                  <div className="text-xs text-gray-500">{sub}</div>
+                </button>
+              ))}
+            </div>
+
+            {mode === 'recent' && (
+              <div className="flex flex-wrap gap-2">
+                {[30, 90, 180, 365].map(d => (
+                  <button key={d} type="button" onClick={() => setRecentDays(d)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${recentDays === d ? 'bg-teal-50 border-teal-500 text-teal-700' : 'bg-white border-gray-200 text-gray-600'}`}>
+                    {d === 365 ? 'Last year' : `Last ${d} days`}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {mode === 'area' && (
+              <div className="space-y-2">
+                {chosenPins.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    {chosenPins.map(pc => {
+                      const p = pins.find(x => x.pin_code === pc)
+                      return (
+                        <span key={pc || 'none'} className="text-xs bg-teal-50 border border-teal-200 text-teal-800 rounded-full pl-2.5 pr-1 py-1 inline-flex items-center gap-1">
+                          {p ? areaLabel(p) : pc}
+                          <button type="button" onClick={() => togglePin(pc)} className="px-1 text-teal-700 hover:text-red-600" aria-label="Remove">✕</button>
+                        </span>
+                      )
+                    })}
+                    <span className="text-xs text-gray-500 ml-1">{chosenCount} {who}</span>
+                  </div>
+                )}
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search area or PIN code…"
+                  className="input-field text-sm" />
+                <ul className="border border-gray-100 rounded-lg divide-y divide-gray-50 max-h-60 overflow-y-auto">
+                  {matches.map(p => (
+                    <li key={p.pin_code || 'none'}>
+                      <button type="button" onClick={() => { togglePin(p.pin_code); setSearch('') }}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50">
+                        <span className="flex items-center gap-2"><Square className="w-4 h-4 text-gray-300" />{areaLabel(p)}</span>
+                        <span className="text-xs text-gray-500">{p.patients}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {!matches.length && <li className="px-3 py-2 text-sm text-gray-400">{search ? 'No area matches.' : 'Every area is chosen.'}</li>}
+                </ul>
+                {!search && !allAreas && pins.length - chosenPins.length > 6 && (
+                  <button type="button" onClick={() => setAllAreas(true)} className="text-xs text-teal-700 font-semibold hover:underline">
+                    Show all {pins.length - chosenPins.length} areas
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {chosenPins.length > 0 && (
+      {mode && (mode !== 'area' || chosenPins.length > 0) && (
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-gray-500">2. Patients</p>
-            <div className="flex gap-3 text-xs">
-              <button className="text-teal-700 font-semibold" onClick={() => setTicked(new Set(audience.map(a => a.patient_member_id)))}>Select all</button>
-              <button className="text-gray-500 font-semibold" onClick={() => setTicked(new Set())}>Clear</button>
-            </div>
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            <p className="text-xs font-semibold text-gray-500">
+              2. {loadingAud ? `Loading ${who}…` : `${ticked.size} of ${audience.length} ${who} selected`}
+              {!loadingAud && audience.length > 0 && (
+                <button type="button" onClick={() => setListOpen(v => !v)} className="ml-2 text-teal-700 font-semibold hover:underline">
+                  {listOpen ? 'Hide list' : 'Review list'}
+                </button>
+              )}
+            </p>
+            {listOpen && (
+              <div className="flex gap-3 text-xs">
+                <button className="text-teal-700 font-semibold" onClick={() => setTicked(new Set(audience.map(a => a.patient_member_id)))}>Select all</button>
+                <button className="text-gray-500 font-semibold" onClick={() => setTicked(new Set())}>Clear</button>
+              </div>
+            )}
           </div>
-          {loadingAud ? <p className="text-sm text-gray-400">Loading patients…</p> : (
+          {!listOpen || loadingAud ? null : (
             <div className="max-h-64 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-50">
               {audience.map(a => {
                 const on = ticked.has(a.patient_member_id)
