@@ -1566,6 +1566,46 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0269 — wards, beds and bed charges: owner and manager set up; a change is
+// the owner's, and a manager's waits for the owner's approval.
+sec('wards')
+if (!skip()) {
+  await inRollback(async () => {
+    const as = async (who, sql, params = []) => {
+      await db.query(`set local role authenticated`)
+      await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid[who], role: 'authenticated', email: emails[who] })])
+      try { const r = await db.query(sql, params); return r.rows[0] ? Object.values(r.rows[0])[0] : null }
+      finally { await db.query('reset role') }
+    }
+    const tries = async (who, sql, params = []) => {
+      await db.query('savepoint t')
+      try { const v = await as(who, sql, params); await db.query('release savepoint t'); return { ok: true, v } }
+      catch (e) { await db.query('rollback to savepoint t'); return { ok: false, why: e.message } }
+    }
+    const ward = await as('manager', `insert into wards (business_id, name) values ($1, '[TEST] Ward W') returning id`, [BIZ.id])
+    expectTrue('a manager can add a ward', !!ward)
+    const bed = await as('manager', `insert into beds (business_id, ward_id, label, daily_charge) values ($1, $2, 'T1', 800) returning id`, [BIZ.id, ward])
+    expectTrue('a manager can add a bed with its daily charge', !!bed)
+    expectEq('reception cannot add a ward', (await tries('reception', `insert into wards (business_id, name) values ($1, '[TEST] Ward R') returning id`, [BIZ.id])).ok, false)
+    expectEq('a manager cannot change a bed charge directly', (await tries('manager', `update beds set daily_charge = 1 where id = $1 returning id`, [bed])).v ?? null, null)
+
+    const req = await as('manager', `select sehat_ward_change($1, 'bed_charge', $2, '{"charge": 950}'::jsonb)`, [BIZ.id, bed])
+    expectEq("a manager's change waits for the owner", req.applied, false)
+    expectEq('…and the charge is unchanged meanwhile', (await raw(`select daily_charge::int c from beds where id = $1`, [bed]))[0]?.c ?? (await db.query(`select daily_charge::int c from beds where id = $1`, [bed])).rows[0].c, 800)
+    expectEq('a manager cannot approve it', (await tries('manager', `select sehat_ward_change_decide($1, true)`, [req.id])).ok, false)
+    await as('owner', `select sehat_ward_change_decide($1, true)`, [req.id])
+    expectEq('the owner approves, and it applies', (await db.query(`select daily_charge::int c from beds where id = $1`, [bed])).rows[0].c, 950)
+
+    const own = await as('owner', `select sehat_ward_change($1, 'ward_charge', $2, '{"charge": 1200}'::jsonb)`, [BIZ.id, ward])
+    expectEq("the owner's own change applies at once", own.applied, true)
+    expectEq('…to every bed in the ward', (await db.query(`select daily_charge::int c from beds where id = $1`, [bed])).rows[0].c, 1200)
+    expectEq('reception cannot ask for a change', (await tries('reception', `select sehat_ward_change($1, 'bed_remove', $2)`, [BIZ.id, bed])).ok, false)
+    await as('owner', `select sehat_ward_change($1, 'bed_remove', $2)`, [BIZ.id, bed])
+    expectEq('a removed bed is taken out of service, not deleted', (await db.query(`select is_active from beds where id = $1`, [bed])).rows[0]?.is_active, false)
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 0266 — a name is found by any of its words, titles and dots ignored.
 sec('name search')
 if (!skip()) {

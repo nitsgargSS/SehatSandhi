@@ -471,3 +471,34 @@ export async function voidDose(id: string, reason: string, by?: string | null) {
   })
   oops(error)
 }
+
+// ── 0269: changing wards, beds and bed charges ──────────────────────────────
+// The owner's change applies at once; a manager's waits for the owner.
+
+export type WardChangeKind = 'bed_charge' | 'ward_charge' | 'bed_label' | 'ward_name' | 'bed_remove' | 'ward_remove'
+
+export interface WardChangeRequest {
+  id: string; kind: WardChangeKind; target_label: string | null; before_text: string | null; after_text: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'applied'; requested_by_name: string | null; decided_by_name: string | null
+  created_at: string; decided_at: string | null; note: string | null
+}
+
+export async function changeWard(businessId: string, kind: WardChangeKind, targetId: string,
+  value: { charge?: number; text?: string } = {}): Promise<{ applied: boolean; text?: string }> {
+  const { data, error } = await supabase.rpc('sehat_ward_change', { p_business: businessId, p_kind: kind, p_target: targetId, p_value: value })
+  oops(error)
+  return data as { applied: boolean; text?: string }
+}
+
+export async function decideWardChange(requestId: string, approve: boolean, note?: string) {
+  const { error } = await supabase.rpc('sehat_ward_change_decide', { p_request: requestId, p_approve: approve, p_note: note ?? null })
+  oops(error)
+}
+
+export async function listWardChanges(businessId: string): Promise<WardChangeRequest[]> {
+  const { data, error } = await supabase.from('ward_change_requests')
+    .select('id, kind, target_label, before_text, after_text, status, requested_by_name, decided_by_name, created_at, decided_at, note')
+    .eq('business_id', businessId).order('created_at', { ascending: false }).limit(30)
+  oops(error)
+  return (data ?? []) as WardChangeRequest[]
+}

@@ -36,7 +36,7 @@ interface Today {
 
 const inr = (n: number) => `₹${Math.round(Number(n) || 0).toLocaleString('en-IN')}`
 const time = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })
-const ALERT_TAB: Record<string, Tab> = { plan: 'plan', wallet: 'whatsapp', auto: 'whatsapp', lab: 'lab' }
+const ALERT_TAB: Record<string, Tab> = { plan: 'plan', wallet: 'whatsapp', auto: 'whatsapp', lab: 'lab', beds: 'beds' }
 
 export default function TodayPanel({ businessId, booksAppointments, onGoTo, onOpenPatient }: {
   businessId: string
