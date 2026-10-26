@@ -580,3 +580,37 @@ export async function listWaPlans(): Promise<Record<string, { plan: 'basic' | 'p
   }
   return out
 }
+
+// ── 0262: WhatsApp Pro's automatic messages ─────────────────────────────────
+
+export interface WaAutoSettings {
+  welcome: boolean; visit_summary: boolean; thank_you: boolean; follow_up: boolean
+  thank_you_after_minutes: number
+}
+export const WA_AUTO_DEFAULTS: WaAutoSettings = { welcome: true, visit_summary: true, thank_you: true, follow_up: true, thank_you_after_minutes: 120 }
+
+export interface WaAutoOverview {
+  month: Record<string, { whatsapp: number; app: number; skipped: number; failed: number; waiting: number }>
+  recent: { kind: string; status: string; channel: string | null; why: string | null; name: string | null; created_at: string; sent_at: string | null; due_at: string }[]
+}
+
+export async function getAutoSettings(businessId: string): Promise<WaAutoSettings> {
+  const { data, error } = await supabase.from('wa_auto_settings')
+    .select('welcome, visit_summary, thank_you, follow_up, thank_you_after_minutes').eq('business_id', businessId).maybeSingle()
+  oops(error)
+  return (data as WaAutoSettings | null) ?? WA_AUTO_DEFAULTS
+}
+
+export async function saveAutoSettings(businessId: string, s: WaAutoSettings) {
+  const { error } = await supabase.rpc('sehat_wa_auto_settings_save', {
+    p_business: businessId, p_welcome: s.welcome, p_visit_summary: s.visit_summary, p_thank_you: s.thank_you,
+    p_follow_up: s.follow_up, p_thank_you_after_minutes: s.thank_you_after_minutes,
+  })
+  oops(error)
+}
+
+export async function getAutoOverview(businessId: string): Promise<WaAutoOverview> {
+  const { data, error } = await supabase.rpc('sehat_wa_auto_overview', { p_business: businessId })
+  oops(error)
+  return data as WaAutoOverview
+}

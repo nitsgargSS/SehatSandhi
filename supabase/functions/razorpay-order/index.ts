@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
   let body: {
     pincodes?: unknown; businessId?: unknown; periodMonths?: unknown; modules?: unknown
     gstin?: unknown; gstLegalName?: unknown; billingAddress?: unknown
-    whatsapp?: unknown; couponCode?: unknown; autoRenew?: unknown
+    whatsapp?: unknown; couponCode?: unknown; autoRenew?: unknown; whatsappPlan?: unknown
   }
   try {
     body = await req.json()
@@ -181,6 +181,7 @@ Deno.serve(async (req) => {
   try {
     priced = await computePrice(supabase, pincodes, businessId, null, requestedMonths, null, requestedModules, {
       whatsapp: body.whatsapp === true,
+      whatsappPlan: body.whatsappPlan === 'pro' ? 'pro' : 'basic',
       couponCode: typeof body.couponCode === 'string' ? body.couponCode.slice(0, 40) : null,
     })
   } catch (e) {
@@ -267,6 +268,7 @@ Deno.serve(async (req) => {
       subscription_amount: priced.subscriptionTotal,
       whatsapp_addon: priced.whatsappSelected,
       whatsapp_amount: priced.whatsappTotal,
+      whatsapp_plan: priced.whatsappSelected ? priced.whatsappPlan : null,
       // 0178: the paid add-ons this term renews; fulfilment keeps them on.
       addon_codes: priced.addonCodes ?? [],
       coupon_code: priced.coupon?.code ?? null,
@@ -309,6 +311,7 @@ Deno.serve(async (req) => {
   await supabase.from('businesses').update({
     renewal_term_months: months,
     renewal_whatsapp: priced.whatsappSelected,
+    ...(priced.whatsappSelected ? { renewal_whatsapp_plan: priced.whatsappPlan } : {}),
     auto_renew: body.autoRenew === false ? false : true,
   }).eq('id', businessId)
 

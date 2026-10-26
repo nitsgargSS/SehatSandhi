@@ -75,7 +75,7 @@ export interface PriceResult {
   coupon?: { code: string; label: string; discount: number } | null
   couponError?: string | null
   lineItems?: { label: string; amount: number }[]
-  terms?: { months: number; price: number; label: string | null; savings_note: string | null; whatsapp_price?: number }[]
+  terms?: { months: number; price: number; label: string | null; savings_note: string | null; whatsapp_price?: number; whatsapp_pro_price?: number }[]
 }
 
 export interface TaxBreakdown {
@@ -139,7 +139,7 @@ export const computePrice = (
   /** care_modules codes ticked in the wizard. Priced server-side, never here. */
   modules?: string[] | null,
   /** 0117: the WhatsApp add-on and a coupon code, both checked server-side. */
-  choices: { whatsapp?: boolean; couponCode?: string } = {},
+  choices: { whatsapp?: boolean; couponCode?: string; whatsappPlan?: 'basic' | 'pro' } = {},
 ) => callFn<PriceResult>('compute-price', { pincodes, businessId, vertical, months, doctorCount, modules, ...choices })
 
 export interface RazorpayOrder {
@@ -214,6 +214,8 @@ export interface BuyerGstDetails {
   billingAddress?: string
   /** 0117: checkout choices, re-priced and checked by razorpay-order. */
   whatsapp?: boolean
+  /** 0262: Basic or Pro, when WhatsApp is ticked. */
+  whatsappPlan?: 'basic' | 'pro'
   couponCode?: string
   autoRenew?: boolean
 }
@@ -228,6 +230,9 @@ export const createRazorpayOrder = (
 
 export interface WhatsappAddonQuote {
   ok: true
+  /** 0262: the plan quoted, and whether it is Basic → Pro for the rest of the term. */
+  plan?: 'basic' | 'pro'
+  upgrading?: boolean
   termMonths: number; termLabel: string; termStart: string; termEnd: string
   daysLeft: number; daysInTerm: number; fullFee: number; amount: number
   tax: { taxableValue: number; taxTotal: number; grandTotal: number; rate: number; applied: boolean }
@@ -235,8 +240,8 @@ export interface WhatsappAddonQuote {
 }
 
 /** WhatsApp added to a plan already paid for: its fee alone, pro rata to the plan's end. */
-export const whatsappAddon = (businessId: string, action: 'quote' | 'order', authToken: string) =>
-  callFn<WhatsappAddonQuote>('whatsapp-addon-order', { businessId, action }, authToken)
+export const whatsappAddon = (businessId: string, action: 'quote' | 'order', authToken: string, plan: 'basic' | 'pro' = 'basic') =>
+  callFn<WhatsappAddonQuote>('whatsapp-addon-order', { businessId, action, plan }, authToken)
 
 // ── 0178: in-clinic test add-ons ──────────────────────────────────────────
 

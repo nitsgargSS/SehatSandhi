@@ -39,6 +39,8 @@ export interface PlanTerm {
   multiplies_headcount: boolean
   /** WhatsApp add-on for this term (0117), whole rupees. Absent on plan_terms. */
   whatsapp_price?: number
+  /** 0262: WhatsApp Pro instead — the clinic's own number and automatic messages. */
+  whatsapp_pro_price?: number
 }
 
 /** One priced line of what is being bought, pre-GST. Copied onto the invoice. */
@@ -150,6 +152,8 @@ export interface PriceResult {
   whatsappAvailable: boolean
   whatsappSelected: boolean
   whatsappTotal: number
+  /** 0262: which WhatsApp plan was priced, when one was selected. */
+  whatsappPlan: 'basic' | 'pro'
   /** 0178: paid in-clinic test add-ons renewed with this term, and their total. */
   addonCodes: string[]
   addonTotal: number
@@ -382,13 +386,13 @@ export async function resolveModules(
 export async function resolveTypeTerms(supabase: SupabaseClient, vertical: string): Promise<PlanTerm[]> {
   const { data, error } = await supabase
     .from('vertical_term_prices')
-    .select('months, subscription_price, whatsapp_price, label')
+    .select('*')
     .eq('vertical', vertical)
     .eq('is_enabled', true)
     .order('months')
   // Missing table (0117 not applied) means the old way, not an outage.
   if (error) return []
-  const rows = (data ?? []) as { months: number; subscription_price: number; whatsapp_price: number; label: string | null }[]
+  const rows = (data ?? []) as { months: number; subscription_price: number; whatsapp_price: number; whatsapp_pro_price?: number | null; label: string | null }[]
   const monthly = rows.find(r => r.months === 1)?.subscription_price ?? 0
   return rows.map(r => {
     const saving = monthly * r.months - r.subscription_price
@@ -399,6 +403,8 @@ export async function resolveTypeTerms(supabase: SupabaseClient, vertical: strin
       savings_note: r.months > 1 && saving > 0 ? `Save ₹${saving.toLocaleString('en-IN')}` : null,
       multiplies_headcount: false,
       whatsapp_price: Number(r.whatsapp_price),
+      // 0262: twice Basic where no Pro price has been set.
+      whatsapp_pro_price: r.whatsapp_pro_price != null ? Number(r.whatsapp_pro_price) : Number(r.whatsapp_price) * 2,
     }
   })
 }
@@ -491,7 +497,7 @@ export async function computePrice(
   /** care_modules codes the buyer ticked. Unknown or disabled codes are ignored. */
   requestedModules?: string[] | null,
   /** 0117: the WhatsApp add-on and a coupon code. */
-  extra: { whatsapp?: boolean | null; couponCode?: string | null } = {},
+  extra: { whatsapp?: boolean | null; couponCode?: string | null; whatsappPlan?: 'basic' | 'pro' | null } = {},
 ): Promise<PriceResult> {
   const [plan, vb, taxSettings, recipientState, resolvedCount, tickedModules] = await Promise.all([
     resolveActivePlan(supabase),
@@ -590,7 +596,7 @@ export async function computePrice(
       tax: applyGst(0, taxSettings, recipientState),
       priceIncludesGst: plan.price_includes_gst,
       pricingSource: byType ? 'type' : 'plan',
-      subscriptionTotal: 0, whatsappAvailable: byType, whatsappSelected: false, whatsappTotal: 0,
+      subscriptionTotal: 0, whatsappAvailable: byType, whatsappSelected: false, whatsappTotal: 0, whatsappPlan: 'basic',
       addonCodes: [], addonTotal: 0,
       coupon: null, couponError: null, lineItems: [],
       ...planFields,
@@ -732,6 +738,7 @@ export async function computePrice(
     waComplimentary = Boolean((wa as { complimentary?: boolean } | null)?.complimentary)
   }
   const whatsappSelected = byType && Boolean(extra.whatsapp) && !waComplimentary
+  const waPlan: 'basic' | 'pro' = extra.whatsappPlan === 'pro' ? 'pro' : 'basic'
 
   // 0178: the paid in-clinic test add-ons this business keeps renew with the
   // plan, at today's price per month × the term's months.
@@ -755,7 +762,7 @@ export async function computePrice(
     subscriptionTotal = customMonthly !== null ? customMonthly * months : (term?.price ?? 0)
     const doctorTotal = typeExtraCost * months
     const moduleTermTotal = moduleTotal * months
-    whatsappTotal = whatsappSelected ? (term?.whatsapp_price ?? 0) : 0
+    whatsappTotal = !whatsappSelected ? 0 : waPlan === 'pro' ? (term?.whatsapp_pro_price ?? 0) : (term?.whatsapp_price ?? 0)
     couponRes = await resolveCoupon(supabase, extra.couponCode, { businessId: businessId ?? null, subscription: subscriptionTotal, months })
     const discount = couponRes.coupon?.discount ?? 0
 
@@ -763,7 +770,12 @@ export async function computePrice(
     if (subscriptionTotal > 0) lineItems.push({ label: `Sehatsandhi subscription — ${termName}`, amount: subscriptionTotal })
     if (doctorTotal > 0) lineItems.push({ label: `Additional doctors — ${typeExtraDoctors} × ₹${vb.extraDoctorPrice}/month × ${months}`, amount: doctorTotal })
     if (moduleTermTotal > 0) lineItems.push({ label: `Clinical systems — ${termName}`, amount: moduleTermTotal })
-    if (whatsappTotal > 0) lineItems.push({ label: `WhatsApp Business Verification & Activation Fee — ${termName}`, amount: whatsappTotal })
+    if (whatsappTotal > 0) lineItems.push({
+      label: waPlan === 'pro'
+        ? `WhatsApp Pro — own number and automatic messages — ${termName}`
+        : `WhatsApp Business Verification & Activation Fee — ${termName}`,
+      amount: whatsappTotal,
+    })
     for (const a of addons) {
       lineItems.push({ label: `${a.label} add-on — ₹${a.monthly}/month × ${months}`, amount: a.monthly * months })
       addonTotal += a.monthly * months
@@ -807,6 +819,7 @@ export async function computePrice(
     whatsappAvailable: byType,
     whatsappSelected,
     whatsappTotal,
+    whatsappPlan: waPlan,
     addonCodes: addons.map(a => a.code),
     addonTotal,
     coupon: couponRes.coupon,

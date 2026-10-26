@@ -42,7 +42,7 @@ export async function fulfilPayment(
 
   const { data: existing } = await supabase
     .from('payments')
-    .select('id, type, status, amount, addon_codes, addon_practitioner_id, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon')
+    .select('id, type, status, amount, addon_codes, addon_practitioner_id, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon, whatsapp_plan')
     .eq(paymentRowId ? 'id' : 'razorpay_order_id', paymentRowId ?? orderId)
     .maybeSingle()
 
@@ -60,6 +60,8 @@ export async function fulfilPayment(
     monthly_price: number | string | null; period_months: number | null
     term_start: string | null; term_end: string | null; modules: string[] | null
     subscription_amount: number | string | null; whatsapp_addon: boolean | null
+    /** 0262: 'basic' or 'pro'; null on payments from before Pro. */
+    whatsapp_plan?: 'basic' | 'pro' | null
     addon_practitioner_id?: string | null
   }
   const alreadyPaid = pay.status === 'paid'
@@ -163,11 +165,15 @@ export async function fulfilPayment(
       next_billing_date: pay.term_end,
       subscription_started_at: (acct as { subscription_started_at?: string } | null)?.subscription_started_at ?? now,
       onboarding_fee_paid_at: (acct as { onboarding_fee_paid_at?: string } | null)?.onboarding_fee_paid_at ?? now,
+      // 0262: the plan paid for. A payment from before Pro leaves it as it is.
+      ...(pay.whatsapp_plan ? { plan: pay.whatsapp_plan } : {}),
     }, { onConflict: 'business_id' })
     // WhatsApp added mid-term (whatsapp-addon-order) renews with the plan from
     // now on. A plan payment already set this when its order was created.
     if (!boughtListing) {
-      await supabase.from('businesses').update({ renewal_whatsapp: true }).eq('id', pay.business_id)
+      await supabase.from('businesses').update({
+        renewal_whatsapp: true, ...(pay.whatsapp_plan ? { renewal_whatsapp_plan: pay.whatsapp_plan } : {}),
+      }).eq('id', pay.business_id)
     }
   }
 

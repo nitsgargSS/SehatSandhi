@@ -1505,6 +1505,67 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0261/0262 — WhatsApp Pro: the clinic's own number, and the messages it sends
+// by itself. Everything here is rolled back; nothing reaches Meta.
+sec('whatsapp pro')
+if (!skip()) {
+  await inRollback(async () => {
+    const q1 = async (sql, params = []) => (await db.query(sql, params)).rows[0]
+    await db.query(`insert into business_wa_accounts (business_id, subscription_status, next_billing_date, plan)
+      values ($1, 'active', current_date + 20, 'basic')
+      on conflict (business_id) do update set subscription_status = 'active', next_billing_date = current_date + 20,
+        plan = 'basic', complimentary = false, past_due_since = null, own_status = 'none'`, [BIZ.id])
+    await db.query(`delete from wa_auto_settings where business_id = $1`, [BIZ.id])
+    const on = async (k) => (await q1(`select sehat_wa_auto_on($1, $2) r`, [BIZ.id, k])).r
+
+    expectEq('Basic sends nothing by itself', await on('welcome'), false)
+    expectEq('Basic has no own number to send from', (await q1(`select sehat_wa_own_sender($1) r`, [BIZ.id])).r, null)
+    await db.query(`update business_wa_accounts set plan = 'pro' where business_id = $1`, [BIZ.id])
+    expectEq('Pro sends the welcome', await on('welcome'), true)
+    expectEq('…but not from an own number until one is connected', (await q1(`select sehat_wa_own_sender($1) r`, [BIZ.id])).r, null)
+
+    await db.query(`update business_wa_accounts set own_status = 'connected', phone_number_id = 'TEST-PHONE-ID', waba_id = 'TEST-WABA' where business_id = $1`, [BIZ.id])
+    await db.query(`select sehat_wa_own_token_set($1, 'TEST-KEY')`, [BIZ.id])
+    const own = (await q1(`select sehat_wa_own_sender($1) r`, [BIZ.id])).r
+    expectEq('a connected number is sent from, with its key', [own?.phone_number_id, own?.token], ['TEST-PHONE-ID', 'TEST-KEY'])
+    expectEq('a reply to it is known to be this clinic\'s', (await q1(`select sehat_wa_own_by_phone_id('TEST-PHONE-ID') r`)).r?.business_id, BIZ.id)
+
+    // A patient registered → welcome; an import → nothing.
+    const members = (await db.query(`select pm.id from patient_members pm
+       where not exists (select 1 from business_patients bp where bp.patient_member_id = pm.id and bp.business_id = $1) limit 2`, [BIZ.id])).rows
+    await db.query(`insert into business_patients (business_id, patient_member_id, source) values ($1, $2, 'walk_in'), ($1, $3, 'import')`,
+      [BIZ.id, members[0].id, members[1].id])
+    const queued = async (m) => (await db.query(`select kind from wa_auto_messages where business_id = $1 and patient_member_id = $2 order by kind`, [BIZ.id, m])).rows.map(r => r.kind)
+    expectEq('a new patient gets a welcome', await queued(members[0].id), ['welcome'])
+    expectEq('an imported old patient does not', await queued(members[1].id), [])
+
+    // The visit finished twice the same day (token and appointment) → one of each.
+    await db.query(`select sehat_wa_auto_after_visit($1, $2, current_date)`, [BIZ.id, members[0].id])
+    await db.query(`select sehat_wa_auto_after_visit($1, $2, current_date)`, [BIZ.id, members[0].id])
+    expectEq('one summary and one thank-you per visit day', await queued(members[0].id), ['thank_you', 'visit_summary', 'welcome'])
+
+    // Switched off by the clinic → not even queued; a lapsed add-on → skipped when due.
+    await db.query(`insert into wa_auto_settings (business_id, welcome) values ($1, false)`, [BIZ.id])
+    expectEq('a message the clinic switched off is off', await on('welcome'), false)
+    await db.query(`update wa_auto_messages set due_at = now() - interval '1 minute' where business_id = $1`, [BIZ.id])
+    await db.query(`update business_wa_accounts set subscription_status = 'paused' where business_id = $1`, [BIZ.id])
+    await db.query(`select sehat_wa_auto_claim(50)`)
+    const st = (await db.query(`select distinct status from wa_auto_messages where business_id = $1`, [BIZ.id])).rows.map(r => r.status)
+    expectEq('when WhatsApp is paused, due messages are skipped, not sent', st, ['skipped'])
+
+    expectEq('9.30 pm waits until 9 am', (await q1(`select to_char(sehat_wa_auto_daytime('2026-10-26 16:00+00') at time zone 'Asia/Kolkata', 'DD HH24:MI') r`)).r, '27 09:00')
+    expectEq('2 pm is sent at 2 pm', (await q1(`select to_char(sehat_wa_auto_daytime('2026-10-26 08:30+00') at time zone 'Asia/Kolkata', 'DD HH24:MI') r`)).r, '26 14:00')
+
+    const price = (await q1(`select whatsapp_price b, whatsapp_pro_price p from vertical_term_prices where months = 1 and whatsapp_price > 0 limit 1`))
+    expectTrue('every term has a Pro price', !!price && price.p > 0, JSON.stringify(price))
+  })
+  await expectDeny('a clinic cannot read its own number\'s key', () => probe('reception', `select sehat_wa_own_sender($1)`, [BIZ.id]))
+  await expectDeny('a clinic cannot claim messages to send', () => probe('reception', `select sehat_wa_auto_claim(1)`))
+  await expectDeny('a receptionist cannot change automatic messages',
+    () => probe('reception', `select sehat_wa_auto_settings_save($1, false, false, false, false, 120)`, [BIZ.id]))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 0102 — the rating request, and the reply that had never been capturable.
 //
 // The send path is exercised inside a transaction that is ALWAYS rolled back.

@@ -13,6 +13,7 @@ import {
   getAudiencePins, getAudience, listTemplates, listBroadcasts, createBroadcast, topUpWallet,
   acceptWaTerms, sendTestMessage, uploadBroadcastPicture, broadcastPictureUrl,
   type WaClinicTemplate, listOwnTemplates, waConnect,
+  type WaAutoSettings, type WaAutoOverview, getAutoSettings, saveAutoSettings, getAutoOverview,
 } from '../../lib/marketingApi'
 import { embeddedSignup, loadFacebookSdk } from '../../lib/embeddedSignup'
 import { WA_TERMS, WA_TERMS_VERSION, PICTURE_RULES, templateRules } from '../../lib/waTerms'
@@ -112,8 +113,10 @@ export default function WhatsAppPanel({ businessId, businessName, prefill, busin
 
 const inr0 = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
-function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn }: {
+function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn, upgrade }: {
   quote: WhatsappAddonQuote
+  /** 0262: on Basic already — this pays the difference to Pro for the rest of the term. */
+  upgrade?: boolean
   businessId: string
   businessName: string
   email?: string
@@ -122,19 +125,32 @@ function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const q = quote
+  // 0262: Basic or Pro; the quote follows the choice.
+  const [plan, setPlan] = useState<'basic' | 'pro'>(upgrade ? 'pro' : quote.plan ?? 'basic')
+  const [q, setQ] = useState<WhatsappAddonQuote>(quote)
+  const [proQuote, setProQuote] = useState<WhatsappAddonQuote | null>(upgrade ? quote : null)
+  useEffect(() => {
+    if (upgrade) return
+    let live = true
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return
+      whatsappAddon(businessId, 'quote', session.access_token, 'pro').then(p => { if (live) setProQuote(p) }, () => undefined)
+    })
+    return () => { live = false }
+  }, [businessId, upgrade])
+  useEffect(() => { setQ(plan === 'pro' && proQuote ? proQuote : quote) }, [plan, proQuote, quote])
 
   const pay = async () => {
     setBusy(true); setError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('Please sign in again.')
-      const order = await whatsappAddon(businessId, 'order', session.access_token)
+      const order = await whatsappAddon(businessId, 'order', session.access_token, plan)
       await loadRazorpayCheckout()
       const Razorpay = (window as unknown as { Razorpay: new (o: unknown) => { open: () => void } }).Razorpay
       new Razorpay({
         key: order.keyId, amount: order.amountPaise, currency: order.currency, order_id: order.orderId,
-        name: 'Sehatsandhi Business', description: `${businessName} · WhatsApp until ${shortDate(q.termEnd)}`,
+        name: 'Sehatsandhi Business', description: `${businessName} · WhatsApp ${plan === 'pro' ? 'Pro ' : ''}until ${shortDate(q.termEnd)}`,
         prefill: { name: businessName, email },
         theme: { color: BIZ.green },
         remember_customer: false,
@@ -156,6 +172,29 @@ function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn
   }
 
   const prorated = q.daysLeft < q.daysInTerm
+  if (upgrade) return (
+    <div className="card shadow-sm space-y-3">
+      <h3 className="font-bold text-navy-700 flex items-center gap-2">
+        Upgrade to WhatsApp Pro <span className="text-[11px] font-semibold bg-teal-50 text-teal-700 rounded-full px-2 py-0.5">Pro</span>
+      </h3>
+      <ul className="text-sm text-gray-600 list-disc ml-5 space-y-0.5">
+        <li>Your clinic’s own WhatsApp number and name — patients see you, not Sehatsandhi.</li>
+        <li>Sends by itself: welcome on registration, prescription and bill after the visit, a thank-you with a rating request, and follow-up reminders.</li>
+        <li>Patients with the Sehatsandhi app get these in the app instead, free.</li>
+        <li>Once your number is connected you pay Meta for messages directly; until then they are included.</li>
+      </ul>
+      <div className="text-sm border rounded-lg divide-y">
+        <div className="flex justify-between px-3 py-2"><span>Difference to Pro ({q.termLabel.toLowerCase()})</span><span>{inr0(q.fullFee)}</span></div>
+        {prorated && <div className="flex justify-between px-3 py-2 text-gray-600"><span>{q.daysLeft} of {q.daysInTerm} days left</span><span>{inr0(q.amount)}</span></div>}
+        {q.tax.applied && <div className="flex justify-between px-3 py-2 text-gray-600"><span>GST {q.tax.rate}%</span><span>{inr0(q.tax.taxTotal)}</span></div>}
+        <div className="flex justify-between px-3 py-2 font-bold"><span>Pay now</span><span>{inr0(q.tax.grandTotal)}</span></div>
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button onClick={pay} disabled={busy} className="btn-teal disabled:opacity-60">
+        {busy ? 'Opening payment…' : `Pay ${inr0(q.tax.grandTotal)} and move to Pro`}
+      </button>
+    </div>
+  )
   return (
     <div className="space-y-4">
       <div className={`rounded-xl px-4 py-3 text-sm border ${locked ? 'bg-red-50 border-red-200 text-red-800' : 'bg-teal-50 border-teal-200 text-teal-900'}`}>
@@ -165,12 +204,26 @@ function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn
       </div>
       <div className="card shadow-sm max-w-xl space-y-3">
         <h3 className="font-bold text-navy-700">Add WhatsApp messaging</h3>
+        {proQuote && (
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <button type="button" onClick={() => setPlan('basic')}
+              className={`text-left rounded-lg border px-3 py-2 ${plan === 'basic' ? 'border-teal-500 bg-teal-50' : 'border-gray-200'}`}>
+              <div className="font-semibold">Basic</div>
+              <div className="text-xs text-gray-500">Send prescriptions, bills and broadcasts yourself, from the Sehatsandhi number.</div>
+            </button>
+            <button type="button" onClick={() => setPlan('pro')}
+              className={`text-left rounded-lg border px-3 py-2 ${plan === 'pro' ? 'border-teal-500 bg-teal-50' : 'border-gray-200'}`}>
+              <div className="font-semibold">Pro</div>
+              <div className="text-xs text-gray-500">Your own number and name; welcome, prescription and bill, thank-you and follow-ups go by themselves.</div>
+            </button>
+          </div>
+        )}
         <p className="text-sm text-gray-600">
           Your plan is already paid until <b>{shortDate(q.termEnd)}</b>, so you pay only the WhatsApp fee
           {prorated ? ' for the days left in it' : ''}. From {shortDate(q.termEnd)} it renews together with your {q.termLabel.toLowerCase()} plan.
         </p>
         <div className="text-sm border rounded-lg divide-y">
-          <div className="flex justify-between px-3 py-2"><span>WhatsApp fee ({q.termLabel.toLowerCase()})</span><span>{inr0(q.fullFee)}</span></div>
+          <div className="flex justify-between px-3 py-2"><span>WhatsApp {plan === 'pro' ? 'Pro' : 'Basic'} fee ({q.termLabel.toLowerCase()})</span><span>{inr0(q.fullFee)}</span></div>
           {prorated && (
             <div className="flex justify-between px-3 py-2 text-gray-600">
               <span>{q.daysLeft} of {q.daysInTerm} days left</span><span>{inr0(q.amount)}</span>
@@ -264,7 +317,11 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
         {blocker && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{blocker}</p>}
       </div>
 
+      {account?.plan === 'pro' && <AutoMessagesCard businessId={businessId} />}
       {account?.plan === 'pro' && <OwnNumberCard businessId={businessId} account={account} onChange={load} />}
+      {account && account.plan !== 'pro' && account.subscription_status === 'active' && (
+        <UpgradeToPro businessId={businessId} businessName={businessName} />
+      )}
 
       <WalletCard businessId={businessId} balance={balance} txs={txs} prefill={prefill} onChange={load} />
 
@@ -845,6 +902,115 @@ function OwnNumberCard({ businessId, account, onChange }: { businessId: string; 
 
       {account.own_error && <p className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{account.own_error}</p>}
       {note && <p className={`text-sm rounded-lg px-3 py-2 ${note.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>{note.text}</p>}
+    </div>
+  )
+}
+
+// ── 0262: Basic → Pro, and what Pro sends by itself ─────────────────────────
+
+function UpgradeToPro({ businessId, businessName }: { businessId: string; businessName: string }) {
+  const [quote, setQuote] = useState<WhatsappAddonQuote | null>(null)
+  useEffect(() => {
+    let live = true
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return
+      // Refused (no paid term, already Pro, given free…): the card simply does not show.
+      whatsappAddon(businessId, 'quote', session.access_token, 'pro')
+        .then(q => { if (live && q.upgrading) setQuote(q) }, () => undefined)
+    })
+    return () => { live = false }
+  }, [businessId])
+  if (!quote) return null
+  return <AddWhatsApp quote={quote} businessId={businessId} businessName={businessName} locked={false} upgrade />
+}
+
+const AUTO_KINDS: { key: 'welcome' | 'visit_summary' | 'thank_you' | 'follow_up'; label: string; when: string }[] = [
+  { key: 'welcome', label: 'Welcome', when: 'When a patient is registered: their file number, and that their records will be in the Sehatsandhi app.' },
+  { key: 'visit_summary', label: 'Prescription and bill', when: '15 minutes after the consultation is marked done — both in one message.' },
+  { key: 'thank_you', label: 'Thank-you and rating', when: 'After the visit, asking for a 1–5 rating. At most once in 30 days per patient.' },
+  { key: 'follow_up', label: 'Follow-up reminder', when: 'At 10 am the day before the follow-up date the doctor wrote.' },
+]
+const AUTO_STATUS: Record<string, string> = { pending: 'Waiting', sending: 'Sending', sent: 'Sent', skipped: 'Not sent', failed: 'Failed' }
+
+function AutoMessagesCard({ businessId }: { businessId: string }) {
+  const [s, setS] = useState<WaAutoSettings | null>(null)
+  const [o, setO] = useState<WaAutoOverview | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [note, setNote] = useState('')
+  useEffect(() => {
+    getAutoSettings(businessId).then(setS).catch(e => setNote((e as Error).message))
+    getAutoOverview(businessId).then(setO).catch(() => setO(null))
+  }, [businessId])
+  if (!s) return null
+
+  const save = async (next: WaAutoSettings) => {
+    setS(next); setSaving(true); setNote('')
+    try { await saveAutoSettings(businessId, next); setNote('Saved.') } catch (e) { setNote((e as Error).message) } finally { setSaving(false) }
+  }
+  const label = (k: string) => AUTO_KINDS.find(x => x.key === k)?.label ?? k
+
+  return (
+    <div className="card shadow-sm space-y-3">
+      <div>
+        <h3 className="font-bold text-navy-700 flex items-center gap-2">
+          <Send className="w-4 h-4 text-teal-600" /> Automatic messages
+          <span className="text-[11px] font-semibold bg-teal-50 text-teal-700 rounded-full px-2 py-0.5">Pro</span>
+        </h3>
+        <p className="text-sm text-gray-500 mt-1">
+          Sent by themselves, between 8 am and 9 pm. Patients with the Sehatsandhi app get them in the app instead. Anyone who replies STOP gets none.
+        </p>
+      </div>
+      <ul className="divide-y divide-gray-100">
+        {AUTO_KINDS.map(k => {
+          const m = o?.month?.[k.key]
+          return (
+            <li key={k.key} className="py-2 flex items-start gap-3">
+              <button type="button" onClick={() => save({ ...s, [k.key]: !s[k.key] })} disabled={saving} className="mt-0.5 text-teal-600 disabled:opacity-50"
+                aria-label={`${s[k.key] ? 'Turn off' : 'Turn on'} ${k.label}`}>
+                {s[k.key] ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5 text-gray-400" />}
+              </button>
+              <div className="flex-1 text-sm">
+                <div className="font-semibold text-navy-700">{k.label}</div>
+                <div className="text-xs text-gray-500">{k.when}</div>
+                {k.key === 'thank_you' && s.thank_you && (
+                  <label className="text-xs text-gray-600 mt-1 inline-flex items-center gap-1">
+                    Send
+                    <select value={s.thank_you_after_minutes} disabled={saving} className="border border-gray-200 rounded px-1 py-0.5"
+                      onChange={e => save({ ...s, thank_you_after_minutes: Number(e.target.value) })}>
+                      {[30, 60, 120, 240, 480].map(n => <option key={n} value={n}>{n < 60 ? `${n} minutes` : `${n / 60} hour${n > 60 ? 's' : ''}`}</option>)}
+                    </select>
+                    after the visit
+                  </label>
+                )}
+              </div>
+              {m && (
+                <div className="text-[11px] text-gray-500 text-right whitespace-nowrap">
+                  This month: <b>{m.whatsapp}</b> WhatsApp · <b>{m.app}</b> app
+                  {m.failed ? <div className="text-red-600">{m.failed} failed</div> : null}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {!!o?.recent?.length && (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-teal-700">Last {o.recent.length} messages</summary>
+          <ul className="mt-2 divide-y divide-gray-100">
+            {o.recent.map((r, i) => (
+              <li key={i} className="py-1.5 flex items-center justify-between gap-2">
+                <span>{label(r.kind)} — {r.name ?? 'patient'}
+                  {r.why && r.status !== 'sent' && <span className="block text-[11px] text-gray-500">{r.why}</span>}</span>
+                <span className="text-[11px] text-gray-500 text-right whitespace-nowrap">
+                  {AUTO_STATUS[r.status] ?? r.status}{r.status === 'sent' ? ` (${r.channel === 'push' ? 'app' : 'WhatsApp'})` : ''}
+                  <br />{dateTime(r.sent_at ?? r.due_at)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {note && <p className={`text-xs ${note === 'Saved.' ? 'text-green-700' : 'text-red-600'}`}>{note}</p>}
     </div>
   )
 }
