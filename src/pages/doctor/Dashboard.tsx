@@ -185,8 +185,8 @@ export default function DoctorDashboard() {
   // else, so a clinic could not see its own history, could not look a patient
   // up, and could not see next week. The month figure was counted from those
   // same 20 rows, so it quietly under-reported past the twentieth booking.
-  interface ApptCounts { total: number; month: number }
-  const [counts, setCounts] = useState<ApptCounts>({ total: 0, month: 0 })
+  interface ApptCounts { total: number; month: number; newPatients: number }
+  const [counts, setCounts] = useState<ApptCounts>({ total: 0, month: 0, newPatients: 0 })
 
   const [allAppts, setAllAppts] = useState<Appointment[]>([])
   const [apptLoading, setApptLoading] = useState(false)
@@ -738,12 +738,15 @@ export default function DoctorDashboard() {
         // thing the list it opens shows (it used to count bookings made this month).
         const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
         const nextMonth = new Date(monthStart); nextMonth.setMonth(nextMonth.getMonth() + 1)
-        const [appts, total, month] = await Promise.all([
+        const [appts, total, month, newPts] = await Promise.all([
           supabase.from('appointments').select('*').eq('business_id', doc.id)
             .order('created_at', { ascending: false }).limit(20),
           supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('business_id', doc.id),
           supabase.from('appointments').select('id', { count: 'exact', head: true })
             .eq('business_id', doc.id).gte('slot_datetime', monthStart.toISOString()).lt('slot_datetime', nextMonth.toISOString()),
+          // New patients registered this month — what the top box shows instead of the areas.
+          supabase.from('business_patients').select('id', { count: 'exact', head: true })
+            .eq('business_id', doc.id).gte('created_at', monthStart.toISOString()),
           loadCamps(doc.id),
           loadLocations(doc.id),
           loadAvailability(doc.id),
@@ -781,7 +784,7 @@ export default function DoctorDashboard() {
             : null,
         ])
         setAppointments(appts.data || [])
-        setCounts({ total: total.count ?? 0, month: month.count ?? 0 })
+        setCounts({ total: total.count ?? 0, month: month.count ?? 0, newPatients: newPts.count ?? 0 })
       }
       setLoading(false)
     }
@@ -1452,8 +1455,8 @@ export default function DoctorDashboard() {
             ] : [
               { label: 'Listed as', value: verticalLabel, icon: <Users className="w-5 h-5 text-teal-500" />, open: undefined },
             ]),
-            { label: t('dashboardPage.statActiveAreas'), value: doctor.pin_codes?.length || 0, icon: <MapPin className="w-5 h-5 text-navy-600" />,
-              open: () => setTab('schedule') },
+            { label: 'New patients this month', value: counts.newPatients, icon: <Users className="w-5 h-5 text-navy-600" />,
+              open: () => setTab('patientreport') },
             { label: t('dashboardPage.statStatus'), value: doctor.status === 'active' ? '✓' : '⏳', icon: <Star className="w-5 h-5 text-amber-500" />,
               open: isOwner ? () => setTab('plan') : undefined },
           ].map(s => s.open ? (
@@ -1627,26 +1630,25 @@ export default function DoctorDashboard() {
               <ClinicLeave businessId={doctor.id}
                 doctors={rosterDoctors.map(r => ({ id: r.practitioner_id, name: r.practitioners!.full_name }))} />
             )}
-            <div className="card shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-navy-700">{t('dashboardPage.activeAreasHeading')}</h3>
-                <span className="badge-active">{doctor.pin_codes?.length || 0} {t('dashboardPage.areasActiveBadge')}</span>
+            {/* Where the listing shows in patients' searches — one line, the list on demand.
+                It never limits who can be registered or seen. */}
+            <details className="card shadow-sm group">
+              <summary className="cursor-pointer list-none flex items-center justify-between gap-3">
+                <span className="text-sm">
+                  <b className="text-navy-700">Found by patients in {doctor.pin_codes?.length || 0} areas</b>
+                  <span className="text-gray-500"> — where your clinic shows when patients search on Sehatsandhi. Patients from anywhere can still be registered and seen.</span>
+                </span>
+                <span className="text-xs text-teal-700 font-semibold whitespace-nowrap group-open:hidden">Show areas</span>
+                <span className="text-xs text-teal-700 font-semibold whitespace-nowrap hidden group-open:inline">Hide</span>
+              </summary>
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {(doctor.pin_codes || []).map(code => (
+                  <span key={code} className="text-xs bg-teal-50 border border-teal-100 text-navy-700 rounded-full px-2.5 py-1">
+                    {areaName.get(code) ? `${areaName.get(code)} · ` : ''}{code}
+                  </span>
+                ))}
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {(doctor.pin_codes || []).map(code => {
-                  const pin = areaName.get(code)
-                  return (
-                    <div key={code} className="border-2 border-teal-200 bg-teal-50 rounded-xl p-3">
-                      <p className="font-bold text-navy-700">{code}</p>
-                      <p className="text-sm text-gray-500">{pin || code}</p>
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="mt-4 bg-navy-50 border border-navy-100 rounded-xl p-4">
-                <p className="text-sm text-navy-700">{t('dashboardPage.contactAdminNote')}</p>
-              </div>
-            </div>
+            </details>
 
             {/* Where you sit. Hours below are set per location. */}
             <div className="card shadow-sm">

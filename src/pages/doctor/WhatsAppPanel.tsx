@@ -262,6 +262,10 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
   const [send, setSend] = useState<SendOptions | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  // One part of the tab at a time; Pro clinics open on their automatic messages.
+  const [section, setSection] = useState<'send' | 'pro' | 'wallet' | 'history' | 'terms'>('send')
+  const [sectionSet, setSectionSet] = useState(false)
+  useEffect(() => { if (!sectionSet && account) { setSectionSet(true); if (account.plan === 'pro') setSection('pro') } }, [account, sectionSet])
 
   const load = async () => {
     try {
@@ -283,84 +287,120 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
       {banner}
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>}
 
-      {/* Status and prices */}
-      <div className="card shadow-sm">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h3 className="font-bold text-navy-700 flex items-center gap-2"><MessageCircle className="w-4 h-4 text-teal-600" /> WhatsApp marketing</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              {business.vertical === 'insurance'
-                ? <>Send approved messages to the people whose leads you accepted in the last 90 days — they asked to hear about cover. Anyone who sends STOP is never messaged.</>
-                : <>Send approved messages — camps, notices, health tips — to {businessName}’s patients. Anyone who replies STOP is taken off the list.</>}
-            </p>
-          </div>
-          <div className="text-xs text-gray-500 text-right">
-            {/* 0237: every clinic sends from Sehatsandhi's number for clinics; a clinic has none of its own to set up. */}
-            <div>Sent from: <b>{account?.own_status === 'connected'
-              ? `your own number${account.whatsapp_number ? ` ${account.whatsapp_number}` : ''}`
-              : 'Sehatsandhi’s WhatsApp number for clinics'}</b>{account?.own_status === 'connected' ? null : ', with your clinic’s name in each message'}
-              {account?.status === 'suspended' ? <> · <b className="text-red-600">{STATUS_TEXT.suspended}</b></> : null}</div>
-            <div>WhatsApp add-on: <b>{account && account.subscription_status !== 'inactive'
-              ? `${STATUS_TEXT[account.subscription_status]}${account.next_billing_date ? ` until ${shortDate(account.next_billing_date)}` : ''}`
-              : 'not added'}</b></div>
-          </div>
+      {/* One line: what plan, where messages come from, the wallet, the free messages. Prices on demand. */}
+      <div className="card shadow-sm space-y-2">
+        <div className="flex items-center justify-between gap-3 flex-wrap text-sm">
+          <span className="flex items-center gap-2 flex-wrap">
+            <MessageCircle className="w-4 h-4 text-teal-600" />
+            <b className="text-navy-700">WhatsApp {account?.plan === 'pro' ? 'Pro' : 'Basic'}</b>
+            <span className="text-gray-500">
+              {account && account.subscription_status !== 'inactive'
+                ? `${STATUS_TEXT[account.subscription_status]}${account.next_billing_date ? ` until ${shortDate(account.next_billing_date)}` : ''}`
+                : 'not added'}
+              {' · from '}{account?.own_status === 'connected' ? `your own number${account.whatsapp_number ? ` ${account.whatsapp_number}` : ''}` : 'the Sehatsandhi number'}
+              {account?.status === 'suspended' ? <> · <b className="text-red-600">{STATUS_TEXT.suspended}</b></> : null}
+            </span>
+          </span>
+          <span className="flex items-center gap-3 text-gray-600">
+            <span>Wallet <b className="text-navy-700">{rupees(balance)}</b></span>
+            {!!send?.free_total && <span><b className="text-navy-700">{Math.max(0, send.free_left ?? 0)}</b>/{send.free_total} free left</span>}
+            <button onClick={() => setSection('wallet')} className="text-teal-700 font-semibold hover:underline">Top up</button>
+          </span>
         </div>
-        {settings && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 text-sm">
-            <Price label="WhatsApp Business Verification & Activation Fee" value="Part of your plan — see the Plan tab" />
-            <Price label="Each broadcast message" value={rupees(settings.per_message_paise)} />
-            <Price label="Each prescription, bill or report on WhatsApp" value={rupees(settings.direct_message_paise)} />
-            <Price label="Replying to a patient within 24 hours" value="Free" />
-          </div>
+        {blocker && <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{blocker}</p>}
+        {account && account.plan !== 'pro' && account.subscription_status === 'active' && section !== 'pro' && (
+          <button onClick={() => setSection('pro')} className="text-xs text-teal-700 font-semibold hover:underline">
+            Upgrade to WhatsApp Pro — your own number, and messages that go by themselves →
+          </button>
         )}
-        {!!send?.free_total && <FreeMessages o={send} />}
-        {blocker && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{blocker}</p>}
       </div>
 
-      {account?.plan === 'pro' && <AutoMessagesCard businessId={businessId} />}
-      {account?.plan === 'pro' && <OwnNumberCard businessId={businessId} account={account} onChange={load} />}
-      {account && account.plan !== 'pro' && account.subscription_status === 'active' && (
-        <UpgradeToPro businessId={businessId} businessName={businessName} />
+      {/* One part at a time. */}
+      <div className="flex gap-1.5 flex-wrap">
+        {SECTIONS.filter(([k]) => k !== 'pro' || account?.plan === 'pro' || (account?.subscription_status === 'active')).map(([k, label]) => (
+          <button key={k} onClick={() => setSection(k)}
+            className={`text-sm px-3 py-1.5 rounded-full border ${section === k ? 'bg-teal-600 text-white border-teal-600' : 'bg-white border-gray-200 text-gray-600 hover:border-teal-400'}`}>
+            {k === 'pro' && account?.plan !== 'pro' ? 'Pro' : label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'send' && (
+        <>
+          {account && account.subscription_status !== 'inactive' && !(account.terms_version === WA_TERMS_VERSION && account.terms_accepted_at) && (
+            <TermsCard businessId={businessId} account={account} onAccepted={load} />
+          )}
+          {settings && (
+            <Composer insurance={business.vertical === 'insurance'}
+              businessId={businessId} businessName={businessName} settings={settings} balance={balance}
+              blocker={blocker} templates={templates} pins={pins} onSent={load}
+            />
+          )}
+        </>
       )}
 
-      <WalletCard businessId={businessId} balance={balance} txs={txs} prefill={prefill} onChange={load} />
+      {section === 'pro' && (
+        account?.plan === 'pro' ? (
+          <>
+            <AutoMessagesCard businessId={businessId} />
+            <OwnNumberCard businessId={businessId} account={account} onChange={load} />
+          </>
+        ) : <UpgradeToPro businessId={businessId} businessName={businessName} />
+      )}
 
-      {account && account.subscription_status !== 'inactive' && (
+      {section === 'wallet' && (
+        <>
+          {!!send?.free_total && <div className="card shadow-sm"><FreeMessages o={send} /></div>}
+          <WalletCard businessId={businessId} balance={balance} txs={txs} prefill={prefill} onChange={load} />
+          {settings && (
+            <details className="card shadow-sm">
+              <summary className="cursor-pointer text-sm font-semibold text-navy-700">Prices</summary>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-sm">
+                <Price label="WhatsApp fee" value="With your plan — see the Plan tab" />
+                <Price label="Each broadcast message" value={rupees(settings.per_message_paise)} />
+                <Price label="Each prescription, bill or report" value={rupees(settings.direct_message_paise)} />
+                <Price label="Replying within 24 hours" value="Free" />
+              </div>
+            </details>
+          )}
+        </>
+      )}
+
+      {section === 'history' && (
+        <div className="card shadow-sm">
+          <h3 className="font-bold text-navy-700 mb-3">Your broadcasts</h3>
+          {!history.length ? <p className="text-sm text-gray-400">Nothing sent yet.</p> : (
+            <div className="divide-y divide-gray-100">
+              {history.map(b => (
+                <div key={b.id} className="py-2.5 flex items-center justify-between gap-3 text-sm flex-wrap">
+                  <div>
+                    <div className="font-medium text-navy-700">{templates.find(t => t.id === b.template_id)?.name ?? 'Message'}</div>
+                    <div className="text-xs text-gray-400">{dateTime(b.created_at)}{b.pin_codes.length ? ` · PIN ${b.pin_codes.join(', ')}` : ''}</div>
+                  </div>
+                  <div className="text-right text-xs text-gray-500">
+                    <div><b>{b.recipient_count}</b> patients · {rupees(b.total_cost_paise)}</div>
+                    <div className={b.status === 'rejected' ? 'text-red-600 font-medium' : b.status === 'pending_approval' ? 'text-amber-700 font-medium' : ''}>
+                      {BROADCAST_STATUS[b.status] ?? b.status.replace('_', ' ')}
+                    </div>
+                    {b.status === 'rejected' && b.review_note && <div className="text-red-600 max-w-xs">“{b.review_note}” · refunded</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {section === 'terms' && account && account.subscription_status !== 'inactive' && (
         <TermsCard businessId={businessId} account={account} onAccepted={load} />
       )}
-
-      {settings && (
-        <Composer insurance={business.vertical === 'insurance'}
-          businessId={businessId} businessName={businessName} settings={settings} balance={balance}
-          blocker={blocker} templates={templates} pins={pins} onSent={load}
-        />
-      )}
-
-      <div className="card shadow-sm">
-        <h3 className="font-bold text-navy-700 mb-3">Your broadcasts</h3>
-        {!history.length ? <p className="text-sm text-gray-400">Nothing sent yet.</p> : (
-          <div className="divide-y divide-gray-100">
-            {history.map(b => (
-              <div key={b.id} className="py-2.5 flex items-center justify-between gap-3 text-sm flex-wrap">
-                <div>
-                  <div className="font-medium text-navy-700">{templates.find(t => t.id === b.template_id)?.name ?? 'Message'}</div>
-                  <div className="text-xs text-gray-400">{dateTime(b.created_at)}{b.pin_codes.length ? ` · PIN ${b.pin_codes.join(', ')}` : ''}</div>
-                </div>
-                <div className="text-right text-xs text-gray-500">
-                  <div><b>{b.recipient_count}</b> patients · {rupees(b.total_cost_paise)}</div>
-                  <div className={b.status === 'rejected' ? 'text-red-600 font-medium' : b.status === 'pending_approval' ? 'text-amber-700 font-medium' : ''}>
-                    {BROADCAST_STATUS[b.status] ?? b.status.replace('_', ' ')}
-                  </div>
-                  {b.status === 'rejected' && b.review_note && <div className="text-red-600 max-w-xs">“{b.review_note}” · refunded</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }
+
+const SECTIONS: ['send' | 'pro' | 'wallet' | 'history' | 'terms', string][] = [
+  ['send', 'Send a broadcast'], ['pro', 'Automatic & own number'], ['wallet', 'Wallet'], ['history', 'Sent'], ['terms', 'Terms'],
+]
 
 // 0259: the add-on's free messages this month — used first, before the wallet.
 function FreeMessages({ o }: { o: SendOptions }) {
