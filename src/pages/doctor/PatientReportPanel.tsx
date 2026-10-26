@@ -73,7 +73,11 @@ function Card({ title, children, note }: { title: string; children: React.ReactN
   )
 }
 
-export default function PatientReportPanel({ businessId, onOpenPatient }: { businessId: string; onOpenPatient?: (memberId: string, visitId?: string | null) => void }) {
+export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }: {
+  businessId: string; onOpenPatient?: (memberId: string, visitId?: string | null) => void
+  /** The bills behind "Billed", in the Bills tab. */
+  onGoTo?: (tab: 'bills') => void
+}) {
   // 0193: every number opens the people behind it, below.
   const [req, setReq] = useState<RegisterRequest | null>(null)
   const show = (kind: RegisterKind, from: string | null, to: string | null) => setReq({ kind, from, to, doctorId: null, nonce: Date.now() })
@@ -156,7 +160,8 @@ export default function PatientReportPanel({ businessId, onOpenPatient }: { busi
             <StatTile onClick={() => show('returning', range[0], range[1])} active={req?.kind === 'returning'} label="Returning patients" value={t.returning} sub={t.seen ? `${Math.round((t.returning / t.seen) * 100)}% came again after their first visit` : undefined} />
             <StatTile onClick={() => show('visits', range[0], range[1])} active={req?.kind === 'visits'} label="Visits" value={t.visits} sub={change(t.visits, t.prev_visits)} />
             <StatTile onClick={() => show('admissions', range[0], range[1])} active={req?.kind === 'admissions'} label="Admissions" value={t.admissions} />
-            <StatTile label="Billed" value={moneyExact(t.revenue)} sub={t.seen ? `${moneyExact(t.revenue / t.seen)} per patient` : undefined} />
+            <StatTile label="Billed" value={moneyExact(t.revenue)} sub={t.seen ? `${moneyExact(t.revenue / t.seen)} per patient` : undefined}
+              onClick={onGoTo ? () => onGoTo('bills') : undefined} />
             <StatTile onClick={() => show('follow_ups', isoDate(), shift(7))} active={req?.kind === 'follow_ups'} label="Follow-ups" value={r.follow_ups.due_7d} sub={`due in 7 days · ${r.follow_ups.overdue} missed`} tone={r.follow_ups.overdue > 0 ? 'alert' : 'normal'} />
           </div>
           {req && (

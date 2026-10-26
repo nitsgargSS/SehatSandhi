@@ -200,6 +200,12 @@ export default function DoctorDashboard() {
   // 0121: one doctor's bookings, or everyone's.
   const [apptDoctor, setApptDoctor] = useState<string>('all')
 
+  // A number at the top opens the appointments behind it: everything else cleared.
+  const openAppointments = (from: string, to: string) => {
+    setApptFrom(from); setApptTo(to); setApptStatus('all'); setApptDoctor('all'); setApptSearch('')
+    setTab('appointments')
+  }
+
   const loadAllAppointments = async (doctorId: string) => {
     setApptLoading(true)
     // Filtered in the database, not in the browser: a busy clinic's full history
@@ -727,13 +733,16 @@ export default function DoctorDashboard() {
         //
         // Counts are read in the database. Counting the 20 rows loaded here
         // under-reported every clinic past its twentieth booking.
+        // "This month" is appointments whose visit falls this month — the same
+        // thing the list it opens shows (it used to count bookings made this month).
         const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
+        const nextMonth = new Date(monthStart); nextMonth.setMonth(nextMonth.getMonth() + 1)
         const [appts, total, month] = await Promise.all([
           supabase.from('appointments').select('*').eq('business_id', doc.id)
             .order('created_at', { ascending: false }).limit(20),
           supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('business_id', doc.id),
           supabase.from('appointments').select('id', { count: 'exact', head: true })
-            .eq('business_id', doc.id).gte('created_at', monthStart.toISOString()),
+            .eq('business_id', doc.id).gte('slot_datetime', monthStart.toISOString()).lt('slot_datetime', nextMonth.toISOString()),
           loadCamps(doc.id),
           loadLocations(doc.id),
           loadAvailability(doc.id),
@@ -1443,14 +1452,26 @@ export default function DoctorDashboard() {
             // Appointment counts are shown only to the verticals that take
             // them; a pharmacy would otherwise lead with two permanent zeroes.
             ...(booksAppointments ? [
-              { label: t('dashboardPage.statTotalAppointments'), value: counts.total, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
-              { label: t('dashboardPage.statThisMonth'), value: counts.month, icon: <Calendar className="w-5 h-5 text-teal-500" /> },
+              { label: t('dashboardPage.statTotalAppointments'), value: counts.total, icon: <Calendar className="w-5 h-5 text-teal-500" />,
+                open: () => openAppointments('2000-01-01', isoDate(new Date(Date.now() + 730 * 86_400_000))) },
+              { label: t('dashboardPage.statThisMonth'), value: counts.month, icon: <Calendar className="w-5 h-5 text-teal-500" />,
+                open: () => { const d = new Date(); openAppointments(isoDate(new Date(d.getFullYear(), d.getMonth(), 1)), isoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0))) } },
             ] : [
-              { label: 'Listed as', value: verticalLabel, icon: <Users className="w-5 h-5 text-teal-500" /> },
+              { label: 'Listed as', value: verticalLabel, icon: <Users className="w-5 h-5 text-teal-500" />, open: undefined },
             ]),
-            { label: t('dashboardPage.statActiveAreas'), value: doctor.pin_codes?.length || 0, icon: <MapPin className="w-5 h-5 text-navy-600" /> },
-            { label: t('dashboardPage.statStatus'), value: doctor.status === 'active' ? '✓' : '⏳', icon: <Star className="w-5 h-5 text-amber-500" /> },
-          ].map(s => (
+            { label: t('dashboardPage.statActiveAreas'), value: doctor.pin_codes?.length || 0, icon: <MapPin className="w-5 h-5 text-navy-600" />,
+              open: () => setTab('schedule') },
+            { label: t('dashboardPage.statStatus'), value: doctor.status === 'active' ? '✓' : '⏳', icon: <Star className="w-5 h-5 text-amber-500" />,
+              open: isOwner ? () => setTab('plan') : undefined },
+          ].map(s => s.open ? (
+            // 0193 again, for the boxes at the top: a number opens what is behind it.
+            <button key={s.label} type="button" onClick={s.open} title={`Open ${s.label.toLowerCase()}`}
+              className="card shadow-sm text-left hover:border-teal-400 hover:shadow-md transition">
+              <div className="flex items-center gap-2 mb-1">{s.icon}<span className="text-sm text-gray-500">{s.label}</span></div>
+              <p className="text-2xl font-bold text-navy-700 underline decoration-dotted underline-offset-4">{s.value}</p>
+              <span className="text-xs text-teal-700">show</span>
+            </button>
+          ) : (
             <div key={s.label} className="card shadow-sm">
               <div className="flex items-center gap-2 mb-1">{s.icon}<span className="text-sm text-gray-500">{s.label}</span></div>
               <p className="text-2xl font-bold text-navy-700">{s.value}</p>
@@ -1960,7 +1981,7 @@ export default function DoctorDashboard() {
 
         {/* ══════════ PATIENT REPORT — how many, from where, who to bring back (0161) ══════════ */}
         {tab === 'patientreport' && doctor && emr && (access.opd || access.ipd) && (
-          <PatientReportPanel businessId={doctor.id} onOpenPatient={openPatient} />
+          <PatientReportPanel businessId={doctor.id} onOpenPatient={openPatient} onGoTo={setTab} />
         )}
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
@@ -1992,7 +2013,7 @@ export default function DoctorDashboard() {
         )}
 
         {tab === 'doctors' && doctor && (
-          <DoctorsOverview businessId={doctor.id} onOpenPatient={openPatient} />
+          <DoctorsOverview businessId={doctor.id} onOpenPatient={openPatient} onGoTo={setTab} />
         )}
 
         {/* ══════════ CLINIC — doctors on the roster + camps & offers ══════════ */}
@@ -2117,7 +2138,8 @@ export default function DoctorDashboard() {
                     sub="in patient searches" />
                   <StatTile label="Profile opened" value={rTotal('profile_views')} />
                   <StatTile label="WhatsApp taps" value={rTotal('whatsapp_clicks')} />
-                  <StatTile label="Appointments booked" value={rTotal('bookings')} />
+                  <StatTile label="Appointments booked" value={rTotal('bookings')}
+                    onClick={() => openAppointments(isoDate(new Date(Date.now() - reportDays * 86_400_000)), isoDate(new Date(Date.now() + 365 * 86_400_000)))} />
                 </div>
 
                 <div className="card shadow-sm">
@@ -2201,7 +2223,7 @@ export default function DoctorDashboard() {
                 on owner/manager/doctor regardless of what is drawn here. */}
             {emr && (access.opd || access.ipd) && doctor && (
               <div className="pt-2 border-t border-gray-100">
-                <RevenuePanel businessId={doctor.id} />
+                <RevenuePanel businessId={doctor.id} onOpen={w => setTab(w === 'billed' ? 'bills' : 'collections')} />
               </div>
             )}
           </div>
