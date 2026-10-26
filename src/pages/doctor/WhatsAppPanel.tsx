@@ -422,7 +422,7 @@ function FreeMessages({ o }: { o: SendOptions }) {
           ? <>Used up — prescriptions, bills, reports and review requests now come from your wallet until {renews}.</>
           : usedPct >= 80
             ? <>Almost used up. After these, prescriptions, bills, reports and review requests come from your wallet.</>
-            : <>With your WhatsApp add-on: prescriptions, bills, reports and review requests use these first, then your wallet. Broadcasts are always from the wallet.</>}
+            : <>With your WhatsApp add-on: prescriptions, bills, reports, review requests and a broadcast’s test message use these first, then your wallet. Broadcasts themselves are always from the wallet.</>}
       </p>
     </div>
   )
@@ -646,7 +646,7 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
     setTesting(true); setErr(''); setMsg('')
     try {
       const r = await sendTestMessage({ businessId, templateId, params })
-      setMsg(`Test sent to your clinic's number ending ${r.to.replace('…', '')}${r.chargedPaise ? ` · ${rupees(r.chargedPaise)} from your wallet` : ''}. Check WhatsApp.`)
+      setMsg(`Test sent to your clinic's number ending ${r.to.replace('…', '')}${r.free ? ' · one of your free messages used' : r.chargedPaise ? ` · ${rupees(r.chargedPaise)} from your wallet` : ''}. Check WhatsApp.`)
       onSent()
     } catch (e) { setErr((e as Error).message) } finally { setTesting(false) }
   }
