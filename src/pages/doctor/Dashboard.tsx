@@ -64,7 +64,7 @@ const AMBULANCE_ROLES: [string, string, string][] = [
 ]
 const rosterRoles = (v: VerticalKey) => v === 'pharmacy' ? PHARMACY_ROLES : v === 'ambulance' ? AMBULANCE_ROLES : ROSTER_ROLES
 import { useLanguage } from '../../i18n/LanguageContext'
-import { generateSlotsForDate, fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
+import { fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
 import { isValidGstin, GST_STATE_NAMES } from '../../hooks/useTaxSettings'
 import { StatTile, ColumnChart, BarList, RangePicker, Point } from '../../components/Charts'
@@ -77,6 +77,7 @@ import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from '.
 import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
 import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
 import DeskBooking from './DeskBooking'
+import TodayPanel from './TodayPanel'
 import { PractitionerPhoneCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import { linkNurse, listNurseLinks, type NurseLink } from '../../lib/nurseApi'
 import { addStaff, findPeople, inviteWhatsAppUrl, listStaffLog, staffInvite, type PersonMatch, type StaffAction, type StaffChangeDone, type StaffInvite, type StaffLogRow } from '../../lib/staffApi'
@@ -982,14 +983,6 @@ export default function DoctorDashboard() {
     return () => { cancelled = true }
   }, [rescheduling, reschedDate, doctor])
 
-  // Today's actual slots, minus already-booked ones — this is
-  // now the FIRST thing a doctor sees, not buried in a 5th tab
-  const todaysBookedTimes = appointments
-    // A no-show frees nothing retroactively, but a cancelled slot is bookable
-    // again — which is why cancel and no-show are separate outcomes.
-    .filter(a => a.status !== 'cancelled')
-    .map(a => a.slot_datetime)
-  const todaysSlots = generateSlotsForDate(availability, new Date(), todaysBookedTimes)
 
   const roleLabel = (r: string) => r === 'pharmacist' ? 'Pharmacist / helper' : r === 'delivery' ? 'Delivery' : r === 'driver' ? 'Driver' : r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
 
@@ -1499,106 +1492,12 @@ export default function DoctorDashboard() {
         {/* ══════════ TODAY (default) — today's slot grid + recent appointments ══════════ */}
         {tab === 'today' && (
           <div className="space-y-4">
-            <div className="card shadow-sm">
-              <h3 className="font-bold text-navy-700 mb-1">{t('dashboardPage.todaysScheduleTitle')}</h3>
-              <p className="text-gray-500 text-sm mb-4">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-              {todaysSlots.length === 0 ? (
-                <p className="text-gray-400 text-sm">{t('dashboardPage.noSlotsToday')}</p>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                  {todaysSlots.map(s => (
-                    <div key={s.datetime}
-                      className={`text-center text-sm py-2.5 rounded-lg border ${s.available ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-gray-200 bg-gray-100 text-gray-400 line-through'}`}>
-                      {s.time}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* 0265: what needs attention right now — replaces the grid of every slot in the day. */}
+            <TodayPanel businessId={doctor.id} booksAppointments={booksAppointments}
+              onGoTo={tb => setTab(tb)} onOpenPatient={m => openPatient(m)} />
 
             {/* What patients said — the stars and words on the public profile. */}
             {doctor && <ReviewsCard businessId={doctor.id} />}
-
-            <div className="card shadow-sm">
-              <h3 className="font-bold text-navy-700 mb-4">{t('dashboardPage.recentAppointments')}</h3>
-              {appointments.length === 0 ? (
-                <div className="text-center py-12">
-                  <Calendar className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                  <p className="text-gray-400 text-sm">{t('dashboardPage.noAppointmentsYet')}</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {apptError && (
-                    <div className="bg-red-50 text-red-600 text-sm rounded-xl p-3">{apptError}</div>
-                  )}
-                  {appointments.map(a => {
-                    const open = a.status === 'booked' || a.status === 'confirmed'
-                    const busy = apptBusy === a.id
-                    return (
-                      <div key={a.id} className="p-3 bg-gray-50 rounded-xl">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div>
-                            <p className="font-medium text-gray-800 text-sm">{a.patient_name}
-                              {doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id) && <span className="text-xs text-teal-700 font-semibold"> · {doctorNameOf((a as { practitioner_id?: string | null }).practitioner_id)}</span>}</p>
-                            <p className="text-sm text-gray-400">
-                              {t('dashboardPage.ageLabel')} {a.patient_age} · {new Date(a.slot_datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-                            </p>
-                            {a.purpose && <p className="text-xs text-teal-800 bg-teal-50 rounded-md px-2 py-1 mt-1">🧪 {a.purpose}</p>}
-                            {/* The original time matters: a patient may still be
-                                holding a reminder for it. */}
-                            {a.previous_slot_datetime && (
-                              <p className="text-xs text-amber-600 mt-0.5">
-                                Moved from {new Date(a.previous_slot_datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-                              </p>
-                            )}
-                            {a.status === 'cancelled' && a.cancelled_by && (
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                Cancelled by {a.cancelled_by === 'patient' ? 'the patient' : a.cancelled_by}
-                                {a.cancel_reason ? ` — ${a.cancel_reason}` : ''}
-                              </p>
-                            )}
-                          </div>
-                          <StatusBadge kind="appointment" value={a.status} />
-                        </div>
-
-                        {open && (
-                          <div className="flex gap-1.5 mt-3 flex-wrap">
-                            {a.status === 'booked' && (
-                              <button disabled={busy}
-                                onClick={() => runApptAction(a.id, () => setAppointmentStatus(a.id, 'confirmed'))}
-                                className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-50">
-                                Confirm
-                              </button>
-                            )}
-                            <button disabled={busy}
-                              onClick={() => { setRescheduling(a); setApptError('') }}
-                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">
-                              Reschedule
-                            </button>
-                            <button disabled={busy}
-                              onClick={() => runApptAction(a.id, () => setAppointmentStatus(a.id, 'completed'))}
-                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">
-                              Completed
-                            </button>
-                            <button disabled={busy}
-                              onClick={() => runApptAction(a.id, () => setAppointmentStatus(a.id, 'no_show'))}
-                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50">
-                              No show
-                            </button>
-                            <button disabled={busy}
-                              onClick={() => { setCancelling(a); setCancelReason(''); setApptError('') }}
-                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 disabled:opacity-50">
-                              Cancel
-                            </button>
-                            {busy && <span className="text-xs text-gray-400 self-center">working…</span>}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
           </div>
         )}
 

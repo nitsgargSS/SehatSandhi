@@ -1566,6 +1566,19 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0265 — the Today tab: what each person may see of it.
+sec('today')
+if (!skip()) {
+  const own = await tryProbe('owner', `select sehat_today($1) t`, [BIZ.id])
+  expectTrue('the owner gets today, with the money', !!own?.money && Array.isArray(own?.doctors), JSON.stringify(own).slice(0, 200))
+  const rec = await tryProbe('reception', `select sehat_today($1) t`, [BIZ.id])
+  expectTrue('reception gets today, without the money', !!rec?.role && !rec.money && Array.isArray(rec.doctors), JSON.stringify(rec).slice(0, 200))
+  const doc = await tryProbe('doctor', `select sehat_today($1) t`, [BIZ.id])
+  expectTrue('a doctor sees only their own column', doc?.role === 'doctor' && doc.doctors.every(x => x.me), JSON.stringify(doc).slice(0, 200))
+  await expectDeny('another clinic cannot read this clinic\'s day', () => probe('reception', `select sehat_today($1)`, [OTHER_BIZ.id]))
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 0102 — the rating request, and the reply that had never been capturable.
 //
 // The send path is exercised inside a transaction that is ALWAYS rolled back.

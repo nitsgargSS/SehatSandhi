@@ -9,10 +9,15 @@ import PhoneError from '../../components/PhoneError'
 // bot offers — so a doctor's leave, their hours at another clinic and full
 // slots are all respected. A nurse sees only the doctors they work with.
 
-export default function DeskBooking({ businessId, onBooked }: { businessId: string; onBooked: () => void }) {
+export default function DeskBooking({ businessId, onBooked, doctorId: startDoctor, onClose }: {
+  businessId: string; onBooked: () => void
+  /** 0265: opened from a doctor's "Book" on the Today tab — that doctor, today. */
+  doctorId?: string
+  onClose?: () => void
+}) {
   const today = new Date().toLocaleDateString('en-CA')
   const [doctors, setDoctors] = useState<BusinessDoctor[]>([])
-  const [doctorId, setDoctorId] = useState('')
+  const [doctorId, setDoctorId] = useState(startDoctor ?? '')
   const [date, setDate] = useState(today)
   const [slots, setSlots] = useState<TimeSlot[]>([])
   const [slot, setSlot] = useState('')
@@ -22,7 +27,7 @@ export default function DeskBooking({ businessId, onBooked }: { businessId: stri
   const [err, setErr] = useState('')
 
   useEffect(() => {
-    listBusinessDoctors(businessId).then(d => { setDoctors(d); if (d.length === 1) setDoctorId(d[0].practitioner_id) }).catch(() => setDoctors([]))
+    listBusinessDoctors(businessId).then(d => { setDoctors(d); if (d.length === 1 && !startDoctor) setDoctorId(d[0].practitioner_id) }).catch(() => setDoctors([]))
   }, [businessId])
 
   useEffect(() => {
@@ -56,7 +61,10 @@ export default function DeskBooking({ businessId, onBooked }: { businessId: stri
 
   return (
     <div className="card shadow-sm">
-      <h3 className="font-bold text-navy-700 mb-1">Book an appointment</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-navy-700 mb-1">Book an appointment</h3>
+        {onClose && <button onClick={onClose} className="text-xs text-gray-500 hover:text-navy-700">Close</button>}
+      </div>
       <p className="text-sm text-gray-500 mb-3">For a patient on the phone or at the desk. Only free slots are shown.</p>
       <div className="flex flex-wrap gap-2 mb-3">
         {doctors.length > 1 && (
