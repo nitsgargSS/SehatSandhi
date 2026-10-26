@@ -57,7 +57,7 @@ import DoctorSelect from '../../components/DoctorSelect'
 import SendMenu from '../../components/SendMenu'
 import FeeChooser, { FeeChoice, FeePaidChooser, FeePaidNote, PAID_HOW_MISSING, emptyFee, feeDueOf, feeToCharge, feeValid, useFeePaidHow } from './FeeChooser'
 import { opdVisit, opdSlipUrl, patientHistory, HistoryRow, vitalsLine, setTokenStatus } from '../../lib/queueApi'
-import { updatePatientDetails, patientDetailChanges, patientPhones, addPatientPhone, removePatientPhone, type DetailChange, type OtherPhone } from '../../lib/patientsApi'
+import { updatePatientDetails, setAlsoKnownAs, patientDetailChanges, patientPhones, addPatientPhone, removePatientPhone, type DetailChange, type OtherPhone } from '../../lib/patientsApi'
 import { phoneProblem } from '../../lib/credentials'
 import VisitRegister from './VisitRegister'
 
@@ -348,6 +348,7 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
               }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: BIZ.ink }}>
                 {r.full_name}
+                {r.also_known_as && <span style={{ fontSize: 12, fontWeight: 500, color: BIZ.muted, marginLeft: 6 }}>also {r.also_known_as}</span>}
                 {r.relation !== 'self' && (
                   <span style={{ fontSize: 11, fontWeight: 700, color: BIZ.mutedWarm, marginLeft: 8 }}>
                     {r.relation}
@@ -496,6 +497,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
     pinCode: '',
     address: '',
     city: '',
+    alsoKnownAs: '',
   })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -561,6 +563,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
         mrn: form.mrn.trim() || undefined,
         pinCode: form.pinCode.trim() || undefined,
         memberId: picked?.patient_member_id ?? null,
+        alsoKnownAs: picked ? undefined : form.alsoKnownAs,
       })
       // 0183: the address lives on the family's account; set right after.
       if (form.address.trim() || form.city.trim()) {
@@ -614,6 +617,11 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
               value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value.replace(/[^\d+ ]/g, '') })} />
             {phoneErr && <div style={{ fontSize: 12, color: '#b3261e', marginTop: 3 }}>{phoneErr}</div>}</div>
         </div>
+        {!picked && (
+          <div><div style={label}>Also known as <span style={{ fontWeight: 400 }}>(maiden name or another name — optional)</span></div>
+            <input style={input} value={form.alsoKnownAs} maxLength={80} placeholder="e.g. Anjana Gupta"
+              onChange={e => setForm({ ...form, alsoKnownAs: e.target.value })} /></div>
+        )}
 
         {choosing && (
           <div style={{ fontSize: 13, background: '#fff8eb', border: '1px solid #f0dcb0', borderRadius: 9, padding: '10px 12px' }}>
@@ -841,7 +849,8 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
       <div style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 20, fontWeight: 800, color: BIZ.ink }}>{summary.full_name}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: BIZ.ink }}>{summary.full_name}
+              {summary.also_known_as && <span style={{ fontSize: 13, fontWeight: 500, color: BIZ.muted, marginLeft: 8 }}>also known as {summary.also_known_as}</span>}</div>
             <div style={{ fontSize: 13, color: BIZ.muted, marginTop: 3 }}>
               {summary.phone}
               {age(summary) != null && ` · ${age(summary)}y`}
@@ -4395,7 +4404,7 @@ function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
   businessId: string; memberId: string; summary: PatientSummary; onSaved: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [f, setF] = useState({ name: '', gender: '', age: '', dob: '' })
+  const [f, setF] = useState({ name: '', gender: '', age: '', dob: '', aka: '' })
   const [log, setLog] = useState<DetailChange[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -4406,6 +4415,7 @@ function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
       name: summary.full_name ?? '', gender: summary.gender ?? '',
       age: summary.age_years != null ? String(summary.age_years) : '',
       dob: summary.date_of_birth ?? '',
+      aka: summary.also_known_as ?? '',
     })
     setErr(''); setMsg(''); setOpen(true)
     patientDetailChanges(businessId, memberId).then(setLog).catch(() => setLog([]))
@@ -4419,7 +4429,11 @@ function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
         dateOfBirth: f.dob || null,
         ageYears: !f.dob && f.age !== '' ? Number(f.age) : null,
       })
-      setMsg(r.changed === 0 ? 'Nothing changed.' : `Saved ${r.changed} change${r.changed === 1 ? '' : 's'}.`)
+      // 0267: the other name is saved on its own, and counted with the rest.
+      const akaChanged = f.aka.trim() !== (summary.also_known_as ?? '')
+      if (akaChanged) await setAlsoKnownAs(businessId, memberId, f.aka)
+      const n = r.changed + (akaChanged ? 1 : 0)
+      setMsg(n === 0 ? 'Nothing changed.' : `Saved ${n} change${n === 1 ? '' : 's'}.`)
       setOpen(false); onSaved()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -4427,7 +4441,7 @@ function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
   if (!open) return (
     <div style={{ marginTop: 4, fontSize: 12.5 }}>
       <button onClick={start} style={{ color: '#0f6b4a', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontSize: 12.5 }}>
-        Edit name, age or gender
+        Edit name, age, gender or other name
       </button>
       {msg && <span style={{ marginLeft: 8, color: BIZ.green }}>{msg}</span>}
     </div>
@@ -4436,6 +4450,7 @@ function PatientDetailsEditor({ businessId, memberId, summary, onSaved }: {
     <div style={{ marginTop: 8, padding: 12, borderRadius: 10, background: '#f6faf8', border: `1px solid ${BIZ.border}`, display: 'grid', gap: 8 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input style={{ ...input, flex: '2 1 220px' }} placeholder="Full name" value={f.name} maxLength={80} onChange={e => setF({ ...f, name: e.target.value })} aria-label="Full name" />
+        <input style={{ ...input, flex: '2 1 200px' }} placeholder="Also known as (maiden name)" value={f.aka} maxLength={80} onChange={e => setF({ ...f, aka: e.target.value })} aria-label="Also known as" />
         <select style={{ ...input, flex: '0 1 120px' }} value={f.gender} onChange={e => setF({ ...f, gender: e.target.value })} aria-label="Gender">
           <option value="">Gender</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
         </select>
