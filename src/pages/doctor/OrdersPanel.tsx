@@ -68,7 +68,7 @@ export default function OrdersPanel({ businessId, role }: { businessId: string; 
         <p className="text-sm text-gray-500">
           {isDelivery
             ? 'Orders handed to you. Mark each one delivered with what you collected.'
-            : 'Patients in your delivery PIN codes order on WhatsApp. The first pharmacy to accept gets the order. You see their name, phone and address once they approve your price.'}
+            : 'WhatsApp orders from your areas — the first pharmacy to accept gets the order.'}
         </p>
         <div className="flex gap-2 mt-3 flex-wrap">
           {TABS.map(([k, l]) => (
@@ -272,6 +272,7 @@ export function DeliveryAreaCard({ businessId, canEdit, title = 'Where you deliv
   const [areas, setAreas] = useState<DeliveryArea[] | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [editing, setEditing] = useState(false)
+  const [find, setFind] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   useEffect(() => {
@@ -295,14 +296,20 @@ export function DeliveryAreaCard({ businessId, canEdit, title = 'Where you deliv
         {!editing && canEdit && <button onClick={() => setEditing(true)} className="text-sm text-teal-700 font-semibold">Change</button>}
       </div>
       {chosen.length === 0 && !editing && <p className="text-sm text-amber-700 mt-1">No areas chosen yet, so no {none} reach you. {canEdit ? '' : 'Ask the owner to choose them.'}</p>}
+      {/* 26 Oct 2026: a count, and the list on demand. */}
       {!editing && chosen.length > 0 && (
-        <p className="text-sm text-gray-600 mt-1">{chosen.map(a => `${a.pin_code}${a.area_name ? ` ${a.area_name}` : ''}`).join(' · ')}</p>
+        <details className="text-sm text-gray-600 mt-1">
+          <summary className="cursor-pointer">Serving <b>{chosen.length} area{chosen.length === 1 ? '' : 's'}</b> <span className="text-teal-700 text-xs font-semibold">show</span></summary>
+          <p className="mt-1">{chosen.map(a => `${a.area_name ? `${a.area_name} · ` : ''}${a.pin_code}`).join(', ')}</p>
+        </details>
       )}
       {editing && canEdit && (
         <div className="mt-2 space-y-3">
-          <p className="text-sm text-gray-500">Tick the PIN codes you can {what}. Requests from these areas reach you; the first to accept gets them.</p>
+          <p className="text-sm text-gray-500">Choose the areas you can {what}. The first to accept a request gets it.</p>
+          <input className="input-field text-sm" placeholder="Search area or PIN code…" value={find} onChange={e => setFind(e.target.value)} />
           <div className="flex gap-2 flex-wrap max-h-60 overflow-auto">
-            {areas.map(a => {
+            {areas.filter(a => picked.includes(a.pin_code) || !find.trim()
+              || a.pin_code.includes(find.trim()) || (a.area_name ?? '').toLowerCase().includes(find.trim().toLowerCase())).map(a => {
               const on = picked.includes(a.pin_code)
               return (
                 <button key={a.pin_code} type="button" onClick={() => setPicked(p => on ? p.filter(x => x !== a.pin_code) : [...p, a.pin_code])}

@@ -199,6 +199,8 @@ export default function DoctorDashboard() {
   })
   const [apptStatus, setApptStatus] = useState<string>('all')
   const [apptSearch, setApptSearch] = useState('')
+  // 26 Oct 2026: the desk booking form opens on a button.
+  const [bookOpen, setBookOpen] = useState(false)
   // 0121: one doctor's bookings, or everyone's.
   const [apptDoctor, setApptDoctor] = useState<string>('all')
 
@@ -1510,15 +1512,20 @@ export default function DoctorDashboard() {
           <div className="space-y-4">
             {/* 0150: bookings a doctor's new leave now covers — to move, not cancelled. */}
             <LeaveConflicts businessId={doctor.id} />
-            {/* 0152: the desk books into the same free slots the bot offers. */}
-            <DeskBooking businessId={doctor.id} onBooked={reloadAppointments} />
+            {/* 0152: the desk books into the same free slots the bot offers — behind a button until needed. */}
+            {bookOpen
+              ? <DeskBooking businessId={doctor.id} onBooked={reloadAppointments} onClose={() => setBookOpen(false)} />
+              : <button onClick={() => setBookOpen(true)} className="btn-teal text-sm inline-flex items-center gap-1.5"><Plus className="w-4 h-4" /> Book an appointment</button>}
             <div className="card shadow-sm">
-              <h3 className="font-bold text-navy-700 mb-1">All appointments</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Everything booked with you, past and future. Search by patient name or number.
-              </p>
+              <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+                <h3 className="font-bold text-navy-700">All appointments</h3>
+                <input className="input-field text-sm w-56" placeholder="Search name or number"
+                  value={apptSearch} onChange={e => setApptSearch(e.target.value)} />
+              </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+              <details className="mb-3">
+              <summary className="text-xs text-teal-700 font-semibold cursor-pointer">Filters — dates, status{rosterDoctors.length > 1 ? ', doctor' : ''}</summary>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
                 <div>
                   <label className="text-[11px] text-gray-500 block mb-1">From</label>
                   <input type="date" className="input-field text-sm" value={apptFrom}
@@ -1552,12 +1559,8 @@ export default function DoctorDashboard() {
                     </select>
                   </div>
                 )}
-                <div>
-                  <label className="text-[11px] text-gray-500 block mb-1">Search</label>
-                  <input className="input-field text-sm" placeholder="Name or number"
-                    value={apptSearch} onChange={e => setApptSearch(e.target.value)} />
-                </div>
               </div>
+              </details>
 
               <div className="text-xs text-gray-500 mb-3">
                 {apptLoading ? 'Loading…' : (
@@ -1661,11 +1664,7 @@ export default function DoctorDashboard() {
                   </button>
                 )}
               </div>
-              <p className="text-gray-500 text-sm mb-4">
-                If you sit at more than one clinic, add each one here. Patients are told which building to
-                come to, and you set separate hours for each below. There is no extra charge for a second
-                location.
-              </p>
+              <p className="text-gray-500 text-sm mb-3">Add each clinic you sit at — no extra charge.</p>
 
               {showAddLoc && (
                 <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
@@ -1722,15 +1721,11 @@ export default function DoctorDashboard() {
               </div>
               {/* The main location is where any booking that does not name one
                   lands, so it cannot be removed — only replaced. */}
-              <p className="text-xs text-gray-400 mt-3">
-                Your main location receives any booking that does not name a clinic. Make another one main
-                first if you want to remove it.
-              </p>
+
             </div>
 
             <div className="card shadow-sm">
               <h3 className="font-bold text-navy-700 mb-1">{t('dashboardPage.availabilityHeading')}</h3>
-              <p className="text-gray-500 text-sm mb-4">{t('dashboardPage.availabilityDesc')}</p>
 
               {locations.length > 1 && (
                 <div className="flex gap-2 flex-wrap mb-4">
@@ -1773,11 +1768,7 @@ export default function DoctorDashboard() {
                   </p>
                 </div>
               )}
-              <div className="bg-navy-50 border border-navy-100 rounded-xl p-3 mb-4 text-sm text-navy-700">
-                Patients book an <strong>hourly window</strong> — 12–1, 1–2 and so on — not an exact minute.
-                Set how many patients you can see in one hour and we will stop taking bookings once that
-                hour is full.
-              </div>
+              <p className="text-xs text-gray-500 mb-3">Patients book an hourly window; bookings stop when an hour is full.</p>
 
               <div className="space-y-2 mb-6">
                 {DAYS_OF_WEEK.map(day => {
@@ -1883,7 +1874,7 @@ export default function DoctorDashboard() {
 
         {/* ══════════ PATIENT REPORT — how many, from where, who to bring back (0161) ══════════ */}
         {tab === 'patientreport' && doctor && emr && (access.opd || access.ipd) && (
-          <PatientReportPanel businessId={doctor.id} onOpenPatient={openPatient} onGoTo={setTab} />
+          <PatientReportPanel businessId={doctor.id} onOpenPatient={openPatient} onGoTo={() => setTab('collections')} />
         )}
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
@@ -1923,7 +1914,7 @@ export default function DoctorDashboard() {
         )}
 
         {tab === 'doctors' && doctor && (
-          <DoctorsOverview businessId={doctor.id} onOpenPatient={openPatient} onGoTo={setTab} />
+          <DoctorsOverview businessId={doctor.id} onOpenPatient={openPatient} onGoTo={() => setTab('collections')} />
         )}
 
         {/* ══════════ CLINIC — doctors on the roster + camps & offers ══════════ */}
@@ -1949,11 +1940,8 @@ export default function DoctorDashboard() {
         {tab === 'bills' && (
           <div className="space-y-4">
             <div className="card shadow-sm">
-              <h3 className="font-bold text-navy-700 mb-1">Your bills</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Every tax invoice we have raised for your listing. Open one to save or print it —
-                they stay here, you do not need the WhatsApp message.
-              </p>
+              <h3 className="font-bold text-navy-700 mb-1">Your Sehatsandhi invoices</h3>
+              <p className="text-sm text-gray-500 mb-4">What you paid Sehatsandhi. Open one to save or print it.</p>
 
               {billsLoading ? (
                 <p className="text-sm text-gray-400 py-8 text-center">Loading…</p>
@@ -1985,7 +1973,9 @@ export default function DoctorDashboard() {
 
                         {/* The split spelled out, because this is the number a
                             business hands to its accountant to claim credit. */}
-                        <div className="text-xs text-gray-500 space-y-0.5 mb-2">
+                        <details className="text-xs text-gray-500 mb-2">
+                          <summary className="cursor-pointer text-teal-700">Tax details</summary>
+                          <div className="space-y-0.5 mt-1">
                           <div>Listing fee {money(b.taxable_value)}</div>
                           {inter ? (
                             <div>IGST @ {Number(b.gst_rate)}% {money(b.igst_amount)}</div>
@@ -2002,7 +1992,8 @@ export default function DoctorDashboard() {
                               {new Date(b.period_end).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                             </div>
                           )}
-                        </div>
+                          </div>
+                        </details>
 
                         {b.public_token && (
                           <a href={`/invoice/${b.public_token}`}
@@ -2138,7 +2129,7 @@ export default function DoctorDashboard() {
                 on owner/manager/doctor regardless of what is drawn here. */}
             {emr && (access.opd || access.ipd) && doctor && (
               <Fold ownCard title="Your billing" summary="billed and collected, by stream">
-                <RevenuePanel businessId={doctor.id} onOpen={w => setTab(w === 'billed' ? 'bills' : 'collections')} />
+                <RevenuePanel businessId={doctor.id} onOpen={() => setTab('collections')} />
               </Fold>
             )}
           </div>

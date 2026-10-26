@@ -14,7 +14,7 @@ import DeskBooking from './DeskBooking'
 // arrived and No-show on each — and each doctor's next free time with Book.
 // It replaces a grid of every slot in the day that could not be clicked.
 
-type Tab = 'queue' | 'beds' | 'lab' | 'pharmacy' | 'bills' | 'collections' | 'patientreport' | 'plan' | 'whatsapp' | 'appointments'
+type Tab = 'queue' | 'beds' | 'lab' | 'pharmacy' | 'collections' | 'patientreport' | 'plan' | 'whatsapp' | 'appointments'
 
 interface Appt {
   id: string; at: string; name: string; member_id: string | null; status: string; phone4: string

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import SectionPills from '../../components/SectionPills'
 import { FlaskConical, Home, Plus, Printer, Search, Send, Trash2, Check, MapPin, Upload, Phone, MessageCircle, Download, CalendarClock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { moneyExact } from '../../lib/format'
@@ -83,11 +84,8 @@ export default function LabPanel({ businessId, canManage, canResults, canApprove
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold text-navy-700 flex items-center gap-2"><FlaskConical className="w-5 h-5" /> Lab</h2>
-          <p className="text-sm text-gray-500">Tests, packages, samples, results and reports sent to patients on WhatsApp.</p>
         </div>
-        <div className="flex gap-1 flex-wrap">
-          {sections.map(([s, l]) => <button key={s} onClick={() => { setSection(s); setOpenOrder(null) }} className={pill(section === s)}>{l}</button>)}
-        </div>
+        <SectionPills sections={sections} primary={['queue', 'new', 'home']} value={section} onChange={s => { setSection(s); setOpenOrder(null) }} />
       </div>
 
       {isLab && !labCats?.length && canManage && (

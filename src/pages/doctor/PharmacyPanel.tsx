@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import SectionPills from '../../components/SectionPills'
 import { AlertTriangle, Package, Plus, Printer, Search, Trash2 } from 'lucide-react'
 import { moneyExact, shortDate, isoDate } from '../../lib/format'
 import { searchPatients, PatientSearchResult } from '../../lib/patientsApi'
@@ -64,15 +65,7 @@ export default function PharmacyPanel({ businessId, canManage, canSettings }: {
             In-house dispensing · {settings?.pharmacy_gstin ? `GST bills (GSTIN ${settings.pharmacy_gstin})` : 'bills without GST'}
           </p>
         </div>
-        <div className="flex gap-1 flex-wrap">
-          {sections.map(([s, label]) => (
-            <button key={s} onClick={() => setSection(s)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${section === s
-                ? 'bg-teal-50 border-teal-500 text-teal-700' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-              {label}
-            </button>
-          ))}
-        </div>
+        <SectionPills sections={sections} primary={['sell', 'bills', 'dues', 'stock']} value={section} onChange={setSection} />
       </div>
 
       {(low > 0 || expiring > 0) && section !== 'stock' && (
@@ -136,6 +129,7 @@ function MedicinePicker({ stock, onPick, placeholder = 'Add a medicine — type 
 function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
   businessId: string; stock: StockRow[]; onSold: () => void; gst: boolean; goStock: () => void; canManage: boolean
 }) {
+  const [showDiscount, setShowDiscount] = useState(false)
   const [mode, setMode] = useState<'patient' | 'walkin'>('patient')
   const [q, setQ] = useState('')
   const [found, setFound] = useState<PatientSearchResult[]>([])
@@ -329,6 +323,11 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
         </div>
       )}
 
+      {/* 26 Oct 2026: discount and payment only once there is something on the bill. */}
+      {lines.length > 0 && <>
+      {!showDiscount && !Number(pct) ? (
+        <button type="button" onClick={() => setShowDiscount(true)} className="text-xs text-teal-700 font-semibold hover:underline">+ Discount</button>
+      ) : (
       <div className="grid sm:grid-cols-3 gap-2 items-start">
         <label className="text-xs text-gray-500">Discount %
           <input type="number" min={0} max={100} className="input-field mt-1" value={pct} onChange={e => setPct(e.target.value)} placeholder="0" />
@@ -339,11 +338,11 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
           </label>
         )}
       </div>
+      )}
 
       <div className="bg-gray-50 rounded-lg p-3 space-y-2">
         <div className="flex justify-between text-sm">
-          <span>About {moneyExact(estimate)} to pay{gst ? ' (GST included)' : ''}</span>
-          <span className="text-xs text-gray-400">Exact total on the bill — each batch has its own MRP.</span>
+          <span title="Exact total on the bill — each batch has its own MRP.">About {moneyExact(estimate)} to pay{gst ? ' (GST included)' : ''}</span>
         </div>
         <div className="grid sm:grid-cols-3 gap-2">
           <input type="number" min={0} className="input-field" value={pay} onChange={e => setPay(e.target.value)} placeholder="Amount received" />
@@ -357,8 +356,8 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
           <button type="button" onClick={() => setPay('')} className={`px-3 py-1 rounded-full border ${!Number(pay) ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200'}`}>Nothing now (credit)</button>
           {Number(pay) > 0 && Number(pay) < estimate && <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800">Part payment · {moneyExact(estimate - Number(pay))} will be due</span>}
         </div>
-        <p className="text-xs text-gray-500">For a part payment, type what was received — the rest stays on the patient's dues.</p>
       </div>
+      </>}
 
       <Err msg={err} />
       <div className="flex justify-end">

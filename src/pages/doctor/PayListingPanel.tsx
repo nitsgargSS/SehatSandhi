@@ -96,6 +96,8 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
   const lastDay = termEnd ? new Date(termEnd.getTime() - 86_400_000) : null
   const daysLeft = termEnd ? Math.ceil((termEnd.getTime() - Date.now()) / 86_400_000) : null
   const paidUp = active && daysLeft !== null && daysLeft > 0
+  // 26 Oct 2026: paid up, the plan choices stay closed until asked for.
+  const [changing, setChanging] = useState(false)
   const terms = price?.terms ?? []
 
   const saveChoice = async () => {
@@ -179,13 +181,20 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
         )}
       </div>
 
-      {paidUp && termEnd && (
+      {paidUp && termEnd && !changing && (
+        <div className="flex items-center justify-between gap-3 flex-wrap text-sm text-gray-600">
+          <span><b>Nothing is due now.</b></span>
+          {canPay && <button onClick={() => setChanging(true)} className="text-teal-700 font-semibold hover:underline">Change plan or renew early</button>}
+        </div>
+      )}
+      {paidUp && termEnd && changing && (
         <p className="text-sm text-gray-600">
-          <b>Nothing is due now.</b> Below you can choose your next plan, or renew early — a renewal starts on {dmy(termEnd)}, after your current plan, so no days are lost.
+          A renewal starts on {dmy(termEnd)}, after your current plan, so no days are lost.{' '}
+          <button onClick={() => setChanging(false)} className="text-teal-700 font-semibold hover:underline">Close</button>
         </p>
       )}
 
-      {!canPay ? (
+      {paidUp && termEnd && !changing ? null : !canPay ? (
         <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">
           Only the owner of {b.name} can pay or change the plan. Please ask them to log in.
         </p>

@@ -377,8 +377,8 @@ export function MyPractice({ businessId, practitionerId, doctorName, onOpenPatie
 // ── Every doctor, for the owner and manager ─────────────────────────────────
 export function DoctorsOverview({ businessId, onOpenPatient, onGoTo }: {
   businessId: string; onOpenPatient: (memberId: string) => void
-  /** Open another tab of the dashboard — the bills behind "Billed". */
-  onGoTo?: (tab: 'bills' | 'collections') => void
+  /** Open another tab of the dashboard — billed and collected, in Collections. */
+  onGoTo?: (tab: 'collections') => void
 }) {
   const [period, setPeriod] = useState<Period>('month')
   // A total opens what is behind it: the appointments, or the visits/admissions register.
@@ -435,7 +435,7 @@ export function DoctorsOverview({ businessId, onOpenPatient, onGoTo }: {
         <StatTile label="Appointments" value={total.appointments} onClick={() => { setReq(null); setApptsOpen(true) }} active={apptsOpen} />
         <StatTile label="OPD visits" value={total.opd_visits} onClick={() => showRegister('visits')} active={req?.kind === 'visits'} />
         <StatTile label="Admissions" value={total.admissions} onClick={() => showRegister('admissions')} active={req?.kind === 'admissions'} />
-        <StatTile label="Billed / collected" value={inr(total.billed)} sub={`${inr(total.collected)} collected`} onClick={onGoTo ? () => onGoTo('bills') : undefined} />
+        <StatTile label="Billed / collected" value={inr(total.billed)} sub={`${inr(total.collected)} collected`} onClick={onGoTo ? () => onGoTo('collections') : undefined} />
       </div>
       {apptsOpen && <AppointmentsList businessId={businessId} practitionerId={null} {...periodRange(period)} onClose={() => setApptsOpen(false)} />}
       {req && <VisitRegister businessId={businessId} request={req} title="Every doctor's patients by date" onOpen={(m) => onOpenPatient(m)} />}

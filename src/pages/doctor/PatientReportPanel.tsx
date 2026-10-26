@@ -76,8 +76,8 @@ function Card({ title, children, note }: { title: string; children: React.ReactN
 
 export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }: {
   businessId: string; onOpenPatient?: (memberId: string, visitId?: string | null) => void
-  /** The bills behind "Billed", in the Bills tab. */
-  onGoTo?: (tab: 'bills') => void
+  /** What was billed and collected, in the Collections tab. */
+  onGoTo?: (tab: 'collections') => void
 }) {
   // 0193: every number opens the people behind it, below.
   const [req, setReq] = useState<RegisterRequest | null>(null)
@@ -165,7 +165,7 @@ export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }
             <StatTile onClick={() => show('visits', range[0], range[1])} active={req?.kind === 'visits'} label="Visits" value={t.visits} sub={change(t.visits, t.prev_visits)} />
             <StatTile onClick={() => show('admissions', range[0], range[1])} active={req?.kind === 'admissions'} label="Admissions" value={t.admissions} />
             <StatTile label="Billed" value={moneyExact(t.revenue)} sub={t.seen ? `${moneyExact(t.revenue / t.seen)} per patient` : undefined}
-              onClick={onGoTo ? () => onGoTo('bills') : undefined} />
+              onClick={onGoTo ? () => onGoTo('collections') : undefined} />
           </div>
           </Fold>
           {req && (

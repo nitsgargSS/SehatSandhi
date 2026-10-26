@@ -58,8 +58,7 @@ export default function LeadsPanel({ businessId, role }: { businessId: string; r
           <button onClick={load} className="text-sm text-teal-700 flex items-center gap-1"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh</button>
         </div>
         <p className="text-sm text-gray-500">
-          People in your areas ask about health cover on WhatsApp. You see what they want before you decide; accept and you pay
-          ₹{fee} from your wallet, and the lead is yours alone — their name and number come to you only. Nothing is charged on any policy.
+          Accept a lead for ₹{fee} from your wallet — it is yours alone. Nothing is charged on any policy.
         </p>
         <div className="grid sm:grid-cols-2 gap-3 mt-3">
           <div className="bg-gray-50 rounded-xl p-3">

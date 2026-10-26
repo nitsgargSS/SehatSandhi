@@ -56,8 +56,7 @@ export default function TripsPanel({ businessId, role }: { businessId: string; r
           <button onClick={load} className="text-sm text-teal-700 flex items-center gap-1"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh</button>
         </div>
         <p className="text-sm text-gray-500">
-          Patients in your areas ask on WhatsApp. They are given your number and 108 straight away; this is for the crew that
-          can reach them first. Accept and you get their phone and pickup address at once.
+          Accept to get the patient's phone and pickup address at once.
         </p>
         <div className="flex gap-2 mt-3 flex-wrap">
           {([['new', 'New'], ['active', isDriver ? 'My trips' : 'Under way'], ['done', 'Done']] as [TripScope, string][]).map(([k, l]) => (
