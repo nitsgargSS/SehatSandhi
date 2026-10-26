@@ -3,6 +3,7 @@ import { Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { isoDate, moneyExact, shortDate } from '../../lib/format'
 import { downloadCsv } from '../../lib/billingApi'
+import Fold from '../../components/Fold'
 import { StatTile, ColumnChart, BarList, Point } from '../../components/Charts'
 import VisitRegister, { type RegisterRequest } from './VisitRegister'
 import type { RegisterKind } from '../../lib/patientsApi'
@@ -130,19 +131,18 @@ export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }
           <h2 className="text-xl font-bold text-navy-700">Patient report</h2>
           <p className="text-sm text-gray-500">How many patients, how often, from where — and who to bring back.</p>
         </div>
-        <div className="flex gap-1 flex-wrap">
-          {PRESETS.map(([id, label]) => (
-            <button key={id} onClick={() => pick(id)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${preset === id ? 'bg-teal-50 border-teal-500 text-teal-700' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-              {label}
-            </button>
-          ))}
-        </div>
+        <select className="input-field w-auto text-sm" value={preset || 'custom'}
+          onChange={e => e.target.value === 'custom' ? setPreset('') : pick(e.target.value)}>
+          {PRESETS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          <option value="custom">Pick dates…</option>
+        </select>
       </div>
       <div className="flex flex-wrap gap-2 items-center text-sm">
-        <input type="date" className="input-field w-auto" value={range[0]} onChange={e => { setPreset(''); setRange([e.target.value, range[1]]) }} />
-        <span className="text-gray-400">to</span>
-        <input type="date" className="input-field w-auto" value={range[1]} onChange={e => { setPreset(''); setRange([range[0], e.target.value]) }} />
+        {!preset && <>
+          <input type="date" className="input-field w-auto" value={range[0]} onChange={e => { setPreset(''); setRange([e.target.value, range[1]]) }} />
+          <span className="text-gray-400">to</span>
+          <input type="date" className="input-field w-auto" value={range[1]} onChange={e => { setPreset(''); setRange([range[0], e.target.value]) }} />
+        </>}
         <span className="text-gray-400 ml-2">Show by</span>
         <select className="input-field w-auto" value={grain} onChange={e => setGrain(e.target.value as Grain)}>
           <option value="day">Day</option><option value="week">Week</option><option value="month">Month</option>
@@ -154,16 +154,20 @@ export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }
       {loading && !r ? <div className="card shadow-sm text-sm text-gray-400 py-10 text-center">Loading…</div> : r && t && (
         <div className={`space-y-4 ${loading ? 'opacity-60' : ''}`}>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatTile onClick={() => show('all', null, null)} active={req?.kind === 'all'} label="Patients, all time" value={t.all_time} sub={`${t.active_12m.toLocaleString('en-IN')} seen in the last 12 months`} />
             <StatTile onClick={() => show('patients', range[0], range[1])} active={req?.kind === 'patients'} label="Patients in this period" value={t.seen} sub={change(t.seen, t.prev_seen)} />
             <StatTile onClick={() => show('new', range[0], range[1])} active={req?.kind === 'new'} label="New patients" value={t.new} sub={change(t.new, t.prev_new)} />
             <StatTile onClick={() => show('returning', range[0], range[1])} active={req?.kind === 'returning'} label="Returning patients" value={t.returning} sub={t.seen ? `${Math.round((t.returning / t.seen) * 100)}% came again after their first visit` : undefined} />
+            <StatTile onClick={() => show('follow_ups', isoDate(), shift(7))} active={req?.kind === 'follow_ups'} label="Follow-ups" value={r.follow_ups.due_7d} sub={`due in 7 days · ${r.follow_ups.overdue} missed`} tone={r.follow_ups.overdue > 0 ? 'alert' : 'normal'} />
+          </div>
+          <Fold tone="plain" title={<span className="text-sm">More numbers</span>} summary="all time, visits, admissions, billed">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatTile onClick={() => show('all', null, null)} active={req?.kind === 'all'} label="Patients, all time" value={t.all_time} sub={`${t.active_12m.toLocaleString('en-IN')} seen in the last 12 months`} />
             <StatTile onClick={() => show('visits', range[0], range[1])} active={req?.kind === 'visits'} label="Visits" value={t.visits} sub={change(t.visits, t.prev_visits)} />
             <StatTile onClick={() => show('admissions', range[0], range[1])} active={req?.kind === 'admissions'} label="Admissions" value={t.admissions} />
             <StatTile label="Billed" value={moneyExact(t.revenue)} sub={t.seen ? `${moneyExact(t.revenue / t.seen)} per patient` : undefined}
               onClick={onGoTo ? () => onGoTo('bills') : undefined} />
-            <StatTile onClick={() => show('follow_ups', isoDate(), shift(7))} active={req?.kind === 'follow_ups'} label="Follow-ups" value={r.follow_ups.due_7d} sub={`due in 7 days · ${r.follow_ups.overdue} missed`} tone={r.follow_ups.overdue > 0 ? 'alert' : 'normal'} />
           </div>
+          </Fold>
           {req && (
             <VisitRegister businessId={businessId} request={req} title="The list behind the number"
               onOpen={(m, v) => onOpenPatient?.(m, v)} />
@@ -177,7 +181,8 @@ export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }
               ))}
             </div>
             <ColumnChart data={trend} />
-            <div className="overflow-x-auto mt-3">
+            <details className="mt-3"><summary className="text-xs text-teal-700 font-semibold cursor-pointer">Show as a table</summary>
+            <div className="overflow-x-auto mt-2">
               <table className="w-full text-xs">
                 <thead><tr className="text-left text-gray-500"><th className="py-1">Period</th><th className="text-right">Patients</th><th className="text-right">New</th><th className="text-right">Visits</th><th className="text-right">Admissions</th></tr></thead>
                 <tbody>{[...r.trend].reverse().filter(p => p.seen || p.new || p.visits).slice(0, 24).map(p => (
@@ -186,8 +191,10 @@ export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }
                 ))}</tbody>
               </table>
             </div>
+            </details>
           </Card>
 
+          <Fold title="Where they come from" summary="by city and PIN code">
           <div className="grid md:grid-cols-2 gap-4">
             <Card title="Where they come from — by city / district"
               note={t.unknown_area ? `${t.unknown_area} of ${t.seen} patients (${unknownShare}%) have no PIN code. Ask for it at registration — it is on the OPD and Patients forms.` : undefined}>
@@ -197,7 +204,9 @@ export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }
               <BarList data={r.by_pincode.slice(0, 15).map(p => ({ label: `${p.pin_code}${p.district ? ` · ${p.district}` : ''}`, value: p.patients, hint: `${p.new} new` }))} />
             </Card>
           </div>
+          </Fold>
 
+          <Fold title="Who your patients are" summary="age, gender, how they found you">
           <div className="grid md:grid-cols-3 gap-4">
             <Card title="Age">
               <BarList data={r.by_age.map(a => ({ label: a.band, value: a.patients }))} />
@@ -209,7 +218,9 @@ export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }
               <BarList data={r.by_source.map(s => ({ label: SOURCE[s.source] ?? s.source, value: s.patients }))} />
             </Card>
           </div>
+          </Fold>
 
+          <Fold title="By doctor and diagnosis" summary={`${r.by_doctor.length} doctors`}>
           <div className="grid md:grid-cols-2 gap-4">
             <Card title="By doctor">
               {r.by_doctor.length === 0 ? <p className="text-sm text-gray-400">Nothing recorded yet.</p> : (
@@ -225,7 +236,9 @@ export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }
               <BarList data={r.top_diagnoses.map(d => ({ label: `${d.diagnosis}${d.icd10 && d.icd10 !== d.diagnosis ? ` (${d.icd10})` : ''}`, value: d.patients, hint: `${d.visits} visits` }))} />
             </Card>
           </div>
+          </Fold>
 
+          <Fold title="Busiest times" summary="days and hours">
           <div className="grid md:grid-cols-2 gap-4">
             <Card title="Busiest days">
               <ColumnChart data={busiestDay} height={100} />
@@ -234,9 +247,11 @@ export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }
               <ColumnChart data={busiestHour} height={100} />
             </Card>
           </div>
+          </Fold>
 
+          <Fold ownCard title="Patients to invite back" summary={`${r.lapsed_count} not seen in 6–18 months`}>
           <Card title={`Patients to invite back — ${r.lapsed_count}`}
-            note="Seen here before, but not in the last 6 to 18 months. Download the list to call them or send a WhatsApp message.">
+            note="Not seen in 6 to 18 months. Download the list to call them or send a WhatsApp message.">
             {r.lapsed.length === 0 ? <p className="text-sm text-gray-400">Nobody yet.</p> : (
               <>
                 <div className="flex justify-end mb-2">
@@ -253,6 +268,7 @@ export default function PatientReportPanel({ businessId, onOpenPatient, onGoTo }
               </>
             )}
           </Card>
+          </Fold>
         </div>
       )}
     </div>

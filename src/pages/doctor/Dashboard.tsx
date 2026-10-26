@@ -2075,6 +2075,9 @@ export default function DoctorDashboard() {
                   )}
                 </div>
 
+                {/* 26 Oct 2026: the day-by-day charts on demand. */}
+                <Fold title="Day by day" summary="profile opens, bookings and outcomes, per day">
+                <div className="space-y-4">
                 <div className="card shadow-sm">
                   <ColumnChart title="Profile opens per day" height={140}
                     data={report.map(r => ({ label: shortDate(r.day), value: r.profile_views }))} />
@@ -2113,6 +2116,8 @@ export default function DoctorDashboard() {
                     </div>
                   )}
                 </div>
+                </div>
+                </Fold>
               </>
             )}
 
@@ -2120,9 +2125,9 @@ export default function DoctorDashboard() {
                 business but few come (0112). Same gate as the listing report:
                 the RPC refuses anyone who cannot read that. */}
             {doctor && (
-              <div className="pt-2 border-t border-gray-100">
+              <Fold ownCard title="Where your patients come from" summary="areas, and where to focus">
                 <PatientAreasPanel businessId={doctor.id} days={reportDays} />
-              </div>
+              </Fold>
             )}
 
             {/* The clinic's own money, under the listing report.
@@ -2132,9 +2137,9 @@ export default function DoctorDashboard() {
                 report — a listing-only business has no charges. The RPC gates
                 on owner/manager/doctor regardless of what is drawn here. */}
             {emr && (access.opd || access.ipd) && doctor && (
-              <div className="pt-2 border-t border-gray-100">
+              <Fold ownCard title="Your billing" summary="billed and collected, by stream">
                 <RevenuePanel businessId={doctor.id} onOpen={w => setTab(w === 'billed' ? 'bills' : 'collections')} />
-              </div>
+              </Fold>
             )}
           </div>
         )}
