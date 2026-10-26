@@ -78,6 +78,7 @@ import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
 import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
 import DeskBooking from './DeskBooking'
 import TodayPanel from './TodayPanel'
+import Fold from '../../components/Fold'
 import { PractitionerPhoneCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import { linkNurse, listNurseLinks, type NurseLink } from '../../lib/nurseApi'
 import { addStaff, findPeople, inviteWhatsAppUrl, listStaffLog, staffInvite, type PersonMatch, type StaffAction, type StaffChangeDone, type StaffInvite, type StaffLogRow } from '../../lib/staffApi'
@@ -1894,14 +1895,22 @@ export default function DoctorDashboard() {
           <>
             <MyPractice businessId={doctor.id} practitionerId={myPractitionerId} onOpenPatient={openPatient} />
             {/* 0149: a doctor's own nurses. Owners manage everyone's on Doctors & staff. */}
-            {role.role === 'doctor' && <MyNurses businessId={doctor.id} practitionerId={myPractitionerId} />}
-            {/* 0150: across every clinic this doctor works at. */}
-            <MyWeek />
-            <MyLeave practitionerId={myPractitionerId} clinics={listings.map(l => ({ id: l.id, name: l.name }))} />
-            {/* 0156: this login's own number and password. */}
-            <div className="grid md:grid-cols-2 gap-4 mt-6">
-              <PractitionerPhoneCard practitionerId={myPractitionerId} />
-              <SetPasswordByCode />
+            <div className="space-y-4 mt-4">
+              {role.role === 'doctor' && (
+                <Fold ownCard title="My nurses"><MyNurses businessId={doctor.id} practitionerId={myPractitionerId} /></Fold>
+              )}
+              {/* 0150: across every clinic this doctor works at. */}
+              <Fold ownCard title="My week, all clinics"><MyWeek /></Fold>
+              <Fold ownCard title="My leave">
+                <MyLeave practitionerId={myPractitionerId} clinics={listings.map(l => ({ id: l.id, name: l.name }))} />
+              </Fold>
+              {/* 0156: this login's own number and password. Doctors have no My account tab. */}
+              <Fold title="My phone number and password">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <PractitionerPhoneCard practitionerId={myPractitionerId} />
+                  <SetPasswordByCode />
+                </div>
+              </Fold>
             </div>
           </>
         )}
@@ -2140,13 +2149,17 @@ export default function DoctorDashboard() {
                 onSaved={r => setDoctor(d => d ? { ...d, lab_categories: r.lab_categories, lab_module: r.lab_module } : d)} />
             )}
             {doctor && (
-              <ClinicQrCard businessId={doctor.id} name={doctor.name}
-                code={(doctor as typeof doctor & { qr_code?: string | null }).qr_code ?? null} />
+              <Fold ownCard title="QR codes" summary="booking, reception and review — print and put up">
+                <ClinicQrCard businessId={doctor.id} name={doctor.name}
+                  code={(doctor as typeof doctor & { qr_code?: string | null }).qr_code ?? null} />
+              </Fold>
             )}
             {doctor && (
-              <LetterheadSettings businessId={doctor.id}
-                current={(doctor as typeof doctor & { letterhead_url?: string | null }).letterhead_url ?? null}
-                onSaved={url => setDoctor(d => d ? ({ ...d, letterhead_url: url } as typeof d) : d)} />
+              <Fold ownCard title="Print banner" summary={(doctor as typeof doctor & { letterhead_url?: string | null }).letterhead_url ? 'set ✓' : 'not set'}>
+                <LetterheadSettings businessId={doctor.id}
+                  current={(doctor as typeof doctor & { letterhead_url?: string | null }).letterhead_url ?? null}
+                  onSaved={url => setDoctor(d => d ? ({ ...d, letterhead_url: url } as typeof d) : d)} />
+              </Fold>
             )}
             {/* The doctors who work here. Shown for clinics too now: the roster
                 is affiliations, and a clinic has those the same as a hospital. */}
@@ -2172,12 +2185,15 @@ export default function DoctorDashboard() {
                   anyone out with an order from the Orders tab.
                 </p>
                 ) : (
-                <p className="text-sm text-gray-500 mb-3">
-                  Doctors get their own profile and appointment calendar, and appear in the WhatsApp bot
-                  and on the website as soon as they are added to a live listing. Set each doctor's OPD fee
-                  (and any discount) here. Reception and managers do not appear publicly — they are here so
-                  they can sign in, and what they can see is set by the role you give them.
-                </p>
+                <div className="text-sm text-gray-500 mb-3">
+                  Doctors appear publicly; reception and managers only sign in.{' '}
+                  <details className="inline">
+                    <summary className="inline cursor-pointer text-teal-700">More</summary>
+                    <span className="block mt-1">Doctors get their own profile and appointment calendar, and appear in the WhatsApp bot
+                    and on the website as soon as they are added to a live listing. Set each doctor's OPD fee
+                    (and any discount) here. What reception and managers can see is set by the role you give them.</span>
+                  </details>
+                </div>
                 )}
 
                 {/* What the roster costs, stated where it is changed rather than
@@ -2433,17 +2449,18 @@ export default function DoctorDashboard() {
                 </div>
                 {/* Removing is reversible and keeps history — worth saying, or a
                     clinic will hesitate to remove someone who has left. */}
-                <p className="text-xs text-gray-400 mt-3">
-                  Removing a doctor takes them off your listing and off your bill, and keeps their
+                <details className="text-xs text-gray-400 mt-3">
+                  <summary className="cursor-pointer">What happens when someone is removed?</summary>
+                  <p className="mt-1">Removing a doctor takes them off your listing and off your bill, and keeps their
                   past appointments. It does not affect anywhere else they work. You can bring
                   them back at any time. Removing, bringing back and making someone a doctor are
-                  confirmed with a code we email you; adding someone is not.
-                </p>
+                  confirmed with a code we email you; adding someone is not.</p>
+                </details>
 
                 {/* 0147: who changed the staff, when, and why. */}
                 {staffLog.length > 0 && (
-                  <div className="mt-5">
-                    <h4 className="text-sm font-semibold text-navy-700 mb-2">Staff changes</h4>
+                  <details className="mt-5">
+                    <summary className="text-sm font-semibold text-navy-700 mb-2 cursor-pointer">Staff changes ({staffLog.length})</summary>
                     <div className="divide-y divide-gray-100 text-xs">
                       {staffLog.map(l => (
                         <div key={l.id} className="py-1.5 flex flex-wrap gap-x-2">
@@ -2456,7 +2473,7 @@ export default function DoctorDashboard() {
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </details>
                 )}
               </div>
             )}
@@ -2473,6 +2490,7 @@ export default function DoctorDashboard() {
                 only route to a claimable invoice would be asking us to edit the
                 database. Applies to invoices issued from now on; ones already
                 issued cannot be altered. */}
+            <Fold ownCard title="GST number" summary={doctor?.gstin ? doctor.gstin : 'not added'}>
             <div className="card shadow-sm">
               <h3 className="font-bold text-navy-700 mb-1">GST number</h3>
               <p className="text-sm text-gray-500 mb-3">
@@ -2503,7 +2521,9 @@ export default function DoctorDashboard() {
                 {gstMsg && <span className="text-sm text-teal-600 self-center">{gstMsg}</span>}
               </div>
             </div>
+            </Fold>
 
+            <Fold ownCard title={t('dashboardPage.campsHeading')} summary="health camps and special offers">
             <div className="card shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-navy-700">{t('dashboardPage.campsHeading')}</h3>
@@ -2620,6 +2640,7 @@ export default function DoctorDashboard() {
                 </div>
               )}
             </div>
+            </Fold>
           </div>
         )}
       </div>

@@ -9,6 +9,7 @@ import RevenuePanel from './RevenuePanel'
 import VisitRegister, { type RegisterRequest } from './VisitRegister'
 import type { RegisterKind } from '../../lib/patientsApi'
 import PublicProfileEditor from './PublicProfileEditor'
+import Fold from '../../components/Fold'
 
 // One hospital, many doctors (0121). All patients live in the business; every
 // visit, admission, prescription, token and charge says which doctor it is for.
@@ -323,6 +324,7 @@ export function MyPractice({ businessId, practitionerId, doctorName, onOpenPatie
   const show = (kind: RegisterKind) => { const { from, to } = periodRange(period); setReq({ kind, from, to, doctorId: practitionerId, nonce: Date.now() }) }
   const [row, setRow] = useState<DoctorPerformanceRow | undefined>()
   const [apptsOpen, setApptsOpen] = useState(false)
+  const [moneyOpen, setMoneyOpen] = useState(0)
   const [error, setError] = useState('')
   useEffect(() => {
     const { from, to } = periodRange(period)
@@ -341,22 +343,33 @@ export function MyPractice({ businessId, practitionerId, doctorName, onOpenPatie
         <PeriodChips value={period} onChange={setPeriod} />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Tiles r={row} onShow={show} onAppointments={() => setApptsOpen(true)}
-        onMoney={() => document.getElementById(`earnings-${practitionerId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
+      <Tiles r={row} onShow={show} onAppointments={() => setApptsOpen(true)} onMoney={() => setMoneyOpen(Date.now())} />
       {apptsOpen && (
         <AppointmentsList businessId={businessId} practitionerId={practitionerId} {...periodRange(period)} onClose={() => setApptsOpen(false)} />
       )}
-      <VisitRegister businessId={businessId} defaultDoctorId={practitionerId} request={req}
-        title="My patients by date" onOpen={(m, v) => onOpenPatient(m, v)} />
-      <OpdFee businessId={businessId} practitionerId={practitionerId} />
-      <PublicProfileEditor practitionerId={practitionerId} />
       <TodayAppointments businessId={businessId} practitionerId={practitionerId} />
-      <PatientList businessId={businessId} practitionerId={practitionerId} onOpenPatient={onOpenPatient} />
-      <div id={`earnings-${practitionerId}`} className="scroll-mt-4">
+      {/* 26 Oct 2026: the rest one line each, open on demand. */}
+      <Fold ownCard title="My patients by date" summary={row ? `${row.patients} patients · ${row.opd_visits} visits` : undefined} open={req?.nonce}>
+        <VisitRegister businessId={businessId} defaultDoctorId={practitionerId} request={req}
+          title="My patients by date" onOpen={(m, v) => onOpenPatient(m, v)} />
+      </Fold>
+      <Fold ownCard title="Find a patient of mine">
+        <PatientList businessId={businessId} practitionerId={practitionerId} onOpenPatient={onOpenPatient} />
+      </Fold>
+      <Fold ownCard id={`earnings-${practitionerId}`} title="What you earned" open={moneyOpen}
+        summary={row ? `${inr(row.billed)} billed · ${inr(row.collected)} collected` : undefined}>
         <RevenuePanel businessId={businessId} practitionerId={practitionerId}
           title="What you earned" subtitle="Charges credited to you: your consultations, and bed, medicine and procedure charges on patients admitted under you." />
-      </div>
-      <DiscountsGiven businessId={businessId} practitionerId={practitionerId} period={period} />
+      </Fold>
+      <Fold ownCard title="Discounts given">
+        <DiscountsGiven businessId={businessId} practitionerId={practitionerId} period={period} />
+      </Fold>
+      <Fold ownCard title="OPD fee" summary="set once">
+        <OpdFee businessId={businessId} practitionerId={practitionerId} />
+      </Fold>
+      <Fold ownCard title="Public profile" summary="photo, languages, specialities, about">
+        <PublicProfileEditor practitionerId={practitionerId} />
+      </Fold>
     </div>
   )
 }
