@@ -15,7 +15,7 @@ const TYPES: { id: string; label: string }[] = [
 ]
 const TERMS = [1, 6, 12]
 
-interface Row { months: number; sub: string; wa: string; on: boolean }
+interface Row { months: number; sub: string; wa: string; pro: string; on: boolean }
 interface TypeForm { rows: Row[]; commission: string; commissionOn: boolean; included: string; extra: string; updated: string | null }
 
 export default function TypePricingCard() {
@@ -35,11 +35,12 @@ export default function TypePricingCard() {
       const vb = (v.data ?? []).find((x: { vertical: string }) => x.vertical === t.id) as
         { commission_percent: number; commission_enabled: boolean; included_doctors: number; extra_doctor_price: number } | undefined
       const mine = (p.data ?? []).filter((x: { vertical: string }) => x.vertical === t.id) as
-        { months: number; subscription_price: number; whatsapp_price: number; is_enabled: boolean; updated_at: string }[]
+        { months: number; subscription_price: number; whatsapp_price: number; whatsapp_pro_price: number | null; is_enabled: boolean; updated_at: string }[]
       next[t.id] = {
         rows: TERMS.map(m => {
           const r = mine.find(x => x.months === m)
-          return { months: m, sub: String(r?.subscription_price ?? 0), wa: String(r?.whatsapp_price ?? 0), on: r?.is_enabled ?? true }
+          return { months: m, sub: String(r?.subscription_price ?? 0), wa: String(r?.whatsapp_price ?? 0),
+            pro: String(r?.whatsapp_pro_price ?? (r?.whatsapp_price ?? 0) * 2), on: r?.is_enabled ?? true }
         }),
         commission: String(vb?.commission_percent ?? 0),
         commissionOn: Boolean(vb?.commission_enabled),
@@ -59,14 +60,14 @@ export default function TypePricingCard() {
   const save = async (type: string) => {
     const f = forms[type]
     const whole = (s: string) => /^\d+$/.test(s.trim())
-    if (!f.rows.every(r => whole(r.sub) && whole(r.wa))) { setMsg(m => ({ ...m, [type]: 'Prices are whole rupees, 0 or more.' })); return }
+    if (!f.rows.every(r => whole(r.sub) && whole(r.wa) && whole(r.pro))) { setMsg(m => ({ ...m, [type]: 'Prices are whole rupees, 0 or more.' })); return }
     const pct = Number(f.commission)
     if (!Number.isFinite(pct) || pct < 0 || pct > 100) { setMsg(m => ({ ...m, [type]: 'Commission is 0–100%.' })); return }
     if (!whole(f.included) || !whole(f.extra)) { setMsg(m => ({ ...m, [type]: 'Doctor numbers are whole numbers, 0 or more.' })); return }
     setBusy(type); setMsg(m => ({ ...m, [type]: '' }))
     const { error: e } = await supabase.rpc('sehat_admin_set_type_pricing', {
       p_vertical: type,
-      p_terms: f.rows.map(r => ({ months: r.months, subscription_price: Number(r.sub), whatsapp_price: Number(r.wa), is_enabled: r.on })),
+      p_terms: f.rows.map(r => ({ months: r.months, subscription_price: Number(r.sub), whatsapp_price: Number(r.wa), whatsapp_pro_price: Number(r.pro), is_enabled: r.on })),
       p_commission_percent: pct, p_commission_enabled: f.commissionOn,
       p_included_doctors: Number(f.included), p_extra_doctor_price: Number(f.extra),
     })
@@ -98,13 +99,14 @@ export default function TypePricingCard() {
             <div className="overflow-x-auto">
               <table className="text-sm">
                 <thead><tr className="text-left text-xs text-gray-400">
-                  <th className="pr-3 pb-1">Term</th><th className="pr-3 pb-1">Subscription ₹</th><th className="pr-3 pb-1">WhatsApp ₹</th><th className="pb-1">Offered</th>
+                  <th className="pr-3 pb-1">Term</th><th className="pr-3 pb-1">Subscription ₹</th><th className="pr-3 pb-1">WhatsApp Basic ₹</th><th className="pr-3 pb-1">WhatsApp Pro ₹</th><th className="pb-1">Offered</th>
                 </tr></thead>
                 <tbody>{f.rows.map(r => (
                   <tr key={r.months}>
                     <td className="pr-3 py-1 whitespace-nowrap">{r.months === 1 ? '1 month' : `${r.months} months`}</td>
                     <td className="pr-3 py-1"><input value={r.sub} onChange={e => setRow(t.id, r.months, { sub: e.target.value })} className={cell} inputMode="numeric" /></td>
                     <td className="pr-3 py-1"><input value={r.wa} onChange={e => setRow(t.id, r.months, { wa: e.target.value })} className={cell} inputMode="numeric" /></td>
+                    <td className="pr-3 py-1"><input value={r.pro} onChange={e => setRow(t.id, r.months, { pro: e.target.value })} className={cell} inputMode="numeric" /></td>
                     <td className="py-1"><input type="checkbox" checked={r.on} onChange={e => setRow(t.id, r.months, { on: e.target.checked })} /></td>
                   </tr>
                 ))}</tbody>

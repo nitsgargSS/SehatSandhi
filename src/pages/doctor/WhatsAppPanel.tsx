@@ -10,9 +10,12 @@ import {
   WaAccess, getWaAccess,
   MarketingSettings, WaAccount, WalletTx, WaTemplate, AudienceMember, Broadcast,
   rupees, renderTemplate, getMarketingSettings, getWaAccount, getWallet, getBroadcastBlocker,
-  getAudiencePins, getAudience, listTemplates, listBroadcasts, createBroadcast, topUpWallet,
+  getAudiencePins, getAudience, listTemplates, type AudiencePin, listBroadcasts, createBroadcast, topUpWallet,
   acceptWaTerms, sendTestMessage, uploadBroadcastPicture, broadcastPictureUrl,
+  type WaClinicTemplate, listOwnTemplates, waConnect,
+  type WaAutoSettings, type WaAutoOverview, getAutoSettings, saveAutoSettings, getAutoOverview,
 } from '../../lib/marketingApi'
+import { embeddedSignup, loadFacebookSdk } from '../../lib/embeddedSignup'
 import { WA_TERMS, WA_TERMS_VERSION, PICTURE_RULES, templateRules } from '../../lib/waTerms'
 import { getSendOptions, type SendOptions } from '../../lib/sendApi'
 
@@ -110,8 +113,10 @@ export default function WhatsAppPanel({ businessId, businessName, prefill, busin
 
 const inr0 = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
-function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn }: {
+function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn, upgrade }: {
   quote: WhatsappAddonQuote
+  /** 0262: on Basic already — this pays the difference to Pro for the rest of the term. */
+  upgrade?: boolean
   businessId: string
   businessName: string
   email?: string
@@ -120,19 +125,32 @@ function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const q = quote
+  // 0262: Basic or Pro; the quote follows the choice.
+  const [plan, setPlan] = useState<'basic' | 'pro'>(upgrade ? 'pro' : quote.plan ?? 'basic')
+  const [q, setQ] = useState<WhatsappAddonQuote>(quote)
+  const [proQuote, setProQuote] = useState<WhatsappAddonQuote | null>(upgrade ? quote : null)
+  useEffect(() => {
+    if (upgrade) return
+    let live = true
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return
+      whatsappAddon(businessId, 'quote', session.access_token, 'pro').then(p => { if (live) setProQuote(p) }, () => undefined)
+    })
+    return () => { live = false }
+  }, [businessId, upgrade])
+  useEffect(() => { setQ(plan === 'pro' && proQuote ? proQuote : quote) }, [plan, proQuote, quote])
 
   const pay = async () => {
     setBusy(true); setError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('Please sign in again.')
-      const order = await whatsappAddon(businessId, 'order', session.access_token)
+      const order = await whatsappAddon(businessId, 'order', session.access_token, plan)
       await loadRazorpayCheckout()
       const Razorpay = (window as unknown as { Razorpay: new (o: unknown) => { open: () => void } }).Razorpay
       new Razorpay({
         key: order.keyId, amount: order.amountPaise, currency: order.currency, order_id: order.orderId,
-        name: 'Sehatsandhi Business', description: `${businessName} · WhatsApp until ${shortDate(q.termEnd)}`,
+        name: 'Sehatsandhi Business', description: `${businessName} · WhatsApp ${plan === 'pro' ? 'Pro ' : ''}until ${shortDate(q.termEnd)}`,
         prefill: { name: businessName, email },
         theme: { color: BIZ.green },
         remember_customer: false,
@@ -154,6 +172,29 @@ function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn
   }
 
   const prorated = q.daysLeft < q.daysInTerm
+  if (upgrade) return (
+    <div className="card shadow-sm space-y-3">
+      <h3 className="font-bold text-navy-700 flex items-center gap-2">
+        Upgrade to WhatsApp Pro <span className="text-[11px] font-semibold bg-teal-50 text-teal-700 rounded-full px-2 py-0.5">Pro</span>
+      </h3>
+      <ul className="text-sm text-gray-600 list-disc ml-5 space-y-0.5">
+        <li>Your clinic’s own WhatsApp number and name — patients see you, not Sehatsandhi.</li>
+        <li>Sends by itself: welcome on registration, prescription and bill after the visit, a thank-you with a rating request, and follow-up reminders.</li>
+        <li>Patients with the Sehatsandhi app get these in the app instead, free.</li>
+        <li>Once your number is connected you pay Meta for messages directly; until then they are included.</li>
+      </ul>
+      <div className="text-sm border rounded-lg divide-y">
+        <div className="flex justify-between px-3 py-2"><span>Difference to Pro ({q.termLabel.toLowerCase()})</span><span>{inr0(q.fullFee)}</span></div>
+        {prorated && <div className="flex justify-between px-3 py-2 text-gray-600"><span>{q.daysLeft} of {q.daysInTerm} days left</span><span>{inr0(q.amount)}</span></div>}
+        {q.tax.applied && <div className="flex justify-between px-3 py-2 text-gray-600"><span>GST {q.tax.rate}%</span><span>{inr0(q.tax.taxTotal)}</span></div>}
+        <div className="flex justify-between px-3 py-2 font-bold"><span>Pay now</span><span>{inr0(q.tax.grandTotal)}</span></div>
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button onClick={pay} disabled={busy} className="btn-teal disabled:opacity-60">
+        {busy ? 'Opening payment…' : `Pay ${inr0(q.tax.grandTotal)} and move to Pro`}
+      </button>
+    </div>
+  )
   return (
     <div className="space-y-4">
       <div className={`rounded-xl px-4 py-3 text-sm border ${locked ? 'bg-red-50 border-red-200 text-red-800' : 'bg-teal-50 border-teal-200 text-teal-900'}`}>
@@ -163,12 +204,26 @@ function AddWhatsApp({ quote, businessId, businessName, email, locked, expiresOn
       </div>
       <div className="card shadow-sm max-w-xl space-y-3">
         <h3 className="font-bold text-navy-700">Add WhatsApp messaging</h3>
+        {proQuote && (
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <button type="button" onClick={() => setPlan('basic')}
+              className={`text-left rounded-lg border px-3 py-2 ${plan === 'basic' ? 'border-teal-500 bg-teal-50' : 'border-gray-200'}`}>
+              <div className="font-semibold">Basic</div>
+              <div className="text-xs text-gray-500">Send prescriptions, bills and broadcasts yourself, from the Sehatsandhi number.</div>
+            </button>
+            <button type="button" onClick={() => setPlan('pro')}
+              className={`text-left rounded-lg border px-3 py-2 ${plan === 'pro' ? 'border-teal-500 bg-teal-50' : 'border-gray-200'}`}>
+              <div className="font-semibold">Pro</div>
+              <div className="text-xs text-gray-500">Your own number and name; welcome, prescription and bill, thank-you and follow-ups go by themselves.</div>
+            </button>
+          </div>
+        )}
         <p className="text-sm text-gray-600">
           Your plan is already paid until <b>{shortDate(q.termEnd)}</b>, so you pay only the WhatsApp fee
           {prorated ? ' for the days left in it' : ''}. From {shortDate(q.termEnd)} it renews together with your {q.termLabel.toLowerCase()} plan.
         </p>
         <div className="text-sm border rounded-lg divide-y">
-          <div className="flex justify-between px-3 py-2"><span>WhatsApp fee ({q.termLabel.toLowerCase()})</span><span>{inr0(q.fullFee)}</span></div>
+          <div className="flex justify-between px-3 py-2"><span>WhatsApp {plan === 'pro' ? 'Pro' : 'Basic'} fee ({q.termLabel.toLowerCase()})</span><span>{inr0(q.fullFee)}</span></div>
           {prorated && (
             <div className="flex justify-between px-3 py-2 text-gray-600">
               <span>{q.daysLeft} of {q.daysInTerm} days left</span><span>{inr0(q.amount)}</span>
@@ -202,11 +257,15 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
   const [blocker, setBlocker] = useState<string | null>(null)
   const [templates, setTemplates] = useState<WaTemplate[]>([])
   const [history, setHistory] = useState<Broadcast[]>([])
-  const [pins, setPins] = useState<{ pin_code: string; patients: number }[]>([])
+  const [pins, setPins] = useState<AudiencePin[]>([])
   // 0259: this month's free messages.
   const [send, setSend] = useState<SendOptions | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  // One part of the tab at a time; Pro clinics open on their automatic messages.
+  const [section, setSection] = useState<'send' | 'pro' | 'wallet' | 'history' | 'terms'>('send')
+  const [sectionSet, setSectionSet] = useState(false)
+  useEffect(() => { if (!sectionSet && account) { setSectionSet(true); if (account.plan === 'pro') setSection('pro') } }, [account, sectionSet])
 
   const load = async () => {
     try {
@@ -228,76 +287,120 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
       {banner}
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>}
 
-      {/* Status and prices */}
-      <div className="card shadow-sm">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h3 className="font-bold text-navy-700 flex items-center gap-2"><MessageCircle className="w-4 h-4 text-teal-600" /> WhatsApp marketing</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              {business.vertical === 'insurance'
-                ? <>Send approved messages to the people whose leads you accepted in the last 90 days — they asked to hear about cover. Anyone who sends STOP is never messaged.</>
-                : <>Send approved messages — camps, notices, health tips — to {businessName}’s patients. Anyone who replies STOP is taken off the list.</>}
-            </p>
-          </div>
-          <div className="text-xs text-gray-500 text-right">
-            {/* 0237: every clinic sends from Sehatsandhi's number for clinics; a clinic has none of its own to set up. */}
-            <div>Sent from: <b>{account?.whatsapp_number || 'Sehatsandhi’s WhatsApp number for clinics'}</b>, with your clinic’s name in each message
-              {account?.status === 'suspended' ? <> · <b className="text-red-600">{STATUS_TEXT.suspended}</b></> : null}</div>
-            <div>WhatsApp add-on: <b>{account && account.subscription_status !== 'inactive'
-              ? `${STATUS_TEXT[account.subscription_status]}${account.next_billing_date ? ` until ${shortDate(account.next_billing_date)}` : ''}`
-              : 'not added'}</b></div>
-          </div>
+      {/* One line: what plan, where messages come from, the wallet, the free messages. Prices on demand. */}
+      <div className="card shadow-sm space-y-2">
+        <div className="flex items-center justify-between gap-3 flex-wrap text-sm">
+          <span className="flex items-center gap-2 flex-wrap">
+            <MessageCircle className="w-4 h-4 text-teal-600" />
+            <b className="text-navy-700">WhatsApp {account?.plan === 'pro' ? 'Pro' : 'Basic'}</b>
+            <span className="text-gray-500">
+              {account && account.subscription_status !== 'inactive'
+                ? `${STATUS_TEXT[account.subscription_status]}${account.next_billing_date ? ` until ${shortDate(account.next_billing_date)}` : ''}`
+                : 'not added'}
+              {' · from '}{account?.own_status === 'connected' ? `your own number${account.whatsapp_number ? ` ${account.whatsapp_number}` : ''}` : 'the Sehatsandhi number'}
+              {account?.status === 'suspended' ? <> · <b className="text-red-600">{STATUS_TEXT.suspended}</b></> : null}
+            </span>
+          </span>
+          <span className="flex items-center gap-3 text-gray-600">
+            <span>Wallet <b className="text-navy-700">{rupees(balance)}</b></span>
+            {!!send?.free_total && <span><b className="text-navy-700">{Math.max(0, send.free_left ?? 0)}</b>/{send.free_total} free left</span>}
+            <button onClick={() => setSection('wallet')} className="text-teal-700 font-semibold hover:underline">Top up</button>
+          </span>
         </div>
-        {settings && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 text-sm">
-            <Price label="WhatsApp Business Verification & Activation Fee" value="Part of your plan — see the Plan tab" />
-            <Price label="Each broadcast message" value={rupees(settings.per_message_paise)} />
-            <Price label="Each prescription, bill or report on WhatsApp" value={rupees(settings.direct_message_paise)} />
-            <Price label="Replying to a patient within 24 hours" value="Free" />
-          </div>
+        {blocker && <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{blocker}</p>}
+        {account && account.plan !== 'pro' && account.subscription_status === 'active' && section !== 'pro' && (
+          <button onClick={() => setSection('pro')} className="text-xs text-teal-700 font-semibold hover:underline">
+            Upgrade to WhatsApp Pro — your own number, and messages that go by themselves →
+          </button>
         )}
-        {!!send?.free_total && <FreeMessages o={send} />}
-        {blocker && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{blocker}</p>}
       </div>
 
-      <WalletCard businessId={businessId} balance={balance} txs={txs} prefill={prefill} onChange={load} />
+      {/* One part at a time. */}
+      <div className="flex gap-1.5 flex-wrap">
+        {SECTIONS.filter(([k]) => k !== 'pro' || account?.plan === 'pro' || (account?.subscription_status === 'active')).map(([k, label]) => (
+          <button key={k} onClick={() => setSection(k)}
+            className={`text-sm px-3 py-1.5 rounded-full border ${section === k ? 'bg-teal-600 text-white border-teal-600' : 'bg-white border-gray-200 text-gray-600 hover:border-teal-400'}`}>
+            {k === 'pro' && account?.plan !== 'pro' ? 'Pro' : label}
+          </button>
+        ))}
+      </div>
 
-      {account && account.subscription_status !== 'inactive' && (
+      {section === 'send' && (
+        <>
+          {account && account.subscription_status !== 'inactive' && !(account.terms_version === WA_TERMS_VERSION && account.terms_accepted_at) && (
+            <TermsCard businessId={businessId} account={account} onAccepted={load} />
+          )}
+          {settings && (
+            <Composer insurance={business.vertical === 'insurance'}
+              businessId={businessId} businessName={businessName} settings={settings} balance={balance}
+              blocker={blocker} templates={templates} pins={pins} onSent={load}
+            />
+          )}
+        </>
+      )}
+
+      {section === 'pro' && (
+        account?.plan === 'pro' ? (
+          <>
+            <AutoMessagesCard businessId={businessId} />
+            <OwnNumberCard businessId={businessId} account={account} onChange={load} />
+          </>
+        ) : <UpgradeToPro businessId={businessId} businessName={businessName} />
+      )}
+
+      {section === 'wallet' && (
+        <>
+          {!!send?.free_total && <div className="card shadow-sm"><FreeMessages o={send} /></div>}
+          <WalletCard businessId={businessId} balance={balance} txs={txs} prefill={prefill} onChange={load} />
+          {settings && (
+            <details className="card shadow-sm">
+              <summary className="cursor-pointer text-sm font-semibold text-navy-700">Prices</summary>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-sm">
+                <Price label="WhatsApp fee" value="With your plan — see the Plan tab" />
+                <Price label="Each broadcast message" value={rupees(settings.per_message_paise)} />
+                <Price label="Each prescription, bill or report" value={rupees(settings.direct_message_paise)} />
+                <Price label="Replying within 24 hours" value="Free" />
+              </div>
+            </details>
+          )}
+        </>
+      )}
+
+      {section === 'history' && (
+        <div className="card shadow-sm">
+          <h3 className="font-bold text-navy-700 mb-3">Your broadcasts</h3>
+          {!history.length ? <p className="text-sm text-gray-400">Nothing sent yet.</p> : (
+            <div className="divide-y divide-gray-100">
+              {history.map(b => (
+                <div key={b.id} className="py-2.5 flex items-center justify-between gap-3 text-sm flex-wrap">
+                  <div>
+                    <div className="font-medium text-navy-700">{templates.find(t => t.id === b.template_id)?.name ?? 'Message'}</div>
+                    <div className="text-xs text-gray-400">{dateTime(b.created_at)}{b.pin_codes.length ? ` · PIN ${b.pin_codes.join(', ')}` : ''}</div>
+                  </div>
+                  <div className="text-right text-xs text-gray-500">
+                    <div><b>{b.recipient_count}</b> patients · {rupees(b.total_cost_paise)}</div>
+                    <div className={b.status === 'rejected' ? 'text-red-600 font-medium' : b.status === 'pending_approval' ? 'text-amber-700 font-medium' : ''}>
+                      {BROADCAST_STATUS[b.status] ?? b.status.replace('_', ' ')}
+                    </div>
+                    {b.status === 'rejected' && b.review_note && <div className="text-red-600 max-w-xs">“{b.review_note}” · refunded</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {section === 'terms' && account && account.subscription_status !== 'inactive' && (
         <TermsCard businessId={businessId} account={account} onAccepted={load} />
       )}
-
-      {settings && (
-        <Composer insurance={business.vertical === 'insurance'}
-          businessId={businessId} businessName={businessName} settings={settings} balance={balance}
-          blocker={blocker} templates={templates} pins={pins} onSent={load}
-        />
-      )}
-
-      <div className="card shadow-sm">
-        <h3 className="font-bold text-navy-700 mb-3">Your broadcasts</h3>
-        {!history.length ? <p className="text-sm text-gray-400">Nothing sent yet.</p> : (
-          <div className="divide-y divide-gray-100">
-            {history.map(b => (
-              <div key={b.id} className="py-2.5 flex items-center justify-between gap-3 text-sm flex-wrap">
-                <div>
-                  <div className="font-medium text-navy-700">{templates.find(t => t.id === b.template_id)?.name ?? 'Message'}</div>
-                  <div className="text-xs text-gray-400">{dateTime(b.created_at)}{b.pin_codes.length ? ` · PIN ${b.pin_codes.join(', ')}` : ''}</div>
-                </div>
-                <div className="text-right text-xs text-gray-500">
-                  <div><b>{b.recipient_count}</b> patients · {rupees(b.total_cost_paise)}</div>
-                  <div className={b.status === 'rejected' ? 'text-red-600 font-medium' : b.status === 'pending_approval' ? 'text-amber-700 font-medium' : ''}>
-                    {BROADCAST_STATUS[b.status] ?? b.status.replace('_', ' ')}
-                  </div>
-                  {b.status === 'rejected' && b.review_note && <div className="text-red-600 max-w-xs">“{b.review_note}” · refunded</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }
+
+const SECTIONS: ['send' | 'pro' | 'wallet' | 'history' | 'terms', string][] = [
+  ['send', 'Send a broadcast'], ['pro', 'Automatic & own number'], ['wallet', 'Wallet'], ['history', 'Sent'], ['terms', 'Terms'],
+]
 
 // 0259: the add-on's free messages this month — used first, before the wallet.
 function FreeMessages({ o }: { o: SendOptions }) {
@@ -454,9 +557,15 @@ function WaText({ text }: { text: string }) {
 function Composer({ insurance = false, businessId, businessName, settings, balance, blocker, templates, pins, onSent }: {
   insurance?: boolean
   businessId: string; businessName: string; settings: MarketingSettings; balance: number
-  blocker: string | null; templates: WaTemplate[]; pins: { pin_code: string; patients: number }[]
+  blocker: string | null; templates: WaTemplate[]; pins: AudiencePin[]
   onSent: () => void
 }) {
+  // 0264: who first — everyone, chosen areas, or recent visitors.
+  const [mode, setMode] = useState<'all' | 'area' | 'recent' | null>(null)
+  const [recentDays, setRecentDays] = useState(90)
+  const [search, setSearch] = useState('')
+  const [allAreas, setAllAreas] = useState(false)
+  const [listOpen, setListOpen] = useState(false)
   const [chosenPins, setChosenPins] = useState<string[]>([])
   const [audience, setAudience] = useState<AudienceMember[]>([])
   const [ticked, setTicked] = useState<Set<string>>(new Set())
@@ -484,15 +593,30 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
 
-  // Reload the checklist whenever the PINs change; everyone starts ticked.
+  // Reload the checklist whenever the choice changes; everyone starts ticked.
   useEffect(() => {
-    if (!chosenPins.length) { setAudience([]); setTicked(new Set()); return }
+    if (!mode || (mode === 'area' && !chosenPins.length)) { setAudience([]); setTicked(new Set()); return }
+    const since = mode === 'recent'
+      ? new Date(Date.now() + 5.5 * 3_600_000 - recentDays * 86_400_000).toISOString().slice(0, 10) : undefined
+    let live = true
     setLoadingAud(true)
-    getAudience(businessId, chosenPins)
-      .then(a => { setAudience(a); setTicked(new Set(a.map(x => x.patient_member_id))) })
+    getAudience(businessId, mode === 'area' ? chosenPins : [], since)
+      .then(a => { if (live) { setAudience(a); setTicked(new Set(a.map(x => x.patient_member_id))) } })
       .catch(e => setErr((e as Error).message))
-      .finally(() => setLoadingAud(false))
-  }, [businessId, chosenPins])
+      .finally(() => { if (live) setLoadingAud(false) })
+    return () => { live = false }
+  }, [businessId, mode, chosenPins, recentDays])
+
+  const everyone = pins.reduce((n, p) => n + p.patients, 0)
+  const areaLabel = (p: AudiencePin) => p.pin_code ? `${p.area ? `${p.area} · ` : ''}${p.pin_code}` : 'Without a PIN code'
+  const matches = useMemo(() => {
+    const t = search.trim().toLowerCase()
+    const list = pins.filter(p => !chosenPins.includes(p.pin_code))
+    if (t) return list.filter(p => p.pin_code.includes(t) || (p.area ?? '').toLowerCase().includes(t) || (!p.pin_code && 'without no pin'.includes(t)))
+    return allAreas ? list : list.slice(0, 6)
+  }, [pins, chosenPins, search, allAreas])
+  const chosenCount = pins.filter(p => chosenPins.includes(p.pin_code)).reduce((n, p) => n + p.patients, 0)
+  const who = insurance ? 'people' : 'patients'
 
   const tpl = templates.find(t => t.id === templateId)
   useEffect(() => { setParams(tpl ? Array(Math.max(tpl.placeholders.length - 1, 0)).fill('') : []); setPicOk(false); setPicErr(''); setEmojiFor(null) }, [templateId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -530,11 +654,11 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
   const send = async () => {
     setBusy(true); setErr(''); setMsg('')
     try {
-      const r = await createBroadcast({ businessId, templateId, params, memberIds: [...ticked], pins: chosenPins })
+      const r = await createBroadcast({ businessId, templateId, params, memberIds: [...ticked], pins: mode === 'area' ? chosenPins : [] })
       // 0238: only a picture waits for Sehatsandhi's approval; a set template goes out at once.
       if (r.status === 'queued') setMsg(`Sending now: ${r.recipients} patients · ${rupees(r.cost_paise)} taken from your wallet (balance ${rupees(r.balance_paise)}). A message that is not delivered is refunded.`)
       else setMsg(`Sent for approval: ${r.recipients} patients · ${rupees(r.cost_paise)} held from your wallet (balance ${rupees(r.balance_paise)}). Sehatsandhi reviews it before it goes out; if it is not approved the money comes back and we email you why.`)
-      setConfirming(false); setChosenPins([]); setTemplateId(''); onSent()
+      setConfirming(false); setChosenPins([]); setMode(null); setSearch(''); setTemplateId(''); onSent()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -543,7 +667,7 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
       <h3 className="font-bold text-navy-700 flex items-center gap-2"><Send className="w-4 h-4 text-teal-600" /> New broadcast</h3>
 
       <div>
-        <p className="text-xs font-semibold text-gray-500 mb-2">1. PIN codes</p>
+        <p className="text-xs font-semibold text-gray-500 mb-2">1. Who gets it</p>
         {!pins.length ? (
           <p className="text-sm text-gray-500">
             {insurance
@@ -551,27 +675,92 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
               : <>No patients to message yet. Every patient you register with a mobile number appears here, until they reply STOP.</>}
           </p>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {pins.map(p => (
-              <button key={p.pin_code || 'none'} onClick={() => togglePin(p.pin_code)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${chosenPins.includes(p.pin_code) ? 'bg-teal-50 border-teal-500 text-teal-700' : 'bg-white border-gray-200 text-gray-600'}`}>
-                {p.pin_code || 'No PIN'} · {p.patients}
-              </button>
-            ))}
+          <div className="space-y-3">
+            <div className="grid sm:grid-cols-3 gap-2">
+              {([
+                ['all', `All my ${who}`, `${everyone}`],
+                ['area', 'By area', 'Choose PIN codes'],
+                ['recent', 'Visited recently', 'Seen in the last few months'],
+              ] as const).map(([k, title, sub]) => (
+                <button key={k} type="button" onClick={() => { setMode(k); setListOpen(false) }}
+                  className={`text-left rounded-lg border px-3 py-2 ${mode === k ? 'border-teal-500 bg-teal-50' : 'border-gray-200 bg-white'}`}>
+                  <div className="text-sm font-semibold text-navy-700">{title}</div>
+                  <div className="text-xs text-gray-500">{sub}</div>
+                </button>
+              ))}
+            </div>
+
+            {mode === 'recent' && (
+              <div className="flex flex-wrap gap-2">
+                {[30, 90, 180, 365].map(d => (
+                  <button key={d} type="button" onClick={() => setRecentDays(d)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${recentDays === d ? 'bg-teal-50 border-teal-500 text-teal-700' : 'bg-white border-gray-200 text-gray-600'}`}>
+                    {d === 365 ? 'Last year' : `Last ${d} days`}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {mode === 'area' && (
+              <div className="space-y-2">
+                {chosenPins.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    {chosenPins.map(pc => {
+                      const p = pins.find(x => x.pin_code === pc)
+                      return (
+                        <span key={pc || 'none'} className="text-xs bg-teal-50 border border-teal-200 text-teal-800 rounded-full pl-2.5 pr-1 py-1 inline-flex items-center gap-1">
+                          {p ? areaLabel(p) : pc}
+                          <button type="button" onClick={() => togglePin(pc)} className="px-1 text-teal-700 hover:text-red-600" aria-label="Remove">✕</button>
+                        </span>
+                      )
+                    })}
+                    <span className="text-xs text-gray-500 ml-1">{chosenCount} {who}</span>
+                  </div>
+                )}
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search area or PIN code…"
+                  className="input-field text-sm" />
+                <ul className="border border-gray-100 rounded-lg divide-y divide-gray-50 max-h-60 overflow-y-auto">
+                  {matches.map(p => (
+                    <li key={p.pin_code || 'none'}>
+                      <button type="button" onClick={() => { togglePin(p.pin_code); setSearch('') }}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50">
+                        <span className="flex items-center gap-2"><Square className="w-4 h-4 text-gray-300" />{areaLabel(p)}</span>
+                        <span className="text-xs text-gray-500">{p.patients}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {!matches.length && <li className="px-3 py-2 text-sm text-gray-400">{search ? 'No area matches.' : 'Every area is chosen.'}</li>}
+                </ul>
+                {!search && !allAreas && pins.length - chosenPins.length > 6 && (
+                  <button type="button" onClick={() => setAllAreas(true)} className="text-xs text-teal-700 font-semibold hover:underline">
+                    Show all {pins.length - chosenPins.length} areas
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {chosenPins.length > 0 && (
+      {mode && (mode !== 'area' || chosenPins.length > 0) && (
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-gray-500">2. Patients</p>
-            <div className="flex gap-3 text-xs">
-              <button className="text-teal-700 font-semibold" onClick={() => setTicked(new Set(audience.map(a => a.patient_member_id)))}>Select all</button>
-              <button className="text-gray-500 font-semibold" onClick={() => setTicked(new Set())}>Clear</button>
-            </div>
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            <p className="text-xs font-semibold text-gray-500">
+              2. {loadingAud ? `Loading ${who}…` : `${ticked.size} of ${audience.length} ${who} selected`}
+              {!loadingAud && audience.length > 0 && (
+                <button type="button" onClick={() => setListOpen(v => !v)} className="ml-2 text-teal-700 font-semibold hover:underline">
+                  {listOpen ? 'Hide list' : 'Review list'}
+                </button>
+              )}
+            </p>
+            {listOpen && (
+              <div className="flex gap-3 text-xs">
+                <button className="text-teal-700 font-semibold" onClick={() => setTicked(new Set(audience.map(a => a.patient_member_id)))}>Select all</button>
+                <button className="text-gray-500 font-semibold" onClick={() => setTicked(new Set())}>Clear</button>
+              </div>
+            )}
           </div>
-          {loadingAud ? <p className="text-sm text-gray-400">Loading patients…</p> : (
+          {!listOpen || loadingAud ? null : (
             <div className="max-h-64 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-50">
               {audience.map(a => {
                 const on = ticked.has(a.patient_member_id)
@@ -703,6 +892,251 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
       {reason && count > 0 && <p className="text-xs text-gray-500">{reason}</p>}
       {msg && <p className="text-sm text-teal-700">{msg}</p>}
       {err && <p className="text-sm text-red-600">{err}</p>}
+    </div>
+  )
+}
+
+// ── 0261: the clinic's own WhatsApp number (Pro) ────────────────────────────
+
+const TEMPLATE_LABEL: Record<string, string> = {
+  prescription_link: 'Prescription', bill_link: 'Bill', lab_report_link: 'Lab report', discharge_link: 'Discharge summary',
+  appointment_update: 'Appointment update', rating_request: 'Rating request', welcome_patient: 'Welcome on registration',
+  visit_summary: 'Prescription and bill after the visit', follow_up_reminder: 'Follow-up reminder',
+}
+const TEMPLATE_STATUS: Record<string, [string, string]> = {
+  APPROVED: ['Approved', 'bg-green-50 text-green-700'], PENDING: ['Waiting for Meta', 'bg-amber-50 text-amber-700'],
+  IN_APPEAL: ['Waiting for Meta', 'bg-amber-50 text-amber-700'], REJECTED: ['Rejected', 'bg-red-50 text-red-700'],
+  PAUSED: ['Paused by Meta', 'bg-red-50 text-red-700'], DISABLED: ['Disabled by Meta', 'bg-red-50 text-red-700'],
+  NOT_CREATED: ['Not created', 'bg-red-50 text-red-700'],
+}
+const QUALITY: Record<string, string> = { GREEN: 'Good', YELLOW: 'Warning — patients are blocking or reporting', RED: 'Poor — Meta may limit this number', UNKNOWN: 'Not rated yet' }
+const LIMIT: Record<string, string> = {
+  TIER_50: '50 patients a day', TIER_250: '250 patients a day', TIER_1K: '1,000 patients a day', TIER_10K: '10,000 patients a day',
+  TIER_100K: '100,000 patients a day', TIER_UNLIMITED: 'No daily limit',
+}
+
+function OwnNumberCard({ businessId, account, onChange }: { businessId: string; account: WaAccount; onChange: () => void }) {
+  const connected = account.own_status === 'connected'
+  const [templates, setTemplates] = useState<WaClinicTemplate[]>([])
+  const [existing, setExisting] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
+
+  useEffect(() => { if (connected) listOwnTemplates(businessId).then(setTemplates).catch(() => setTemplates([])) }, [connected, businessId, account.own_checked_at])
+  // Loaded now, so Connect can open Meta's window straight from the click.
+  useEffect(() => { if (!connected) loadFacebookSdk().catch(() => undefined) }, [connected])
+
+  const connect = async () => {
+    setBusy(true); setNote(null)
+    try {
+      const r = await embeddedSignup(existing)
+      const res = await waConnect(businessId, 'connect', { ...r, coexistence: existing })
+      setNote({ ok: res.ok, text: res.message ?? (res.ok ? 'Connected.' : 'Could not connect.') })
+      if (res.ok) onChange()
+    } catch (e) { setNote({ ok: false, text: (e as Error).message }) } finally { setBusy(false) }
+  }
+  const act = async (action: 'refresh' | 'disconnect') => {
+    if (action === 'disconnect' && !window.confirm('Stop sending from your own number? Messages will go from the Sehatsandhi number again, paid from your wallet.')) return
+    setBusy(true); setNote(null)
+    try {
+      const res = await waConnect(businessId, action)
+      setNote({ ok: res.ok, text: res.message ?? '' })
+      onChange()
+    } catch (e) { setNote({ ok: false, text: (e as Error).message }) } finally { setBusy(false) }
+  }
+
+  const manager = account.waba_id ? `https://business.facebook.com/wa/manage/home/?waba_id=${account.waba_id}` : 'https://business.facebook.com/wa/manage/home/'
+
+  return (
+    <div className="card shadow-sm space-y-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="font-bold text-navy-700 flex items-center gap-2">
+            <MessageCircle className="w-4 h-4 text-teal-600" /> Your own WhatsApp number
+            <span className="text-[11px] font-semibold bg-teal-50 text-teal-700 rounded-full px-2 py-0.5">Pro</span>
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">
+            {connected
+              ? <>Patients get messages from your clinic’s own number and name. Meta charges your card for them directly; nothing is taken from the wallet.</>
+              : <>Connect your clinic’s number and patients get every message from it, in your clinic’s name. You pay Meta for messages directly with your own card. Until then, messages go from the Sehatsandhi number.</>}
+          </p>
+        </div>
+        {connected && (
+          <div className="flex gap-2">
+            <button onClick={() => act('refresh')} disabled={busy} className="btn-secondary text-sm disabled:opacity-50">Refresh</button>
+            <button onClick={() => act('disconnect')} disabled={busy} className="text-sm text-red-600 hover:underline disabled:opacity-50">Disconnect</button>
+          </div>
+        )}
+      </div>
+
+      {!connected ? (
+        <div className="space-y-3">
+          <div className="grid sm:grid-cols-2 gap-2 text-sm">
+            <label className={`border rounded-lg px-3 py-2 cursor-pointer ${!existing ? 'border-teal-500 bg-teal-50' : 'border-gray-200'}`}>
+              <input type="radio" className="mr-2" checked={!existing} onChange={() => setExisting(false)} />
+              <b>A new number</b>
+              <span className="block text-xs text-gray-500 ml-5">A SIM or landline that is not on WhatsApp yet.</span>
+            </label>
+            <label className={`border rounded-lg px-3 py-2 cursor-pointer ${existing ? 'border-teal-500 bg-teal-50' : 'border-gray-200'}`}>
+              <input type="radio" className="mr-2" checked={existing} onChange={() => setExisting(true)} />
+              <b>Our WhatsApp Business app number</b>
+              <span className="block text-xs text-gray-500 ml-5">Keep using the app on the reception phone; automatic messages go from the same number.</span>
+            </label>
+          </div>
+          <ol className="text-xs text-gray-500 list-decimal ml-5 space-y-0.5">
+            <li>Meta’s window opens. Log in with Facebook and choose or create your clinic’s business.</li>
+            <li>Enter your clinic’s name as patients should see it, and the number. Meta sends a code to it.</li>
+            <li>That’s it — we set up the messages. Then add a card in Meta so it can charge for messages.</li>
+          </ol>
+          <button onClick={connect} disabled={busy} className="btn-teal text-sm disabled:opacity-50">
+            {busy ? 'Connecting…' : 'Connect your WhatsApp number'}
+          </button>
+          {account.own_status === 'disconnected' && <p className="text-xs text-gray-500">Your number was disconnected. Connect it again any time.</p>}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+            <Price label="Number" value={account.whatsapp_number ?? '—'} />
+            <Price label="Name patients see" value={`${account.verified_name ?? '—'}${account.name_status && account.name_status !== 'APPROVED' ? ` (${account.name_status.toLowerCase().replace(/_/g, ' ')})` : ''}`} />
+            <Price label="Quality" value={QUALITY[account.quality_rating ?? 'UNKNOWN'] ?? account.quality_rating ?? '—'} />
+            <Price label="Daily limit" value={LIMIT[account.messaging_limit ?? ''] ?? (account.messaging_limit || 'Starts at 250 patients a day')} />
+          </div>
+          {account.coexistence && <p className="text-xs text-gray-500">Connected together with your WhatsApp Business app — keep using the app on your phone as before.</p>}
+          <div>
+            <div className="text-xs font-semibold text-gray-500 mb-1">Messages Meta has to approve</div>
+            {!templates.length ? <p className="text-xs text-gray-400">Being set up…</p> : (
+              <ul className="divide-y divide-gray-100 text-sm">
+                {templates.map(t => {
+                  const [label, cls] = TEMPLATE_STATUS[t.status] ?? [t.status, 'bg-gray-50 text-gray-600']
+                  return (
+                    <li key={`${t.name}:${t.language}`} className="py-1.5 flex items-center justify-between gap-2">
+                      <span>{TEMPLATE_LABEL[t.name] ?? t.name}{t.language === 'hi' ? ' (Hindi)' : ''}
+                        {t.reason && <span className="block text-[11px] text-red-600">{t.reason}</span>}</span>
+                      <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${cls}`}>{label}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <a href={manager} target="_blank" rel="noreferrer" className="text-teal-700 hover:underline">Add your card in Meta →</a>
+            <a href="https://business.facebook.com/settings/security" target="_blank" rel="noreferrer" className="text-teal-700 hover:underline">Verify your business with Meta (raises the daily limit) →</a>
+          </div>
+        </div>
+      )}
+
+      {account.own_error && <p className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">{account.own_error}</p>}
+      {note && <p className={`text-sm rounded-lg px-3 py-2 ${note.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>{note.text}</p>}
+    </div>
+  )
+}
+
+// ── 0262: Basic → Pro, and what Pro sends by itself ─────────────────────────
+
+function UpgradeToPro({ businessId, businessName }: { businessId: string; businessName: string }) {
+  const [quote, setQuote] = useState<WhatsappAddonQuote | null>(null)
+  useEffect(() => {
+    let live = true
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return
+      // Refused (no paid term, already Pro, given free…): the card simply does not show.
+      whatsappAddon(businessId, 'quote', session.access_token, 'pro')
+        .then(q => { if (live && q.upgrading) setQuote(q) }, () => undefined)
+    })
+    return () => { live = false }
+  }, [businessId])
+  if (!quote) return null
+  return <AddWhatsApp quote={quote} businessId={businessId} businessName={businessName} locked={false} upgrade />
+}
+
+const AUTO_KINDS: { key: 'welcome' | 'visit_summary' | 'thank_you' | 'follow_up'; label: string; when: string }[] = [
+  { key: 'welcome', label: 'Welcome', when: 'When a patient is registered: their file number, and that their records will be in the Sehatsandhi app.' },
+  { key: 'visit_summary', label: 'Prescription and bill', when: '15 minutes after the consultation is marked done — both in one message.' },
+  { key: 'thank_you', label: 'Thank-you and rating', when: 'After the visit, asking for a 1–5 rating. At most once in 30 days per patient.' },
+  { key: 'follow_up', label: 'Follow-up reminder', when: 'At 10 am the day before the follow-up date the doctor wrote.' },
+]
+const AUTO_STATUS: Record<string, string> = { pending: 'Waiting', sending: 'Sending', sent: 'Sent', skipped: 'Not sent', failed: 'Failed' }
+
+function AutoMessagesCard({ businessId }: { businessId: string }) {
+  const [s, setS] = useState<WaAutoSettings | null>(null)
+  const [o, setO] = useState<WaAutoOverview | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [note, setNote] = useState('')
+  useEffect(() => {
+    getAutoSettings(businessId).then(setS).catch(e => setNote((e as Error).message))
+    getAutoOverview(businessId).then(setO).catch(() => setO(null))
+  }, [businessId])
+  if (!s) return null
+
+  const save = async (next: WaAutoSettings) => {
+    setS(next); setSaving(true); setNote('')
+    try { await saveAutoSettings(businessId, next); setNote('Saved.') } catch (e) { setNote((e as Error).message) } finally { setSaving(false) }
+  }
+  const label = (k: string) => AUTO_KINDS.find(x => x.key === k)?.label ?? k
+
+  return (
+    <div className="card shadow-sm space-y-3">
+      <div>
+        <h3 className="font-bold text-navy-700 flex items-center gap-2">
+          <Send className="w-4 h-4 text-teal-600" /> Automatic messages
+          <span className="text-[11px] font-semibold bg-teal-50 text-teal-700 rounded-full px-2 py-0.5">Pro</span>
+        </h3>
+        <p className="text-sm text-gray-500 mt-1">
+          Sent by themselves, between 8 am and 9 pm. Patients with the Sehatsandhi app get them in the app instead. Anyone who replies STOP gets none.
+        </p>
+      </div>
+      <ul className="divide-y divide-gray-100">
+        {AUTO_KINDS.map(k => {
+          const m = o?.month?.[k.key]
+          return (
+            <li key={k.key} className="py-2 flex items-start gap-3">
+              <button type="button" onClick={() => save({ ...s, [k.key]: !s[k.key] })} disabled={saving} className="mt-0.5 text-teal-600 disabled:opacity-50"
+                aria-label={`${s[k.key] ? 'Turn off' : 'Turn on'} ${k.label}`}>
+                {s[k.key] ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5 text-gray-400" />}
+              </button>
+              <div className="flex-1 text-sm">
+                <div className="font-semibold text-navy-700">{k.label}</div>
+                <div className="text-xs text-gray-500">{k.when}</div>
+                {k.key === 'thank_you' && s.thank_you && (
+                  <label className="text-xs text-gray-600 mt-1 inline-flex items-center gap-1">
+                    Send
+                    <select value={s.thank_you_after_minutes} disabled={saving} className="border border-gray-200 rounded px-1 py-0.5"
+                      onChange={e => save({ ...s, thank_you_after_minutes: Number(e.target.value) })}>
+                      {[30, 60, 120, 240, 480].map(n => <option key={n} value={n}>{n < 60 ? `${n} minutes` : `${n / 60} hour${n > 60 ? 's' : ''}`}</option>)}
+                    </select>
+                    after the visit
+                  </label>
+                )}
+              </div>
+              {m && (
+                <div className="text-[11px] text-gray-500 text-right whitespace-nowrap">
+                  This month: <b>{m.whatsapp}</b> WhatsApp · <b>{m.app}</b> app
+                  {m.failed ? <div className="text-red-600">{m.failed} failed</div> : null}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {!!o?.recent?.length && (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-teal-700">Last {o.recent.length} messages</summary>
+          <ul className="mt-2 divide-y divide-gray-100">
+            {o.recent.map((r, i) => (
+              <li key={i} className="py-1.5 flex items-center justify-between gap-2">
+                <span>{label(r.kind)} — {r.name ?? 'patient'}
+                  {r.why && r.status !== 'sent' && <span className="block text-[11px] text-gray-500">{r.why}</span>}</span>
+                <span className="text-[11px] text-gray-500 text-right whitespace-nowrap">
+                  {AUTO_STATUS[r.status] ?? r.status}{r.status === 'sent' ? ` (${r.channel === 'push' ? 'app' : 'WhatsApp'})` : ''}
+                  <br />{dateTime(r.sent_at ?? r.due_at)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {note && <p className={`text-xs ${note === 'Saved.' ? 'text-green-700' : 'text-red-600'}`}>{note}</p>}
     </div>
   )
 }

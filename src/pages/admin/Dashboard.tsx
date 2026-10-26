@@ -328,6 +328,24 @@ export default function AdminDashboard() {
   const [taxSettings, setTaxSettings] = useState<TaxSettingsRow | null>(null)
   const [taxDraft, setTaxDraft] = useState<Record<string, string>>({})
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
+  // 26 Oct 2026: all invoices, or only those with (or without) the business's GSTIN.
+  const [invGst, setInvGst] = useState<'all' | 'with' | 'without'>('all')
+  const [invLoading, setInvLoading] = useState(false)
+  const loadInvoices = async (gst: 'all' | 'with' | 'without') => {
+    setInvGst(gst); setInvLoading(true)
+    try {
+      const inv = await adminPricing<{ invoices: InvoiceRow[] }>(pricingKey, 'invoices', { gst, limit: 500 })
+      setInvoices(inv.invoices || [])
+    } finally { setInvLoading(false) }
+  }
+  const invoicesCsv = () => {
+    const head = ['Invoice', 'Date', 'Business', 'GSTIN', 'Place of supply', 'Taxable', 'GST %', 'CGST', 'SGST', 'IGST', 'Tax', 'Total', 'Status']
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const lines = [head.map(esc).join(',')].concat(invoices.map(iv => [iv.invoice_number, iv.invoice_date, iv.recipient_name, iv.recipient_gstin,
+      iv.place_of_supply, iv.taxable_value, iv.gst_rate, iv.cgst_amount, iv.sgst_amount, iv.igst_amount, iv.tax_total, iv.total_amount, iv.status].map(esc).join(',')))
+    const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
+    const a = document.createElement('a'); a.href = url; a.download = `invoices-${invGst === 'with' ? 'with-gstin' : invGst === 'without' ? 'without-gstin' : 'all'}.csv`; a.click(); URL.revokeObjectURL(url)
+  }
   const [invoiceMonths, setInvoiceMonths] = useState<InvoiceMonth[]>([])
 
   // Pull the full plan list (seat counts, disabled plans) — needs the key.
@@ -1903,9 +1921,26 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+                      <div className="flex gap-1.5">
+                        {([['all', 'Show all'], ['with', 'With GST number'], ['without', 'Without GST number']] as const).map(([k, l]) => (
+                          <button key={k} onClick={() => loadInvoices(k)} disabled={invLoading}
+                            className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${invGst === k ? 'bg-teal-50 border-teal-500 text-teal-700' : 'bg-white border-gray-200 text-gray-500'}`}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        {invLoading ? 'Loading…' : <>{invoices.length} invoice{invoices.length === 1 ? '' : 's'}{invoices.length >= 500 ? ' (latest 500)' : ''}</>}
+                        {invoices.length > 0 && <button onClick={invoicesCsv} className="font-semibold text-teal-700 hover:underline">Download CSV</button>}
+                      </div>
+                    </div>
+
                     {invoices.length === 0 ? (
                       <p className="text-sm text-gray-400 py-6 text-center">
-                        No invoices yet. One is issued automatically when a payment succeeds.
+                        {invGst === 'with' ? 'No invoice yet carries a business GST number.'
+                          : invGst === 'without' ? 'Every invoice carries a business GST number.'
+                          : 'No invoices yet. One is issued automatically when a payment succeeds.'}
                       </p>
                     ) : (
                       <ScrollableTable>

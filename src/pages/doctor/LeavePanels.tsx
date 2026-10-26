@@ -98,6 +98,7 @@ export function MyLeave({ practitionerId, clinics }: { practitionerId: string; c
 
 export function ClinicLeave({ businessId, doctors }: { businessId: string; doctors: { id: string; name: string }[] }) {
   const [rows, setRows] = useState<Leave[]>([])
+  const [adding, setAdding] = useState(false)
   const [who, setWho] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -117,19 +118,26 @@ export function ClinicLeave({ businessId, doctors }: { businessId: string; docto
   const nameOf = (l: Leave) => `${doctors.find(d => d.id === l.practitioner_id)?.name ?? 'Doctor'}${l.business_id ? ' · here' : ' · own leave'}`
   return (
     <div className="card shadow-sm">
-      <h3 className="font-bold text-navy-700 mb-1">Doctors' leave &amp; unavailability</h3>
-      <p className="text-sm text-gray-500 mb-3">
-        A doctor's own leave applies at every clinic and only they can change it. You can mark a doctor unavailable
-        at this clinic — patients then cannot book them here at those times.
-      </p>
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+        <h3 className="font-bold text-navy-700">Doctors' leave</h3>
+        {!adding && <button onClick={() => setAdding(true)} className="text-sm text-teal-700 font-semibold hover:underline">+ Mark a doctor unavailable here</button>}
+      </div>
       {err && <p className="text-sm text-red-600 mb-2">{err}</p>}
       <LeaveList rows={rows} names={nameOf} busy={busy}
         canCancel={l => l.business_id === businessId} onCancel={l => run(() => cancelLeave(l.id))} />
-      <select className="input-field text-sm w-auto mb-2" value={who} onChange={e => setWho(e.target.value)}>
-        <option value="">Choose a doctor…</option>
-        {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-      </select>
-      {who && <LeaveForm busy={busy} onAdd={(from, to, reason) => run(() => addLeave(who, businessId, from, to, reason))} />}
+      {adding && (
+        <div className="mt-2">
+          <p className="text-xs text-gray-500 mb-2">Patients cannot book them here at those times. A doctor's own leave applies everywhere and only they can change it.</p>
+          <div className="flex gap-2 items-center mb-2">
+            <select className="input-field text-sm w-auto" value={who} onChange={e => setWho(e.target.value)}>
+              <option value="">Choose a doctor…</option>
+              {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+            <button onClick={() => { setAdding(false); setWho('') }} className="text-xs text-gray-500">Cancel</button>
+          </div>
+          {who && <LeaveForm busy={busy} onAdd={(from, to, reason) => run(() => addLeave(who, businessId, from, to, reason))} />}
+        </div>
+      )}
     </div>
   )
 }

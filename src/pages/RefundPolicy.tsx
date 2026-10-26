@@ -5,7 +5,7 @@ import SiteFooter from '../components/SiteFooter'
 const content = {
   en: {
     title: 'Refund & Cancellation Policy',
-    updated: 'Last updated: 24 October 2026',
+    updated: 'Last updated: 26 October 2026',
     intro: 'This policy explains refunds and cancellations for clinics, hospitals, labs, pharmacies, ambulance services and insurance advisors who pay Sehatsandhi — a listing fee, a lead fee, money added to a wallet, or an optional add-on such as WhatsApp messaging. Sehatsandhi is completely free for patients — they never pay us; section 11 explains who to ask about money paid to a clinic, pharmacy or ambulance.',
     sections: [
       {
@@ -46,7 +46,7 @@ const content = {
       },
       {
         h: '10. Money in Your Wallet',
-        p: 'Money you add to your Sehatsandhi wallet is credit for lead fees and for the WhatsApp messages you send — broadcasts, prescriptions, bills and reports. Wallet top-ups are not refundable: the balance cannot be withdrawn or returned to a bank account or card, including when you close your account, and it does not expire while your account is open — you can keep using it for messages. The price of each kind of message is shown in your dashboard before you send. If a message you were charged for is not delivered, its charge is returned to your wallet automatically. The free messages that come with the WhatsApp add-on each month are not wallet money: they are used before your wallet, lapse at the end of each month, and cannot be carried over, withdrawn or refunded. The one exception: if we stop offering the WhatsApp service, or remove your listing for any reason other than a breach of our Terms, any unused balance is refunded to the original payment method within 7 business days — ask us through the Contact page.',
+        p: 'Money you add to your Sehatsandhi wallet is credit for lead fees and for the WhatsApp messages you send — broadcasts, prescriptions, bills and reports. Wallet top-ups are not refundable: the balance cannot be withdrawn or returned to a bank account or card, including when you close your account, and it does not expire while your account is open — you can keep using it for messages. The price of each kind of message is shown in your dashboard before you send. If a message you were charged for is not delivered, its charge is returned to your wallet automatically. The free messages that come with the WhatsApp add-on each month are not wallet money: they are used before your wallet, lapse at the end of each month, and cannot be carried over, withdrawn or refunded. On WhatsApp Pro, messages from your clinic’s own connected number are charged by Meta to your own card; Sehatsandhi does not charge or refund them. Pro’s automatic messages sent from the Sehatsandhi number are included in the Pro fee and are not taken from your wallet. The one exception: if we stop offering the WhatsApp service, or remove your listing for any reason other than a breach of our Terms, any unused balance is refunded to the original payment method within 7 business days — ask us through the Contact page.',
       },
       {
         h: '11. Money Patients Pay to a Clinic, Pharmacy or Ambulance',
@@ -64,7 +64,7 @@ const content = {
   },
   hi: {
     title: 'रिफंड और कैंसिलेशन पॉलिसी',
-    updated: 'आखिरी अपडेट: 24 अक्टूबर 2026',
+    updated: 'आखिरी अपडेट: 26 अक्टूबर 2026',
     intro: 'यह पॉलिसी उन क्लिनिक, हॉस्पिटल, लैब, फार्मेसी, एम्बुलेंस सेवाओं और बीमा सलाहकारों के लिए रिफंड और कैंसिलेशन को बताती है जो Sehatsandhi को पेमेंट करते हैं — लिस्टिंग फीस, लीड फीस, वॉलेट में डाला पैसा, या WhatsApp मैसेजिंग जैसा कोई ऑप्शनल ऐड-ऑन। Sehatsandhi मरीज़ों के लिए बिल्कुल फ्री है — वे हमें कभी पेमेंट नहीं करते; क्लिनिक, फार्मेसी या एम्बुलेंस को दिए पैसे के बारे में किससे पूछें, यह सेक्शन 11 में है।',
     sections: [
       {
@@ -105,7 +105,7 @@ const content = {
       },
       {
         h: '10. आपके वॉलेट का पैसा',
-        p: 'Sehatsandhi वॉलेट में डाला गया पैसा लीड फीस और आपके भेजे WhatsApp मैसेज — ब्रॉडकास्ट, पर्चे, बिल और रिपोर्ट — के लिए क्रेडिट है। वॉलेट टॉप-अप का रिफंड नहीं होता: बैलेंस निकाला या बैंक अकाउंट या कार्ड में वापस नहीं किया जा सकता, अकाउंट बंद करने पर भी नहीं, और जब तक आपका अकाउंट खुला है यह एक्सपायर नहीं होता — आप इसे मैसेज भेजने में इस्तेमाल करते रह सकते हैं। हर तरह के मैसेज की कीमत भेजने से पहले आपके डैशबोर्ड में दिखती है। जिस मैसेज का चार्ज कटा और वह डिलीवर नहीं हुआ, उसका चार्ज अपने आप आपके वॉलेट में लौट आता है। WhatsApp ऐड-ऑन के साथ हर महीने मिलने वाले फ्री मैसेज वॉलेट का पैसा नहीं हैं: वे वॉलेट से पहले इस्तेमाल होते हैं, हर महीने के अंत में खत्म हो जाते हैं, और आगे नहीं ले जाए जा सकते, निकाले या रिफंड नहीं किए जा सकते। एक ही अपवाद: अगर हम WhatsApp सर्विस देना बंद करते हैं, या हमारी शर्तों के उल्लंघन के अलावा किसी और कारण से आपकी लिस्टिंग हटाते हैं, तो बचा हुआ बैलेंस 7 बिज़नेस दिनों में ओरिजिनल पेमेंट मेथड में लौटाया जाता है — संपर्क पेज से हमसे कहें।',
+        p: 'Sehatsandhi वॉलेट में डाला गया पैसा लीड फीस और आपके भेजे WhatsApp मैसेज — ब्रॉडकास्ट, पर्चे, बिल और रिपोर्ट — के लिए क्रेडिट है। वॉलेट टॉप-अप का रिफंड नहीं होता: बैलेंस निकाला या बैंक अकाउंट या कार्ड में वापस नहीं किया जा सकता, अकाउंट बंद करने पर भी नहीं, और जब तक आपका अकाउंट खुला है यह एक्सपायर नहीं होता — आप इसे मैसेज भेजने में इस्तेमाल करते रह सकते हैं। हर तरह के मैसेज की कीमत भेजने से पहले आपके डैशबोर्ड में दिखती है। जिस मैसेज का चार्ज कटा और वह डिलीवर नहीं हुआ, उसका चार्ज अपने आप आपके वॉलेट में लौट आता है। WhatsApp ऐड-ऑन के साथ हर महीने मिलने वाले फ्री मैसेज वॉलेट का पैसा नहीं हैं: वे वॉलेट से पहले इस्तेमाल होते हैं, हर महीने के अंत में खत्म हो जाते हैं, और आगे नहीं ले जाए जा सकते, निकाले या रिफंड नहीं किए जा सकते। WhatsApp Pro में, आपके क्लिनिक के अपने जुड़े नंबर से गए मैसेज का चार्ज Meta सीधे आपके अपने कार्ड से लेता है; Sehatsandhi उनका न चार्ज लेता है, न रिफंड करता है। Sehatsandhi के नंबर से जाने वाले Pro के ऑटोमैटिक मैसेज Pro फीस में शामिल हैं और वॉलेट से नहीं कटते। एक ही अपवाद: अगर हम WhatsApp सर्विस देना बंद करते हैं, या हमारी शर्तों के उल्लंघन के अलावा किसी और कारण से आपकी लिस्टिंग हटाते हैं, तो बचा हुआ बैलेंस 7 बिज़नेस दिनों में ओरिजिनल पेमेंट मेथड में लौटाया जाता है — संपर्क पेज से हमसे कहें।',
       },
       {
         h: '11. मरीज़ क्लिनिक, फार्मेसी या एम्बुलेंस को जो पैसा देते हैं',

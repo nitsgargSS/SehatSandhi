@@ -342,10 +342,14 @@ Deno.serve(async (req) => {
 
     if (action === 'invoices') {
       const limit = Number.isFinite(body.limit) ? Math.min(Number(body.limit), 500) : 100
+      // 26 Oct 2026: only the invoices where the business gave its GSTIN (B2B,
+      // the ones that matter for GSTR-1), or only those without (B2C).
+      let q = supabase.from('invoices')
+        .select('id, invoice_number, invoice_date, fy, recipient_name, recipient_gstin, place_of_supply, taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, tax_total, total_amount, status, public_token, sent_whatsapp_at, sent_email_at')
+      if (body.gst === 'with') q = q.not('recipient_gstin', 'is', null).neq('recipient_gstin', '')
+      else if (body.gst === 'without') q = q.or('recipient_gstin.is.null,recipient_gstin.eq.')
       const [rows, summary] = await Promise.all([
-        supabase.from('invoices')
-          .select('id, invoice_number, invoice_date, fy, recipient_name, recipient_gstin, place_of_supply, taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, tax_total, total_amount, status, public_token, sent_whatsapp_at, sent_email_at')
-          .order('invoice_date', { ascending: false }).order('invoice_number', { ascending: false })
+        q.order('invoice_date', { ascending: false }).order('invoice_number', { ascending: false })
           .limit(limit),
         supabase.from('invoice_monthly_summary').select('*').limit(24),
       ])

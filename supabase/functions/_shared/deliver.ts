@@ -7,7 +7,9 @@
 // existed.
 //
 // THE CLINIC CHOOSES THE CHANNEL (0218):
-//   whatsapp  needs the WhatsApp add-on and is paid for from the wallet;
+//   whatsapp  needs the WhatsApp add-on and is paid for from the wallet —
+//             or, on Pro with the clinic's own number connected (0261), goes
+//             from that number and the clinic pays Meta itself;
 //   email     is free — sent from no-reply@ under the clinic's name, with
 //             replies going to the clinic's own address.
 // A caller that names no channel (the app before 1.2) gets what it always
@@ -26,6 +28,16 @@ import { canSendTemplate, sendTemplate, type WaProvider } from './whatsapp.ts'
 import { emailConfigured, esc, layout, sendEmail } from './email.ts'
 
 export type Channel = 'whatsapp' | 'email'
+
+/**
+ * 0261: the clinic's own WhatsApp number and the key to send from it, when it
+ * is on Pro with a connected number; null otherwise (our number, the wallet).
+ */
+// deno-lint-ignore no-explicit-any
+export async function ownSender(supabase: any, businessId: string): Promise<{ phoneNumberId: string; token: string } | null> {
+  const { data } = await supabase.rpc('sehat_wa_own_sender', { p_business: businessId })
+  return data?.phone_number_id && data?.token ? { phoneNumberId: String(data.phone_number_id), token: String(data.token) } : null
+}
 
 /** The channel a request asked for; undefined when it named none. */
 export const asChannel = (v: unknown): Channel | undefined => v === 'whatsapp' || v === 'email' ? v : undefined
@@ -85,13 +97,27 @@ export async function sendDocumentLink(
 
   // ── WhatsApp ──
   let whatsappProvider: WaProvider | null = null
+  const own = t.channel === 'email' || !t.phone ? null : await ownSender(supabase, t.businessId)
   if (t.channel === 'email') {
     // Email was chosen: nothing goes on WhatsApp and nothing is charged.
   } else if (!t.phone) {
     errors.push('no phone number on the record')
-  } else if (!canSendTemplate({ campaignEnv: t.campaignEnv })) {
+  } else if (!canSendTemplate({ campaignEnv: t.campaignEnv, sender: own ?? undefined })) {
     // No provider carries this message yet: say so, and take no money.
     errors.push(`${t.campaignEnv} is not set`)
+  } else if (own) {
+    // 0261: the clinic's own number (Pro). The clinic pays Meta for it
+    // directly, so the wallet is not touched.
+    const r = await sendTemplate({
+      campaignEnv: t.campaignEnv, to: t.phone, userName: t.patientName,
+      params: [t.patientName, t.clinicName, t.link], sender: own,
+    })
+    whatsappProvider = r.provider
+    if (r.ok) {
+      sent.push('whatsapp')
+      await supabase.rpc('sehat_wa_clinic_sent', { p_phone: t.phone, p_business: t.businessId, p_message_id: r.id ?? null })
+        .then(() => undefined, () => undefined)
+    } else errors.push(r.error ?? 'whatsapp: not sent')
   } else {
     // Charged first, under the wallet's lock; put back if the message does not go.
     const { data: charge, error: cErr } = await supabase.rpc('sehat_wallet_charge_direct', {

@@ -250,9 +250,9 @@ export default function Queue({ businessId, practitionerId, onConsult }: {
       </div>
 
       {done.length > 0 && (
-        <div style={card}>
-          <div style={{ ...label, marginBottom: 10 }}>Finished ({done.length})</div>
-          <div style={{ display: 'grid', gap: 6 }}>
+        <details style={card}>
+          <summary style={{ ...label, cursor: 'pointer' }}>Finished ({done.length}) — show</summary>
+          <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
             {done.map(e => (
               <div key={e.id} style={{ fontSize: 13, color: BIZ.muted, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                 <span>
@@ -272,7 +272,7 @@ export default function Queue({ businessId, practitionerId, onConsult }: {
               </div>
             ))}
           </div>
-        </div>
+        </details>
       )}
     </div>
   )

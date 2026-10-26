@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
+import Fold from '../../components/Fold'
 import { supabase } from '../../lib/supabase'
 import { moneyExact, isoDate } from '../../lib/format'
 import { methodLabel, downloadCsv, getDayHeads, HEAD_LABELS } from '../../lib/billingApi'
@@ -142,7 +143,8 @@ export default function CollectionsPanel({ businessId, seesEveryone }: { busines
               </table>
             </div>
 
-            <div className="card shadow-sm p-0 overflow-x-auto">
+            <Fold title="Every payment" summary={`${shown.length} in these dates`}>
+            <div className="overflow-x-auto -mx-1">
               <table className="w-full text-xs">
                 <thead><tr className="text-left text-gray-500 border-b">
                   <th className="px-3 py-2">When</th><th>Counter</th><th>Patient</th><th>Bill</th><th>Method</th><th>Reference</th><th>Taken by</th><th className="text-right px-3">Amount</th>
@@ -162,6 +164,7 @@ export default function CollectionsPanel({ businessId, seesEveryone }: { busines
               </table>
               <p className="text-xs text-gray-400 px-3 py-2">Pharmacy refunds show as minus amounts. "Not recorded" is a clinic payment taken before names were kept.</p>
             </div>
+            </Fold>
           </>
         )}
 
@@ -170,8 +173,8 @@ export default function CollectionsPanel({ businessId, seesEveryone }: { busines
         const taken = (rows ?? []).reduce((s, r) => s + r.amount, 0)
         const gap = Math.round((billed - taken) * 100) / 100
         return (
-          <div className="card shadow-sm p-0 overflow-x-auto">
-            <p className="px-3 pt-3 font-bold text-navy-700 text-sm">Charged in these dates, by head</p>
+          <Fold title="Charged vs collected" summary={`${moneyExact(billed)} charged · ${moneyExact(taken)} collected${gap > 0.004 ? ` · ${moneyExact(gap)} not yet paid` : ''}`}>
+          <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <tbody>
                 {[...heads].sort((a, b) => b.amount - a.amount).map(h => (
@@ -198,12 +201,13 @@ export default function CollectionsPanel({ businessId, seesEveryone }: { busines
               Charges before discounts given on a bill.
             </p>
           </div>
+          </Fold>
         )
       })()}
 
       {seesEveryone && changes.length > 0 && (
-        <div className="card shadow-sm p-0 overflow-x-auto">
-          <p className="px-3 pt-3 font-bold text-navy-700 text-sm">Payments changed or removed</p>
+        <Fold title={<span className="text-amber-800">Payments changed or removed</span>} summary={`${changes.length}`}>
+        <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <tbody>{changes.map(c => (
               <tr key={c.id} className="border-t">
@@ -219,6 +223,7 @@ export default function CollectionsPanel({ businessId, seesEveryone }: { busines
             ))}</tbody>
           </table>
         </div>
+        </Fold>
       )}
     </div>
   )

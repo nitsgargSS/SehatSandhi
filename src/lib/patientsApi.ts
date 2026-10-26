@@ -22,6 +22,8 @@ import { supabase } from './supabase'
 import { activeConfig } from './env'
 
 export interface PatientSearchResult {
+  /** 0267: another name they go by — a maiden name. */
+  also_known_as?: string | null
   patient_member_id: string
   business_id: string
   full_name: string
@@ -35,6 +37,8 @@ export interface PatientSearchResult {
 }
 
 export interface PatientSummary {
+  /** 0267: another name they go by — a maiden name. */
+  also_known_as?: string | null
   patient_member_id: string
   business_id: string
   full_name: string
@@ -694,6 +698,8 @@ export interface NewPatient {
   /** 0258: the returning patient picked at the counter — the visit goes on
    *  this record whatever spelling or which of their numbers was typed. */
   memberId?: string | null
+  /** 0267: a maiden name or other name to find them by. */
+  alsoKnownAs?: string
 }
 
 /**
@@ -719,7 +725,14 @@ export async function registerPatient(businessId: string, p: NewPatient): Promis
     p_member: p.memberId || null,
   })
   if (error) throw new Error(error.message)
+  if (p.alsoKnownAs?.trim()) await setAlsoKnownAs(businessId, data as string, p.alsoKnownAs)
   return data as string
+}
+
+/** 0267: set or clear the other name a patient goes by. Logged like any correction. */
+export async function setAlsoKnownAs(businessId: string, memberId: string, name: string) {
+  const { error } = await supabase.rpc('sehat_set_also_known_as', { p_business: businessId, p_member: memberId, p_name: name.trim() || null })
+  if (error) throw new Error(error.message)
 }
 
 /** 0183: the patient's address (on the family's account). */

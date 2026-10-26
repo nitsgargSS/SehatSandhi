@@ -26,8 +26,10 @@ import {
 // the CSV, so the sheet a clinic downloads cannot disagree with the screen it
 // was looking at when it clicked.
 
-export default function RevenuePanel({ businessId, practitionerId = null, title, subtitle }: {
+export default function RevenuePanel({ businessId, practitionerId = null, title, subtitle, onOpen }: {
   businessId: string
+  /** Open the bills behind "Billed", or the payments behind "Collected". */
+  onOpen?: (what: 'billed' | 'collected') => void
   /** 0121: one doctor's earnings. A doctor is always shown their own. */
   practitionerId?: string | null
   title?: string
@@ -109,8 +111,8 @@ export default function RevenuePanel({ businessId, practitionerId = null, title,
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatTile label="Billed" value={moneyExact(total('billed_total'))} sub="what you charged" />
-            <StatTile label="Collected" value={moneyExact(total('collected'))} sub="what you received" />
+            <StatTile label="Billed" value={moneyExact(total('billed_total'))} sub="what you charged" onClick={onOpen ? () => onOpen('billed') : undefined} />
+            <StatTile label="Collected" value={moneyExact(total('collected'))} sub="what you received" onClick={onOpen ? () => onOpen('collected') : undefined} />
             <StatTile label="OPD fees" value={moneyExact(total('consultation'))} />
             <StatTile label="Admission & bed" value={moneyExact(total('bed'))} />
           </div>

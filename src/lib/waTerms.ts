@@ -15,7 +15,7 @@
 // These are the working terms, written to be read in a minute. Have them
 // checked by a lawyer before they are relied on.
 
-export const WA_TERMS_VERSION = '2026-10-24'
+export const WA_TERMS_VERSION = '2026-10-26'
 
 export const WA_TERMS: { title: string; text: string }[] = [
   {
@@ -44,19 +44,23 @@ export const WA_TERMS: { title: string; text: string }[] = [
   },
   {
     title: 'What it costs',
-    text: 'While your WhatsApp add-on is active you get free messages every month — 200 at present, the number shown on your WhatsApp tab. They are used first, for one-to-one messages only: a prescription, a bill, a report or a request for a review; not for broadcasts. Your month runs from the day your add-on started; free messages left at its end lapse and cannot be carried over, exchanged or refunded. After them, each message is paid for from your WhatsApp wallet at the price shown before you send: one price for a broadcast message, and a lower one for a one-to-one message. A message that is not delivered is given back automatically — a free message to that month, a paid one to your wallet. Wallet top-ups are not refundable to a bank account or card (see the Refund Policy).',
+    text: 'While your WhatsApp add-on is active you get free messages every month — 200 at present, the number shown on your WhatsApp tab. They are used first, for one-to-one messages only: a prescription, a bill, a report or a request for a review; not for broadcasts. Your month runs from the day your add-on started; free messages left at its end lapse and cannot be carried over, exchanged or refunded. After them, each message is paid for from your WhatsApp wallet at the price shown before you send: one price for a broadcast message, and a lower one for a one-to-one message. A message that is not delivered is given back automatically — a free message to that month, a paid one to your wallet. Wallet top-ups are not refundable to a bank account or card (see the Refund Policy). On WhatsApp Pro, once your clinic’s own number is connected, Meta charges your own card for every message from it, at Meta’s prices; that is between you and Meta, and Sehatsandhi neither charges for nor refunds those messages. Until it is connected, Pro’s automatic messages from the Sehatsandhi number are included in the Pro fee.',
+  },
+  {
+    title: 'Automatic messages (WhatsApp Pro)',
+    text: 'On WhatsApp Pro, Sehatsandhi sends these on your clinic’s behalf, each one only while you keep it switched on in your WhatsApp tab: a welcome when a patient is registered; the prescription and bill after the visit; a thank-you asking for a rating, at most once in 30 days per patient; and a reminder the day before a follow-up date your doctor wrote. They go only to your own patients, never between 9 pm and 8 am, and never to anyone who has said STOP. Patients who have the Sehatsandhi app get them in the app instead. You are responsible for what you record — the patient’s number, the prescription, the bill and the follow-up date — because that is what is sent.',
   },
   {
     title: 'Asking for reviews',
     text: 'You may ask a patient who visited you for a review. You will not ask for a particular rating, offer anything in return, or write a review on a patient’s behalf. A review is the patient’s own words.',
   },
   {
-    title: 'Sent from Sehatsandhi’s number',
-    text: 'Messages go from Sehatsandhi’s WhatsApp number for clinics, with your clinic’s name in the message. WhatsApp limits how many promotional messages a person receives, so a few patients may not get a given message; those are refunded.',
+    title: 'Which number messages are sent from',
+    text: 'On WhatsApp Basic, messages go from Sehatsandhi’s WhatsApp number for clinics, with your clinic’s name in the message. On WhatsApp Pro you may connect your clinic’s own number through Meta; messages then go from it, in your clinic’s name, and you are also bound by Meta’s WhatsApp Business terms and policies for that number — including keeping your card in Meta and your business details correct. You can disconnect it at any time, and messages then go from the Sehatsandhi number again. WhatsApp limits how many promotional messages a person receives, so a few patients may not get a given message; those sent from the Sehatsandhi number are refunded.',
   },
   {
     title: 'If the rules are broken',
-    text: 'If patients report or block your messages in numbers, or these terms are broken, Sehatsandhi may pause or end your clinic’s WhatsApp sending to protect the number every clinic shares.',
+    text: 'If patients report or block your messages in numbers, or these terms are broken, Sehatsandhi may pause or end your clinic’s WhatsApp sending — including the automatic messages, and sending from your own number through Sehatsandhi — to protect patients and the number every clinic shares. Meta may also limit or block your own number under its own rules.',
   },
 ]
 

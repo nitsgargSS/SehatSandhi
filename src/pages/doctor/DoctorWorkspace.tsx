@@ -9,6 +9,7 @@ import RevenuePanel from './RevenuePanel'
 import VisitRegister, { type RegisterRequest } from './VisitRegister'
 import type { RegisterKind } from '../../lib/patientsApi'
 import PublicProfileEditor from './PublicProfileEditor'
+import Fold from '../../components/Fold'
 
 // One hospital, many doctors (0121). All patients live in the business; every
 // visit, admission, prescription, token and charge says which doctor it is for.
@@ -136,14 +137,53 @@ function TodayAppointments({ businessId, practitionerId }: { businessId: string;
   )
 }
 
-function Tiles({ r, onShow }: { r: DoctorPerformanceRow | undefined; onShow?: (kind: RegisterKind) => void }) {
+// ── The appointments behind an "Appointments" number ────────────────────────
+function AppointmentsList({ businessId, practitionerId, from, to, onClose }: {
+  businessId: string; practitionerId: string | null; from: string; to: string; onClose: () => void
+}) {
+  const [rows, setRows] = useState<{ id: string; patient_name: string; slot_datetime: string; status: string; practitioners: { full_name: string } | null }[] | null>(null)
+  useEffect(() => {
+    let q = supabase.from('appointments').select('id, patient_name, slot_datetime, status, practitioners(full_name)')
+      .eq('business_id', businessId)
+      .gte('slot_datetime', `${from}T00:00:00+05:30`).lte('slot_datetime', `${to}T23:59:59+05:30`)
+      .order('slot_datetime', { ascending: false }).limit(500)
+    if (practitionerId) q = q.eq('practitioner_id', practitionerId)
+    q.then(({ data }) => setRows((data ?? []) as unknown as NonNullable<typeof rows>))
+  }, [businessId, practitionerId, from, to])
+  return (
+    <div className="card shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-bold text-navy-700">Appointments · {shortDate(from)} to {shortDate(to)}{rows ? ` · ${rows.length}` : ''}</h3>
+        <button onClick={onClose} className="text-xs text-gray-500 hover:text-navy-700">Close</button>
+      </div>
+      {!rows ? <p className="text-sm text-gray-400">Loading…</p> : !rows.length ? <p className="text-sm text-gray-400">No appointments in this period.</p> : (
+        <div className="divide-y divide-gray-100 text-sm max-h-96 overflow-y-auto">
+          {rows.map(r => (
+            <div key={r.id} className="py-2 flex justify-between gap-3">
+              <span>
+                <b>{shortDate(r.slot_datetime)}, {new Date(r.slot_datetime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</b> · {r.patient_name}
+                {!practitionerId && r.practitioners?.full_name && <span className="text-xs text-gray-500"> · {r.practitioners.full_name}</span>}
+              </span>
+              <span className="text-xs text-gray-500 capitalize">{r.status.replace(/_/g, ' ')}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Tiles({ r, onShow, onAppointments, onMoney }: {
+  r: DoctorPerformanceRow | undefined; onShow?: (kind: RegisterKind) => void
+  onAppointments?: () => void; onMoney?: () => void
+}) {
   if (!r) return null
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <StatTile label="Appointments" value={r.appointments} sub={`${r.completed} seen · ${r.no_shows} no-show`} />
+      <StatTile label="Appointments" value={r.appointments} sub={`${r.completed} seen · ${r.no_shows} no-show`} onClick={onAppointments} />
       <StatTile label="OPD visits" value={r.opd_visits} sub={`${r.prescriptions} prescriptions`} onClick={onShow ? () => onShow('visits') : undefined} />
       <StatTile label="Admissions" value={r.admissions} sub={`${r.discharges} discharged`} onClick={onShow ? () => onShow('admissions') : undefined} />
-      <StatTile label="Billed / collected" value={inr(r.billed)} sub={`${inr(r.collected)} collected`} />
+      <StatTile label="Billed / collected" value={inr(r.billed)} sub={`${inr(r.collected)} collected`} onClick={onMoney} />
     </div>
   )
 }
@@ -283,6 +323,8 @@ export function MyPractice({ businessId, practitionerId, doctorName, onOpenPatie
   const [req, setReq] = useState<RegisterRequest | null>(null)
   const show = (kind: RegisterKind) => { const { from, to } = periodRange(period); setReq({ kind, from, to, doctorId: practitionerId, nonce: Date.now() }) }
   const [row, setRow] = useState<DoctorPerformanceRow | undefined>()
+  const [apptsOpen, setApptsOpen] = useState(false)
+  const [moneyOpen, setMoneyOpen] = useState(0)
   const [error, setError] = useState('')
   useEffect(() => {
     const { from, to } = periodRange(period)
@@ -301,25 +343,48 @@ export function MyPractice({ businessId, practitionerId, doctorName, onOpenPatie
         <PeriodChips value={period} onChange={setPeriod} />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Tiles r={row} onShow={show} />
-      <VisitRegister businessId={businessId} defaultDoctorId={practitionerId} request={req}
-        title="My patients by date" onOpen={(m, v) => onOpenPatient(m, v)} />
-      <OpdFee businessId={businessId} practitionerId={practitionerId} />
-      <PublicProfileEditor practitionerId={practitionerId} />
+      <Tiles r={row} onShow={show} onAppointments={() => setApptsOpen(true)} onMoney={() => setMoneyOpen(Date.now())} />
+      {apptsOpen && (
+        <AppointmentsList businessId={businessId} practitionerId={practitionerId} {...periodRange(period)} onClose={() => setApptsOpen(false)} />
+      )}
       <TodayAppointments businessId={businessId} practitionerId={practitionerId} />
-      <PatientList businessId={businessId} practitionerId={practitionerId} onOpenPatient={onOpenPatient} />
-      <RevenuePanel businessId={businessId} practitionerId={practitionerId}
-        title="What you earned" subtitle="Charges credited to you: your consultations, and bed, medicine and procedure charges on patients admitted under you." />
-      <DiscountsGiven businessId={businessId} practitionerId={practitionerId} period={period} />
+      {/* 26 Oct 2026: the rest one line each, open on demand. */}
+      <Fold ownCard title="My patients by date" summary={row ? `${row.patients} patients · ${row.opd_visits} visits` : undefined} open={req?.nonce}>
+        <VisitRegister businessId={businessId} defaultDoctorId={practitionerId} request={req}
+          title="My patients by date" onOpen={(m, v) => onOpenPatient(m, v)} />
+      </Fold>
+      <Fold ownCard title="Find a patient of mine">
+        <PatientList businessId={businessId} practitionerId={practitionerId} onOpenPatient={onOpenPatient} />
+      </Fold>
+      <Fold ownCard id={`earnings-${practitionerId}`} title="What you earned" open={moneyOpen}
+        summary={row ? `${inr(row.billed)} billed · ${inr(row.collected)} collected` : undefined}>
+        <RevenuePanel businessId={businessId} practitionerId={practitionerId}
+          title="What you earned" subtitle="Charges credited to you: your consultations, and bed, medicine and procedure charges on patients admitted under you." />
+      </Fold>
+      <Fold ownCard title="Discounts given">
+        <DiscountsGiven businessId={businessId} practitionerId={practitionerId} period={period} />
+      </Fold>
+      <Fold ownCard title="OPD fee" summary="set once">
+        <OpdFee businessId={businessId} practitionerId={practitionerId} />
+      </Fold>
+      <Fold ownCard title="Public profile" summary="photo, languages, specialities, about">
+        <PublicProfileEditor practitionerId={practitionerId} />
+      </Fold>
     </div>
   )
 }
 
 // ── Every doctor, for the owner and manager ─────────────────────────────────
-export function DoctorsOverview({ businessId, onOpenPatient }: {
+export function DoctorsOverview({ businessId, onOpenPatient, onGoTo }: {
   businessId: string; onOpenPatient: (memberId: string) => void
+  /** Open another tab of the dashboard — billed and collected, in Collections. */
+  onGoTo?: (tab: 'collections') => void
 }) {
   const [period, setPeriod] = useState<Period>('month')
+  // A total opens what is behind it: the appointments, or the visits/admissions register.
+  const [apptsOpen, setApptsOpen] = useState(false)
+  const [req, setReq] = useState<RegisterRequest | null>(null)
+  const showRegister = (kind: RegisterKind) => { const { from, to } = periodRange(period); setApptsOpen(false); setReq({ kind, from, to, doctorId: null, nonce: Date.now() }) }
   const [rows, setRows] = useState<DoctorPerformanceRow[]>([])
   const [open, setOpen] = useState<DoctorPerformanceRow | null>(null)
   const [error, setError] = useState('')
@@ -367,11 +432,13 @@ export function DoctorsOverview({ businessId, onOpenPatient }: {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="Appointments" value={total.appointments} />
-        <StatTile label="OPD visits" value={total.opd_visits} />
-        <StatTile label="Admissions" value={total.admissions} />
-        <StatTile label="Billed / collected" value={inr(total.billed)} sub={`${inr(total.collected)} collected`} />
+        <StatTile label="Appointments" value={total.appointments} onClick={() => { setReq(null); setApptsOpen(true) }} active={apptsOpen} />
+        <StatTile label="OPD visits" value={total.opd_visits} onClick={() => showRegister('visits')} active={req?.kind === 'visits'} />
+        <StatTile label="Admissions" value={total.admissions} onClick={() => showRegister('admissions')} active={req?.kind === 'admissions'} />
+        <StatTile label="Billed / collected" value={inr(total.billed)} sub={`${inr(total.collected)} collected`} onClick={onGoTo ? () => onGoTo('collections') : undefined} />
       </div>
+      {apptsOpen && <AppointmentsList businessId={businessId} practitionerId={null} {...periodRange(period)} onClose={() => setApptsOpen(false)} />}
+      {req && <VisitRegister businessId={businessId} request={req} title="Every doctor's patients by date" onOpen={(m) => onOpenPatient(m)} />}
       <div className="card shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="text-left text-xs text-gray-400 border-b border-gray-100">

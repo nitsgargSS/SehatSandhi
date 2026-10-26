@@ -38,10 +38,12 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
-  let body: { businessId?: unknown; action?: unknown }
+  let body: { businessId?: unknown; action?: unknown; months?: unknown; plan?: unknown }
   try { body = await req.json() } catch { return json({ error: 'invalid JSON' }, 400) }
   const businessId = typeof body.businessId === 'string' ? body.businessId : ''
   const action = body.action === 'order' ? 'order' : 'quote'
+  // 0262: Basic (₹500 a month) or Pro (the clinic's own number and automatic messages).
+  const waPlan: 'basic' | 'pro' = body.plan === 'pro' ? 'pro' : 'basic'
   if (!businessId) return json({ error: 'businessId required' }, 400)
 
   const who = caller(req)
@@ -64,7 +66,7 @@ Deno.serve(async (req) => {
   const today = todayIst()
   const terms = await resolveTypeTerms(db, b.vertical)
   const { data: acct } = await db.from('business_wa_accounts')
-    .select('subscription_status, next_billing_date').eq('business_id', businessId).maybeSingle()
+    .select('subscription_status, next_billing_date, plan, complimentary').eq('business_id', businessId).maybeSingle()
   const waEnd = acct?.next_billing_date ? new Date(`${String(acct.next_billing_date).slice(0, 10)}T00:00:00Z`) : null
 
   // 0195: a business type that lists free (insurance advisors) has no paid
@@ -79,17 +81,18 @@ Deno.serve(async (req) => {
   let daysLeft: number
   let daysInTerm: number
   let startDay = today
+  let upgrading = false
   if (listsFree) {
     if (b.status !== 'active') {
       return json({ error: 'no_active_term', message: 'Your listing is not active yet.' }, 409)
     }
     termMonths = [1, 6, 12].includes(Number(body.months)) ? Number(body.months) : 1
     if (acct && acct.subscription_status !== 'inactive' && waEnd && waEnd.getTime() > today.getTime() + 7 * DAY) {
-      return json({ error: 'already_active', message: `WhatsApp is on until ${isoDate(waEnd)}. You can renew it in the last week.` }, 409)
+      return json({ error: 'already_active', message: `WhatsApp is on until ${isoDate(waEnd)}. You can renew it${waPlan === 'pro' && acct.plan !== 'pro' ? ', and move to Pro,' : ''} in the last week.` }, 409)
     }
     if (waEnd && waEnd.getTime() > today.getTime()) startDay = waEnd
     const term = terms.find(t => t.months === termMonths)
-    fullFee = Number(term?.whatsapp_price ?? 0)
+    fullFee = Number((waPlan === 'pro' ? term?.whatsapp_pro_price : term?.whatsapp_price) ?? 0)
     if (!(fullFee > 0)) {
       return json({ error: 'not_offered', message: 'WhatsApp is not offered for this business type.' }, 409)
     }
@@ -106,14 +109,25 @@ Deno.serve(async (req) => {
     end = termEnd
 
     // ── Not already on for this term ──
-    if (acct && acct.subscription_status !== 'inactive' && (!waEnd || waEnd.getTime() >= end.getTime())) {
-      return json({ error: 'already_active', message: 'WhatsApp is already included until your plan ends.' }, 409)
+    // 0262: on Basic for the term, Pro can still be bought — for the
+    // difference between the two, for the days left.
+    const onForTerm = !!acct && acct.subscription_status !== 'inactive' && (!waEnd || waEnd.getTime() >= end.getTime())
+    upgrading = onForTerm && waPlan === 'pro' && acct!.plan !== 'pro'
+    if (onForTerm && !upgrading) {
+      return json({ error: 'already_active', message: waPlan === 'pro' || acct!.plan !== 'pro'
+        ? 'WhatsApp is already included until your plan ends.'
+        : 'You are on WhatsApp Pro until your plan ends. You can choose Basic when you renew.' }, 409)
+    }
+    if (upgrading && acct!.complimentary) {
+      return json({ error: 'complimentary', message: 'WhatsApp is free for your clinic. Ask Sehatsandhi to move you to Pro.' }, 409)
     }
 
     // ── The fee for the term the business is on ──
     termMonths = [1, 3, 6, 12].includes(Number(b.months_paid)) ? Number(b.months_paid) : 1
     const term = terms.find(t => t.months === termMonths)
-    fullFee = Number(term?.whatsapp_price ?? 0)
+    fullFee = waPlan === 'pro'
+      ? Number(term?.whatsapp_pro_price ?? 0) - (upgrading ? Number(term?.whatsapp_price ?? 0) : 0)
+      : Number(term?.whatsapp_price ?? 0)
     if (!(fullFee > 0)) {
       return json({ error: 'not_offered', message: 'WhatsApp is not offered for this business type.' }, 409)
     }
@@ -136,12 +150,15 @@ Deno.serve(async (req) => {
     : applyGst(amount, taxSettings, recipientState)
 
   const label = termLabel(termMonths)
+  const what = upgrading
+    ? 'Upgrade to WhatsApp Pro (own number and automatic messages)'
+    : waPlan === 'pro' ? 'WhatsApp Pro — own number and automatic messages' : 'WhatsApp Business Verification & Activation Fee'
   const lineItems = [{
-    label: `WhatsApp Business Verification & Activation Fee — ${label}, ${daysLeft} of ${daysInTerm} days (${isoDate(startDay)} to ${isoDate(end)})`,
+    label: `${what} — ${label}, ${daysLeft} of ${daysInTerm} days (${isoDate(startDay)} to ${isoDate(end)})`,
     amount,
   }]
   const quote = {
-    ok: true, termMonths, termLabel: label, termStart: isoDate(startDay), termEnd: isoDate(end), standalone: listsFree,
+    ok: true, plan: waPlan, upgrading, termMonths, termLabel: label, termStart: isoDate(startDay), termEnd: isoDate(end), standalone: listsFree,
     daysLeft, daysInTerm, fullFee, amount, tax, lineItems,
   }
   if (action === 'quote') return json(quote)
@@ -169,6 +186,7 @@ Deno.serve(async (req) => {
     subscription_amount: 0,
     whatsapp_addon: true,
     whatsapp_amount: amount,
+    whatsapp_plan: waPlan,
     coupon_discount: 0,
     line_items: lineItems,
   }).select('id').single()

@@ -30,6 +30,7 @@ type Biz = Business & {
   auto_renew?: boolean | null
   renewal_term_months?: number | null
   renewal_whatsapp?: boolean | null
+  renewal_whatsapp_plan?: 'basic' | 'pro' | null
   months_paid?: number | null
 }
 
@@ -46,6 +47,10 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
   const [months, setMonths] = useState(initialMonths)
   // Ticked unless they chose to leave it out (0119): null = never chose.
   const [whatsapp, setWhatsapp] = useState(b.renewal_whatsapp !== false)
+  // 0262: Basic or Pro.
+  const [waPlan, setWaPlan] = useState<'basic' | 'pro'>(b.renewal_whatsapp_plan === 'pro' ? 'pro' : 'basic')
+  const waFee = (t?: { whatsapp_price?: number; whatsapp_pro_price?: number }) =>
+    (waPlan === 'pro' ? t?.whatsapp_pro_price : t?.whatsapp_price) ?? 0
   // 0259: the free messages that come with the add-on, from the one settings row.
   const [freePerMonth, setFreePerMonth] = useState<number | null>(null)
   useEffect(() => {
@@ -74,11 +79,11 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
     if (!pins.length) return
     const id = ++req.current
     setPricing(true)
-    computePrice(pins, b.id, null, months, null, modules, { whatsapp, couponCode: couponCode || undefined })
+    computePrice(pins, b.id, null, months, null, modules, { whatsapp, whatsappPlan: waPlan, couponCode: couponCode || undefined })
       .then(p => { if (id === req.current) { setPrice(p); setError('') } })
       .catch(e => { if (id === req.current) setError((e as Error).message) })
       .finally(() => { if (id === req.current) setPricing(false) })
-  }, [pins.join(','), b.id, months, whatsapp, couponCode, modules.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pins.join(','), b.id, months, whatsapp, waPlan, couponCode, modules.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const g = gstin.trim().toUpperCase()
   const gstState = !g ? 'empty' : g.length < 15 ? 'partial' : isValidGstin(g) ? 'ok' : 'bad'
@@ -91,6 +96,8 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
   const lastDay = termEnd ? new Date(termEnd.getTime() - 86_400_000) : null
   const daysLeft = termEnd ? Math.ceil((termEnd.getTime() - Date.now()) / 86_400_000) : null
   const paidUp = active && daysLeft !== null && daysLeft > 0
+  // 26 Oct 2026: paid up, the plan choices stay closed until asked for.
+  const [changing, setChanging] = useState(false)
   const terms = price?.terms ?? []
 
   const saveChoice = async () => {
@@ -98,9 +105,10 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
     const { error: e } = await supabase.rpc('sehat_set_renewal_preference', {
       p_business: b.id, p_months: months, p_whatsapp: whatsapp, p_auto_renew: autoRenew,
     })
+    const e2 = !e && whatsapp ? (await supabase.rpc('sehat_set_renewal_whatsapp_plan', { p_business: b.id, p_plan: waPlan })).error : null
     setBusy(false)
-    if (e) setError(e.message)
-    else setMsg(`Saved. Your next renewal will be ${months === 1 ? '1 month' : `${months} months`}${whatsapp ? ' with WhatsApp' : ''}${autoRenew ? ', renewed automatically' : ''}.`)
+    if (e || e2) setError((e ?? e2)!.message)
+    else setMsg(`Saved. Your next renewal will be ${months === 1 ? '1 month' : `${months} months`}${whatsapp ? ` with WhatsApp ${waPlan === 'pro' ? 'Pro' : 'Basic'}` : ''}${autoRenew ? ', renewed automatically' : ''}.`)
   }
 
   const pay = async () => {
@@ -115,7 +123,7 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
       if (!session) throw new Error('Please sign in again.')
       const order = await createRazorpayOrder(pins, b.id, months, modules, {
         ...(gstState === 'ok' ? { gstin: g, billingAddress: b.address || undefined } : {}),
-        whatsapp, couponCode: couponCode || undefined, autoRenew,
+        whatsapp, whatsappPlan: waPlan, couponCode: couponCode || undefined, autoRenew,
       }, session.access_token)
       await loadRazorpayCheckout()
       const Razorpay = (window as unknown as { Razorpay: new (o: unknown) => { open: () => void } }).Razorpay
@@ -173,13 +181,20 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
         )}
       </div>
 
-      {paidUp && termEnd && (
+      {paidUp && termEnd && !changing && (
+        <div className="flex items-center justify-between gap-3 flex-wrap text-sm text-gray-600">
+          <span><b>Nothing is due now.</b></span>
+          {canPay && <button onClick={() => setChanging(true)} className="text-teal-700 font-semibold hover:underline">Change plan or renew early</button>}
+        </div>
+      )}
+      {paidUp && termEnd && changing && (
         <p className="text-sm text-gray-600">
-          <b>Nothing is due now.</b> Below you can choose your next plan, or renew early — a renewal starts on {dmy(termEnd)}, after your current plan, so no days are lost.
+          A renewal starts on {dmy(termEnd)}, after your current plan, so no days are lost.{' '}
+          <button onClick={() => setChanging(false)} className="text-teal-700 font-semibold hover:underline">Close</button>
         </p>
       )}
 
-      {!canPay ? (
+      {paidUp && termEnd && !changing ? null : !canPay ? (
         <p className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">
           Only the owner of {b.name} can pay or change the plan. Please ask them to log in.
         </p>
@@ -193,7 +208,7 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
                   <button key={t.months} onClick={() => setMonths(t.months)}
                     className={`text-sm px-3 py-2.5 rounded-lg border text-left ${months === t.months ? 'bg-teal-50 border-teal-500 text-teal-800' : 'bg-white border-gray-200 text-gray-700'}`}>
                     <div className="font-semibold">{t.label || `${t.months} months`}</div>
-                    <div>{t.price > 0 ? inr(t.price) : 'No subscription'}{whatsapp && (t.whatsapp_price ?? 0) > 0 ? ` + WhatsApp ${inr(t.whatsapp_price ?? 0)}` : ''}</div>
+                    <div>{t.price > 0 ? inr(t.price) : 'No subscription'}{whatsapp && waFee(t) > 0 ? ` + WhatsApp ${waPlan === 'pro' ? 'Pro ' : ''}${inr(waFee(t))}` : ''}</div>
                     {t.savings_note && <div className="text-xs text-teal-700">{t.savings_note}</div>}
                   </button>
                 ))}
@@ -202,15 +217,32 @@ export default function PayListingPanel({ business, canPay, onPaid }: {
           )}
 
           {price?.whatsappAvailable && (
-            <label className="flex items-start gap-2 text-sm bg-gray-50 rounded-lg px-3 py-2.5">
-              <input type="checkbox" checked={whatsapp} onChange={e => setWhatsapp(e.target.checked)} className="mt-1" />
-              <span>
-                <b>WhatsApp messaging</b> — {inr(terms.find(t => t.months === months)?.whatsapp_price ?? 0)} for this term
-                (WhatsApp Business Verification &amp; Activation Fee).
-                {freePerMonth ? <> Includes <b>{freePerMonth} free messages a month</b> for prescriptions, bills and reports; after those, and for broadcasts, messages are paid from your WhatsApp wallet.</>
-                  : <> Messages are paid separately from your WhatsApp wallet.</>}
-              </span>
-            </label>
+            <div className="text-sm bg-gray-50 rounded-lg px-3 py-2.5 space-y-2">
+              <label className="flex items-start gap-2">
+                <input type="checkbox" checked={whatsapp} onChange={e => setWhatsapp(e.target.checked)} className="mt-1" />
+                <span><b>WhatsApp messaging</b> for this term</span>
+              </label>
+              {whatsapp && (
+                <div className="grid sm:grid-cols-2 gap-2 ml-6">
+                  <button type="button" onClick={() => setWaPlan('basic')}
+                    className={`text-left rounded-lg border px-3 py-2 ${waPlan === 'basic' ? 'border-teal-500 bg-white' : 'border-gray-200 bg-white/60'}`}>
+                    <div className="font-semibold">Basic — {inr(terms.find(t => t.months === months)?.whatsapp_price ?? 0)}</div>
+                    <div className="text-xs text-gray-500">
+                      Send prescriptions, bills and reports yourself from the Sehatsandhi number.
+                      {freePerMonth ? <> {freePerMonth} free messages a month; after those, and for broadcasts, from your WhatsApp wallet.</> : <> Messages are paid from your WhatsApp wallet.</>}
+                    </div>
+                  </button>
+                  <button type="button" onClick={() => setWaPlan('pro')}
+                    className={`text-left rounded-lg border px-3 py-2 ${waPlan === 'pro' ? 'border-teal-500 bg-white' : 'border-gray-200 bg-white/60'}`}>
+                    <div className="font-semibold">Pro — {inr(terms.find(t => t.months === months)?.whatsapp_pro_price ?? 0)}</div>
+                    <div className="text-xs text-gray-500">
+                      Your clinic’s own WhatsApp number and name. Sends by itself: welcome on registration, prescription and bill
+                      after the visit, a thank-you with a rating request, and follow-up reminders. You pay Meta for messages directly.
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           {(price?.subscriptionTotal ?? 0) > 0 && (

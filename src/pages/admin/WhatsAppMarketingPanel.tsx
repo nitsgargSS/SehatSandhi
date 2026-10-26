@@ -6,7 +6,7 @@ import {
   MarketingSettings, WaTemplate, MarketingReportRow, BroadcastForReview, rupees, renderTemplate,
   getMarketingSettings, updateMarketingSettings, listTemplates, updateTemplate, createTemplate,
   getMarketingReport, getWalletReport, type WalletReport, getWaCosts, type WaCosts, sendTestMessage, broadcastPicture, broadcastPictureUrl, adminSetWaAccount, adminWalletAdjust, listBroadcastsForReview, reviewBroadcast,
-  setWaComplimentary, listWaComplimentary,
+  setWaComplimentary, listWaComplimentary, listWaPlans, houseTemplates,
   getWaFreeOverview, adminSetWaFree, adminGrantWaFree, type WaFreeRow,
 } from '../../lib/marketingApi'
 
@@ -103,6 +103,7 @@ export default function WhatsAppMarketingPanel({ businesses, isManager = false }
 
       {!isManager && <ClinicsCard rows={rows} businesses={businesses} onChange={load} onError={setError} />}
       {!isManager && settings && <FreeMessagesCard perMonth={settings.free_messages_per_month} />}
+      {!isManager && <HouseTemplatesCard />}
     </div>
   )
 }
@@ -447,6 +448,9 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
   // 0157: clinics given WhatsApp free.
   const [comp, setComp] = useState<Record<string, { on: boolean; note: string | null }>>({})
   useEffect(() => { listWaComplimentary().then(setComp).catch(() => setComp({})) }, [rows])
+  // 0261: Basic or Pro, and whether a Pro clinic has connected its own number.
+  const [plans, setPlans] = useState<Record<string, { plan: 'basic' | 'pro'; own: string; number: string | null }>>({})
+  useEffect(() => { listWaPlans().then(setPlans).catch(() => setPlans({})) }, [rows])
 
   const candidates = useMemo(() => businesses.filter(b => !rows.some(r => r.business_id === b.id)), [businesses, rows])
 
@@ -481,7 +485,7 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-gray-400 border-b border-gray-100">
-              <th className="py-2 pr-3">Clinic</th><th className="pr-3">Number</th><th className="pr-3">Subscription</th>
+              <th className="py-2 pr-3">Clinic</th><th className="pr-3">Plan</th><th className="pr-3">Number</th><th className="pr-3">Subscription</th>
               <th className="pr-3">Opted in</th><th className="pr-3">Sent (month / all)</th><th className="pr-3">Last send</th>
               <th className="pr-3">Wallet</th><th className="pr-3">Recharged / spent</th><th className="pr-3">Free</th><th></th>
             </tr></thead>
@@ -493,6 +497,17 @@ function ClinicsCard({ rows, businesses, onChange, onError }: {
                   <td className="py-2.5 pr-3 font-medium text-navy-700">{r.business_name}
                     {neverSent && <div className="text-[11px] text-amber-700">Live but never sent — follow up</div>}
                     {dry && <div className="text-[11px] text-red-600">Empty wallet, no recent top-up</div>}
+                  </td>
+                  <td className="pr-3">
+                    <select value={plans[r.business_id]?.plan ?? 'basic'} className="text-xs border border-gray-200 rounded px-1.5 py-1"
+                      onChange={e => act(() => adminSetWaAccount(r.business_id, { plan: e.target.value as 'basic' | 'pro' }))}>
+                      <option value="basic">Basic</option><option value="pro">Pro</option>
+                    </select>
+                    {plans[r.business_id]?.plan === 'pro' && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">
+                        {plans[r.business_id].own === 'connected' ? `Own number ${plans[r.business_id].number ?? ''}` : 'Own number not connected'}
+                      </div>
+                    )}
                   </td>
                   <td className="pr-3">
                     <select value={r.wa_status ?? 'pending'} className="text-xs border border-gray-200 rounded px-1.5 py-1"
@@ -653,6 +668,50 @@ function FreeMessagesCard({ perMonth }: { perMonth: number }) {
               )
             })}</tbody>
           </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 0262: the templates in OUR WhatsApp account that clinics' messages from our
+// number use — including WhatsApp Pro's automatic messages.
+function HouseTemplatesCard() {
+  const [waba, setWaba] = useState('1461510652560252')
+  const [busy, setBusy] = useState(false)
+  const [r, setR] = useState<Awaited<ReturnType<typeof houseTemplates>> | null>(null)
+  const [err, setErr] = useState('')
+  const run = async (dryRun: boolean) => {
+    setBusy(true); setErr('')
+    try { setR(await houseTemplates(waba.trim(), dryRun)) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <div className="card shadow-sm space-y-3">
+      <h3 className="font-bold text-navy-700">Templates in our WhatsApp account</h3>
+      <p className="text-xs text-gray-500">
+        Clinics’ prescriptions, bills, reports and WhatsApp Pro’s automatic messages, when they go from the Sehatsandhi number, need these
+        templates approved in the account that number is in. “Create missing” adds any that are not there; Meta then reviews them.
+      </p>
+      <div className="flex gap-2 flex-wrap items-center">
+        <input value={waba} onChange={e => setWaba(e.target.value)} className="input-field text-sm w-56" aria-label="WhatsApp account id" />
+        <button onClick={() => run(true)} disabled={busy} className="btn-secondary text-sm disabled:opacity-50">Check</button>
+        <button onClick={() => run(false)} disabled={busy} className="btn-teal text-sm disabled:opacity-50">Create missing</button>
+      </div>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {r && (
+        <div className="text-sm space-y-2">
+          {r.message && <p className={r.ok ? 'text-gray-600' : 'text-red-600'}>{r.message}</p>}
+          {!!r.numbers?.length && <p className="text-xs text-gray-500">Numbers: {r.numbers.join(', ')}</p>}
+          {!!r.created?.length && <p className="text-xs">Created: {r.created.map(c => `${c.name}${c.ok ? '' : ` (failed: ${c.error})`}`).join(', ')}</p>}
+          <ul className="divide-y divide-gray-100">
+            {(r.templates ?? []).map(t => (
+              <li key={`${t.name}:${t.language}`} className="py-1 flex justify-between gap-2">
+                <span>{t.name} <span className="text-xs text-gray-400">{t.language} · {t.category?.toLowerCase()}</span>
+                  {t.reason && <span className="block text-[11px] text-red-600">{t.reason}</span>}</span>
+                <span className={`text-xs font-semibold ${t.status === 'APPROVED' ? 'text-green-700' : t.status === 'PENDING' ? 'text-amber-700' : 'text-red-600'}`}>{t.status}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

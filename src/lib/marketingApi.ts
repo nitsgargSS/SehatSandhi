@@ -34,6 +34,28 @@ export interface WaAccount {
   /** 0219: the messaging terms the owner accepted, and when. */
   terms_version?: string | null
   terms_accepted_at?: string | null
+  /** 0261: Basic (our number, by hand) or Pro (the clinic's own number, automatic messages). */
+  plan?: 'basic' | 'pro'
+  /** 0261: the clinic's own number, connected through Meta's Embedded Signup. */
+  phone_number_id?: string | null
+  verified_name?: string | null
+  name_status?: string | null
+  quality_rating?: string | null
+  messaging_limit?: string | null
+  coexistence?: boolean
+  own_status?: 'none' | 'connected' | 'failed' | 'disconnected'
+  own_error?: string | null
+  own_checked_at?: string | null
+  connected_at?: string | null
+}
+
+/** 0261: one of our templates in a clinic's own WhatsApp account. */
+export interface WaClinicTemplate {
+  name: string
+  language: string
+  status: string
+  reason: string | null
+  updated_at: string
 }
 
 export interface WalletTx {
@@ -202,14 +224,18 @@ export async function getBroadcastBlocker(businessId: string): Promise<string | 
   return data as string | null
 }
 
-export async function getAudiencePins(businessId: string): Promise<{ pin_code: string; patients: number }[]> {
+/** 0264: each PIN with its area name; '' is the patients with no PIN. */
+export interface AudiencePin { pin_code: string; patients: number; area: string | null }
+
+export async function getAudiencePins(businessId: string): Promise<AudiencePin[]> {
   const { data, error } = await supabase.rpc('sehat_marketing_audience_pins', { p_business: businessId })
   oops(error)
-  return ((data ?? []) as { pin_code: string; patients: number }[]).map(r => ({ ...r, patients: Number(r.patients) }))
+  return ((data ?? []) as AudiencePin[]).map(r => ({ ...r, patients: Number(r.patients) }))
 }
 
-export async function getAudience(businessId: string, pins: string[]): Promise<AudienceMember[]> {
-  const { data, error } = await supabase.rpc('sehat_marketing_audience', { p_business: businessId, p_pins: pins })
+/** pins empty = everyone; since (YYYY-MM-DD) = only patients seen at the clinic since that day (0264). */
+export async function getAudience(businessId: string, pins: string[], since?: string): Promise<AudienceMember[]> {
+  const { data, error } = await supabase.rpc('sehat_marketing_audience', { p_business: businessId, p_pins: pins, p_since: since ?? null })
   oops(error)
   return (data ?? []) as AudienceMember[]
 }
@@ -391,7 +417,7 @@ export async function getMarketingReport(): Promise<MarketingReportRow[]> {
   }))
 }
 
-export async function adminSetWaAccount(businessId: string, patch: Partial<Pick<WaAccount, 'status' | 'subscription_status' | 'whatsapp_number' | 'notes'>>) {
+export async function adminSetWaAccount(businessId: string, patch: Partial<Pick<WaAccount, 'status' | 'subscription_status' | 'whatsapp_number' | 'notes' | 'plan'>>) {
   const extra: Record<string, unknown> = {}
   if (patch.status === 'live') extra.onboarded_at = new Date().toISOString()
   if (patch.subscription_status === 'past_due') extra.past_due_since = new Date().toISOString()
@@ -521,4 +547,92 @@ export async function adminGrantWaFree(businessId: string, messages: number, rea
   const { data, error } = await supabase.rpc('sehat_admin_wa_free_grant', { p_business: businessId, p_messages: messages, p_reason: reason })
   oops(error)
   return data as WaFreeStatus
+}
+
+// ── 0261: the clinic's own WhatsApp number ──────────────────────────────────
+
+export async function listOwnTemplates(businessId: string): Promise<WaClinicTemplate[]> {
+  const { data, error } = await supabase.from('wa_clinic_templates')
+    .select('name, language, status, reason, updated_at').eq('business_id', businessId).order('name')
+  oops(error)
+  return (data ?? []) as WaClinicTemplate[]
+}
+
+/** Connect (after Embedded Signup), look again, or disconnect. The server does all the talking to Meta. */
+export async function waConnect(businessId: string, action: 'connect' | 'refresh' | 'disconnect',
+  extra: { code?: string; wabaId?: string; phoneNumberId?: string; coexistence?: boolean } = {}): Promise<{ ok: boolean; message?: string }> {
+  const { url, anon } = activeConfig()
+  if (!url || !anon) throw new Error('Not configured.')
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Please sign in again.')
+  const res = await fetch(`${url}/functions/v1/wa-connect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, apikey: anon },
+    body: JSON.stringify({ businessId, action, ...extra }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: !!body.ok, message: body.message ?? body.error }
+}
+
+/** 0261: each clinic's WhatsApp plan and own-number state, for the admin table. */
+export async function listWaPlans(): Promise<Record<string, { plan: 'basic' | 'pro'; own: string; number: string | null }>> {
+  const { data, error } = await supabase.from('business_wa_accounts').select('business_id, plan, own_status, whatsapp_number')
+  oops(error)
+  const out: Record<string, { plan: 'basic' | 'pro'; own: string; number: string | null }> = {}
+  for (const r of (data ?? []) as { business_id: string; plan: 'basic' | 'pro' | null; own_status: string | null; whatsapp_number: string | null }[]) {
+    out[r.business_id] = { plan: r.plan ?? 'basic', own: r.own_status ?? 'none', number: r.whatsapp_number }
+  }
+  return out
+}
+
+// ── 0262: WhatsApp Pro's automatic messages ─────────────────────────────────
+
+export interface WaAutoSettings {
+  welcome: boolean; visit_summary: boolean; thank_you: boolean; follow_up: boolean
+  thank_you_after_minutes: number
+}
+export const WA_AUTO_DEFAULTS: WaAutoSettings = { welcome: true, visit_summary: true, thank_you: true, follow_up: true, thank_you_after_minutes: 120 }
+
+export interface WaAutoOverview {
+  month: Record<string, { whatsapp: number; app: number; skipped: number; failed: number; waiting: number }>
+  recent: { kind: string; status: string; channel: string | null; why: string | null; name: string | null; created_at: string; sent_at: string | null; due_at: string }[]
+}
+
+export async function getAutoSettings(businessId: string): Promise<WaAutoSettings> {
+  const { data, error } = await supabase.from('wa_auto_settings')
+    .select('welcome, visit_summary, thank_you, follow_up, thank_you_after_minutes').eq('business_id', businessId).maybeSingle()
+  oops(error)
+  return (data as WaAutoSettings | null) ?? WA_AUTO_DEFAULTS
+}
+
+export async function saveAutoSettings(businessId: string, s: WaAutoSettings) {
+  const { error } = await supabase.rpc('sehat_wa_auto_settings_save', {
+    p_business: businessId, p_welcome: s.welcome, p_visit_summary: s.visit_summary, p_thank_you: s.thank_you,
+    p_follow_up: s.follow_up, p_thank_you_after_minutes: s.thank_you_after_minutes,
+  })
+  oops(error)
+}
+
+export async function getAutoOverview(businessId: string): Promise<WaAutoOverview> {
+  const { data, error } = await supabase.rpc('sehat_wa_auto_overview', { p_business: businessId })
+  oops(error)
+  return data as WaAutoOverview
+}
+
+/** 0262: our own WhatsApp account's templates for clinics' messages — checked, or the missing ones created. Admins. */
+export async function houseTemplates(wabaId: string, dryRun: boolean): Promise<{
+  ok: boolean; message?: string; numbers?: string[]; created?: { name: string; ok: boolean; error?: string }[]
+  templates?: { name: string; language: string; status: string; category: string; reason?: string }[]
+}> {
+  const { url, anon } = activeConfig()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!url || !anon || !session) throw new Error('Please sign in again.')
+  const res = await fetch(`${url}/functions/v1/wa-connect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, apikey: anon },
+    body: JSON.stringify({ action: 'house-templates', wabaId, dryRun }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok && !body.message) throw new Error(body.error ?? 'Could not reach Meta.')
+  return body
 }
