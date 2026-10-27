@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BedDouble, Check, FlaskConical, Pill, ScanLine } from 'lucide-react'
+import { BedDouble, Check, FlaskConical, Pill, ScanLine, Stethoscope } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { LabAddonQuote, loadRazorpayCheckout, planAddon, verifyRazorpayPayment } from '../../lib/businessApi'
 import { shortDate } from '../../lib/format'
@@ -15,14 +15,22 @@ const ICON: Record<string, JSX.Element> = {
   pathology: <FlaskConical className="w-5 h-5 text-purple-600" />,
   diagnostics: <ScanLine className="w-5 h-5 text-sky-600" />,
   pharmacy: <Pill className="w-5 h-5 text-teal-600" />,
+  opd: <Stethoscope className="w-5 h-5 text-emerald-600" />,
+}
+// 0278: which add-ons each kind of plan can take.
+const OFFERED: Record<string, string[]> = {
+  core: ['ipd', 'pathology', 'diagnostics', 'pharmacy'],
+  lab_pathology: ['opd', 'pharmacy'],
+  lab_diagnostic: ['pharmacy'],
+  lab_both: ['pharmacy'],
 }
 const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
 
 interface Addon { code: string; label: string; description: string | null; monthly_price: number; logins_included: number }
 interface Quote {
-  live: boolean; tier_label: string; doctors: number; doctors_included: number; staff: number; staff_included: number
+  live: boolean; family: string; tier_label: string; doctors: number; doctors_included: number; staff: number; staff_included: number
   beds: number; addons: string[]; bundle_pct: number; monthly: number
-  lines: { kind: string; code?: string; label: string; monthly: number }[]
+  lines: { kind: string; code?: string; label: string; monthly: number; free?: boolean }[]
 }
 
 /** True once an admin has switched the plans by doctors on. */
@@ -116,8 +124,9 @@ export default function PlanAddons({ businessId, businessName, email, canChange,
         </p>
       </div>
 
-      {addons.map(a => {
+      {addons.filter(a => (OFFERED[quote.family] ?? []).includes(a.code)).map(a => {
         const isOn = on.has(a.code)
+        const free = !!quote.lines.find(l => l.code === a.code)?.free
         const line = a.code === 'ipd' ? bedsLine?.label.replace(/^IPD — /, '') : null
         return (
           <div key={a.code} className="border border-gray-100 rounded-xl p-3 flex flex-wrap items-center gap-3 justify-between">
@@ -128,11 +137,14 @@ export default function PlanAddons({ businessId, businessName, email, canChange,
                 <div className="text-xs text-gray-500">
                   {inr(a.monthly_price)}/month{a.code === 'ipd' ? ' with 20 beds' : ''}{a.logins_included ? ` · ${a.logins_included} technician logins` : ''}
                   {isOn && line ? ` · ${line}` : ''}
-                  {isOn && !renews.has(a.code) ? ' · on until the term ends, not renewing' : ''}
+                  {isOn && !renews.has(a.code) && !free ? ' · on until the term ends, not renewing' : ''}
+                  {free ? ' · free for you' : ''}
                 </div>
               </div>
             </div>
-            {canChange && (isOn ? (
+            {canChange && (isOn && free ? (
+              <span className="text-xs text-teal-700 font-semibold inline-flex items-center gap-1"><Check className="w-4 h-4" /> On · free</span>
+            ) : isOn ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-teal-700 font-semibold inline-flex items-center gap-1"><Check className="w-4 h-4" /> On</span>
                 {renews.has(a.code)

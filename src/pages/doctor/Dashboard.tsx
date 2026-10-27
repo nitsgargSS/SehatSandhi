@@ -1932,7 +1932,7 @@ export default function DoctorDashboard() {
           <div className="space-y-4">
             <PayListingPanel business={doctor} canPay={isOwner} onPaid={() => window.location.reload()} />
             {/* 0178: in-clinic tests. A lab is its kind instead (Lab & team). */}
-            {hasPractitioners(myVertical) && plansLive && (myVertical === 'clinic' || myVertical === 'hospital') && (
+            {plansLive && (myVertical === 'clinic' || myVertical === 'hospital' || myVertical === 'lab') && (
               <PlanAddons businessId={doctor.id} businessName={doctor.name} email={doctor.email ?? undefined}
                 canChange={isOwner} months={Number((doctor as { months_paid?: number | null }).months_paid) || 1} />
             )}

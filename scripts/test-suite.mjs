@@ -1658,19 +1658,35 @@ if (!skip()) {
   expectEq('6 months cost 5', Number(r.total), 10000)
   r = await q(1, null, 'lab', 3, 5, 0, 'lab_diagnostic')
   expectEq('a Diagnostic Centre with a third doctor: ₹4,000 + ₹500', Number(r.monthly), 4500)
+  r = await q(1, ['opd'], 'lab', 1, 5, 0, 'lab_pathology')
+  expectEq('a pathology lab adds OPD for ₹1,000', Number(r.monthly), 3000)
+  r = await q(1, ['opd'], 'lab', 2, 5, 0, 'lab_diagnostic')
+  expectEq('a diagnostic centre is not charged for OPD — it is in the plan', Number(r.monthly), 4000)
+  r = await q(1, ['opd'], 'clinic', 2, 3, 0, null)
+  expectEq('a clinic is not sold OPD — its plan is OPD', Number(r.monthly), 2000)
   r = await q(1, null, 'pharmacy', 0, 5, 0, null)
   expectEq('a pharmacy store: ₹1,500', Number(r.monthly), 1500)
   expectEq('insurance and ambulance are not priced by plans', await q(1, null, 'insurance', null, null, null, null), null)
 
   await inRollback(async () => {
+    // probe() opens and rolls back its own transaction, which would end this
+    // one early — denials here go through a savepoint instead.
+    const denied = async (label, who, sql, params) => {
+      await db.query('savepoint d')
+      let ok = true
+      try {
+        await db.query(`set local role authenticated`)
+        await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid[who], role: 'authenticated', email: emails[who] })])
+        await db.query(sql, params)
+      } catch { ok = false }
+      await db.query('rollback to savepoint d')
+      expectEq(label, ok, false)
+    }
     await db.query(`update plan_settings set tiered_live = true where id`)
     await db.query(`update businesses set pharmacy_module = false, ipd_module = false, lab_module = false, lab_categories = '{}' where id = $1`, [BIZ.id])
-    await expectDeny('once live, the owner cannot switch the pharmacy on for free',
-      () => probe('owner', `select sehat_set_pharmacy_module($1, true)`, [BIZ.id]))
-    await expectDeny('…nor the heart tests',
-      () => probe('owner', `select sehat_set_lab_tests($1, array['cardiology'])`, [BIZ.id]))
-    await expectDeny('reception cannot change the renewal',
-      () => probe('reception', `select sehat_set_renewal_plan_addons($1, array['ipd'])`, [BIZ.id]))
+    await denied('once live, the owner cannot switch the pharmacy on for free', 'owner', `select sehat_set_pharmacy_module($1, true)`, [BIZ.id])
+    await denied('…nor the heart tests', 'owner', `select sehat_set_lab_tests($1, array['cardiology'])`, [BIZ.id])
+    await denied('reception cannot change the renewal', 'reception', `select sehat_set_renewal_plan_addons($1, array['ipd'])`, [BIZ.id])
 
     // A payment for IPD + Pharmacy, its term starting today: both on, OPD on.
     const pay = (await db.query(`insert into payments (business_id, amount, type, status, period_months, term_start, term_end, plan_addons)
@@ -1691,6 +1707,18 @@ if (!skip()) {
     await db.query(`select sehat_apply_due_plan_addons()`)
     b = (await db.query(`select pharmacy_module, ipd_module from businesses where id = $1`, [BIZ.id])).rows[0]
     expectEq('…and goes when it does (the tab hides, nothing is deleted)', [b.pharmacy_module, b.ipd_module], [false, true])
+
+    // 0278: free add-ons cost nothing, are on at once, and don't count in the bundle.
+    await db.query(`update businesses set free_addons = '{}' where id = $1`, [BIZ.id])
+    const base = (await db.query(`select sehat_plan_quote($1, 1, array['ipd','pharmacy']) q`, [BIZ.id])).rows[0].q
+    await db.query(`set local role authenticated`)
+    await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.admin, role: 'authenticated', email: emails.admin })])
+    await db.query(`select sehat_admin_set_free_addons($1, array['pathology'])`, [BIZ.id])
+    await db.query('reset role')
+    const withFree = (await db.query(`select sehat_plan_quote($1, 1, array['ipd','pharmacy','pathology']) q`, [BIZ.id])).rows[0].q
+    expectEq('a free add-on adds nothing, and the bundle stays at two paid add-ons', Number(withFree.monthly), Number(base.monthly))
+    expectEq('…and it is switched on at once', (await db.query(`select 'pathology' = any(lab_categories) and lab_module is_on from businesses where id = $1`, [BIZ.id])).rows[0].is_on, true)
+    await denied('only an admin gives add-ons free', 'owner', `select sehat_admin_set_free_addons($1, array['ipd'])`, [BIZ.id])
 
     const extra = (await db.query(`select sehat_extra_doctor_monthly($1, gen_random_uuid()) m`, [BIZ.id])).rows[0].m
     expectTrue('an extra doctor costs the step to the next plan, or nothing', Number(extra) >= 0, String(extra))
@@ -1772,7 +1800,14 @@ sec('ratings')
 /** Run fn inside a transaction that is rolled back whatever happens. */
 async function inRollback(fn) {
   await db.query('begin')
-  try { return await fn() } finally { await db.query('rollback') }
+  try {
+    const r = await fn()
+    // Something inside ended the transaction early (probe() does): what came
+    // after it was committed. Fail loudly rather than leave that unnoticed.
+    const live = (await db.query(`select now() = statement_timestamp() as fresh`)).rows[0].fresh
+    if (live) throw new Error('inRollback: the transaction ended early — a nested begin/rollback (probe?) inside it committed later writes')
+    return r
+  } finally { await db.query('rollback') }
 }
 
 // ── the shape, which needs no rows ──────────────────────────────────────────

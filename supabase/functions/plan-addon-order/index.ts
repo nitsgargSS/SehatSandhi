@@ -37,10 +37,10 @@ Deno.serve(async (req) => {
   let body: { businessId?: unknown; code?: unknown; action?: unknown }
   try { body = await req.json() } catch { return json({ error: 'invalid JSON' }, 400) }
   const businessId = typeof body.businessId === 'string' ? body.businessId : ''
-  const code = ['ipd', 'pathology', 'diagnostics', 'pharmacy'].includes(String(body.code)) ? String(body.code) : ''
+  const code = ['ipd', 'pathology', 'diagnostics', 'pharmacy', 'opd'].includes(String(body.code)) ? String(body.code) : ''
   const action = body.action === 'order' ? 'order' : 'quote'
   if (!businessId) return json({ error: 'businessId required' }, 400)
-  if (!code) return json({ error: "code must be 'ipd', 'pathology', 'diagnostics' or 'pharmacy'" }, 400)
+  if (!code) return json({ error: "code must be 'ipd', 'pathology', 'diagnostics', 'pharmacy' or 'opd'" }, 400)
 
   const who = caller(req)
   if (!who) return json({ error: 'Please sign in.' }, 401)
@@ -59,8 +59,11 @@ Deno.serve(async (req) => {
   if (bErr) return json({ error: bErr.message }, 500)
   if (!b) return json({ error: 'no such business' }, 404)
 
-  if (!['clinic', 'hospital'].includes(String(b.vertical))) {
-    return json({ error: 'not_offered', message: 'Add-ons are for clinics and hospitals.' }, 409)
+  // 0278: a lab adds OPD (a pathology lab) or the pharmacy; clinics and hospitals the rest.
+  const isLab = b.vertical === 'lab'
+  const diagnostic = ((b.lab_categories ?? []) as string[]).some(c => c === 'radiology' || c === 'cardiology')
+  if (isLab ? !(code === 'pharmacy' || (code === 'opd' && !diagnostic)) : !['clinic', 'hospital'].includes(String(b.vertical)) || code === 'opd') {
+    return json({ error: 'not_offered', message: code === 'opd' && diagnostic ? 'OPD is already part of a diagnostic centre’s plan.' : 'This add-on is not offered for your kind of business.' }, 409)
   }
 
   // ── Is there a paid term to add it to? ──

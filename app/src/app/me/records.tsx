@@ -16,7 +16,7 @@ function RecordsScreen() {
   const [err, setErr] = useState('')
   const load = useCallback(() => { myRecords().then(x => { setR(x); setErr('') }).catch(e => setErr((e as Error).message)) }, [])
   useFocusEffect(useCallback(() => { load() }, [load]))
-  const open = (kind: 'rx' | 'lab' | 'bill' | 'ds', id: string) => openRecord(kind, id).then(u => Linking.openURL(u)).catch(e => setErr((e as Error).message))
+  const open = (kind: 'rx' | 'lab' | 'bill' | 'ds' | 'file', id: string) => openRecord(kind, id).then(u => Linking.openURL(u)).catch(e => setErr((e as Error).message))
   const mine = <T extends { member_id: string }>(xs: T[]) => xs.filter(x => !who || x.member_id === who)
   const name = (id: string) => r?.members.find(m => m.id === id)?.name ?? ''
   const many = (r?.members.length ?? 0) > 1
@@ -64,11 +64,17 @@ function RecordsScreen() {
         </Card>
       ))}
 
-      {!!mine(r.lab_reports).length && <Label>Lab reports</Label>}
+      {!!(mine(r.lab_reports).length + mine(r.lab_files ?? []).length) && <Label>Lab reports & scans</Label>}
       {mine(r.lab_reports).map(x => (
         <Pressable key={x.id} onPress={() => open('lab', x.id)}><Card>
           <Text style={st.bold}>🧪 {d(x.date)} · {x.clinic}</Text>
           <Note>Report {x.no}{x.by ? ` · ${x.by}` : ''}{many ? ` · ${name(x.member_id)}` : ''} · open ›</Note>
+        </Card></Pressable>
+      ))}
+      {mine(r.lab_files ?? []).map(x => (
+        <Pressable key={x.id} onPress={() => open('file', x.id)}><Card>
+          <Text style={st.bold}>{x.mime?.startsWith('image/') ? '🩻' : '📄'} {d(x.date)} · {x.clinic}</Text>
+          <Note>{x.title || 'Report file'}{many ? ` · ${name(x.member_id)}` : ''} · open ›</Note>
         </Card></Pressable>
       ))}
 

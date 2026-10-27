@@ -19,6 +19,7 @@ import PartnersPanel from './PartnersPanel'
 import InsightsPanel from './InsightsPanel'
 import LeadsPanel from './LeadsPanel'
 import WhatsAppMarketingPanel from './WhatsAppMarketingPanel'
+import FreeAddons from './FreeAddons'
 import PlanPricingCard from './PlanPricingCard'
 import TypePricingCard from './TypePricingCard'
 import AddonPricingCard from './AddonPricingCard'
@@ -1049,6 +1050,7 @@ export default function AdminDashboard() {
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                         {d.vertical !== 'lab' && <LabSwitch businessId={d.id} on={!!d.lab_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, lab_module: on } : x))} />}
+                        <FreeAddons businessId={d.id} vertical={d.vertical} canChange={!isManager} />
                       </div>
                     )}
                   </div>
@@ -1124,6 +1126,7 @@ export default function AdminDashboard() {
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, pharmacy_module: on } : x))} />
                         {d.vertical !== 'lab' && <LabSwitch businessId={d.id} on={!!d.lab_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, lab_module: on } : x))} />}
+                        <FreeAddons businessId={d.id} vertical={d.vertical} canChange={!isManager} />
                           </div>
                         </td>
                       </tr>
