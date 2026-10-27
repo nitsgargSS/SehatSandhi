@@ -516,21 +516,35 @@ export async function getUploadedFile(token: string) {
 
 // ── 0177: which kinds of tests a business does ─────────────────────────────
 
-/** What a standalone lab is. A radiology & imaging centre also runs ECG / echo / TMT. */
-export const LAB_KIND_OPTIONS: { value: 'pathology' | 'radiology'; label: string; cats: LabCategory[] }[] = [
+/** What a standalone lab is (0272: three plans). A diagnostic centre runs imaging and heart, lung and nerve tests. */
+export const LAB_KIND_OPTIONS: { value: 'pathology' | 'radiology' | 'both'; label: string; cats: LabCategory[] }[] = [
   { value: 'pathology', label: 'Pathology lab — blood, urine and stool tests', cats: ['pathology'] },
-  { value: 'radiology', label: 'Radiology & imaging centre — X-ray, ultrasound, CT, MRI, ECG, echo', cats: ['radiology', 'cardiology'] },
+  { value: 'radiology', label: 'Diagnostic centre — X-ray, ultrasound, CT, MRI, ECG, echo, TMT, Holter, PFT, EEG, NCV', cats: ['radiology', 'cardiology'] },
+  { value: 'both', label: 'Diagnostic centre with pathology — all of the above', cats: ['pathology', 'radiology', 'cardiology'] },
 ]
+
+/** 0276: how a category reads. Diagnostics is radiology + cardiology. */
+export const CATEGORY_LABEL: Record<string, string> = {
+  pathology: 'Pathology', radiology: 'Imaging', cardiology: 'Heart, lungs & nerves', other: 'Other',
+}
+
+/** 0276: the groups diagnostic tests are listed under; a lab may name its own. */
+export const DIAGNOSTIC_GROUPS: Record<'radiology' | 'cardiology', string[]> = {
+  radiology: ['X-ray', 'Ultrasound & Doppler', 'CT scan', 'MRI', 'Mammography', 'Bone density', 'Contrast studies', 'Nuclear medicine'],
+  cardiology: ['Heart', 'Lungs', 'Brain & nerves', 'Hearing'],
+}
 
 /** What a clinic or hospital may do in-house (tick any). */
 export const IN_CLINIC_TESTS: { value: LabCategory; label: string }[] = [
   { value: 'pathology', label: 'Blood & urine tests (sample collection / pathology)' },
-  { value: 'radiology', label: 'X-ray, ultrasound and other imaging' },
-  { value: 'cardiology', label: 'ECG, 2D echo, TMT (heart tests)' },
+  { value: 'radiology', label: 'Imaging — X-ray, ultrasound, CT, MRI, mammography' },
+  { value: 'cardiology', label: 'Heart, lungs & nerves — ECG, echo, TMT, Holter, PFT, EEG, NCV' },
 ]
 
-export const labKindOf = (cats: string[] | null | undefined): 'pathology' | 'radiology' | null =>
-  !cats?.length ? null : cats.includes('pathology') ? 'pathology' : 'radiology'
+export const labKindOf = (cats: string[] | null | undefined): 'pathology' | 'radiology' | 'both' | null =>
+  !cats?.length ? null
+    : cats.includes('pathology') ? (cats.some(c => c === 'radiology' || c === 'cardiology') ? 'both' : 'pathology')
+    : 'radiology'
 
 /** Tests a business sees: its chosen kinds, plus 'other'. Nothing chosen = everything. */
 export const testVisible = (cats: string[] | null | undefined, category: string | null | undefined) =>

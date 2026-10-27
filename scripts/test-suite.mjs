@@ -1698,6 +1698,26 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0276 — the Diagnostics catalogue: imaging, and heart, lung and nerve tests.
+sec('diagnostics')
+if (!skip()) {
+  const cat = async (code) => (await raw(`select category, department from lab_catalogue where code = $1`, [code]))[0]
+  expectEq('every X-ray is imaging', (await raw(`select count(*)::int n from lab_catalogue where name ilike '%x-ray%' and category <> 'radiology'`))[0].n, 0)
+  for (const code of ['EEG', 'NCV', 'PFT'].map(c => c)) {
+    const r = (await raw(`select category from lab_catalogue where code = $1 or name ilike $2 limit 1`,
+      [code, code === 'PFT' ? 'Pulmonary Function%' : code === 'NCV' ? 'Nerve Conduction%' : 'EEG']))[0]
+    expectEq(`${code} is in Diagnostics`, r?.category, 'cardiology')
+  }
+  expectEq('MRI is grouped as MRI', (await cat('MRIBRAIN'))?.department, 'MRI')
+  expectEq('Holter is grouped under Heart', (await cat('HOLTER'))?.department, 'Heart')
+  expectEq('no diagnostic test is left without a group',
+    (await raw(`select count(*)::int n from lab_catalogue where category in ('radiology', 'cardiology') and department is null`))[0].n, 0)
+  expectEq('a business\'s copies follow the catalogue',
+    (await raw(`select count(*)::int n from lab_tests t join lab_catalogue c on c.code = t.catalogue_code
+                 where c.category <> 'pathology' and t.category is distinct from c.category`))[0].n, 0)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 0266 — a name is found by any of its words, titles and dots ignored.
 sec('name search')
 if (!skip()) {

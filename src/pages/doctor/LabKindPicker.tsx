@@ -3,8 +3,7 @@ import { FlaskConical } from 'lucide-react'
 import { IN_CLINIC_TESTS, LAB_KIND_OPTIONS, labKindOf, setLabTests } from '../../lib/labApi'
 
 // 0177: which kinds of tests this business does.
-//   A lab: one kind (pathology lab, or radiology & imaging centre). A lab that
-//   does both registers two listings.
+//   A lab: pathology, diagnostic centre, or both (0272: one plan each).
 //   A clinic or hospital: tick what it does in-house — a cardiologist's echo,
 //   an orthopaedic clinic's X-ray. Ticking anything switches the Lab tab on.
 export default function LabKindPicker({ businessId, vertical, current, canChange, onSaved }: {
@@ -38,7 +37,7 @@ export default function LabKindPicker({ businessId, vertical, current, canChange
         {isLab ? 'What kind of lab is this?' : 'Tests you do here'}</h3>
       <p className="text-sm text-gray-500 mb-3">
         {isLab
-          ? 'Your test list, the standard tests you import and your reports follow this. If you run both a pathology lab and an imaging centre, register the second one as its own listing.'
+          ? 'Your test list, the standard tests you import and your reports follow this.'
           : 'If you do tests in your own clinic — an ECG or echo, an X-ray, blood samples — tick them. A Lab tab appears for orders, results and reports sent to patients on WhatsApp. No separate lab registration needed.'}
       </p>
       {isLab ? (
