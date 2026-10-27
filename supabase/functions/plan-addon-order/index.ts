@@ -73,6 +73,13 @@ Deno.serve(async (req) => {
     return json({ error: 'no_active_term', message: 'Your plan is not active. Renew your plan first, then add this.' }, 409)
   }
 
+  // ── 0279: an existing customer keeps its old plan until its notice has run ──
+  const { data: now } = await db.rpc('sehat_plans_apply_now', { p_business: businessId })
+  if (now === false) {
+    const { data: bf } = await db.from('businesses').select('plans_from').eq('id', businessId).maybeSingle()
+    return json({ error: 'not_yet', message: `Your current plan continues until ${bf?.plans_from ?? 'your renewal'}. Until then, switch add-ons on as before.` }, 409)
+  }
+
   // ── Not already on ──
   const { data: current } = await db.rpc('sehat_business_addons', { p_business: businessId })
   const have = ((current ?? []) as string[])

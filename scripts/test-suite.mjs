@@ -1725,6 +1725,32 @@ if (!skip()) {
   })
 }
 
+// 0279 — going live: a paying customer keeps its plan until a month's notice has run.
+if (!skip()) {
+  await inRollback(async () => {
+    const asAdmin = async (sql, params) => {
+      await db.query(`set local role authenticated`)
+      await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.admin, role: 'authenticated', email: emails.admin })])
+      const r = await db.query(sql, params); await db.query('reset role'); return r
+    }
+    await db.query(`update plan_settings set tiered_live = false where id`)
+    await db.query(`update businesses set status = 'active', term_end = (now() at time zone 'Asia/Kolkata')::date + 10,
+                      plan_notice_at = null, plans_from = null, locked_monthly_price = 2000 where id = $1`, [BIZ.id])
+    await asAdmin(`select sehat_admin_set_plan_pricing('{"settings": {"tiered_live": true}}'::jsonb)`)
+    const b = (await db.query(`select plans_from - (now() at time zone 'Asia/Kolkata')::date d, plan_notice_at is not null told,
+                                      sehat_plans_apply($1) next_term, sehat_plans_apply_now($1) now_ from businesses where id = $1`, [BIZ.id])).rows[0]
+    expectEq('a customer renewing in 10 days gets the full 30 days of notice', [b.d, b.told], [30, true])
+    expectEq('…so its next renewal is still at the old price', b.next_term, false)
+    expectEq('…and today it runs on the old rules', b.now_, false)
+    const notice = (await db.query(`select count(*)::int n from billing_notifications where business_id = $1 and kind = 'plan_change_notice'`, [BIZ.id])).rows[0].n
+    expectEq('a notice with the new price is queued for it', notice, 1)
+    const newBiz = (await db.query(`select sehat_plans_apply(gen_random_uuid()) a`)).rows[0].a
+    expectEq('a business registering after go-live is on the plans at once', newBiz, true)
+    await db.query(`update businesses set plans_from = (now() at time zone 'Asia/Kolkata')::date where id = $1`, [BIZ.id])
+    expectEq('once the date comes, the plans apply', (await db.query(`select sehat_plans_apply_now($1) a`, [BIZ.id])).rows[0].a, true)
+  })
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 0276 — the Diagnostics catalogue: imaging, and heart, lung and nerve tests.
 sec('diagnostics')

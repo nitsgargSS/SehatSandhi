@@ -7,8 +7,9 @@ import { supabase } from '../../lib/supabase'
 
 interface Settings {
   tiered_live: boolean; months6_factor: number; months12_factor: number; staff_pack_size: number; staff_pack_price: number
-  bundle2_pct: number; bundle3_pct: number; ipd_beds_included: number; ipd_bed_price: number
+  bundle2_pct: number; bundle3_pct: number; ipd_beds_included: number; ipd_bed_price: number; notice_days: number
 }
+interface Moving { business_id: string; name: string; vertical: string; phone: string | null; email: string | null; term_end: string | null; plans_from: string | null; old_monthly: number | null; new_monthly: number | null; tier: string | null; addons: string[] | null }
 interface Tier { code: string; family: string; label: string; max_doctors: number; staff_included: number; monthly_price: number; extra_doctor_price: number; is_enabled: boolean }
 interface Addon { code: string; label: string; monthly_price: number; logins_included: number; is_enabled: boolean }
 
@@ -21,6 +22,19 @@ export default function PlanPricingCard() {
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [saving, setSaving] = useState(false)
+  const [moving, setMoving] = useState<Moving[] | null>(null)
+  const loadMoving = async () => {
+    const { data, error } = await supabase.rpc('sehat_admin_plan_transition')
+    if (error) setErr(error.message); else setMoving((data ?? []) as Moving[])
+  }
+  const csv = () => {
+    if (!moving) return
+    const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const rows = [['Business', 'Type', 'Phone', 'Email', 'Term ends', 'New plan from', 'Pays now /month', 'New plan', 'New /month', 'Add-ons'],
+      ...moving.map(m => [m.name, m.vertical, m.phone, m.email, m.term_end, m.plans_from, m.old_monthly, m.tier, m.new_monthly, (m.addons ?? []).join(' ')])]
+    const url = URL.createObjectURL(new Blob([rows.map(r => r.map(cell).join(',')).join('\n')], { type: 'text/csv' }))
+    const a = document.createElement('a'); a.href = url; a.download = 'plan-changes.csv'; a.click(); URL.revokeObjectURL(url)
+  }
 
   const load = async () => {
     const [a, b, c] = await Promise.all([
@@ -64,7 +78,9 @@ export default function PlanPricingCard() {
         <button disabled={saving} className={s.tiered_live ? 'btn-outline text-xs py-2 px-3' : 'btn-teal text-xs py-2 px-3'}
           onClick={() => {
             const on = !s.tiered_live
-            if (window.confirm(on ? 'Put the plans by doctors live? New payments and renewals will be priced by them.' : 'Take the plans off? Pricing goes back to the old single price.')) save({ tiered_live: on })
+            if (window.confirm(on
+              ? `Put the plans by doctors live? New businesses are on them at once. Every paying business keeps its plan until its renewal, and at least ${s.notice_days} days — they are listed below for you to tell them.`
+              : 'Take the plans off? Pricing goes back to the old single price.')) save({ tiered_live: on })
           }}>{s.tiered_live ? 'Switch off' : 'Put live'}</button>
       </div>
 
@@ -111,7 +127,33 @@ export default function PlanPricingCard() {
         {field('3+ add-ons % off', 'bundle3_pct')}
         {field('6 months = months ×', 'months6_factor')}
         {field('12 months = months ×', 'months12_factor')}
+        {field('Notice to existing customers (days)', 'notice_days')}
       </div>
+
+      {s.tiered_live && (
+        <div className="border-t border-gray-100 pt-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2 justify-between">
+            <p className="text-sm font-semibold text-navy-700">Existing customers moving to the plans</p>
+            <div className="flex gap-2">
+              <button className="btn-outline text-xs py-1.5 px-3" onClick={loadMoving}>{moving ? 'Refresh' : 'Show list'}</button>
+              {!!moving?.length && <button className="btn-outline text-xs py-1.5 px-3" onClick={csv}>Download CSV</button>}
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">Each keeps its plan and price until the date shown. The new price is what they use today; it changes if they add or drop add-ons before then.</p>
+          {moving && (moving.length === 0 ? <p className="text-xs text-gray-500">Nobody — no paying customers when the plans went live.</p> : (
+            <div className="overflow-x-auto">
+              <table className="text-xs min-w-full">
+                <thead><tr className="text-gray-500 text-left"><th className="pr-2">Business</th><th className="pr-2">From</th><th className="pr-2">Now /month</th><th className="pr-2">New plan</th><th>New /month</th></tr></thead>
+                <tbody>{moving.map(m => (
+                  <tr key={m.business_id}><td className="pr-2 py-0.5">{m.name}</td><td className="pr-2">{m.plans_from}</td>
+                    <td className="pr-2">{m.old_monthly != null ? `₹${m.old_monthly}` : '—'}</td><td className="pr-2">{m.tier}</td>
+                    <td>{m.new_monthly != null ? `₹${Number(m.new_monthly).toLocaleString('en-IN')}` : '—'}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <button disabled={saving} className="btn-teal text-xs py-2 px-4" onClick={() => save()}>{saving ? 'Saving…' : 'Save prices'}</button>

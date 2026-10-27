@@ -28,23 +28,32 @@ const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`
 
 interface Addon { code: string; label: string; description: string | null; monthly_price: number; logins_included: number }
 interface Quote {
-  live: boolean; family: string; tier_label: string; doctors: number; doctors_included: number; staff: number; staff_included: number
+  live: boolean; family: string; tier_label: string; plans_from: string | null; doctors: number; doctors_included: number; staff: number; staff_included: number
   beds: number; addons: string[]; bundle_pct: number; monthly: number
   lines: { kind: string; code?: string; label: string; monthly: number; free?: boolean }[]
 }
 
-/** True once an admin has switched the plans by doctors on. */
-export function usePlansLive(): boolean | null {
-  const [live, setLive] = useState<boolean | null>(null)
+/**
+ * Whether the plans by doctors are live, and whether they apply to this
+ * business today (0279: an existing customer keeps its old plan until its
+ * notice has run). null while loading.
+ */
+export function usePlansLive(businessId?: string | null): { live: boolean; now: boolean } | null {
+  const [st, setSt] = useState<{ live: boolean; now: boolean } | null>(null)
   useEffect(() => {
-    supabase.from('plan_settings').select('tiered_live').maybeSingle()
-      .then(({ data }) => setLive(!!data?.tiered_live), () => setLive(false))
-  }, [])
-  return live
+    Promise.all([
+      supabase.from('plan_settings').select('tiered_live').maybeSingle(),
+      businessId ? supabase.rpc('sehat_plans_apply_now', { p_business: businessId }) : Promise.resolve({ data: true }),
+    ]).then(([a, b]) => { const live = !!a.data?.tiered_live; setSt({ live, now: live && b.data !== false }) },
+            () => setSt({ live: false, now: false }))
+  }, [businessId])
+  return st
 }
 
-export default function PlanAddons({ businessId, businessName, email, canChange, months }: {
+export default function PlanAddons({ businessId, businessName, email, canChange, months, preview }: {
   businessId: string; businessName: string; email?: string; canChange: boolean; months: number
+  /** 0279: an existing customer still on its old plan — show what it moves to, and when. */
+  preview?: boolean
 }) {
   const [quote, setQuote] = useState<Quote | null>(null)
   const [addons, setAddons] = useState<Addon[]>([])
@@ -116,7 +125,13 @@ export default function PlanAddons({ businessId, businessName, email, canChange,
   return (
     <div className="card shadow-sm space-y-3">
       <div>
-        <h3 className="font-bold text-navy-700">Your plan — {quote.tier_label} · {inr(quote.monthly)}/month + GST</h3>
+        {preview ? <>
+          <h3 className="font-bold text-navy-700">Your plan is changing{quote.plans_from ? ` on ${shortDate(quote.plans_from)}` : ' at your next renewal'}</h3>
+          <p className="text-sm text-gray-600">
+            Until then everything stays as it is, at what you pay now. From then: <b>{quote.tier_label} · {inr(quote.monthly)}/month + GST</b> for what you use today.
+            Choose below what to keep at renewal.
+          </p>
+        </> : <h3 className="font-bold text-navy-700">Your plan — {quote.tier_label} · {inr(quote.monthly)}/month + GST</h3>}
         <p className="text-xs text-gray-500">
           {quote.doctors} of {quote.doctors_included} doctors · {quote.staff} of {quote.staff_included} staff logins
           {quote.bundle_pct > 0 && <> · {Number(quote.bundle_pct)}% bundle discount on add-ons</>}
@@ -153,6 +168,10 @@ export default function PlanAddons({ businessId, businessName, email, canChange,
                     }}>Don't renew</button>
                   : <button className="text-xs text-teal-700 underline" onClick={() => setRenews(a.code, true)}>Renew it</button>}
               </div>
+            ) : preview ? (
+              renews.has(a.code)
+                ? <button className="text-xs text-teal-700 underline" onClick={() => setRenews(a.code, false)}>In renewal ✓ — remove</button>
+                : <button className="text-xs text-teal-700 underline" onClick={() => setRenews(a.code, true)}>Add at renewal</button>
             ) : (
               <button disabled={!!busy} className="btn-teal text-xs py-2 px-4" onClick={() => ask(a.code)}>
                 {busy === a.code ? 'Working out…' : 'Add'}
