@@ -19,6 +19,7 @@ import PartnersPanel from './PartnersPanel'
 import InsightsPanel from './InsightsPanel'
 import LeadsPanel from './LeadsPanel'
 import WhatsAppMarketingPanel from './WhatsAppMarketingPanel'
+import PlanPricingCard from './PlanPricingCard'
 import TypePricingCard from './TypePricingCard'
 import AddonPricingCard from './AddonPricingCard'
 import { IS_STAGING } from '../../lib/env'
@@ -1362,6 +1363,7 @@ export default function AdminDashboard() {
               )}
               {/* 0117: what each business type pays. Wins over the plan below
                   for every type that has prices here — all six, as seeded. */}
+              <PlanPricingCard />
               <TypePricingCard />
               {/* 0178: in-clinic test add-ons (pathology, radiology, heart tests & X-ray). */}
               <AddonPricingCard />

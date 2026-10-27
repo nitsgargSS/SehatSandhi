@@ -77,6 +77,7 @@ import StaffCodeModal from './StaffCodeModal'
 import LabKindPicker from './LabKindPicker'
 import ReviewsCard from './ReviewsCard'
 import AddonsPanel from './AddonsPanel'
+import PlanAddons, { usePlansLive } from './PlanAddons'
 import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from './NurseLinks'
 import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
 import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
@@ -1051,6 +1052,7 @@ export default function DoctorDashboard() {
   // 0181: the account — plan, payments, Bills, WhatsApp, add-ons, doctors'
   // leave — is the owner's. A manager runs the floor (0180), not the account.
   const isOwner = !role.enforced || role.role === 'owner'
+  const plansLive = usePlansLive()
   const ROLE_WORD: Record<string, string> = { owner: 'Owner', doctor: 'Doctor', nurse: 'Nurse', receptionist: 'Reception', manager: 'Manager' }
   const whoIsIn = `${myName || signedInAs || 'Signed in'}${role.role ? ` · ${ROLE_WORD[role.role] ?? role.role}` : ''}`
   const isClinician = isClinicalRole(role)
@@ -1929,7 +1931,11 @@ export default function DoctorDashboard() {
           <div className="space-y-4">
             <PayListingPanel business={doctor} canPay={isOwner} onPaid={() => window.location.reload()} />
             {/* 0178: in-clinic tests. A lab is its kind instead (Lab & team). */}
-            {hasPractitioners(myVertical) && (
+            {hasPractitioners(myVertical) && plansLive && (myVertical === 'clinic' || myVertical === 'hospital') && (
+              <PlanAddons businessId={doctor.id} businessName={doctor.name} email={doctor.email ?? undefined}
+                canChange={isOwner} months={Number((doctor as { months_paid?: number | null }).months_paid) || 1} />
+            )}
+            {hasPractitioners(myVertical) && plansLive === false && (
               <AddonsPanel businessId={doctor.id} businessName={doctor.name} email={doctor.email ?? undefined}
                 current={doctor.lab_categories} canChange={isOwner}
                 pharmacyOn={!!doctor.pharmacy_module}

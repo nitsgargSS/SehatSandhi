@@ -154,6 +154,8 @@ export interface PriceResult {
   whatsappTotal: number
   /** 0262: which WhatsApp plan was priced, when one was selected. */
   whatsappPlan: 'basic' | 'pro'
+  /** 0272: the plan by doctors and its add-ons, when the plans are live. Null: the old pricing. */
+  plan: PlanQuote | null
   /** 0178: paid in-clinic test add-ons renewed with this term, and their total. */
   addonCodes: string[]
   addonTotal: number
@@ -382,6 +384,36 @@ export async function resolveModules(
   }))
 }
 
+// ── 0272: plans by doctors, and add-ons ─────────────────────────────────────
+export interface PlanQuoteLine { kind: 'plan' | 'doctors' | 'staff' | 'addon' | 'bundle'; code?: string; label: string; monthly: number; amount: number }
+export interface PlanQuote {
+  live: boolean; family: string; tier: string; tier_label: string
+  doctors: number; doctors_included: number; staff: number; staff_included: number; beds: number
+  addons: string[]; bundle_pct: number; monthly: number; months: number; factor: number
+  lines: PlanQuoteLine[]; total: number
+}
+
+/** The plan quote (sehat_plan_quote), or null when the plans are not live or do not price this business type. */
+export async function resolvePlanQuote(supabase: SupabaseClient, q: {
+  businessId: string | null; months: number; vertical: string; addons: string[] | null
+  doctors: number | null; staff: number | null; beds: number | null; labKind: string | null
+}): Promise<PlanQuote | null> {
+  // A renewal with no choice sent prices what the owner chose to renew (null: what is on now).
+  let addons = q.addons
+  if (addons === null && q.businessId) {
+    const { data: b } = await supabase.from('businesses').select('renewal_plan_addons').eq('id', q.businessId).maybeSingle()
+    addons = (b?.renewal_plan_addons as string[] | null) ?? null
+  }
+  const { data, error } = await supabase.rpc('sehat_plan_quote', {
+    p_business: q.businessId, p_months: q.months, p_addons: addons, p_vertical: q.vertical,
+    p_doctors: q.doctors, p_staff: q.staff, p_beds: q.beds, p_lab_kind: q.labKind,
+  })
+  // Missing function (0272 not applied) or not live: the old pricing.
+  if (error || !data || !(data as PlanQuote).live) return null
+  const d = data as PlanQuote
+  return { ...d, monthly: Number(d.monthly), total: Number(d.total), lines: (d.lines ?? []).map(l => ({ ...l, monthly: Number(l.monthly), amount: Number(l.amount) })) }
+}
+
 /** A type's own price list (0117). Empty = price it the old way, off the plan. */
 export async function resolveTypeTerms(supabase: SupabaseClient, vertical: string): Promise<PlanTerm[]> {
   const { data, error } = await supabase
@@ -497,7 +529,13 @@ export async function computePrice(
   /** care_modules codes the buyer ticked. Unknown or disabled codes are ignored. */
   requestedModules?: string[] | null,
   /** 0117: the WhatsApp add-on and a coupon code. */
-  extra: { whatsapp?: boolean | null; couponCode?: string | null; whatsappPlan?: 'basic' | 'pro' | null } = {},
+  extra: {
+    whatsapp?: boolean | null; couponCode?: string | null; whatsappPlan?: 'basic' | 'pro' | null
+    /** 0272: the add-ons chosen (ipd, pathology, diagnostics, pharmacy); null = what is on now. */
+    planAddons?: string[] | null
+    /** 0272: before there is a business — staff, beds and a lab's kind, for the quote only. */
+    staffHint?: number | null; bedsHint?: number | null; labKind?: string | null
+  } = {},
 ): Promise<PriceResult> {
   const [plan, vb, taxSettings, recipientState, resolvedCount, tickedModules] = await Promise.all([
     resolveActivePlan(supabase),
@@ -596,7 +634,7 @@ export async function computePrice(
       tax: applyGst(0, taxSettings, recipientState),
       priceIncludesGst: plan.price_includes_gst,
       pricingSource: byType ? 'type' : 'plan',
-      subscriptionTotal: 0, whatsappAvailable: byType, whatsappSelected: false, whatsappTotal: 0, whatsappPlan: 'basic',
+      subscriptionTotal: 0, whatsappAvailable: byType, whatsappSelected: false, whatsappTotal: 0, whatsappPlan: 'basic', plan: null,
       addonCodes: [], addonTotal: 0,
       coupon: null, couponError: null, lineItems: [],
       ...planFields,
@@ -755,7 +793,41 @@ export async function computePrice(
   }
   let addonTotal = 0
 
+  // 0272: plans by doctors, staff and beds, with paid add-ons — once switched on.
+  let planQuote: PlanQuote | null = null
   if (byType) {
+    planQuote = await resolvePlanQuote(supabase, {
+      businessId: businessId ?? null, months, vertical: vb.vertical,
+      addons: extra.planAddons ?? null,
+      doctors: businessId ? null : Math.max(0, Math.floor(Number(doctorCountHint) || 0)) || null,
+      staff: businessId ? null : (extra.staffHint ?? null), beds: businessId ? null : (extra.bedsHint ?? null),
+      labKind: extra.labKind ?? null,
+    })
+  }
+
+  if (byType && planQuote) {
+    // The plan (and extra doctors and staff) is the subscription — a negotiated
+    // price still wins, and the coupon touches only this; the add-ons follow.
+    const termName = termLabel(months)
+    const subLines = planQuote.lines.filter(l => l.kind !== 'addon' && l.kind !== 'bundle')
+    const addonLines = planQuote.lines.filter(l => l.kind === 'addon' || l.kind === 'bundle')
+    subscriptionTotal = customMonthly !== null ? customMonthly * months : subLines.reduce((t, l) => t + l.amount, 0)
+    addonTotal = addonLines.reduce((t, l) => t + l.amount, 0)
+    whatsappTotal = !whatsappSelected ? 0 : waPlan === 'pro' ? (term?.whatsapp_pro_price ?? 0) : (term?.whatsapp_price ?? 0)
+    couponRes = await resolveCoupon(supabase, extra.couponCode, { businessId: businessId ?? null, subscription: subscriptionTotal, months })
+    const discount = couponRes.coupon?.discount ?? 0
+    if (customMonthly !== null) lineItems.push({ label: `Sehatsandhi subscription (agreed price) — ${termName}`, amount: subscriptionTotal })
+    else for (const l of subLines) if (l.amount !== 0) lineItems.push({ label: `${l.label} — ${termName}`, amount: l.amount })
+    for (const l of addonLines) if (l.amount !== 0) lineItems.push({ label: `${l.label} — ${termName}`, amount: l.amount })
+    if (whatsappTotal > 0) lineItems.push({
+      label: waPlan === 'pro'
+        ? `WhatsApp Pro — own number and automatic messages — ${termName}`
+        : `WhatsApp Business Verification & Activation Fee — ${termName}`,
+      amount: whatsappTotal,
+    })
+    if (discount > 0 && couponRes.coupon) lineItems.push({ label: `Coupon ${couponRes.coupon.label}`, amount: -discount })
+    termTotal = Math.max(0, subscriptionTotal + addonTotal + whatsappTotal - discount)
+  } else if (byType) {
     // Subscription for the term (a negotiated price still wins), the doctor
     // extra, any modules, the WhatsApp add-on if chosen, less the coupon — which
     // only ever touches the subscription.
@@ -790,7 +862,7 @@ export async function computePrice(
     termTotal = monthlyTotal * months
   }
   // The headline monthly rate: by type, the type's 1-month subscription.
-  if (byType) monthlyTotal = typeTerms.find(t => t.months === 1)?.price ?? Math.round(subscriptionTotal / months)
+  if (byType) monthlyTotal = planQuote ? planQuote.monthly : typeTerms.find(t => t.months === 1)?.price ?? Math.round(subscriptionTotal / months)
   if (!byType) {
     subscriptionTotal = termTotal
     if (termTotal > 0) lineItems.push({ label: `Business listing services — ${months} month${months === 1 ? '' : 's'}`, amount: termTotal })
@@ -820,6 +892,7 @@ export async function computePrice(
     whatsappSelected,
     whatsappTotal,
     whatsappPlan: waPlan,
+    plan: planQuote,
     addonCodes: addons.map(a => a.code),
     addonTotal,
     coupon: couponRes.coupon,

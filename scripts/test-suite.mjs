@@ -1636,6 +1636,68 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0272–0275 — plans by doctors, paid add-ons, and the switch that puts them live.
+sec('plans')
+if (!skip()) {
+  const q = async (...args) => (await raw(`select sehat_plan_quote(null, $1, $2::text[], $3, $4, $5, $6, $7) q`, args))[0].q
+  let r = await q(1, ['pharmacy'], 'clinic', 2, 3, 0, null)
+  expectEq('2 doctors and the pharmacy: Clinic ₹2,000 + ₹1,000', [r.tier, Number(r.monthly)], ['clinic', 3000])
+  r = await q(1, [], 'clinic', 3, 3, 0, null)
+  expectEq('a third doctor moves a clinic to the Polyclinic plan', [r.tier, Number(r.monthly)], ['polyclinic', 3000])
+  r = await q(1, ['pathology', 'pharmacy'], 'clinic', 4, 6, 0, null)
+  expectEq('two add-ons: 10% off them', Number(r.monthly), 3000 + Math.round(2500 * 0.9))
+  r = await q(1, ['ipd', 'pathology', 'diagnostics', 'pharmacy'], 'hospital', 15, 25, 30, null)
+  expectEq('Hospital, all four add-ons, 30 beds: 20% off, 10 beds × ₹75', Number(r.monthly), 8000 + Math.round((2000 + 750 + 1500 + 3000 + 1000) * 0.8))
+  r = await q(1, [], 'hospital', 18, 40, 0, null)
+  expectEq('18 doctors: 3 × ₹400; 40 staff: 15 over → 3 packs × ₹250', Number(r.monthly), 8000 + 1200 + 750)
+  r = await q(1, ['pathology'], 'clinic', 2, 5, 0, null)
+  expectEq('Pathology brings 2 technician logins (5 staff, none extra)', [r.staff_included, Number(r.monthly)], [5, 3500])
+  r = await q(12, [], 'clinic', 2, 3, 0, null)
+  expectEq('12 months cost 9', Number(r.total), 18000)
+  r = await q(6, [], 'clinic', 2, 3, 0, null)
+  expectEq('6 months cost 5', Number(r.total), 10000)
+  r = await q(1, null, 'lab', 3, 5, 0, 'lab_diagnostic')
+  expectEq('a Diagnostic Centre with a third doctor: ₹4,000 + ₹500', Number(r.monthly), 4500)
+  r = await q(1, null, 'pharmacy', 0, 5, 0, null)
+  expectEq('a pharmacy store: ₹1,500', Number(r.monthly), 1500)
+  expectEq('insurance and ambulance are not priced by plans', await q(1, null, 'insurance', null, null, null, null), null)
+
+  await inRollback(async () => {
+    await db.query(`update plan_settings set tiered_live = true where id`)
+    await db.query(`update businesses set pharmacy_module = false, ipd_module = false, lab_module = false, lab_categories = '{}' where id = $1`, [BIZ.id])
+    await expectDeny('once live, the owner cannot switch the pharmacy on for free',
+      () => probe('owner', `select sehat_set_pharmacy_module($1, true)`, [BIZ.id]))
+    await expectDeny('…nor the heart tests',
+      () => probe('owner', `select sehat_set_lab_tests($1, array['cardiology'])`, [BIZ.id]))
+    await expectDeny('reception cannot change the renewal',
+      () => probe('reception', `select sehat_set_renewal_plan_addons($1, array['ipd'])`, [BIZ.id]))
+
+    // A payment for IPD + Pharmacy, its term starting today: both on, OPD on.
+    const pay = (await db.query(`insert into payments (business_id, amount, type, status, period_months, term_start, term_end, plan_addons)
+      values ($1, 1, 'listing', 'paid', 1, (now() at time zone 'Asia/Kolkata')::date, (now() at time zone 'Asia/Kolkata')::date + 30, array['ipd','pharmacy'])
+      returning id`, [BIZ.id])).rows[0].id
+    await db.query(`select sehat_fulfil_plan_addons($1)`, [pay])
+    let b = (await db.query(`select opd_module, ipd_module, pharmacy_module, lab_module from businesses where id = $1`, [BIZ.id])).rows[0]
+    expectEq('paid IPD and Pharmacy are on, with OPD', [b.opd_module, b.ipd_module, b.pharmacy_module, b.lab_module], [true, true, true, false])
+
+    // A renewal paid early without the pharmacy: it stays on until that term starts.
+    const pay2 = (await db.query(`insert into payments (business_id, amount, type, status, period_months, term_start, term_end, plan_addons)
+      values ($1, 1, 'listing', 'paid', 1, (now() at time zone 'Asia/Kolkata')::date + 30, (now() at time zone 'Asia/Kolkata')::date + 60, array['ipd'])
+      returning id`, [BIZ.id])).rows[0].id
+    await db.query(`select sehat_fulfil_plan_addons($1)`, [pay2])
+    b = (await db.query(`select pharmacy_module, next_addons from businesses where id = $1`, [BIZ.id])).rows[0]
+    expectEq('a renewal paid early leaves the pharmacy on until its term starts', [b.pharmacy_module, b.next_addons], [true, ['ipd']])
+    await db.query(`update businesses set next_addons_from = (now() at time zone 'Asia/Kolkata')::date where id = $1`, [BIZ.id])
+    await db.query(`select sehat_apply_due_plan_addons()`)
+    b = (await db.query(`select pharmacy_module, ipd_module from businesses where id = $1`, [BIZ.id])).rows[0]
+    expectEq('…and goes when it does (the tab hides, nothing is deleted)', [b.pharmacy_module, b.ipd_module], [false, true])
+
+    const extra = (await db.query(`select sehat_extra_doctor_monthly($1, gen_random_uuid()) m`, [BIZ.id])).rows[0].m
+    expectTrue('an extra doctor costs the step to the next plan, or nothing', Number(extra) >= 0, String(extra))
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 0266 — a name is found by any of its words, titles and dots ignored.
 sec('name search')
 if (!skip()) {
