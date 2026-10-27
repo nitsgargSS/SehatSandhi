@@ -1606,6 +1606,36 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0271 — a lab technician: tests, packages and prices, and results; not sign.
+sec('lab technician')
+if (!skip()) {
+  await inRollback(async () => {
+    await db.query(`update businesses set lab_module = true where id = $1`, [BIZ.id])
+    // sehat_lab_check is only ever called inside the lab's own functions; let
+    // this rolled-back test call it directly.
+    await db.query(`grant execute on function sehat_lab_check(uuid, text) to authenticated`)
+    await db.query(`update business_practitioners bp set role = 'lab_technician' from practitioners p
+                     where p.id = bp.practitioner_id and bp.business_id = $1 and p.auth_uid = $2`, [BIZ.id, uid.reception])
+    const can = async (need) => {
+      await db.query('savepoint t')
+      try {
+        await db.query(`set local role authenticated`)
+        await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.reception, role: 'authenticated', email: emails.reception })])
+        await db.query(`select sehat_lab_check($1, $2)`, [BIZ.id, need]); await db.query('reset role'); await db.query('release savepoint t'); return true
+      } catch { await db.query('rollback to savepoint t'); return false }
+    }
+    expectEq('a lab technician can change tests, packages and prices', await can('manage'), true)
+    expectEq('…and enter results', await can('results'), true)
+    expectEq('…but cannot sign a report', await can('approve'), false)
+    await db.query(`set local role authenticated`)
+    await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.reception, role: 'authenticated', email: emails.reception })])
+    const clinical = (await db.query(`select sehat_caller_is_clinical($1) c`, [BIZ.id])).rows[0].c
+    await db.query('reset role')
+    expectEq('…and does not see clinical records', clinical, false)
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 0266 — a name is found by any of its words, titles and dots ignored.
 sec('name search')
 if (!skip()) {
