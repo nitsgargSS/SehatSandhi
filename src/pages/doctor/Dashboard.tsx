@@ -48,6 +48,8 @@ const ROSTER_ROLES: [string, string, string][] = [
   ['doctor',       'Doctor',       'Sees patients, prescribes, reads the full record'],
   ['nurse',        'Nurse',        'Registers OPD patients, runs the queue, records vitals and charts the ward — for their doctors. Cannot prescribe'],
   ['receptionist', 'Reception',    'Queue, beds and billing — no medical record'],
+  // 0271: the lab's own staff.
+  ['lab_technician', 'Lab technician', 'Lab only: tests, packages and prices, samples and results. Cannot sign reports; no patient records or money'],
   ['manager',      'Manager',      'Everything reception and nurses do, for every patient, plus staff and the pharmacy. Not the plan, bills or WhatsApp'],
 ]
 // 0189: a medical store's own people. A helper often delivers too — anyone
@@ -62,7 +64,9 @@ const AMBULANCE_ROLES: [string, string, string][] = [
   ['driver',  'Driver',  'Gets every request in your areas on their phone, accepts, and runs their own trips'],
   ['manager', 'Manager', 'Assigns drivers and runs every trip, plus the team. Not the plan, bills or WhatsApp'],
 ]
-const rosterRoles = (v: VerticalKey) => v === 'pharmacy' ? PHARMACY_ROLES : v === 'ambulance' ? AMBULANCE_ROLES : ROSTER_ROLES
+// 0271: a lab technician only where there is a lab.
+const rosterRoles = (v: VerticalKey, labOn = false) => v === 'pharmacy' ? PHARMACY_ROLES : v === 'ambulance' ? AMBULANCE_ROLES
+  : ROSTER_ROLES.filter(([r]) => r !== 'lab_technician' || labOn || v === 'lab')
 import { useLanguage } from '../../i18n/LanguageContext'
 import { fetchOpenWindows, DAYS_OF_WEEK, AvailabilityTemplate, TimeSlot } from '../../lib/availability'
 import { cancelAppointment, rescheduleAppointment, setAppointmentStatus } from '../../lib/appointmentApi'
@@ -73,6 +77,7 @@ import StaffCodeModal from './StaffCodeModal'
 import LabKindPicker from './LabKindPicker'
 import ReviewsCard from './ReviewsCard'
 import AddonsPanel from './AddonsPanel'
+import PlanAddons, { usePlansLive } from './PlanAddons'
 import { MyNurses, NurseLinksLine, UnlinkedNursesAlert, type StaffLite } from './NurseLinks'
 import { ClinicLeave, LeaveConflicts, MyLeave, MyWeek } from './LeavePanels'
 import { ClinicInvitations, MyInvitations, PersonMatches } from './Invitations'
@@ -132,7 +137,10 @@ export default function DoctorDashboard() {
   // so a busy or less tech-savvy doctor sees one obvious default
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages'>('today')
+  // 0280: a billing message links straight to ?tab=plan.
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages'>(
+    () => (['plan', 'whatsapp', 'bills'].includes(new URLSearchParams(window.location.search).get('tab') ?? '')
+      ? new URLSearchParams(window.location.search).get('tab') as 'plan' : 'today'))
 
   // What this login is at this business, and whether the database has a role
   // system to ask at all. Starts enforced-with-no-role so nothing extra is
@@ -990,7 +998,7 @@ export default function DoctorDashboard() {
   }, [rescheduling, reschedDate, doctor])
 
 
-  const roleLabel = (r: string) => r === 'pharmacist' ? 'Pharmacist / helper' : r === 'delivery' ? 'Delivery' : r === 'driver' ? 'Driver' : r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
+  const roleLabel = (r: string) => r === 'lab_technician' ? 'Lab technician' : r === 'pharmacist' ? 'Pharmacist / helper' : r === 'delivery' ? 'Delivery' : r === 'driver' ? 'Driver' : r === 'receptionist' ? t('dashboardPage.roleReceptionist') : r === 'manager' ? t('dashboardPage.roleManager') : r === 'doctor' ? t('dashboardPage.roleDoctor') : r
 
   // ── Everything below runs BEFORE the early returns, and must ──────────────
   //
@@ -1047,6 +1055,7 @@ export default function DoctorDashboard() {
   // 0181: the account — plan, payments, Bills, WhatsApp, add-ons, doctors'
   // leave — is the owner's. A manager runs the floor (0180), not the account.
   const isOwner = !role.enforced || role.role === 'owner'
+  const plans = usePlansLive(doctor?.id)
   const ROLE_WORD: Record<string, string> = { owner: 'Owner', doctor: 'Doctor', nurse: 'Nurse', receptionist: 'Reception', manager: 'Manager' }
   const whoIsIn = `${myName || signedInAs || 'Signed in'}${role.role ? ` · ${ROLE_WORD[role.role] ?? role.role}` : ''}`
   const isClinician = isClinicalRole(role)
@@ -1067,9 +1076,11 @@ export default function DoctorDashboard() {
   // 0192: an insurance advisor's leads.
   const handlesLeads = myVertical === 'insurance' && (!role.enforced || ['owner', 'manager'].includes(role.role ?? ''))
   // 0197: patients' messages from the app — every role that sees patients.
-  const handlesMessages = !!doctor && !['delivery', 'driver'].includes(role.role ?? '') && myVertical !== 'insurance' && myVertical !== 'ambulance'
+  const handlesMessages = !!doctor && !['delivery', 'driver', 'lab_technician'].includes(role.role ?? '') && myVertical !== 'insurance' && myVertical !== 'ambulance'
 
-  const tabs = [
+  // 0271: a lab technician works in the Lab and nowhere else.
+  const labOnly = role.enforced && role.role === 'lab_technician'
+  const allTabs = [
     ...(handlesMessages ? [
       { id: 'messages', label: msgUnread ? `Messages (${msgUnread})` : 'Messages', icon: <MessageCircle className="w-4 h-4" /> },
     ] : []),
@@ -1103,7 +1114,8 @@ export default function DoctorDashboard() {
     // those run the tab would open onto a PostgREST 404.
     // Either system gives you a patient record — OPD writes visits into it and
     // IPD writes admissions. Neither bought, no record.
-    ...(emr && (access.opd || access.ipd) ? [
+    // 0277: every lab keeps its patients and their reports, OPD or not.
+    ...(emr && (access.opd || access.ipd || myVertical === 'lab') ? [
       { id: 'patients', label: 'Patients', icon: <UserSearch className="w-4 h-4" /> },
     ] : []),
     // Only where somebody is actually admitted. A pharmacy has no beds, and a
@@ -1166,6 +1178,7 @@ export default function DoctorDashboard() {
       { id: 'myaccount', label: 'My account', icon: <User className="w-4 h-4" /> },
     ] : []),
   ]
+  const tabs = labOnly ? allTabs.filter(tb => tb.id === 'lab' || tb.id === 'myaccount') : allTabs
 
   // Keep the open tab one that exists.
   //
@@ -1862,8 +1875,8 @@ export default function DoctorDashboard() {
         {/* ══════════ LAB — tests, orders, results, reports (0168) ══════════ */}
         {tab === 'lab' && doctor && (doctor.vertical === 'lab' || doctor.lab_module) && (
           <LabPanel businessId={doctor.id}
-            canManage={!role.enforced || ['owner', 'manager', 'doctor'].includes(role.role ?? '')}
-            canResults={!role.enforced || ['owner', 'manager', 'doctor', 'nurse'].includes(role.role ?? '')}
+            canManage={!role.enforced || ['owner', 'manager', 'doctor', 'lab_technician'].includes(role.role ?? '')}
+            canResults={!role.enforced || ['owner', 'manager', 'doctor', 'nurse', 'lab_technician'].includes(role.role ?? '')}
             canApprove={!role.enforced || ['owner', 'doctor'].includes(role.role ?? '')} />
         )}
 
@@ -1922,7 +1935,12 @@ export default function DoctorDashboard() {
           <div className="space-y-4">
             <PayListingPanel business={doctor} canPay={isOwner} onPaid={() => window.location.reload()} />
             {/* 0178: in-clinic tests. A lab is its kind instead (Lab & team). */}
-            {hasPractitioners(myVertical) && (
+            {/* 0279: on the plans — or still on the old one, with notice of the move. */}
+            {plans?.live && (myVertical === 'clinic' || myVertical === 'hospital' || myVertical === 'lab') && (
+              <PlanAddons businessId={doctor.id} businessName={doctor.name} email={doctor.email ?? undefined} preview={!plans.now}
+                canChange={isOwner} months={Number((doctor as { months_paid?: number | null }).months_paid) || 1} />
+            )}
+            {hasPractitioners(myVertical) && plans && !plans.now && (
               <AddonsPanel businessId={doctor.id} businessName={doctor.name} email={doctor.email ?? undefined}
                 current={doctor.lab_categories} canChange={isOwner}
                 pharmacyOn={!!doctor.pharmacy_module}
@@ -2222,7 +2240,7 @@ export default function DoctorDashboard() {
                     <div>
                       <label className="text-xs font-medium text-gray-600 mb-1 block">What do they do here?</label>
                       <div className="flex gap-2 flex-wrap">
-                        {rosterRoles(myVertical).map(([value, label, blurb]) => {
+                        {rosterRoles(myVertical, !!doctor?.lab_module).map(([value, label, blurb]) => {
                           const on = docForm.role === value
                           return (
                             <button key={value} type="button"
@@ -2429,7 +2447,7 @@ export default function DoctorDashboard() {
                               } catch (err) { setRosterErr((err as Error).message) }
                               finally { setRosterBusy(false) }
                             }}>
-                            {rosterRoles(myVertical).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                            {rosterRoles(myVertical, !!doctor?.lab_module).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                           </select>
                         )}
                         <button disabled={rosterBusy}

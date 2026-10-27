@@ -28,7 +28,7 @@ function Records_() {
   const navigate = useNavigate()
   useEffect(() => { myRecords().then(setR).catch(e => setErr((e as Error).message)) }, [])
   // The record's own page (prescription, report, bill, summary), its link renewed if it had expired.
-  const open = (kind: 'rx' | 'lab' | 'bill' | 'ds', id: string) =>
+  const open = (kind: 'rx' | 'lab' | 'bill' | 'ds' | 'file', id: string) =>
     openRecord(kind, id).then(u => navigate(new URL(u).pathname)).catch(e => setErr((e as Error).message))
   if (!r) return err ? <Err msg={err} /> : <p className="text-gray-400">Loading…</p>
   const mine = <T extends { member_id: string }>(xs: T[]) => xs.filter(x => !who || x.member_id === who)
@@ -77,8 +77,9 @@ function Records_() {
       {mine(r.visits).map(v => <Row key={v.id} icon="🩺" title={`${v.date ? day(v.date) : ''} · ${v.clinic}`}
         sub={[v.doctor, v.diagnosis && `Diagnosis: ${v.diagnosis}`, v.advice && `Advice: ${v.advice}`, v.follow_up && `Follow-up ${day(v.follow_up)}`, many && name(v.member_id)].filter(Boolean).join(' · ')} />)}
 
-      {!!mine(r.lab_reports).length && <H>Lab reports</H>}
+      {!!(mine(r.lab_reports).length + mine(r.lab_files ?? []).length) && <H>Lab reports &amp; scans</H>}
       {mine(r.lab_reports).map(x => <Row key={x.id} icon="🧪" title={`${day(x.date)} · ${x.clinic}`} sub={`Report ${x.no}${x.by ? ` · ${x.by}` : ''}${tail(x.member_id)}`} onClick={() => open('lab', x.id)} />)}
+      {mine(r.lab_files ?? []).map(x => <Row key={x.id} icon={x.mime?.startsWith('image/') ? '🩻' : '📄'} title={`${day(x.date)} · ${x.clinic}`} sub={`${x.title || 'Report file'}${tail(x.member_id)}`} onClick={() => open('file', x.id)} />)}
 
       {!!mine(r.discharges).length && <H>Discharge summaries</H>}
       {mine(r.discharges).map(x => <Row key={x.id} icon="🏥" title={`${day(x.date)} · ${x.clinic}`} sub={`${x.diagnosis ?? ''}${x.doctor ? ` · ${x.doctor}` : ''}${tail(x.member_id)}`} onClick={() => open('ds', x.id)} />)}

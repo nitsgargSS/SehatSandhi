@@ -261,6 +261,10 @@ export interface LabAddonQuote extends Omit<WhatsappAddonQuote, 'fullFee'> {
 export const labAddon = (businessId: string, code: string, action: 'quote' | 'order', authToken: string) =>
   callFn<LabAddonQuote>('lab-addon-order', { businessId, code, action }, authToken)
 
+/** 0272: an add-on (ipd, pathology, diagnostics, pharmacy) bought mid-term — the difference to the plan, pro rata. */
+export const planAddon = (businessId: string, code: string, action: 'quote' | 'order', authToken: string) =>
+  callFn<LabAddonQuote>('plan-addon-order', { businessId, code, action }, authToken)
+
 export const verifyRazorpayPayment = (args: {
   orderId: string
   paymentId: string

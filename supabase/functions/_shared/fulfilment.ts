@@ -151,6 +151,9 @@ export async function fulfilPayment(
     await supabase.rpc('sehat_release_paid_doctor', { p_business: pay.business_id, p_practitioner: pay.addon_practitioner_id })
   }
 
+  // 0273: the add-ons this payment bought — on now; anything left out goes when its term starts.
+  await supabase.rpc('sehat_fulfil_plan_addons', { p_payment: pay.id }).then(() => undefined, () => undefined)
+
   // 0117: count the coupon once, and switch the WhatsApp add-on on for the term.
   // Both idempotent, so the second of verify/webhook changes nothing.
   await supabase.rpc('sehat_redeem_coupon', { p_payment_id: pay.id })

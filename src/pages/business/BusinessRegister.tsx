@@ -77,8 +77,8 @@ const categoryOptions = (v: VerticalKey): string[] => {
       return ['Multi-speciality', ...DOCTOR_SPECIALITIES.map(s => s.en)]
     case 'lab':
       // 0177: this is also what the lab IS — its tests and reports follow it
-      // (LAB_KIND_FOR below). A lab doing both registers two listings.
-      return ['Pathology', 'Radiology & imaging', 'Sample collection centre']
+      // (LAB_KIND_FOR below). 0272: one plan each.
+      return ['Pathology', 'Diagnostic centre (imaging, ECG, echo…)', 'Diagnostic centre with pathology', 'Sample collection centre']
     case 'pharmacy':
       return ['Retail pharmacy', 'Hospital pharmacy', 'Ayurvedic / Homeopathic', 'Surgical & medical equipment']
     case 'insurance':
@@ -97,6 +97,9 @@ const CLINIC_MAX_DOCTORS = 3
 const LAB_KIND_FOR: Record<string, string[]> = {
   'Pathology': ['pathology'],
   'Sample collection centre': ['pathology'],
+  'Diagnostic centre (imaging, ECG, echo…)': ['radiology', 'cardiology'],
+  'Diagnostic centre with pathology': ['pathology', 'radiology', 'cardiology'],
+  // Listings registered before 0276.
   'Radiology & imaging': ['radiology', 'cardiology'],
 }
 
@@ -409,7 +412,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                   : soloDoctor && !form.owner_name?.trim()
                     ? 'Please enter your name — it is what patients see.'
                     : vertical === 'lab' && !LAB_KIND_FOR[form.category ?? '']
-                    ? 'Choose what kind of lab this is — Pathology or Radiology & imaging. If you do both, register each as its own listing.'
+                    ? 'Choose what kind of lab this is — Pathology, Diagnostic centre, or both.'
                     : ownerIsDoctor && !practitioners.some(d => d.is_owner)
                       ? 'Find the owner as a doctor and press Add doctor — or untick "The owner is a doctor".'
                       : 'Please enter your council registration number.')

@@ -28,6 +28,7 @@ Deno.serve(async (req) => {
     pincodes?: unknown; businessId?: unknown; vertical?: unknown
     months?: unknown; doctorCount?: unknown; modules?: unknown
     whatsapp?: unknown; couponCode?: unknown; whatsappPlan?: unknown
+    planAddons?: unknown; staffCount?: unknown; bedCount?: unknown; labKind?: unknown
   }
   try {
     body = await req.json()
@@ -60,6 +61,10 @@ Deno.serve(async (req) => {
     const result = await computePrice(supabase, pincodes, businessId, vertical, months, doctorCount, modules, {
       whatsapp: body.whatsapp === true,
       whatsappPlan: body.whatsappPlan === 'pro' ? 'pro' : 'basic',
+      planAddons: Array.isArray(body.planAddons) ? (body.planAddons as unknown[]).filter((x): x is string => typeof x === 'string') : null,
+      staffHint: Number.isFinite(body.staffCount) ? Number(body.staffCount) : null,
+      bedsHint: Number.isFinite(body.bedCount) ? Number(body.bedCount) : null,
+      labKind: typeof body.labKind === 'string' ? body.labKind : null,
       couponCode: typeof body.couponCode === 'string' ? body.couponCode.slice(0, 40) : null,
     })
     return json(result)

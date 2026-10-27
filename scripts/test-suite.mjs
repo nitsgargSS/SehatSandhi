@@ -1606,6 +1606,186 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0271 — a lab technician: tests, packages and prices, and results; not sign.
+sec('lab technician')
+if (!skip()) {
+  await inRollback(async () => {
+    await db.query(`update businesses set lab_module = true where id = $1`, [BIZ.id])
+    // sehat_lab_check is only ever called inside the lab's own functions; let
+    // this rolled-back test call it directly.
+    await db.query(`grant execute on function sehat_lab_check(uuid, text) to authenticated`)
+    await db.query(`update business_practitioners bp set role = 'lab_technician' from practitioners p
+                     where p.id = bp.practitioner_id and bp.business_id = $1 and p.auth_uid = $2`, [BIZ.id, uid.reception])
+    const can = async (need) => {
+      await db.query('savepoint t')
+      try {
+        await db.query(`set local role authenticated`)
+        await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.reception, role: 'authenticated', email: emails.reception })])
+        await db.query(`select sehat_lab_check($1, $2)`, [BIZ.id, need]); await db.query('reset role'); await db.query('release savepoint t'); return true
+      } catch { await db.query('rollback to savepoint t'); return false }
+    }
+    expectEq('a lab technician can change tests, packages and prices', await can('manage'), true)
+    expectEq('…and enter results', await can('results'), true)
+    expectEq('…but cannot sign a report', await can('approve'), false)
+    await db.query(`set local role authenticated`)
+    await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.reception, role: 'authenticated', email: emails.reception })])
+    const clinical = (await db.query(`select sehat_caller_is_clinical($1) c`, [BIZ.id])).rows[0].c
+    await db.query('reset role')
+    expectEq('…and does not see clinical records', clinical, false)
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 0272–0275 — plans by doctors, paid add-ons, and the switch that puts them live.
+sec('plans')
+if (!skip()) {
+  const q = async (...args) => (await raw(`select sehat_plan_quote(null, $1, $2::text[], $3, $4, $5, $6, $7) q`, args))[0].q
+  let r = await q(1, ['pharmacy'], 'clinic', 2, 3, 0, null)
+  expectEq('2 doctors and the pharmacy: Clinic ₹2,000 + ₹1,000', [r.tier, Number(r.monthly)], ['clinic', 3000])
+  r = await q(1, [], 'clinic', 3, 3, 0, null)
+  expectEq('a third doctor moves a clinic to the Polyclinic plan', [r.tier, Number(r.monthly)], ['polyclinic', 3000])
+  r = await q(1, ['pathology', 'pharmacy'], 'clinic', 4, 6, 0, null)
+  expectEq('two add-ons: 10% off them', Number(r.monthly), 3000 + Math.round(2500 * 0.9))
+  r = await q(1, ['ipd', 'pathology', 'diagnostics', 'pharmacy'], 'hospital', 15, 25, 30, null)
+  expectEq('Hospital, all four add-ons, 30 beds: 20% off, 10 beds × ₹100', Number(r.monthly), 8000 + Math.round((2000 + 1000 + 1500 + 3000 + 1000) * 0.8))
+  r = await q(1, [], 'hospital', 18, 40, 0, null)
+  expectEq('18 doctors: 3 × ₹500; 40 staff: 15 over → 3 packs × ₹250', Number(r.monthly), 8000 + 1500 + 750)
+  r = await q(1, ['pathology'], 'clinic', 2, 5, 0, null)
+  expectEq('Pathology brings 2 technician logins (5 staff, none extra)', [r.staff_included, Number(r.monthly)], [5, 3500])
+  r = await q(12, [], 'clinic', 2, 3, 0, null)
+  expectEq('12 months cost 9', Number(r.total), 18000)
+  r = await q(6, [], 'clinic', 2, 3, 0, null)
+  expectEq('6 months cost 5', Number(r.total), 10000)
+  r = await q(1, null, 'lab', 3, 5, 0, 'lab_diagnostic')
+  expectEq('a Diagnostic Centre with a third doctor: ₹4,000 + ₹500', Number(r.monthly), 4500)
+  r = await q(1, ['opd'], 'lab', 1, 5, 0, 'lab_pathology')
+  expectEq('a pathology lab adds OPD for ₹1,000', Number(r.monthly), 3000)
+  r = await q(1, ['opd'], 'lab', 2, 5, 0, 'lab_diagnostic')
+  expectEq('a diagnostic centre is not charged for OPD — it is in the plan', Number(r.monthly), 4000)
+  r = await q(1, ['opd'], 'clinic', 2, 3, 0, null)
+  expectEq('a clinic is not sold OPD — its plan is OPD', Number(r.monthly), 2000)
+  r = await q(1, null, 'pharmacy', 0, 5, 0, null)
+  expectEq('a pharmacy store: ₹1,500', Number(r.monthly), 1500)
+  expectEq('insurance and ambulance are not priced by plans', await q(1, null, 'insurance', null, null, null, null), null)
+
+  await inRollback(async () => {
+    // probe() opens and rolls back its own transaction, which would end this
+    // one early — denials here go through a savepoint instead.
+    const denied = async (label, who, sql, params) => {
+      await db.query('savepoint d')
+      let ok = true
+      try {
+        await db.query(`set local role authenticated`)
+        await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid[who], role: 'authenticated', email: emails[who] })])
+        await db.query(sql, params)
+      } catch { ok = false }
+      await db.query('rollback to savepoint d')
+      expectEq(label, ok, false)
+    }
+    await db.query(`update plan_settings set tiered_live = true where id`)
+    await db.query(`update businesses set pharmacy_module = false, ipd_module = false, lab_module = false, lab_categories = '{}' where id = $1`, [BIZ.id])
+    await denied('once live, the owner cannot switch the pharmacy on for free', 'owner', `select sehat_set_pharmacy_module($1, true)`, [BIZ.id])
+    await denied('…nor the heart tests', 'owner', `select sehat_set_lab_tests($1, array['cardiology'])`, [BIZ.id])
+    await denied('reception cannot change the renewal', 'reception', `select sehat_set_renewal_plan_addons($1, array['ipd'])`, [BIZ.id])
+
+    // A payment for IPD + Pharmacy, its term starting today: both on, OPD on.
+    const pay = (await db.query(`insert into payments (business_id, amount, type, status, period_months, term_start, term_end, plan_addons)
+      values ($1, 1, 'listing', 'paid', 1, (now() at time zone 'Asia/Kolkata')::date, (now() at time zone 'Asia/Kolkata')::date + 30, array['ipd','pharmacy'])
+      returning id`, [BIZ.id])).rows[0].id
+    await db.query(`select sehat_fulfil_plan_addons($1)`, [pay])
+    let b = (await db.query(`select opd_module, ipd_module, pharmacy_module, lab_module from businesses where id = $1`, [BIZ.id])).rows[0]
+    expectEq('paid IPD and Pharmacy are on, with OPD', [b.opd_module, b.ipd_module, b.pharmacy_module, b.lab_module], [true, true, true, false])
+
+    // A renewal paid early without the pharmacy: it stays on until that term starts.
+    const pay2 = (await db.query(`insert into payments (business_id, amount, type, status, period_months, term_start, term_end, plan_addons)
+      values ($1, 1, 'listing', 'paid', 1, (now() at time zone 'Asia/Kolkata')::date + 30, (now() at time zone 'Asia/Kolkata')::date + 60, array['ipd'])
+      returning id`, [BIZ.id])).rows[0].id
+    await db.query(`select sehat_fulfil_plan_addons($1)`, [pay2])
+    b = (await db.query(`select pharmacy_module, next_addons from businesses where id = $1`, [BIZ.id])).rows[0]
+    expectEq('a renewal paid early leaves the pharmacy on until its term starts', [b.pharmacy_module, b.next_addons], [true, ['ipd']])
+    await db.query(`update businesses set next_addons_from = (now() at time zone 'Asia/Kolkata')::date where id = $1`, [BIZ.id])
+    await db.query(`select sehat_apply_due_plan_addons()`)
+    b = (await db.query(`select pharmacy_module, ipd_module from businesses where id = $1`, [BIZ.id])).rows[0]
+    expectEq('…and goes when it does (the tab hides, nothing is deleted)', [b.pharmacy_module, b.ipd_module], [false, true])
+
+    // 0278: free add-ons cost nothing, are on at once, and don't count in the bundle.
+    await db.query(`update businesses set free_addons = '{}' where id = $1`, [BIZ.id])
+    const base = (await db.query(`select sehat_plan_quote($1, 1, array['ipd','pharmacy']) q`, [BIZ.id])).rows[0].q
+    await db.query(`set local role authenticated`)
+    await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.admin, role: 'authenticated', email: emails.admin })])
+    await db.query(`select sehat_admin_set_free_addons($1, array['pathology'])`, [BIZ.id])
+    await db.query('reset role')
+    const withFree = (await db.query(`select sehat_plan_quote($1, 1, array['ipd','pharmacy','pathology']) q`, [BIZ.id])).rows[0].q
+    expectEq('a free add-on adds nothing, and the bundle stays at two paid add-ons', Number(withFree.monthly), Number(base.monthly))
+    expectEq('…and it is switched on at once', (await db.query(`select 'pathology' = any(lab_categories) and lab_module is_on from businesses where id = $1`, [BIZ.id])).rows[0].is_on, true)
+    await denied('only an admin gives add-ons free', 'owner', `select sehat_admin_set_free_addons($1, array['ipd'])`, [BIZ.id])
+
+    const extra = (await db.query(`select sehat_extra_doctor_monthly($1, gen_random_uuid()) m`, [BIZ.id])).rows[0].m
+    expectTrue('an extra doctor costs the step to the next plan, or nothing', Number(extra) >= 0, String(extra))
+  })
+}
+
+// 0279 — going live: a paying customer keeps its plan until a month's notice has run.
+if (!skip()) {
+  await inRollback(async () => {
+    const asAdmin = async (sql, params) => {
+      await db.query(`set local role authenticated`)
+      await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.admin, role: 'authenticated', email: emails.admin })])
+      const r = await db.query(sql, params); await db.query('reset role'); return r
+    }
+    await db.query(`update plan_settings set tiered_live = false where id`)
+    await db.query(`update businesses set status = 'active', term_end = (now() at time zone 'Asia/Kolkata')::date + 10,
+                      plan_notice_at = null, plans_from = null, locked_monthly_price = 2000 where id = $1`, [BIZ.id])
+    await asAdmin(`select sehat_admin_set_plan_pricing('{"settings": {"tiered_live": true}}'::jsonb)`)
+    const b = (await db.query(`select plans_from - (now() at time zone 'Asia/Kolkata')::date d, plan_notice_at is not null told,
+                                      sehat_plans_apply($1) next_term, sehat_plans_apply_now($1) now_ from businesses where id = $1`, [BIZ.id])).rows[0]
+    expectEq('a customer renewing in 10 days gets the full 30 days of notice', [b.d, b.told], [30, true])
+    expectEq('…so its next renewal is still at the old price', b.next_term, false)
+    expectEq('…and today it runs on the old rules', b.now_, false)
+    const notice = (await db.query(`select count(*)::int n from billing_notifications where business_id = $1 and kind = 'plan_change_notice'`, [BIZ.id])).rows[0].n
+    expectEq('a notice with the new price is queued for it', notice, 1)
+    const newBiz = (await db.query(`select sehat_plans_apply(gen_random_uuid()) a`)).rows[0].a
+    expectEq('a business registering after go-live is on the plans at once', newBiz, true)
+    await db.query(`update businesses set plans_from = (now() at time zone 'Asia/Kolkata')::date where id = $1`, [BIZ.id])
+    expectEq('once the date comes, the plans apply', (await db.query(`select sehat_plans_apply_now($1) a`, [BIZ.id])).rows[0].a, true)
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 0276 — the Diagnostics catalogue: imaging, and heart, lung and nerve tests.
+sec('diagnostics')
+if (!skip()) {
+  const cat = async (code) => (await raw(`select category, department from lab_catalogue where code = $1`, [code]))[0]
+  expectEq('every X-ray is imaging', (await raw(`select count(*)::int n from lab_catalogue where name ilike '%x-ray%' and category <> 'radiology'`))[0].n, 0)
+  for (const code of ['EEG', 'NCV', 'PFT'].map(c => c)) {
+    const r = (await raw(`select category from lab_catalogue where code = $1 or name ilike $2 limit 1`,
+      [code, code === 'PFT' ? 'Pulmonary Function%' : code === 'NCV' ? 'Nerve Conduction%' : 'EEG']))[0]
+    expectEq(`${code} is in Diagnostics`, r?.category, 'cardiology')
+  }
+  expectEq('MRI is grouped as MRI', (await cat('MRIBRAIN'))?.department, 'MRI')
+  expectEq('Holter is grouped under Heart', (await cat('HOLTER'))?.department, 'Heart')
+  expectEq('no diagnostic test is left without a group',
+    (await raw(`select count(*)::int n from lab_catalogue where category in ('radiology', 'cardiology') and department is null`))[0].n, 0)
+  expectEq('a business\'s copies follow the catalogue',
+    (await raw(`select count(*)::int n from lab_tests t join lab_catalogue c on c.code = t.catalogue_code
+                 where c.category <> 'pathology' and t.category is distinct from c.category`))[0].n, 0)
+
+  // 0277: a diagnostic centre runs an OPD; a pathology lab keeps patients without one.
+  const LAB = (await raw(`select id from businesses where vertical = 'lab' limit 1`))[0]
+  if (LAB) await inRollback(async () => {
+    await db.query(`set local role authenticated`)
+    await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.admin, role: 'authenticated', email: emails.admin })])
+    await db.query(`select sehat_set_lab_tests($1, array['radiology','cardiology'])`, [LAB.id])
+    await db.query('reset role')
+    expectEq('a lab that becomes a diagnostic centre gets OPD', (await db.query(`select opd_module from businesses where id = $1`, [LAB.id])).rows[0].opd_module, true)
+    await db.query(`set local role authenticated`)
+    await db.query(`select sehat_set_lab_tests($1, array['pathology'])`, [LAB.id])
+    await db.query('reset role')
+    expectEq('…and a pathology-only lab does not', (await db.query(`select opd_module from businesses where id = $1`, [LAB.id])).rows[0].opd_module, false)
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 0266 — a name is found by any of its words, titles and dots ignored.
 sec('name search')
 if (!skip()) {
@@ -1646,7 +1826,14 @@ sec('ratings')
 /** Run fn inside a transaction that is rolled back whatever happens. */
 async function inRollback(fn) {
   await db.query('begin')
-  try { return await fn() } finally { await db.query('rollback') }
+  try {
+    const r = await fn()
+    // Something inside ended the transaction early (probe() does): what came
+    // after it was committed. Fail loudly rather than leave that unnoticed.
+    const live = (await db.query(`select now() = statement_timestamp() as fresh`)).rows[0].fresh
+    if (live) throw new Error('inRollback: the transaction ended early — a nested begin/rollback (probe?) inside it committed later writes')
+    return r
+  } finally { await db.query('rollback') }
 }
 
 // ── the shape, which needs no rows ──────────────────────────────────────────

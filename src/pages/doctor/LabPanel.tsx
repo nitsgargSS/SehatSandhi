@@ -9,7 +9,7 @@ import {
   createOrder, getOrders, getOrder, markCollected, assignCollector, cancelOrder, getResults, getPreviousValues,
   saveResults, approveOrder, sendReport, rangeText, STATUS_LABEL,
   getFollowups, followupAction, getCrmSummary, getSegment, setRepeatDays, reminderLink,
-  getUploads, uploadReport, sendUpload, testVisible,
+  getUploads, uploadReport, sendUpload, testVisible, CATEGORY_LABEL, DIAGNOSTIC_GROUPS,
   type LabCategory,
   LabTest, LabPackage, LabOrder, LabParameter, OrderStatus, ParamKind, LabFollowup, CrmSummary, Segment, UploadedReport,
 } from '../../lib/labApi'
@@ -90,7 +90,7 @@ export default function LabPanel({ businessId, canManage, canResults, canApprove
 
       {isLab && !labCats?.length && canManage && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-3">
-          Tell us what kind of lab this is — pathology, or radiology &amp; imaging — under <b>Lab &amp; team</b>. Your test list and reports then show only those tests.
+          Tell us what kind of lab this is — pathology, diagnostic centre, or both — under <b>Lab &amp; team</b>. Your test list and reports then show only those tests.
         </div>
       )}
 
@@ -848,7 +848,10 @@ function Tests({ businessId, tests, cats, canManage, reload }: { businessId: str
   const [err, setErr] = useState('')
   const load = async (t: LabTest) => setEdit({ test: t, params: (await getTestParameters(t.id)).map(p => ({ ...p })) })
   const rows = tests.filter(t => !q.trim() || t.name.toLowerCase().includes(q.trim().toLowerCase()))
-  const groups = useMemo(() => Array.from(new Set(rows.map(t => t.category))), [rows])
+  // 0276: diagnostic tests list under their group (Imaging · X-ray, Heart, lungs & nerves · Heart).
+  const groupOf = (t: LabTest) => t.category === 'radiology' || t.category === 'cardiology'
+    ? `${CATEGORY_LABEL[t.category]}${t.department ? ` · ${t.department}` : ''}` : CATEGORY_LABEL[t.category] ?? t.category
+  const groups = useMemo(() => Array.from(new Set(rows.map(groupOf))), [rows]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const doImport = async () => {
     setBusy(true); setErr(''); setMsg('')
@@ -876,12 +879,18 @@ function Tests({ businessId, tests, cats, canManage, reload }: { businessId: str
         <div className="grid sm:grid-cols-4 gap-2">
           <input className="input-field sm:col-span-2" placeholder="Test name" value={t.name ?? ''} onChange={e => setT('name', e.target.value)} />
           <select className="input-field" value={t.category ?? firstCat} onChange={e => setT('category', e.target.value)}>
-            {([['pathology', 'Pathology'], ['radiology', 'Radiology / imaging'], ['cardiology', 'Cardiology'], ['other', 'Other']] as const)
-              .filter(([v]) => testVisible(cats, v) || t.category === v)
-              .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            {(['pathology', 'radiology', 'cardiology', 'other'] as const)
+              .filter(v => testVisible(cats, v) || t.category === v)
+              .map(v => <option key={v} value={v}>{CATEGORY_LABEL[v]}</option>)}
           </select>
           <input className="input-field" type="number" min={0} placeholder="Price ₹" value={t.price ?? ''} onChange={e => setT('price', e.target.value)} />
-          <input className="input-field" placeholder="Department" value={t.department ?? ''} onChange={e => setT('department', e.target.value)} />
+          {/* 0276: the group it is listed under — pick one, or type your own (e.g. Holter, Dental). */}
+          <input className="input-field" list="lab-groups" placeholder={t.category === 'radiology' || t.category === 'cardiology' ? 'Group (X-ray, MRI, Heart…)' : 'Department'}
+            value={t.department ?? ''} onChange={e => setT('department', e.target.value)} />
+          <datalist id="lab-groups">
+            {(t.category === 'radiology' || t.category === 'cardiology' ? DIAGNOSTIC_GROUPS[t.category] : [])
+              .map(g => <option key={g} value={g} />)}
+          </datalist>
           <input className="input-field" placeholder="Sample (Blood, Urine…)" value={t.sample_type ?? ''} onChange={e => setT('sample_type', e.target.value)} />
           <input className="input-field" type="number" min={0} placeholder="Report in (hours)" value={t.tat_hours ?? ''} onChange={e => setT('tat_hours', e.target.value)} />
           <label className="text-xs text-gray-500">Repeat after (days) — for follow-up reminders; blank = none
@@ -934,12 +943,12 @@ function Tests({ businessId, tests, cats, canManage, reload }: { businessId: str
       </div>
       {msg && <p className="text-sm text-green-700">{msg}</p>}
       <Err msg={err} />
-      {!tests.length ? <div className="card shadow-sm text-sm text-gray-500 py-10 text-center">No tests yet.{canManage ? ' "Load standard tests" adds 57 common blood, urine, imaging and cardiology tests with normal ranges — you set the prices.' : ''}</div>
+      {!tests.length ? <div className="card shadow-sm text-sm text-gray-500 py-10 text-center">No tests yet.{canManage ? ' "Load standard tests" adds the common tests for what you do — blood and urine, or X-ray, ultrasound, CT, MRI, ECG, echo, PFT, EEG and more — you set the prices.' : ''}</div>
         : groups.map(g => (
           <div key={g} className="card shadow-sm p-0">
             <div className="px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wide text-gray-500">{g}</div>
             <div className="divide-y">
-              {rows.filter(t => t.category === g).map(t => (
+              {rows.filter(t => groupOf(t) === g).map(t => (
                 <div key={t.id} className="px-4 py-2.5 text-sm flex justify-between gap-2">
                   <span className={t.is_active ? '' : 'text-gray-400 line-through'}>{t.name}{t.sample_type ? <span className="text-gray-400"> · {t.sample_type}</span> : null}</span>
                   <span className="flex gap-3 items-center">
@@ -1071,7 +1080,7 @@ function Settings({ businessId }: { businessId: string }) {
         <input className="input-field mt-1" maxLength={60} value={offer} onChange={e => setOffer(e.target.value)} placeholder="10% off on MRI and CT scans" />
         <span className="text-[11px] text-gray-400">{offer.length}/60 · It must be a real offer, honoured for every patient who books.</span>
       </label>
-      <p className="text-xs text-gray-500">Reports are approved by a doctor on your staff — add pathologists and radiologists as doctors (speciality Pathology or Radiology). Lab technicians join with the Nurse role. Reports go to patients on WhatsApp automatically when approved.</p>
+      <p className="text-xs text-gray-500">Reports are approved by a doctor on your staff — add pathologists and radiologists as doctors (speciality Pathology or Radiology). Lab technicians join with the Lab technician role — they add tests, packages and prices and enter results; a doctor signs. Reports go to patients on WhatsApp automatically when approved.</p>
       {msg && <p className="text-sm text-green-700">{msg}</p>}
       <Err msg={err} />
       <button onClick={async () => { setErr(''); try { await saveLabSettings(businessId, Number(fee) || 0); await saveLabOffer(businessId, offer); setMsg('Saved.') } catch (e) { setErr((e as Error).message) } }} className="btn-teal text-sm">Save</button>

@@ -106,12 +106,14 @@ export interface Records {
   visits: { id: string; member_id: string; date: string | null; clinic: string; business_id: string; doctor: string | null; complaint: string | null; diagnosis: string | null; advice: string | null; follow_up: string | null }[]
   prescriptions: { id: string; member_id: string; no: string; clinic: string; doctor: string; date: string; diagnosis: string | null }[]
   lab_reports: { id: string; member_id: string; no: string; clinic: string; by: string | null; date: string }[]
+  /** 0278: scans, X-ray images and PDFs a lab uploaded. Absent from an older database. */
+  lab_files?: { id: string; member_id: string; title: string | null; clinic: string; date: string; mime: string | null }[]
   bills: { id: string; member_id: string; no: string; clinic: string; date: string; amount: number; type: string }[]
   discharges: { id: string; member_id: string; no: string; clinic: string; doctor: string | null; date: string; diagnosis: string | null }[]
   clinics: { business_id: string; name: string; phone: string | null; address: string | null; last_seen: string | null; unread: number }[]
 }
 export const myRecords = () => rpc<Records>('sehat_my_records')
-export const openRecord = (kind: 'rx' | 'lab' | 'bill' | 'ds', id: string) => rpc<string>('sehat_my_open', { p_kind: kind, p_id: id })
+export const openRecord = (kind: 'rx' | 'lab' | 'bill' | 'ds' | 'file', id: string) => rpc<string>('sehat_my_open', { p_kind: kind, p_id: id })
 
 export interface ChatMessage { id: number; from: 'patient' | 'clinic'; by: string | null; body: string; photo_url: string | null; at: string; read: boolean }
 export const myThread = (businessId: string) =>

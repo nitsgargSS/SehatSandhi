@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
   let body: {
     pincodes?: unknown; businessId?: unknown; periodMonths?: unknown; modules?: unknown
     gstin?: unknown; gstLegalName?: unknown; billingAddress?: unknown
-    whatsapp?: unknown; couponCode?: unknown; autoRenew?: unknown; whatsappPlan?: unknown
+    whatsapp?: unknown; couponCode?: unknown; autoRenew?: unknown; whatsappPlan?: unknown; planAddons?: unknown
   }
   try {
     body = await req.json()
@@ -182,6 +182,7 @@ Deno.serve(async (req) => {
     priced = await computePrice(supabase, pincodes, businessId, null, requestedMonths, null, requestedModules, {
       whatsapp: body.whatsapp === true,
       whatsappPlan: body.whatsappPlan === 'pro' ? 'pro' : 'basic',
+      planAddons: Array.isArray(body.planAddons) ? (body.planAddons as unknown[]).filter((x): x is string => typeof x === 'string') : null,
       couponCode: typeof body.couponCode === 'string' ? body.couponCode.slice(0, 40) : null,
     })
   } catch (e) {
@@ -269,6 +270,9 @@ Deno.serve(async (req) => {
       whatsapp_addon: priced.whatsappSelected,
       whatsapp_amount: priced.whatsappTotal,
       whatsapp_plan: priced.whatsappSelected ? priced.whatsappPlan : null,
+      // 0273: the plan and add-ons this payment is for; fulfilment switches the modules to match.
+      plan_addons: priced.plan ? priced.plan.addons : null,
+      plan_tier: priced.plan ? priced.plan.tier : null,
       // 0178: the paid add-ons this term renews; fulfilment keeps them on.
       addon_codes: priced.addonCodes ?? [],
       coupon_code: priced.coupon?.code ?? null,
