@@ -160,7 +160,8 @@ async function test(who: NonNullable<ReturnType<typeof caller>>, body: Any) {
     console.error(`wa-broadcast-send: test not sent: ${res.error}`)
     return json({ ok: false, message: `WhatsApp did not accept the test${plan.tx ? ', so nothing was charged' : ''}. Is the number on WhatsApp?` })
   }
-  return json({ ok: true, to: `…${String(plan.to).slice(-4)}`, chargedPaise: Number(plan.charged_paise ?? 0) })
+  // 0268: a test uses one of the month's free messages while there are any.
+  return json({ ok: true, to: `…${String(plan.to).slice(-4)}`, chargedPaise: Number(plan.charged_paise ?? 0), free: plan.free === true })
 }
 
 Deno.serve(async (req) => {

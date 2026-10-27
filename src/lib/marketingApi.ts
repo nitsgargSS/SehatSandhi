@@ -356,7 +356,7 @@ export async function sendTestMessage(what: { businessId: string; templateId: st
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok || !body.ok) throw new Error(body.message ?? body.error ?? 'The test could not be sent.')
-  return body as { to: string; chargedPaise: number }
+  return body as { to: string; chargedPaise: number; free?: boolean }
 }
 
 // ── Admin ──────────────────────────────────────────────────────────────────

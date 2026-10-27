@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { BedDouble, Plus, X, LogOut as DischargeIcon } from 'lucide-react'
 import { BIZ } from '../business/shared'
+import { supabase } from '../../lib/supabase'
 import { Spinner } from '../../components/Loading'
 import {
   getOccupancy, getWards, addWard, addBed, dischargePatient, moveToBed,
-  OccupancyRow, Ward,
+  OccupancyRow, Ward, changeWard, getDepositBoard, setDepositLowAt, decideWardChange, listWardChanges, type WardChangeKind, type WardChangeRequest,
 } from '../../lib/admissionsApi'
 
 // The bed board — every bed and who is in it.
@@ -41,10 +42,16 @@ const WARD_KINDS = ['general', 'icu', 'hdu', 'private', 'semi_private', 'materni
 const daysSince = (iso: string) =>
   Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000))
 
-export default function Wards({ businessId, practitionerId }: {
+export default function Wards({ businessId, practitionerId, role }: {
   businessId: string
   practitionerId?: string | null
+  /** 0269: the owner and a manager set wards and beds up; others only use them. */
+  role?: string | null
 }) {
+  const canSetUp = role === 'owner' || role === 'manager'
+  const isOwner = role === 'owner'
+  const [changed, setChanged] = useState(0)
+  const [deposits, setDeposits] = useState<Record<string, { left: number; low: boolean }>>({})
   const [rows, setRows] = useState<OccupancyRow[]>([])
   const [wards, setWards] = useState<Ward[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,7 +62,8 @@ export default function Wards({ businessId, practitionerId }: {
   const reload = useCallback(async () => {
     try {
       const [o, w] = await Promise.all([getOccupancy(businessId), getWards(businessId)])
-      setRows(o); setWards(w); setErr('')
+      setRows(o); setWards(w); setErr(''); setChanged(n => n + 1)
+      getDepositBoard(businessId).then(setDeposits).catch(() => setDeposits({}))
     } catch (e) { setErr((e as Error).message) } finally { setLoading(false) }
   }, [businessId])
 
@@ -92,19 +100,24 @@ export default function Wards({ businessId, practitionerId }: {
             {rows.length - occupied} free across {Object.keys(byWard).length} ward{Object.keys(byWard).length === 1 ? '' : 's'}
           </div>
         </div>
-        <button style={btn()} onClick={() => setSetup(s => !s)}>
-          {setup ? 'Done' : 'Wards & beds'}
-        </button>
+        {canSetUp && (
+          <button style={btn()} onClick={() => setSetup(s => !s)}>
+            {setup ? 'Done' : 'Wards & beds'}
+          </button>
+        )}
       </div>
 
       {err && <div style={{ ...card, color: '#8a2b2b', fontSize: 13 }}>{err}</div>}
 
-      {setup && <WardSetup businessId={businessId} wards={wards} onChange={reload} />}
+      {canSetUp && <PendingChanges businessId={businessId} isOwner={isOwner} refresh={changed} onDecided={reload} />}
+
+      {setup && canSetUp && <WardSetup businessId={businessId} wards={wards} beds={rows} isOwner={isOwner} onChange={reload} />}
 
       {rows.length === 0 && !setup && (
         <div style={{ ...card, textAlign: 'center', color: BIZ.muted, fontSize: 13.5 }}>
           <BedDouble className="w-5 h-5" style={{ display: 'inline', marginRight: 6 }} />
-          No beds set up yet. Add a ward and its beds, then patients can be admitted from their record.
+          {canSetUp ? 'No beds set up yet. Add a ward and its beds, then patients can be admitted from their record.'
+            : 'No beds set up yet. The owner or a manager adds the wards and beds.'}
         </div>
       )}
 
@@ -139,6 +152,13 @@ export default function Wards({ businessId, practitionerId }: {
                       </div>
                       {b.attending_name && (
                         <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>{b.attending_name}</div>
+                      )}
+                      {/* 0270: the deposit left on this stay. */}
+                      {b.admission_id && deposits[b.admission_id] && (
+                        <div style={{ fontSize: 11.5, fontWeight: deposits[b.admission_id].low ? 800 : 500, color: deposits[b.admission_id].low ? '#8a2b2b' : BIZ.muted }}>
+                          {deposits[b.admission_id].low ? 'Deposit low · ' : 'Deposit '}
+                          {deposits[b.admission_id].left >= 0 ? `₹${Math.round(deposits[b.admission_id].left).toLocaleString('en-IN')} left` : `₹${Math.round(-deposits[b.admission_id].left).toLocaleString('en-IN')} short`}
+                        </div>
                       )}
                       {b.expected_discharge && (
                         <div style={{ fontSize: 11.5, color: '#8a5a00' }}>
@@ -217,11 +237,16 @@ function MoveBed({ row, free, onClose, onMoved, onError }: {
   )
 }
 
-function WardSetup({ businessId, wards, onChange }: {
+function WardSetup({ businessId, wards, beds, isOwner, onChange }: {
   businessId: string
   wards: Ward[]
+  /** The board's rows: every bed, its charge, and whether someone is in it. */
+  beds: OccupancyRow[]
+  isOwner: boolean
   onChange: () => void
 }) {
+  const [charge, setCharge] = useState('')
+  const [msg, setMsg] = useState('')
   const [wardName, setWardName] = useState('')
   const [kind, setKind] = useState('general')
   const [bedWard, setBedWard] = useState('')
@@ -244,8 +269,11 @@ function WardSetup({ businessId, wards, onChange }: {
           for (let n = Math.min(a, b); n <= Math.max(a, b); n++) labels.push(String(n))
         } else labels.push(part)
       }
-      for (const l of labels) await addBed(businessId, bedWard, l)
-      setBedLabels(''); onChange()
+      // 0269: each new bed's daily charge, typed once for all of them.
+      const perDay = charge.trim() === '' ? null : Number(charge)
+      if (perDay != null && (!Number.isFinite(perDay) || perDay < 0)) throw new Error('Enter the daily charge in rupees, or leave it empty.')
+      for (const l of labels) await addBed(businessId, bedWard, l, perDay)
+      setBedLabels(''); setCharge(''); onChange()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -280,16 +308,172 @@ function WardSetup({ businessId, wards, onChange }: {
             </select>
             <input style={{ ...input, flex: '1 1 200px' }} placeholder="1-12, or 7A, 7B"
               value={bedLabels} onChange={e => setBedLabels(e.target.value)} />
+            <input style={{ ...input, flex: '0 1 150px' }} placeholder="Daily charge ₹" inputMode="decimal"
+              value={charge} onChange={e => setCharge(e.target.value.replace(/[^0-9.]/g, ''))} aria-label="Daily charge in rupees" />
             <button style={btn(true)} disabled={!bedWard || !bedLabels.trim() || busy}
               onClick={createBeds}>Add beds</button>
           </div>
           <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginTop: 5 }}>
-            A range like <strong>1-12</strong> creates twelve beds. Commas work too.
+            A range like <strong>1-12</strong> creates twelve beds. Commas work too. The daily charge applies to each bed added.
           </div>
         </div>
       )}
 
+      {isOwner && <DepositLevel businessId={businessId} />}
+
+      {wards.length > 0 && (
+        <ChangeWards businessId={businessId} wards={wards} beds={beds} isOwner={isOwner}
+          onDone={(t) => { setMsg(t); onChange() }} onError={setErr} />
+      )}
+
+      {msg && <div style={{ fontSize: 12.5, color: BIZ.green }}>{msg}</div>}
       {err && <div style={{ fontSize: 12.5, color: '#8a2b2b' }}>{err}</div>}
+    </div>
+  )
+}
+
+// 0269: change what is already set up. The owner's change applies at once; a
+// manager's goes to the owner, who approves it on this screen.
+function ChangeWards({ businessId, wards, beds, isOwner, onDone, onError }: {
+  businessId: string; wards: Ward[]; beds: OccupancyRow[]; isOwner: boolean
+  onDone: (text: string) => void; onError: (text: string) => void
+}) {
+  const [open, setOpen] = useState<string | null>(null)
+  const [val, setVal] = useState({ charge: '', text: '' })
+  const [busy, setBusy] = useState(false)
+  const run = async (kind: WardChangeKind, target: string, what: string, value: { charge?: number; text?: string } = {}) => {
+    if ((kind === 'bed_remove' || kind === 'ward_remove') && !window.confirm(`Take ${what} out of service?`)) return
+    setBusy(true); onError('')
+    try {
+      const r = await changeWard(businessId, kind, target, value)
+      onDone(r.applied ? `Done: ${what}.` : (r.text ?? 'Sent to the owner for approval.'))
+      setOpen(null); setVal({ charge: '', text: '' })
+    } catch (e) { onError((e as Error).message) } finally { setBusy(false) }
+  }
+  const money = (n: number | null) => n == null ? 'no charge' : `₹${Number(n).toLocaleString('en-IN')}/day`
+  const charge = () => Number(val.charge)
+  const okCharge = val.charge.trim() !== '' && Number.isFinite(charge()) && charge() >= 0
+
+  const editor = (key: string, kindCharge: WardChangeKind, kindText: WardChangeKind, kindRemove: WardChangeKind, target: string, name: string, removeBlocked: string | null) => (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
+      <input style={{ ...input, width: 130 }} placeholder="New charge ₹" inputMode="decimal" value={val.charge}
+        onChange={e => setVal({ ...val, charge: e.target.value.replace(/[^0-9.]/g, '') })} />
+      <button style={btn()} disabled={busy || !okCharge}
+        onClick={() => run(kindCharge, target, `${name} — ₹${charge()}/day`, { charge: charge() })}>Set charge</button>
+      <input style={{ ...input, width: 140 }} placeholder="New name" value={val.text} maxLength={60}
+        onChange={e => setVal({ ...val, text: e.target.value })} />
+      <button style={btn()} disabled={busy || !val.text.trim()}
+        onClick={() => run(kindText, target, `${name} renamed to ${val.text.trim()}`, { text: val.text.trim() })}>Rename</button>
+      <button style={{ ...btn(), color: '#8a2b2b' }} disabled={busy || !!removeBlocked} title={removeBlocked ?? undefined}
+        onClick={() => run(kindRemove, target, name)}>Take out of service</button>
+      <button style={{ ...btn(), border: 'none' }} onClick={() => setOpen(null)}>Close</button>
+      {key && null}
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ ...label, marginBottom: 4 }}>Change wards &amp; beds</div>
+      <div style={{ fontSize: 12, color: BIZ.mutedWarm, marginBottom: 8 }}>
+        {isOwner ? 'Your changes apply at once.' : 'Your changes go to the owner for approval before they apply.'}
+      </div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {wards.map(w => {
+          const wb = beds.filter(b => b.ward_id === w.id)
+          const busyBeds = wb.filter(b => b.occupied).length
+          return (
+            <div key={w.id} style={{ border: `1px solid ${BIZ.border}`, borderRadius: 10, padding: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700, color: BIZ.ink, fontSize: 13.5 }}>{w.name}
+                  <span style={{ fontWeight: 400, color: BIZ.muted, fontSize: 12 }}> · {wb.length} beds · {[...new Set(wb.map(b => money(b.daily_charge)))].join(', ') || 'no beds'}</span></span>
+                <button style={{ ...btn(), padding: '5px 10px', fontSize: 12 }} onClick={() => { setOpen(open === `w:${w.id}` ? null : `w:${w.id}`); setVal({ charge: '', text: '' }) }}>
+                  Change ward
+                </button>
+              </div>
+              {open === `w:${w.id}` && editor(`w:${w.id}`, 'ward_charge', 'ward_name', 'ward_remove', w.id, w.name,
+                busyBeds ? `${busyBeds} patient${busyBeds === 1 ? ' is' : 's are'} in this ward` : null)}
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 7 }}>
+                {wb.map(b => (
+                  <button key={b.bed_id} onClick={() => { setOpen(open === `b:${b.bed_id}` ? null : `b:${b.bed_id}`); setVal({ charge: '', text: '' }) }}
+                    style={{ fontSize: 12, padding: '4px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
+                      border: `1px solid ${open === `b:${b.bed_id}` ? BIZ.green : BIZ.border}`, background: '#fff', color: BIZ.ink }}>
+                    Bed {b.bed_label} · {money(b.daily_charge)}
+                  </button>
+                ))}
+              </div>
+              {wb.filter(b => open === `b:${b.bed_id}`).map(b =>
+                <div key={b.bed_id}>{editor(`b:${b.bed_id}`, 'bed_charge', 'bed_label', 'bed_remove', b.bed_id, `${w.name} bed ${b.bed_label}`,
+                  b.occupied ? 'Someone is in this bed' : null)}</div>)}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+const CHANGE_WHAT: Record<WardChangeKind, string> = {
+  bed_charge: 'Bed charge', ward_charge: 'Charge for the whole ward', bed_label: 'Bed renamed', ward_name: 'Ward renamed',
+  bed_remove: 'Bed taken out', ward_remove: 'Ward taken out',
+}
+
+// 0269: changes waiting for the owner — the owner approves or rejects; a manager sees theirs waiting.
+function PendingChanges({ businessId, isOwner, refresh, onDecided }: {
+  businessId: string; isOwner: boolean; refresh: number; onDecided: () => void
+}) {
+  const [rows, setRows] = useState<WardChangeRequest[]>([])
+  const [err, setErr] = useState('')
+  useEffect(() => { listWardChanges(businessId).then(r => setRows(r.filter(x => x.status === 'pending'))).catch(() => setRows([])) }, [businessId, refresh])
+  if (!rows.length) return null
+  const decide = async (id: string, ok: boolean) => {
+    const note = ok ? undefined : (window.prompt('Why not? (optional — the manager sees this)') ?? undefined)
+    try { await decideWardChange(id, ok, note); setErr(''); onDecided() } catch (e) { setErr((e as Error).message) }
+  }
+  return (
+    <div style={{ ...card, background: '#fffaf0', borderColor: '#f0dcb0' }}>
+      <div style={{ ...label, marginBottom: 8, color: '#8a5a00' }}>
+        {isOwner ? `Waiting for your approval (${rows.length})` : `Waiting for the owner's approval (${rows.length})`}
+      </div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {rows.map(r => (
+          <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 13 }}>
+            <span>
+              <b>{CHANGE_WHAT[r.kind]}</b> — {r.target_label}: {r.before_text} → <b>{r.after_text}</b>
+              <span style={{ color: BIZ.muted, fontSize: 12 }}> · asked by {r.requested_by_name ?? 'manager'}, {new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+            </span>
+            {isOwner && (
+              <span style={{ display: 'flex', gap: 6 }}>
+                <button style={btn(true)} onClick={() => decide(r.id, true)}>Approve</button>
+                <button style={btn()} onClick={() => decide(r.id, false)}>Reject</button>
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      {err && <div style={{ fontSize: 12.5, color: '#8a2b2b', marginTop: 6 }}>{err}</div>}
+    </div>
+  )
+}
+
+// 0270: below this, a stay's deposit shows as running low — the owner sets it.
+function DepositLevel({ businessId }: { businessId: string }) {
+  const [v, setV] = useState('')
+  const [saved, setSaved] = useState('')
+  useEffect(() => {
+    supabase.from('businesses').select('deposit_low_at').eq('id', businessId).maybeSingle()
+      .then(({ data }) => setV(String((data as { deposit_low_at?: number } | null)?.deposit_low_at ?? 2000)))
+  }, [businessId])
+  return (
+    <div>
+      <div style={{ ...label, marginBottom: 7 }}>Deposit running low</div>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center', fontSize: 13 }}>
+        Warn when a patient's deposit left falls below ₹
+        <input style={{ ...input, width: 110 }} inputMode="numeric" value={v} onChange={e => { setV(e.target.value.replace(/\D/g, '')); setSaved('') }} />
+        <button style={btn()} disabled={v === ''} onClick={async () => {
+          try { await setDepositLowAt(businessId, Number(v)); setSaved('Saved.') } catch (e) { setSaved((e as Error).message) }
+        }}>Save</button>
+        {saved && <span style={{ color: BIZ.green }}>{saved}</span>}
+      </div>
     </div>
   )
 }

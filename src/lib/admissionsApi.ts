@@ -471,3 +471,105 @@ export async function voidDose(id: string, reason: string, by?: string | null) {
   })
   oops(error)
 }
+
+// ── 0269: changing wards, beds and bed charges ──────────────────────────────
+// The owner's change applies at once; a manager's waits for the owner.
+
+export type WardChangeKind = 'bed_charge' | 'ward_charge' | 'bed_label' | 'ward_name' | 'bed_remove' | 'ward_remove'
+
+export interface WardChangeRequest {
+  id: string; kind: WardChangeKind; target_label: string | null; before_text: string | null; after_text: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'applied'; requested_by_name: string | null; decided_by_name: string | null
+  created_at: string; decided_at: string | null; note: string | null
+}
+
+export async function changeWard(businessId: string, kind: WardChangeKind, targetId: string,
+  value: { charge?: number; text?: string } = {}): Promise<{ applied: boolean; text?: string }> {
+  const { data, error } = await supabase.rpc('sehat_ward_change', { p_business: businessId, p_kind: kind, p_target: targetId, p_value: value })
+  oops(error)
+  return data as { applied: boolean; text?: string }
+}
+
+export async function decideWardChange(requestId: string, approve: boolean, note?: string) {
+  const { error } = await supabase.rpc('sehat_ward_change_decide', { p_request: requestId, p_approve: approve, p_note: note ?? null })
+  oops(error)
+}
+
+export async function listWardChanges(businessId: string): Promise<WardChangeRequest[]> {
+  const { data, error } = await supabase.from('ward_change_requests')
+    .select('id, kind, target_label, before_text, after_text, status, requested_by_name, decided_by_name, created_at, decided_at, note')
+    .eq('business_id', businessId).order('created_at', { ascending: false }).limit(30)
+  oops(error)
+  return (data ?? []) as WardChangeRequest[]
+}
+
+// ── 0270: deposits, and medicines from the hospital pharmacy ────────────────
+
+export interface AdmissionMoney {
+  deposits: number; used: number; left: number; low_at: number; low: boolean
+  payments: { id: string; amount: number; method: string; on: string; by: string | null; kind: string }[]
+}
+
+/** What this stay has paid in, used so far (bed days not yet posted included) and has left. */
+export async function getAdmissionMoney(admissionId: string): Promise<AdmissionMoney> {
+  const { data, error } = await supabase.rpc('sehat_admission_money', { p_admission: admissionId })
+  oops(error)
+  const m = data as AdmissionMoney
+  return { ...m, deposits: Number(m.deposits), used: Number(m.used), left: Number(m.left), low_at: Number(m.low_at) }
+}
+
+/** Every admitted patient's deposit left — for the bed board. */
+export async function getDepositBoard(businessId: string): Promise<Record<string, { left: number; low: boolean }>> {
+  const { data, error } = await supabase.rpc('sehat_deposit_board', { p_business: businessId })
+  oops(error)
+  const out: Record<string, { left: number; low: boolean }> = {}
+  for (const r of (data ?? []) as { admission_id: string; left_amount: number; low: boolean }[]) out[r.admission_id] = { left: Number(r.left_amount), low: r.low }
+  return out
+}
+
+export async function setDepositLowAt(businessId: string, amount: number) {
+  const { error } = await supabase.rpc('sehat_set_deposit_low_at', { p_business: businessId, p_amount: amount })
+  oops(error)
+}
+
+export interface WardRequest {
+  id: string; admission_id: string; patient_member_id: string
+  items: { name: string; qty: string; order_id?: string }[]
+  note: string | null; status: 'requested' | 'issued' | 'cancelled'
+  requested_by_name: string | null; issued_bill_id: string | null; issued_at: string | null; issued_by_name: string | null
+  created_at: string
+}
+
+/** The ward asks the pharmacy for medicines for an admitted patient. */
+export async function requestFromPharmacy(admissionId: string, items: { name: string; qty: string; order_id?: string }[], note?: string) {
+  const { data, error } = await supabase.rpc('sehat_pharmacy_ward_request', { p_admission: admissionId, p_items: items, p_note: note ?? null })
+  oops(error)
+  return data as string
+}
+
+export async function listWardRequests(businessId: string, opts: { admissionId?: string; open?: boolean } = {}): Promise<WardRequest[]> {
+  let q = supabase.from('pharmacy_ward_requests').select('*').eq('business_id', businessId)
+    .order('created_at', { ascending: !!opts.open }).limit(100)
+  if (opts.admissionId) q = q.eq('admission_id', opts.admissionId)
+  if (opts.open) q = q.eq('status', 'requested')
+  const { data, error } = await q
+  oops(error)
+  return (data ?? []) as WardRequest[]
+}
+
+export async function cancelWardRequest(id: string) {
+  const { error } = await supabase.rpc('sehat_pharmacy_ward_request_cancel', { p_request: id })
+  oops(error)
+}
+
+/** Issue medicines from stock to an admitted patient: on their hospital bill, not paid at the counter. */
+export async function issueToAdmission(admissionId: string, lines: { item_id: string; qty: number }[], requestId?: string | null) {
+  const { data, error } = await supabase.rpc('sehat_pharmacy_issue_to_admission', { p_admission: admissionId, p_lines: lines, p_request: requestId ?? null })
+  oops(error)
+  return data as { bill_id: string; bill_no: string; amount: number; money: AdmissionMoney }
+}
+
+export async function cancelWardIssue(pharmacyBillId: string, reason: string) {
+  const { error } = await supabase.rpc('sehat_pharmacy_cancel_ipd_issue', { p_bill: pharmacyBillId, p_reason: reason })
+  oops(error)
+}

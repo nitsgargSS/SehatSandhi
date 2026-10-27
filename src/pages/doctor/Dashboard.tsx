@@ -1837,7 +1837,7 @@ export default function DoctorDashboard() {
 
         {/* ══════════ BEDS — the ward board ══════════ */}
         {tab === 'beds' && emr && access.ipd && doctor && (
-          <Wards businessId={doctor.id} practitionerId={myPractitionerId} />
+          <Wards businessId={doctor.id} practitionerId={myPractitionerId} role={isOwner ? 'owner' : role.role} />
         )}
 
         {/* ══════════ PHARMACY — in-house dispensing (0158) ══════════ */}
@@ -1854,7 +1854,7 @@ export default function DoctorDashboard() {
           <OrdersPanel businessId={doctor.id} role={role.enforced ? role.role : 'owner'} />
         )}
         {tab === 'pharmacy' && doctor?.pharmacy_module && !deliveryOnly && (
-          <PharmacyPanel businessId={doctor.id}
+          <PharmacyPanel businessId={doctor.id} hasIpd={emr && access.ipd}
             canManage={!role.enforced || role.role === 'owner' || role.role === 'manager' || role.role === 'doctor' || role.role === 'pharmacist'}
             canSettings={businessRole} />
         )}

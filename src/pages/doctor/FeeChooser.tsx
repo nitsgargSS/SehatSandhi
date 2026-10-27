@@ -70,7 +70,9 @@ export default function FeeChooser({ doctor, value, onChange, input }: {
   input: React.CSSProperties
 }) {
   const fee = doctorFee(doctor)
-  if (!doctor) return null
+  // 26 Oct 2026: with several doctors the fee is the chosen doctor's — say so,
+  // rather than show nothing until one is picked.
+  if (!doctor) return <div style={{ fontSize: 12.5, color: BIZ.mutedWarm }}>Choose the doctor they came to see (above) to add the OPD fee.</div>
   if (fee <= 0) {
     return <div style={{ fontSize: 12.5, color: BIZ.mutedWarm }}>{doctor.full_name} has no OPD fee set — no charge will be added. Set it under Clinic → Your team.</div>
   }
