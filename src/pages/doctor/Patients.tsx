@@ -41,7 +41,7 @@ import {
   Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod, Bill,
   PAYMENT_METHOD_OPTIONS, methodLabel, downloadCsv,
 } from '../../lib/billingApi'
-import { getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
+import { getModuleAccess, getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
 import CounterInvoice from './CounterInvoice'
 import {
   clinicalSearch, getSurgeries, recordSurgery, cancelSurgery, SOURCES, ANAESTHESIA,
@@ -139,6 +139,13 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
   /** 0182: from the queue's Consult — open this visit, ready to fill in. */
   openVisitId?: string | null
 }) {
+  // 0277: a pathology lab registers patients without OPD.
+  const [opdOn, setOpdOn] = useState(true)
+  useEffect(() => {
+    Promise.all([getModuleAccess(businessId), supabase.from('businesses').select('vertical').eq('id', businessId).maybeSingle()])
+      .then(([m, b]) => setOpdOn(b.data?.vertical !== 'lab' || m.opd))
+      .catch(() => setOpdOn(true))
+  }, [businessId])
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PatientSearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -318,6 +325,7 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
 
       {registering && (
         <RegisterPatient
+          hasOpd={opdOn}
           practitionerId={doctorId ?? null}
           businessId={businessId}
           // Prefill from whatever they were searching for: reception usually
@@ -477,7 +485,9 @@ const RELATIONS: [string, string][] = [
   ['sibling', 'Sibling'], ['other', 'Someone else'],
 ]
 
-function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId }: {
+function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId, hasOpd = true }: {
+  /** 0277: a pathology lab registers patients without an OPD token or fee. */
+  hasOpd?: boolean
   businessId: string
   initial: string
   practitionerId?: string | null
@@ -507,7 +517,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
   const [underDoctor, setUnderDoctor] = useState<string | null>(practitionerId ?? null)
   // 0135: straight to the doctor they came for — the fee and a token today —
   // and a warning when the number already has patients here.
-  const [toOpd, setToOpd] = useState(true)
+  const [toOpd, setToOpd] = useState(hasOpd)
   const [fee, setFee] = useState<FeeChoice>(emptyFee)
   const [paidHow, setPaidHow] = useFeePaidHow()
   const [done, setDone] = useState<{ id: string; queueId: string | null; token: number | null; fee: number; paid: number } | null>(null)
@@ -709,10 +719,10 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
           )}
         </div>
 
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: BIZ.ink }}>
+        {hasOpd && <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: BIZ.ink }}>
           <input type="checkbox" checked={toOpd} onChange={e => setToOpd(e.target.checked)} />
           OPD visit now — give a token{opdDoctor ? ` for ${opdDoctor.full_name}` : ''} and add the fee
-        </label>
+        </label>}
         {toOpd && <FeeChooser doctor={opdDoctor} value={fee} onChange={setFee} input={input} />}
         {toOpd && <FeePaidChooser due={feeDueOf(fee, opdDoctor)} value={paidHow} onChange={setPaidHow} />}
 
@@ -776,6 +786,15 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
   // 0168: the Lab tests pane, where the clinic runs a lab (or is one).
   const [labOn, setLabOn] = useState(false)
   useEffect(() => { getLabSettings(businessId).then(s => setLabOn(s.on)).catch(() => setLabOn(false)) }, [businessId])
+  // 0277: what this business runs. A pathology lab keeps patients and their
+  // reports — no visits, prescriptions or admissions to show. A switched-off
+  // system hides its panes; the records stay (and an old admission still shows).
+  const [care, setCare] = useState<{ opd: boolean; ipd: boolean; isLab: boolean } | null>(null)
+  useEffect(() => {
+    Promise.all([getModuleAccess(businessId), supabase.from('businesses').select('vertical').eq('id', businessId).maybeSingle()])
+      .then(([m, b]) => setCare({ ...m, isLab: b.data?.vertical === 'lab' }))
+      .catch(() => setCare(null))
+  }, [businessId])
 
   // 0138: a doctor sees only patients they have been involved with here (or
   // were referred). Anyone else's shows a notice, not empty tabs that read as
@@ -806,7 +825,17 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
   // 'history' is the default and is clinical, so reception would land on an
   // empty Visits pane whose tab is not even drawn. Fall through to Admissions
   // rather than tracking the default in two places.
-  const shown = !clinical && CLINICAL_PANES.has(pane) ? 'ipd' : pane
+  // 0277: in a lab, the reports are the record — reception sees them too.
+  const labRecord = !!care?.isLab && !care.opd
+  const hasOpd = !care || care.opd || !care.isLab
+  const hasIpd = !care || care.ipd || stays.length > 0
+  const paneOn = (id: string) =>
+    ['history', 'clinical', 'vitals', 'rx', 'refer'].includes(id) ? hasOpd
+      : ['ipd', 'ot'].includes(id) ? hasIpd
+      : id === 'money' ? !labRecord
+      : true
+  const fallback = labRecord ? 'lab' : 'ipd'
+  const shown = (!clinical && CLINICAL_PANES.has(pane) && !(care?.isLab && pane === 'lab')) || !paneOn(pane) ? fallback : pane
 
   const reload = useCallback(async () => {
     try {
@@ -933,7 +962,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
         />
       )}
 
-      <OpdVisitCard memberId={memberId} businessId={businessId} practitionerId={practitionerId} onChange={reload} />
+      {hasOpd && <OpdVisitCard memberId={memberId} businessId={businessId} practitionerId={practitionerId} onChange={reload} />}
 
       {/* Panes. The clinical ones are not shown to reception — the database
           refuses them either way, but a tab that opens onto nothing looks like
@@ -943,10 +972,10 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
           ['history', 'Visits', true], ['clinical', 'Medical history', true],
           ['vitals', 'Vitals', false], ['rx', 'Prescriptions', true],
           ['docs', 'Documents', true], ['ipd', 'Admissions', false], ['ot', 'Operations', true],
-          ...(labOn ? [['lab', 'Lab tests', true] as const] : []),
+          ...(labOn || care?.isLab ? [['lab', care?.isLab ? 'Reports' : 'Lab tests', !care?.isLab] as const] : []),
           ['money', 'Billing', false], ['refer', 'Refer to doctor', false],
         ] as const)
-          .filter(([, , needsClinical]) => clinical || !needsClinical)
+          .filter(([id, , needsClinical]) => (clinical || !needsClinical) && paneOn(id))
           .map(([id, lbl]) => (
             <button key={id} onClick={() => setPane(id)}
               style={{ ...btn(shown === id), fontSize: 12.5 }}>{lbl}</button>
@@ -968,7 +997,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
           It opens once they are referred to you, booked with you, or seen in your OPD.
         </div>
       )}
-      {!clinical && !otherDoctors && (
+      {!clinical && !otherDoctors && !labRecord && (
         <div style={{ fontSize: 12.5, color: BIZ.mutedWarm }}>
           Your account is not registered as a doctor here, so the medical record
           is not shown. Beds, the queue and billing are.
@@ -1003,7 +1032,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
           clinical={clinical} prescriber={prescriber}
         />
       )}
-      {shown === 'lab' && labOn && (
+      {shown === 'lab' && (labOn || care?.isLab) && (
         <LabTestsPane memberId={memberId} businessId={businessId} visits={visits} />
       )}
       {shown === 'ot' && (

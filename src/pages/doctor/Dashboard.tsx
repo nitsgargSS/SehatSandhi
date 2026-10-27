@@ -1111,7 +1111,8 @@ export default function DoctorDashboard() {
     // those run the tab would open onto a PostgREST 404.
     // Either system gives you a patient record — OPD writes visits into it and
     // IPD writes admissions. Neither bought, no record.
-    ...(emr && (access.opd || access.ipd) ? [
+    // 0277: every lab keeps its patients and their reports, OPD or not.
+    ...(emr && (access.opd || access.ipd || myVertical === 'lab') ? [
       { id: 'patients', label: 'Patients', icon: <UserSearch className="w-4 h-4" /> },
     ] : []),
     // Only where somebody is actually admitted. A pharmacy has no beds, and a

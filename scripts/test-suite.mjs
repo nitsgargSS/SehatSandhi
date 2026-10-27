@@ -1715,6 +1715,20 @@ if (!skip()) {
   expectEq('a business\'s copies follow the catalogue',
     (await raw(`select count(*)::int n from lab_tests t join lab_catalogue c on c.code = t.catalogue_code
                  where c.category <> 'pathology' and t.category is distinct from c.category`))[0].n, 0)
+
+  // 0277: a diagnostic centre runs an OPD; a pathology lab keeps patients without one.
+  const LAB = (await raw(`select id from businesses where vertical = 'lab' limit 1`))[0]
+  if (LAB) await inRollback(async () => {
+    await db.query(`set local role authenticated`)
+    await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.admin, role: 'authenticated', email: emails.admin })])
+    await db.query(`select sehat_set_lab_tests($1, array['radiology','cardiology'])`, [LAB.id])
+    await db.query('reset role')
+    expectEq('a lab that becomes a diagnostic centre gets OPD', (await db.query(`select opd_module from businesses where id = $1`, [LAB.id])).rows[0].opd_module, true)
+    await db.query(`set local role authenticated`)
+    await db.query(`select sehat_set_lab_tests($1, array['pathology'])`, [LAB.id])
+    await db.query('reset role')
+    expectEq('…and a pathology-only lab does not', (await db.query(`select opd_module from businesses where id = $1`, [LAB.id])).rows[0].opd_module, false)
+  })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
