@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { BedDouble, Plus, X, LogOut as DischargeIcon } from 'lucide-react'
 import { BIZ } from '../business/shared'
+import { supabase } from '../../lib/supabase'
 import { Spinner } from '../../components/Loading'
 import {
   getOccupancy, getWards, addWard, addBed, dischargePatient, moveToBed,
-  OccupancyRow, Ward, changeWard, decideWardChange, listWardChanges, type WardChangeKind, type WardChangeRequest,
+  OccupancyRow, Ward, changeWard, getDepositBoard, setDepositLowAt, decideWardChange, listWardChanges, type WardChangeKind, type WardChangeRequest,
 } from '../../lib/admissionsApi'
 
 // The bed board — every bed and who is in it.
@@ -50,6 +51,7 @@ export default function Wards({ businessId, practitionerId, role }: {
   const canSetUp = role === 'owner' || role === 'manager'
   const isOwner = role === 'owner'
   const [changed, setChanged] = useState(0)
+  const [deposits, setDeposits] = useState<Record<string, { left: number; low: boolean }>>({})
   const [rows, setRows] = useState<OccupancyRow[]>([])
   const [wards, setWards] = useState<Ward[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,6 +63,7 @@ export default function Wards({ businessId, practitionerId, role }: {
     try {
       const [o, w] = await Promise.all([getOccupancy(businessId), getWards(businessId)])
       setRows(o); setWards(w); setErr(''); setChanged(n => n + 1)
+      getDepositBoard(businessId).then(setDeposits).catch(() => setDeposits({}))
     } catch (e) { setErr((e as Error).message) } finally { setLoading(false) }
   }, [businessId])
 
@@ -149,6 +152,13 @@ export default function Wards({ businessId, practitionerId, role }: {
                       </div>
                       {b.attending_name && (
                         <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>{b.attending_name}</div>
+                      )}
+                      {/* 0270: the deposit left on this stay. */}
+                      {b.admission_id && deposits[b.admission_id] && (
+                        <div style={{ fontSize: 11.5, fontWeight: deposits[b.admission_id].low ? 800 : 500, color: deposits[b.admission_id].low ? '#8a2b2b' : BIZ.muted }}>
+                          {deposits[b.admission_id].low ? 'Deposit low · ' : 'Deposit '}
+                          {deposits[b.admission_id].left >= 0 ? `₹${Math.round(deposits[b.admission_id].left).toLocaleString('en-IN')} left` : `₹${Math.round(-deposits[b.admission_id].left).toLocaleString('en-IN')} short`}
+                        </div>
                       )}
                       {b.expected_discharge && (
                         <div style={{ fontSize: 11.5, color: '#8a5a00' }}>
@@ -309,6 +319,8 @@ function WardSetup({ businessId, wards, beds, isOwner, onChange }: {
         </div>
       )}
 
+      {isOwner && <DepositLevel businessId={businessId} />}
+
       {wards.length > 0 && (
         <ChangeWards businessId={businessId} wards={wards} beds={beds} isOwner={isOwner}
           onDone={(t) => { setMsg(t); onChange() }} onError={setErr} />
@@ -439,6 +451,29 @@ function PendingChanges({ businessId, isOwner, refresh, onDecided }: {
         ))}
       </div>
       {err && <div style={{ fontSize: 12.5, color: '#8a2b2b', marginTop: 6 }}>{err}</div>}
+    </div>
+  )
+}
+
+// 0270: below this, a stay's deposit shows as running low — the owner sets it.
+function DepositLevel({ businessId }: { businessId: string }) {
+  const [v, setV] = useState('')
+  const [saved, setSaved] = useState('')
+  useEffect(() => {
+    supabase.from('businesses').select('deposit_low_at').eq('id', businessId).maybeSingle()
+      .then(({ data }) => setV(String((data as { deposit_low_at?: number } | null)?.deposit_low_at ?? 2000)))
+  }, [businessId])
+  return (
+    <div>
+      <div style={{ ...label, marginBottom: 7 }}>Deposit running low</div>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center', fontSize: 13 }}>
+        Warn when a patient's deposit left falls below ₹
+        <input style={{ ...input, width: 110 }} inputMode="numeric" value={v} onChange={e => { setV(e.target.value.replace(/\D/g, '')); setSaved('') }} />
+        <button style={btn()} disabled={v === ''} onClick={async () => {
+          try { await setDepositLowAt(businessId, Number(v)); setSaved('Saved.') } catch (e) { setSaved((e as Error).message) }
+        }}>Save</button>
+        {saved && <span style={{ color: BIZ.green }}>{saved}</span>}
+      </div>
     </div>
   )
 }

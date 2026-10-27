@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState, useCallback } from 'react'
+import StayMoney from './StayMoney'
 import { SPECIALITIES } from '../../types'
 import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
@@ -2620,6 +2621,9 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, doctorId,
           {a.reason && !a.admitting_diagnosis && <Row k="Reason" v={a.reason} />}
           {a.discharge_diagnosis && <Row k="Discharge diagnosis" v={a.discharge_diagnosis} />}
           {a.discharge_summary && <Row k="Discharge summary" v={a.discharge_summary} />}
+
+          {/* 0270: the deposit, what is left of it, and medicines from the pharmacy. */}
+          <StayMoney stay={a} memberId={memberId} businessId={businessId} practitionerId={practitionerId} clinical={clinical} />
 
           <button style={{ ...btn(), fontSize: 12, marginTop: 10 }}
             onClick={() => setOpenNotes(openNotes === a.id ? null : a.id)}>

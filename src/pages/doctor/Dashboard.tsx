@@ -1854,7 +1854,7 @@ export default function DoctorDashboard() {
           <OrdersPanel businessId={doctor.id} role={role.enforced ? role.role : 'owner'} />
         )}
         {tab === 'pharmacy' && doctor?.pharmacy_module && !deliveryOnly && (
-          <PharmacyPanel businessId={doctor.id}
+          <PharmacyPanel businessId={doctor.id} hasIpd={emr && access.ipd}
             canManage={!role.enforced || role.role === 'owner' || role.role === 'manager' || role.role === 'doctor' || role.role === 'pharmacist'}
             canSettings={businessRole} />
         )}

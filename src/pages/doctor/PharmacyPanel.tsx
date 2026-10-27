@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import SectionPills from '../../components/SectionPills'
+import WardPharmacy from './WardPharmacy'
 import { AlertTriangle, Package, Plus, Printer, Search, Trash2 } from 'lucide-react'
 import { moneyExact, shortDate, isoDate } from '../../lib/format'
 import { searchPatients, PatientSearchResult } from '../../lib/patientsApi'
@@ -21,7 +22,7 @@ import PhoneError from '../../components/PhoneError'
 // a manager or a doctor — the database refuses anyone else, so the hidden
 // sections are a courtesy, not the lock.
 
-type Section = 'sell' | 'bills' | 'dues' | 'stock' | 'purchases' | 'summary' | 'settings'
+type Section = 'sell' | 'ward' | 'bills' | 'dues' | 'stock' | 'purchases' | 'summary' | 'settings'
 
 const printBill = (id: string) => window.open(`/business/print/pharmacy/${id}`, '_blank')
 const today = () => isoDate()
@@ -33,8 +34,10 @@ function Err({ msg }: { msg: string }) {
   return msg ? <p className="text-sm text-red-600 mt-2">{msg}</p> : null
 }
 
-export default function PharmacyPanel({ businessId, canManage, canSettings }: {
+export default function PharmacyPanel({ businessId, canManage, canSettings, hasIpd = false }: {
   businessId: string
+  /** 0270: a hospital with wards — the pharmacy issues to admitted patients too. */
+  hasIpd?: boolean
   /** Owner, manager or doctor: medicines, purchases, stock counts, cancel, summary. */
   canManage: boolean
   /** Owner or manager: GSTIN and drug licence. */
@@ -51,7 +54,7 @@ export default function PharmacyPanel({ businessId, canManage, canSettings }: {
   const expiring = stock.filter(s => s.qty_expired > 0 || (s.qty_available > 0 && soon(s.next_expiry, 60))).length
 
   const sections: [Section, string][] = [
-    ['sell', 'New bill'], ['bills', 'Bills'], ['dues', 'Dues'], ['stock', 'Stock'],
+    ['sell', 'New bill'], ...(hasIpd ? [['ward', 'Ward requests']] as [Section, string][] : []), ['bills', 'Bills'], ['dues', 'Dues'], ['stock', 'Stock'],
     ...(canManage ? [['purchases', 'Purchases'], ['summary', 'Summary']] as [Section, string][] : []),
     ...(canSettings ? [['settings', 'Settings']] as [Section, string][] : []),
   ]
@@ -65,7 +68,7 @@ export default function PharmacyPanel({ businessId, canManage, canSettings }: {
             In-house dispensing · {settings?.pharmacy_gstin ? `GST bills (GSTIN ${settings.pharmacy_gstin})` : 'bills without GST'}
           </p>
         </div>
-        <SectionPills sections={sections} primary={['sell', 'bills', 'dues', 'stock']} value={section} onChange={setSection} />
+        <SectionPills sections={sections} primary={['sell', 'ward', 'bills', 'dues', 'stock']} value={section} onChange={setSection} />
       </div>
 
       {(low > 0 || expiring > 0) && section !== 'stock' && (
@@ -79,6 +82,7 @@ export default function PharmacyPanel({ businessId, canManage, canSettings }: {
 
       {section === 'sell' && <SellSection businessId={businessId} stock={stock} onSold={reloadStock}
         gst={!!settings?.pharmacy_gstin} goStock={() => setSection('stock')} canManage={canManage} />}
+      {section === 'ward' && hasIpd && <WardPharmacy businessId={businessId} stock={stock} onIssued={reloadStock} />}
       {section === 'bills' && <BillsSection businessId={businessId} canManage={canManage} onStockChanged={reloadStock} />}
       {section === 'dues' && <DuesSection businessId={businessId} canManage={canManage} onStockChanged={reloadStock} />}
       {section === 'stock' && <StockSection businessId={businessId} stock={stock} canManage={canManage} reload={reloadStock} />}
