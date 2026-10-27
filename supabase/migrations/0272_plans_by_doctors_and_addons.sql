@@ -6,9 +6,9 @@
 --
 --   CORE (clinics and hospitals): the plan follows the number of doctors —
 --     Clinic ≤ 2 (₹2,000), Polyclinic ≤ 4 (₹3,000), Multi-speciality ≤ 8
---     (₹5,000), Hospital ≤ 15 (₹8,000), then ₹400 for each doctor beyond.
+--     (₹5,000), Hospital ≤ 15 (₹8,000), then ₹500 for each doctor beyond.
 --     Each includes staff logins (3 / 6 / 12 / 25); every 5 more cost ₹250.
---   ADD-ONS: IPD ₹2,000 with 20 beds (₹75 a bed beyond), Pathology ₹1,500,
+--   ADD-ONS: IPD ₹2,000 with 20 beds (₹100 a bed beyond), Pathology ₹1,500,
 --     Diagnostics ₹3,000, Pharmacy ₹1,000. Pathology and Diagnostics each
 --     bring 2 more logins for their technicians. Two add-ons: 10% off the
 --     add-ons; three or more: 20% off.
@@ -34,7 +34,7 @@ create table if not exists plan_settings (
   bundle2_pct numeric(5,2) not null default 10 check (bundle2_pct between 0 and 100),
   bundle3_pct numeric(5,2) not null default 20 check (bundle3_pct between 0 and 100),
   ipd_beds_included integer not null default 20 check (ipd_beds_included >= 0),
-  ipd_bed_price integer not null default 75 check (ipd_bed_price >= 0),
+  ipd_bed_price integer not null default 100 check (ipd_bed_price >= 0),
   updated_at timestamptz not null default now(),
   updated_by text
 );
@@ -59,7 +59,7 @@ insert into plan_tiers (code, family, label, max_doctors, staff_included, monthl
   ('clinic',          'core',           'Clinic',                 2,  3, 2000,   0, 10),
   ('polyclinic',      'core',           'Polyclinic',             4,  6, 3000,   0, 20),
   ('multispeciality', 'core',           'Multi-speciality',       8, 12, 5000,   0, 30),
-  ('hospital',        'core',           'Hospital',              15, 25, 8000, 400, 40),
+  ('hospital',        'core',           'Hospital',              15, 25, 8000, 500, 40),
   ('lab_pathology',   'lab_pathology',  'Pathology Lab',          1,  5, 2000, 500, 50),
   ('lab_diagnostic',  'lab_diagnostic', 'Diagnostic Centre',      2,  5, 4000, 500, 60),
   ('lab_both',        'lab_both',       'Diagnostic + Pathology', 2,  8, 5000, 500, 70),
