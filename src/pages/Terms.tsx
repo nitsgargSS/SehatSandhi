@@ -22,7 +22,7 @@ interface Content {
 const content: Record<'en' | 'hi', Content> = {
   en: {
     title: 'Terms of Service',
-    updated: 'Last updated: 4 October 2026',
+    updated: 'Last updated: 28 October 2026',
     intro: 'These terms govern your use of Sehatsandhi, operated by NG Technologies. By using our WhatsApp service or website, you agree to these terms.',
     sections: [
       {
@@ -47,7 +47,7 @@ const content: Record<'en' | 'hi', Content> = {
       },
       {
         h: '6. Fees and Payment',
-        p: 'Clinics, hospitals, labs, pharmacies and ambulance services pay a listing fee for the term they choose, shown in full before they pay; the OPD and IPD systems are currently included for clinics and hospitals at no extra charge. Insurance advisors list free and pay a flat fee, shown before they accept, for each lead they choose to accept, taken from a prepaid wallet. Sehatsandhi charges no commission on any consultation, medicine order, ambulance trip or insurance policy. Optional add-ons, such as WhatsApp messaging, are priced at checkout. Fees are non-refundable except as described in our Refund & Cancellation Policy. We do not guarantee any specific volume of patients, orders, trips or leads.',
+        p: 'Clinics, hospitals, labs, pharmacies and ambulance services pay a listing fee for the term they choose, shown in full before they pay; what each plan includes, and the price of each add-on such as the IPD system, are shown on our pricing page and at checkout. Insurance advisors list free and pay a flat fee, shown before they accept, for each lead they choose to accept, taken from a prepaid wallet. Sehatsandhi charges no commission on any consultation, medicine order, ambulance trip or insurance policy. Optional add-ons, such as WhatsApp messaging, are priced at checkout. Fees are non-refundable except as described in our Refund & Cancellation Policy. We do not guarantee any specific volume of patients, orders, trips or leads.',
         link: { to: '/refund', label: 'Read the Refund & Cancellation Policy →' },
       },
       {

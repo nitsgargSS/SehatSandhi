@@ -9,6 +9,8 @@ import ReachSnapshot from './ReachSnapshot'
 import CareSystems from './CareSystems'
 import BusinessFeatures from './BusinessFeatures'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
+import { usePlanCatalogue } from '../../hooks/usePlanCatalogue'
+import TieredPricing from './TieredPricing'
 import { useTaxSettings } from '../../hooks/useTaxSettings'
 import { money } from '../../lib/format'
 import { getLeadFee } from '../../lib/insuranceApi'
@@ -18,7 +20,9 @@ import { getLeadFee } from '../../lib/insuranceApi'
 //
 // Pricing is read live from the active plan, never hardcoded — switching plans in
 // admin changes this page with no deploy. Under a flat plan it shows one price
-// card; under tier pricing it shows the population grid. Pharmacies, insurance
+// card; under tier pricing it shows the population grid. Once the plans by
+// number of doctors are switched on (plan_settings.tiered_live, 0272), those
+// replace both — TieredPricing. Pharmacies, insurance
 // advisors and ambulance services get a partner-programme section instead of a
 // rate card: free to join during the launch offer.
 
@@ -49,6 +53,11 @@ export default function BusinessLanding() {
   const tax = useTaxSettings()
   const flatPlan = plan.mode !== 'pincode_tiers'
   const flatPrice = plan.monthly_price ?? 0
+  // The plans by number of doctors, when switched on. Until the catalogue has
+  // loaded this is false, which shows the old plan — what checkout charges on a
+  // project where the switch is off.
+  const catalogue = usePlanCatalogue()
+  const tiered = !!catalogue?.settings.tiered_live
 
   // Say on the card what the number does and does not include, so the figure
   // here and the figure at checkout are never a surprise to each other.
@@ -105,7 +114,7 @@ export default function BusinessLanding() {
             <a href="#pricing" style={{ fontSize: 14, fontWeight: 700, color: BIZ.green }}>See pricing →</a>
           </div>
         </div>
-        <ReachSnapshot />
+        <ReachSnapshot tiered={tiered} />
       </div>
 
       {/* trust strip */}
@@ -125,7 +134,9 @@ export default function BusinessLanding() {
           {[
             { n: '1', t: 'Pick your pincodes', d: 'Select any number of pincodes — villages, towns or full cities — where you want patients to find you.' },
             { n: '2', t: 'We show you to those users', d: 'When a patient in your pincodes needs your category, you appear in their WhatsApp options.' },
-            flatPlan
+            tiered
+              ? { n: '3', t: 'A plan sized to you', d: 'Your plan follows the number of doctors you have, and covers every pincode you pick. See pricing below.' }
+            : flatPlan
               ? { n: '3', t: 'One simple plan', d: 'A single monthly plan covers every pincode you pick, for as many months as you pay upfront. See pricing below.' }
               : { n: '3', t: 'Pay by audience size', d: 'Your fee scales with how many users live in your chosen pincodes. Bigger reach, higher premium.' },
           ].map(s => (
@@ -142,11 +153,11 @@ export default function BusinessLanding() {
           ahead of the category grid on purpose: reach is what brings a clinic
           to the page, but the software is the thing that makes it stay, and it
           should be read before the price rather than after it. */}
-      <CareSystems />
+      <CareSystems catalogue={catalogue} />
 
       {/* The full feature list: multi-clinic doctors, the doctor's own practice,
           the pharmacy, billing, reports, the team. */}
-      <BusinessFeatures />
+      <BusinessFeatures tiered={tiered} />
 
       {/* verticals — this is what /partners used to be. That page was a second
           six-card grid of the same categories, one click further from signing
@@ -173,14 +184,19 @@ export default function BusinessLanding() {
       {/* pricing — the monthly plan, then the partner programme */}
       <div id="pricing" className="mx-auto pb-14" style={{ maxWidth: PAGE.maxWidth, paddingLeft: PAGE.padX, paddingRight: PAGE.padX }}>
         <h2 style={{ fontSize: 'clamp(23px,5.5vw,28px)', fontWeight: 800, color: BIZ.ink, textAlign: 'center', margin: '0 0 8px', letterSpacing: '-.02em' }}>
-          {flatPlan ? plan.label : 'Pay for reach, not clicks'}
+          {tiered ? 'Plans sized to your clinic' : flatPlan ? plan.label : 'Pay for reach, not clicks'}
         </h2>
         <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 0 36px' }}>
-          {plan.description
-            ?? 'Every pincode has a monthly price set by its population tier. Your total is the sum of the pincodes you pick.'}
+          {tiered
+            ? 'Priced by the number of doctors, with the OPD system in every plan. Add IPD, lab and pharmacy as you need them.'
+            : plan.description
+              ?? 'Every pincode has a monthly price set by its population tier. Your total is the sum of the pincodes you pick.'}
         </p>
 
-        {flatPlan ? (
+        {tiered && catalogue ? (
+          <TieredPricing catalogue={catalogue} gstNote={gstNote}
+            ambulancePrice={flatPlan && monthlyVerticals.some(v => v.key === 'ambulance') ? flatPrice : null} />
+        ) : flatPlan ? (
           /* ── Flat plan: one price card, not a tier grid ── */
           <>
             <div style={{ maxWidth: 560, margin: '0 auto' }}>
