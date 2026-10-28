@@ -196,5 +196,5 @@ WhatsApp accounts for step 6 (WhatsApp Manager, 28 Oct 2026):
 | Sehatsandhi Demo Clinic | `1080508188148557` | the demo's own number — reconnects with Connect (step 12) |
 | Sehatsandhi | `1586382356551948` | not checked — look before the night |
 
-The script stops at the first account Meta refuses; if 3997937100511018 is
-refused because it holds no number, run it again with the other two.
+The script tries every account given and reports each; a refusal for one
+(say 3997937100511018, if it holds no number) does not stop the others.
