@@ -171,7 +171,7 @@ copied (`auth-config`); 46 functions deployed (`functions`); 21 secrets copied
 | 2 | ! | `bash scripts/move-region.sh pause-tokyo --cutover --yes` (Tokyo's scheduled jobs off; their state saved) |
 | 3 | ! | `bash scripts/move-region.sh wipe --yes` (empty the rehearsal copy) |
 | 4 | ! | `bash scripts/move-region.sh --cutover --yes` (the copy, ~10 min; jobs as they were in Tokyo; must end "✓ Everything matches") |
-| 6 | T | `REF=tbmlhawtnrvvnemcljma bash scripts/wa-connect-production.sh <main account id> [<business number account id>]` — new WA_INBOUND_SECRET in Mumbai, Meta's webhook → Mumbai. Mumbai already has `WA_BOT_PHONE_IDS` from step 1, so its bot answers once Meta points there. |
+| 6 | T | `REF=tbmlhawtnrvvnemcljma bash scripts/wa-connect-production.sh 1461510652560252 3997937100511018 1953329202322425` — new WA_INBOUND_SECRET in Mumbai, Meta's webhook → Mumbai. Mumbai already has `WA_BOT_PHONE_IDS` from step 1, so its bot answers once Meta points there. |
 | 7 | N | Razorpay → Settings → Webhooks → edit → URL `https://tbmlhawtnrvvnemcljma.supabase.co/functions/v1/razorpay-webhook` (secret unchanged). |
 | 8 | N | Vercel Production env: `VITE_SUPABASE_URL` = `https://tbmlhawtnrvvnemcljma.supabase.co`, `VITE_SUPABASE_ANON_KEY` = Mumbai's public key (same kind as now), `VITE_MAINTENANCE` = `false` → Redeploy. |
 | 9 | ! | `bash scripts/app-point.sh mumbai` (build + check) → `bash scripts/app-point.sh mumbai --publish`; commit `app/eas.json`. |
@@ -185,5 +185,16 @@ Rollback (before Mumbai takes real writes): Vercel env back to Tokyo + redeploy,
 `bash scripts/wa-connect-production.sh <ids>` (REF defaults to Tokyo),
 `bash scripts/move-region.sh resume-tokyo --cutover`, `npx supabase secrets set WA_BOT_PHONE_IDS=<main number id> --project-ref ctxkkqqtasegoowuqbmi` (the id is in docs/whatsapp-rollout.md).
 
-Open before the night: the account ids for step 6 — the main number's WhatsApp
-account and the business number's — confirm which currently point at Tokyo.
+WhatsApp accounts for step 6 (WhatsApp Manager, 28 Oct 2026):
+
+| Account | ID | Number |
+|---|---|---|
+| Sehatsandhi Main | `1461510652560252` | +91 70153 99355 (patients, bot) |
+| Sehatsandhi | `3997937100511018` | also listed with +91 70153 99355 — Manager shows the number under both; passed too, so whichever really holds it is repointed |
+| Sehatsandhi Clinics | `1953329202322425` | +91 79886 20804 (to businesses: bills, alerts, login codes' replies) |
+| Sehatsandhi Direct, Test WhatsApp Business Account | `28511562831799665`, `28803655879267940` | +1 555 test numbers — not repointed |
+| Sehatsandhi Demo Clinic | `1080508188148557` | the demo's own number — reconnects with Connect (step 12) |
+| Sehatsandhi | `1586382356551948` | not checked — look before the night |
+
+The script stops at the first account Meta refuses; if 3997937100511018 is
+refused because it holds no number, run it again with the other two.
