@@ -361,6 +361,17 @@ export const clinicOtp = (payload: { action: 'request' | 'verify'; phone: string
   callFn<{ message?: string; devCode?: string; tokenHash?: string }>('clinic-otp', payload)
     .catch((e: Error) => { throw new Error(e.message.replace(/^clinic-otp failed: /, '')) })
 
+/** What to tell someone when clinic-otp returns one of its sentinels. Shared by
+ *  the website's sign-in form and the app's login. */
+export const WHATSAPP_CODE_ERRORS: Record<string, string> = {
+  WHATSAPP_UNREACHABLE:
+    "We couldn't reach that number on WhatsApp. Use the email code instead, or call us on +91 85708 89188.",
+  DELIVERY_UNAVAILABLE:
+    'We cannot send WhatsApp codes right now. This is a problem at our end — use the email code, or call us on +91 85708 89188.',
+  DELIVERY_FAILED:
+    'We could not send your code just now. Try again in a minute, or use the email code.',
+}
+
 /** WhatsApp-number verification at signup (0130). Off until PHONE_VERIFY_ENABLED is set. */
 export const phoneVerify = async (action: 'status' | 'send' | 'verify', phone?: string, code?: string) => {
   const { data: { session } } = await supabase.auth.getSession()
