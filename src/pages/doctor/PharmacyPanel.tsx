@@ -617,32 +617,49 @@ function DuesSection({ businessId, canManage, onStockChanged }: { businessId: st
 
 // ── Stock and medicines ─────────────────────────────────────────────────────
 
-const blankItem: Partial<PharmacyItem> = { name: '', generic_name: '', strength: '', form: 'tablet', unit: 'tablet', pack_size: 1, hsn_code: '3004', gst_rate: 12, reorder_level: 0 }
+const blankItem: Partial<PharmacyItem> = { name: '', generic_name: '', strength: '', form: 'tablet', unit: 'tablet', pack_size: 10, hsn_code: '3004', gst_rate: 12, reorder_level: 0 }
 
 // 0184: stock in plain units — "10 bottles, MRP ₹250 each". Used when a
 // medicine is added (opening stock) and from Add stock on any item.
+// A medicine sold loose from strips (pack_size > 1, 0253) is entered the way it
+// is bought — strips, with the MRP and cost printed for the strip — and stored
+// per tablet: 10 strips of 10 at ₹20 = 100 tablets at ₹2.
 interface StockIn { units: string; mrp: string; cost: string; batch: string; expiry: string }
 const blankStockIn: StockIn = { units: '', mrp: '', cost: '', batch: '', expiry: '' }
-const addStock = (businessId: string, itemId: string, st: StockIn, supplier = 'Opening stock') =>
-  recordPurchase(businessId, supplier, '', today(), [{
+const addStock = (businessId: string, itemId: string, st: StockIn, packSize = 1, supplier = 'Opening stock') => {
+  const n = Math.max(1, Math.floor(packSize) || 1)
+  return recordPurchase(businessId, supplier, '', today(), [{
     item_id: itemId, batch_no: st.batch, expiry_date: st.expiry,
-    units: Number(st.units) || 0, free_units: 0, unit_cost: Number(st.cost) || 0, unit_mrp: Number(st.mrp) || 0,
+    units: (Number(st.units) || 0) * n, free_units: 0,
+    unit_cost: (Number(st.cost) || 0) / n, unit_mrp: (Number(st.mrp) || 0) / n,
   }])
+}
 
-function StockInFields({ unit, st, set }: { unit: string; st: StockIn; set: (s: StockIn) => void }) {
+function StockInFields({ unit, packSize = 1, st, set }: { unit: string; packSize?: number; st: StockIn; set: (s: StockIn) => void }) {
   const u = unit || 'unit'
+  const n = Math.max(1, Math.floor(packSize) || 1)
+  const by = n > 1 ? 'strip' : u
+  const mrp = Number(st.mrp) || 0
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-      <label className="text-xs text-gray-500">Quantity ({u}s)
-        <input className="input-field mt-1" type="number" min={0} value={st.units} onChange={e => set({ ...st, units: e.target.value })} placeholder="e.g. 10" /></label>
-      <label className="text-xs text-gray-500">MRP per {u} (₹)
-        <input className="input-field mt-1" type="number" min={0} step="0.01" value={st.mrp} onChange={e => set({ ...st, mrp: e.target.value })} /></label>
-      <label className="text-xs text-gray-500">Cost per {u} (₹, optional)
-        <input className="input-field mt-1" type="number" min={0} step="0.01" value={st.cost} onChange={e => set({ ...st, cost: e.target.value })} /></label>
-      <label className="text-xs text-gray-500">Batch no.
-        <input className="input-field mt-1" value={st.batch} onChange={e => set({ ...st, batch: e.target.value })} placeholder="on the strip / box" /></label>
-      <label className="text-xs text-gray-500">Expiry
-        <input className="input-field mt-1" type="date" min={plusDays(today(), 1)} value={st.expiry} onChange={e => set({ ...st, expiry: e.target.value })} /></label>
+    <div className="space-y-1">
+      {/* items-end: a label that wraps to two lines must not push its box out of line with the others. */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
+        <label className="text-xs text-gray-500">{n > 1 ? 'Strips' : `Quantity (${u}s)`}
+          <input className="input-field mt-1" type="number" min={0} value={st.units} onChange={e => set({ ...st, units: e.target.value })} placeholder="e.g. 10" /></label>
+        <label className="text-xs text-gray-500">MRP per {by} (₹)
+          <input className="input-field mt-1" type="number" min={0} step="0.01" value={st.mrp} onChange={e => set({ ...st, mrp: e.target.value })} /></label>
+        <label className="text-xs text-gray-500">Cost per {by} (₹) <span className="text-gray-400">optional</span>
+          <input className="input-field mt-1" type="number" min={0} step="0.01" value={st.cost} onChange={e => set({ ...st, cost: e.target.value })} /></label>
+        <label className="text-xs text-gray-500">Batch no.
+          <input className="input-field mt-1" value={st.batch} onChange={e => set({ ...st, batch: e.target.value })} placeholder="on the strip / box" /></label>
+        <label className="text-xs text-gray-500">Expiry
+          <input className="input-field mt-1" type="date" min={plusDays(today(), 1)} value={st.expiry} onChange={e => set({ ...st, expiry: e.target.value })} /></label>
+      </div>
+      {n > 1 && Number(st.units) > 0 && (
+        <p className="text-xs text-teal-700">
+          = {Number(st.units) * n} {u}s{mrp > 0 ? ` at ₹${(mrp / n).toFixed(2)} each` : ''} · {n} {u}s in a strip
+        </p>
+      )}
     </div>
   )
 }
@@ -655,7 +672,7 @@ function AddStockForm({ businessId, item, onDone, onCancel }: { businessId: stri
   return (
     <div className="border border-teal-200 bg-teal-50/40 rounded-lg p-3 space-y-2">
       <div className="text-sm font-semibold text-navy-700">Add stock — {itemLabel(item)}</div>
-      <StockInFields unit={item.unit} st={st} set={setSt} />
+      <StockInFields unit={item.unit} packSize={item.pack_size} st={st} set={setSt} />
       <label className="text-xs text-gray-500 block">Supplier (optional)
         <input className="input-field mt-1" value={supplier} onChange={e => setSupplier(e.target.value)} /></label>
       <Err msg={err} />
@@ -663,7 +680,7 @@ function AddStockForm({ businessId, item, onDone, onCancel }: { businessId: stri
         <button onClick={onCancel} className="btn-outline text-xs">Cancel</button>
         <button disabled={busy} className="btn-teal text-xs disabled:opacity-50" onClick={async () => {
           setBusy(true); setErr('')
-          try { await addStock(businessId, item.id, st, supplier.trim() || 'Stock added'); onDone() }
+          try { await addStock(businessId, item.id, st, item.pack_size, supplier.trim() || 'Stock added'); onDone() }
           catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
         }}>{busy ? 'Saving…' : 'Add to stock'}</button>
       </div>
@@ -692,7 +709,7 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
     try {
       // The stored name is the brand, or the medicine itself when sold without one.
       const id = await saveItem(businessId, { ...f, name: brand || generic, generic_name: generic || null })
-      if (withStock) await addStock(businessId, id, opening)
+      if (withStock) await addStock(businessId, id, opening, Number(f.pack_size) || 1)
       onSaved()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -710,7 +727,10 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
         <label className="text-xs text-gray-500">Type
           <select className="input-field mt-1" value={f.form ?? ''} onChange={e => {
             const t = ITEM_FORMS.find(x => x.value === e.target.value)
-            setF(x => ({ ...x, form: e.target.value, unit: t?.unit ?? x.unit }))
+            // A new tablet or capsule comes in strips (10 unless changed); anything else is sold whole.
+            const strips = t?.unit === 'tablet' || t?.unit === 'capsule'
+            setF(x => ({ ...x, form: e.target.value, unit: t?.unit ?? x.unit,
+              ...(x.id ? {} : { pack_size: strips ? (Number(x.pack_size) > 1 ? x.pack_size : 10) : 1 }) }))
           }}>
             {!ITEM_FORMS.some(t => t.value === f.form) && f.form && <option value={f.form}>{f.form}</option>}
             {ITEM_FORMS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -718,6 +738,8 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
         </label>
         {field('strength', 'Strength', { placeholder: '650mg, 0.5%, 5ml' })}
         {field('unit', 'Sold per', { placeholder: 'tablet, bottle, tube' })}
+        {/* New medicines only: an existing one's count changes through "Open a strip" (0253), which moves its stock and bills with it. */}
+        {!f.id && field('pack_size', `${f.unit || 'unit'}s per strip / pack`, { type: 'number', min: 1, placeholder: '10 — or 1 if sold whole' })}
         {field('hsn_code', 'HSN code', { placeholder: '3004' })}
         <label className="text-xs text-gray-500">GST rate
           <select className="input-field mt-1" value={String(f.gst_rate ?? 12)} onChange={set('gst_rate')}>
@@ -729,8 +751,8 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
       <p className="text-xs text-gray-500">GST rate and HSN are used only if your clinic has a GSTIN for the pharmacy (Settings).</p>
       {!f.id && (
         <div className="border-t border-gray-100 pt-3 space-y-2">
-          <div className="text-sm font-semibold text-navy-700">Stock you have now <span className="font-normal text-gray-500">— counted in {f.unit || 'unit'}s, not boxes</span></div>
-          <StockInFields unit={String(f.unit ?? '')} st={opening} set={setOpening} />
+          <div className="text-sm font-semibold text-navy-700">Stock you have now <span className="font-normal text-gray-500">{Number(f.pack_size) > 1 ? `— in strips of ${f.pack_size}; prices as printed on the strip` : `— counted in ${f.unit || 'unit'}s`}</span></div>
+          <StockInFields unit={String(f.unit ?? '')} packSize={Number(f.pack_size) || 1} st={opening} set={setOpening} />
         </div>
       )}
       {f.id && (
