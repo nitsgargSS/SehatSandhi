@@ -39,8 +39,9 @@ export interface TemplateSend {
   /**
    * Sent from the number kept for businesses, META_CLINIC_PHONE_NUMBER_ID,
    * when that is set: what a clinic sends its patient (a prescription, a
-   * bill), and what Sehatsandhi sends a business (its login code, a booking
-   * alert, an invoice, a staff invite). The main number, META_PHONE_NUMBER_ID,
+   * bill), and what Sehatsandhi sends a business (a booking alert, an
+   * invoice, a staff invite). Login codes go from the main number: login_code
+   * is approved only in its account (28 Oct 2026). The main number, META_PHONE_NUMBER_ID,
    * is kept for patients — decided 9 Oct 2026. The template has to exist in
    * the sending number's own messaging account.
    */

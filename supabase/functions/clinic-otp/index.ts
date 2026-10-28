@@ -79,7 +79,10 @@ type SendResult = {
  */
 async function sendCode(phone: string, code: string): Promise<SendResult> {
   const r = await sendTemplate({
-    campaignEnv: 'AISENSY_LOGIN_CAMPAIGN', to: phone, userName: 'Sehatsandhi', params: [code], otp: true, fromClinic: true,
+    // From the main number, not the business one: login_code is approved only
+    // in the main number's account, and Meta refuses it from the other (28 Oct
+    // 2026, "(#100) Invalid parameter").
+    campaignEnv: 'AISENSY_LOGIN_CAMPAIGN', to: phone, userName: 'Sehatsandhi', params: [code], otp: true,
   })
   if (r.ok) return { sent: true }
   // Nothing was even attempted: no provider has credentials. Worth separating
