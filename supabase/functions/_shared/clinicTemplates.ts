@@ -64,6 +64,15 @@ export const CLINIC_TEMPLATES: ClinicTemplate[] = [
     body: 'Hello {{1}}, thank you for visiting {{2}} today.\n\nPrescription: {{3}}\nBill: {{4}}\n\nThese links are private to you. Please do not share them.',
     samples: ['Sunita Devi', 'Family Health Clinic', 'https://www.sehatsandhi.com/rx/abc123', 'https://www.sehatsandhi.com/bill/abc123'],
   },
+  // 0281: Meta filed follow_up_reminder as Marketing ("reply … to book" reads
+  // as a promotion). follow_up_due is the same message about the visit the
+  // doctor advised — same four variables, same order — worded as a reminder of
+  // that visit. It replaces follow_up_reminder once Meta approves it as Utility.
+  {
+    name: 'follow_up_due', language: 'en', category: 'UTILITY',
+    body: 'Hello {{1}}, at your last visit {{2}} of {{3}} advised a follow-up visit on {{4}}. This is a reminder of that follow-up. Reply to this message if you need to change the date.',
+    samples: ['Sunita Devi', 'Dr. Anita Verma', 'Family Health Clinic', 'Mon 3 Nov'],
+  },
   {
     name: 'follow_up_reminder', language: 'en', category: 'UTILITY',
     body: 'Hello {{1}}, {{2}} at {{3}} asked to see you again on {{4}}. Reply to this message to book a time, or call the clinic.',

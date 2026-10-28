@@ -242,7 +242,7 @@ async function createTemplates(db: Any, businessId: string, wabaId: string, toke
  * found without on 26 Oct 2026. appointment_update and rating_request are
  * left out: ours have their own approved wording.
  */
-const HOUSE_NAMES = new Set(['welcome_patient', 'visit_summary', 'follow_up_reminder',
+const HOUSE_NAMES = new Set(['welcome_patient', 'visit_summary', 'follow_up_reminder', 'follow_up_due',
   'prescription_link', 'bill_link', 'lab_report_link', 'discharge_link'])
 
 async function houseTemplates(req: Request, body: Any) {
