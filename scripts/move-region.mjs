@@ -363,6 +363,12 @@ async function authConfig() {
     if (v === null || /(secrets?|pass(word)?|_key)$/i.test(k)) continue
     patch[k] = typeof v === 'string' ? v.replaceAll(SRC_REF, DST_REF) : v
   }
+  // Auth hooks that are off in Tokyo are left out entirely: some (password and
+  // MFA verification attempts) cannot even be set to "off" on the Free plan.
+  for (const k of Object.keys(patch)) {
+    const hook = k.match(/^(hook_[a-z_]+?)_(enabled|uri|secrets)$/)?.[1]
+    if (hook && !cfg[`${hook}_enabled`]) delete patch[k]
+  }
   // Supabase refuses any SMTP setting (and the email rate limit, which only
   // custom SMTP allows) unless the SMTP password comes in the same request.
   // It is the ZeptoMail token; give it as SMTP_PASS in .env.mumbai.local to
