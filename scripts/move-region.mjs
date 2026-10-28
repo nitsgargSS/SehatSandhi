@@ -89,8 +89,22 @@ async function mgmt(path, init = {}) {
   return body
 }
 
+/**
+ * The connection string as libpq wants it. node-pg splits user from host at the
+ * LAST "@", libpq at the first, so a password with "@" (or ":", "/", "#"…)
+ * works for one and not the other. Percent-encoding the password suits both.
+ */
+function libpq(url) {
+  const m = url?.match(/^(postgres(?:ql)?:\/\/)([^:@/]+):(.*)@([^@]+)$/)
+  if (!m) return url
+  let pw = m[3]
+  try { pw = decodeURIComponent(pw) } catch { /* not encoded */ }
+  return `${m[1]}${m[2]}:${encodeURIComponent(pw)}@${m[4]}`
+}
+
 /** pg_dump / psql, never through a shell; the connection string goes as an argument, not on screen. */
 function tool(name, args) {
+  args = args.map(a => [SRC_DB, DST_DB].reduce((s, u) => (u ? s.split(u).join(libpq(u)) : s), a))
   const r = spawnSync(join(BIN, name), args, { stdio: ['ignore', 'inherit', 'pipe'], encoding: 'utf8', maxBuffer: 1 << 30 })
   if (r.status !== 0) die(`${name} failed:\n${(r.stderr ?? '').replace(/postgresql:\/\/\S+/g, '<db>').slice(-3000)}`)
   if (r.stderr?.trim()) say(r.stderr.replace(/postgresql:\/\/\S+/g, '<db>').trim().split('\n').slice(-5).join('\n'))
