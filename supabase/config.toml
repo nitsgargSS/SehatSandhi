@@ -10,14 +10,14 @@
 # every browser hitting the site already sees. The keys are the secrets, and
 # those stay in .env.supabase.
 #
-#   prod     ctxkkqqtasegoowuqbmi   (.env.production.local)
+#   prod     tbmlhawtnrvvnemcljma   (.env.production.local; Mumbai since 28 Oct 2026, Tokyo ctxkkqqtasegoowuqbmi retired)
 #   sandbox  xmsycnlztqmyvtcyxkmg   (.env.sandbox)
 #
 # project_id is the DEFAULT target. It points at sandbox deliberately: an
 # unqualified `supabase functions deploy` should not be able to reach
 # production by accident. Deploying to prod is an explicit act:
 #
-#   npx supabase functions deploy --project-ref ctxkkqqtasegoowuqbmi
+#   npx supabase functions deploy --project-ref tbmlhawtnrvvnemcljma
 #
 # Note that functions and migrations deploy separately, and the schema change
 # in 0037 means old function code cannot talk to the new tables. Deploy them

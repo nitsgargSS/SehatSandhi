@@ -21,7 +21,7 @@ set -euo pipefail
 
 WABA="28511562831799665"                   # Sehatsandhi Direct
 CC="91"; NUMBER="7015399355"
-REF="ctxkkqqtasegoowuqbmi"                 # production
+REF="tbmlhawtnrvvnemcljma"                 # production (Mumbai since 28 Oct 2026)
 GRAPH="https://graph.facebook.com/v25.0"
 cd "$(dirname "$0")/.."
 SB_TOKEN="$(grep -m1 '^SUPABASE_ACCESS_TOKEN=' .env.supabase | cut -d= -f2- | tr -d '"'"'"' \r')"
