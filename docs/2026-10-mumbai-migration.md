@@ -166,12 +166,12 @@ copied (`auth-config`); 46 functions deployed (`functions`); 21 secrets copied
 | # | Who | Command / action |
 |---|---|---|
 | 0 | N | Vercel → sehat-sandhi → Settings → Environment Variables (Production): `VITE_MAINTENANCE` = `true` → Deployments → latest → Redeploy. Site shows the maintenance page. |
-| 1 | ! | `npx supabase secrets set WA_BOT_PHONE_IDS= --project-ref ctxkkqqtasegoowuqbmi` (Tokyo bot stops answering) |
+| 1 | ! | `npx supabase functions deploy move-secrets --no-verify-jwt --project-ref ctxkkqqtasegoowuqbmi` → `bash scripts/move-region.sh secrets --cutover` → `npx supabase functions delete move-secrets --project-ref ctxkkqqtasegoowuqbmi` (the 5 held-back keys; BEFORE step 1b, which empties one of them in Tokyo) |
+| 1b | ! | `npx supabase secrets unset WA_BOT_PHONE_IDS --project-ref ctxkkqqtasegoowuqbmi` (Tokyo's bot stops answering) |
 | 2 | ! | `bash scripts/move-region.sh pause-tokyo --cutover --yes` (Tokyo's scheduled jobs off; their state saved) |
 | 3 | ! | `bash scripts/move-region.sh wipe --yes` (empty the rehearsal copy) |
 | 4 | ! | `bash scripts/move-region.sh --cutover --yes` (the copy, ~10 min; jobs as they were in Tokyo; must end "✓ Everything matches") |
-| 5 | ! | `npx supabase functions deploy move-secrets --no-verify-jwt --project-ref ctxkkqqtasegoowuqbmi` → `bash scripts/move-region.sh secrets --cutover` → `npx supabase functions delete move-secrets --project-ref ctxkkqqtasegoowuqbmi` |
-| 6 | T | `REF=tbmlhawtnrvvnemcljma bash scripts/wa-connect-production.sh <main account id> [<business number account id>]` — new WA_INBOUND_SECRET in Mumbai, Meta's webhook → Mumbai. Then `! npx supabase secrets set WA_BOT_PHONE_IDS=<main number id> --project-ref tbmlhawtnrvvnemcljma` if step 5 did not already carry it. |
+| 6 | T | `REF=tbmlhawtnrvvnemcljma bash scripts/wa-connect-production.sh <main account id> [<business number account id>]` — new WA_INBOUND_SECRET in Mumbai, Meta's webhook → Mumbai. Mumbai already has `WA_BOT_PHONE_IDS` from step 1, so its bot answers once Meta points there. |
 | 7 | N | Razorpay → Settings → Webhooks → edit → URL `https://tbmlhawtnrvvnemcljma.supabase.co/functions/v1/razorpay-webhook` (secret unchanged). |
 | 8 | N | Vercel Production env: `VITE_SUPABASE_URL` = `https://tbmlhawtnrvvnemcljma.supabase.co`, `VITE_SUPABASE_ANON_KEY` = Mumbai's public key (same kind as now), `VITE_MAINTENANCE` = `false` → Redeploy. |
 | 9 | ! | `bash scripts/app-point.sh mumbai` (build + check) → `bash scripts/app-point.sh mumbai --publish`; commit `app/eas.json`. |
@@ -183,7 +183,7 @@ copied (`auth-config`); 46 functions deployed (`functions`); 21 secrets copied
 Rollback (before Mumbai takes real writes): Vercel env back to Tokyo + redeploy,
 `bash scripts/app-point.sh tokyo --publish`, Razorpay URL back,
 `bash scripts/wa-connect-production.sh <ids>` (REF defaults to Tokyo),
-`bash scripts/move-region.sh resume-tokyo --cutover`, `WA_BOT_PHONE_IDS` back on Tokyo.
+`bash scripts/move-region.sh resume-tokyo --cutover`, `npx supabase secrets set WA_BOT_PHONE_IDS=<main number id> --project-ref ctxkkqqtasegoowuqbmi` (the id is in docs/whatsapp-rollout.md).
 
 Open before the night: the account ids for step 6 — the main number's WhatsApp
 account and the business number's — confirm which currently point at Tokyo.
