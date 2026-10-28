@@ -87,6 +87,7 @@ Deno.serve(async (req) => {
     pincodes?: unknown; businessId?: unknown; periodMonths?: unknown; modules?: unknown
     gstin?: unknown; gstLegalName?: unknown; billingAddress?: unknown
     whatsapp?: unknown; couponCode?: unknown; autoRenew?: unknown; whatsappPlan?: unknown; planAddons?: unknown
+    whatsappProNumber?: unknown
   }
   try {
     body = await req.json()
@@ -318,6 +319,18 @@ Deno.serve(async (req) => {
     ...(priced.whatsappSelected ? { renewal_whatsapp_plan: priced.whatsappPlan } : {}),
     auto_renew: body.autoRenew === false ? false : true,
   }).eq('id', businessId)
+
+  // WhatsApp Pro chosen at signup: the number the clinic means to connect, so
+  // whoever helps them set it up can see it. wa-connect overwrites it with
+  // Meta's own once connected, so a connected number is never replaced here.
+  const proNumber = String(body.whatsappProNumber ?? '').replace(/\D/g, '')
+  if (priced.whatsappSelected && priced.whatsappPlan === 'pro' && /^[6-9]\d{9}$/.test(proNumber)) {
+    const { data: wa } = await supabase.from('business_wa_accounts').select('own_status').eq('business_id', businessId).maybeSingle()
+    if ((wa as { own_status?: string } | null)?.own_status !== 'connected') {
+      await supabase.from('business_wa_accounts')
+        .upsert({ business_id: businessId, whatsapp_number: `+91 ${proNumber}` }, { onConflict: 'business_id' })
+    }
+  }
 
   return json({
     orderId: order.id,

@@ -226,6 +226,8 @@ export interface BuyerGstDetails {
   autoRenew?: boolean
   /** 0272: plan add-ons ticked at signup (ipd, pathology…), when the plans by doctors are on. */
   planAddons?: string[]
+  /** 0262: the number the clinic will connect for WhatsApp Pro, ten digits. Kept for setting it up. */
+  whatsappProNumber?: string
 }
 
 // Signup calls this anonymously (no login exists yet); the dashboard passes the
