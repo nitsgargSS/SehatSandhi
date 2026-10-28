@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isValidEmail, normEmail, passwordProblem, checkPassword, passwordSaveError } from '../lib/credentials'
-import { prepareEmailLogin, linkMyLogin, clinicOtp } from '../lib/businessApi'
+import { prepareEmailLogin, linkMyLogin, clinicOtp, WHATSAPP_CODE_ERRORS } from '../lib/businessApi'
 import { markPasswordChanged } from '../lib/passwordState'
 import { Spinner } from './Loading'
 
@@ -49,16 +49,6 @@ export interface EmailSignInProps {
    * listings, so no number of theirs would match.
    */
   whatsapp?: boolean
-}
-
-// Sentinels from clinic-otp, not prose: the wording belongs to the screen.
-const WHATSAPP_ERRORS: Record<string, string> = {
-  WHATSAPP_UNREACHABLE:
-    "We couldn't reach that number on WhatsApp. Use the email code instead, or call us on +91 85708 89188.",
-  DELIVERY_UNAVAILABLE:
-    'We cannot send WhatsApp codes right now. This is a problem at our end — use the email code, or call us on +91 85708 89188.',
-  DELIVERY_FAILED:
-    'We could not send your code just now. Try again in a minute, or use the email code.',
 }
 
 export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in', whatsapp = false }: EmailSignInProps) {
@@ -154,7 +144,7 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
       setStep('code')
     } catch (err) {
       const m = (err as Error).message
-      setError(WHATSAPP_ERRORS[m] ?? m)
+      setError(WHATSAPP_CODE_ERRORS[m] ?? m)
     } finally { setBusy(false) }
   }
 

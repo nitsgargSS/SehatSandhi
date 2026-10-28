@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import { supabase } from '../lib/supabase'
-import { linkMyLogin, prepareEmailLogin } from '@web/lib/businessApi'
+import { clinicOtp, linkMyLogin, prepareEmailLogin, WHATSAPP_CODE_ERRORS } from '@web/lib/businessApi'
 import { fetchPasswordState, mustChangeNow } from '@web/lib/passwordState'
 import NewPassword from '../ui/NewPassword'
 import { C } from '../ui/theme'
@@ -11,13 +11,15 @@ import { C } from '../ui/theme'
 // (the everyday one), or email + password — and, as there, "Set a password":
 // an emailed code proves the address, then they choose one. Many staff have
 // only a phone, so setting, forgetting and expiry are all handled here.
-// WhatsApp OTP joins once AiSensy is live on production.
-type Mode = 'code' | 'password' | 'reset'
-const TAB: Record<Mode, string> = { code: 'Email me a code', password: 'Password', reset: 'Set / forgot password' }
+// A WhatsApp code is the fourth way in, to the number registered on the clinic
+// or doctor (clinic-otp) — and the way in when email delivery is down.
+type Mode = 'code' | 'whatsapp' | 'password' | 'reset'
+const TAB: Record<Mode, string> = { code: 'Email me a code', whatsapp: 'WhatsApp code', password: 'Password', reset: 'Set / forgot password' }
 
 export default function Login() {
   const [mode, setMode] = useState<Mode>('code')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [sent, setSent] = useState(false)
@@ -28,6 +30,7 @@ export default function Login() {
   // would look empty).
   const [choose, setChoose] = useState<null | 'reset' | 'expired'>(null)
   const addr = email.trim().toLowerCase()
+  const digits = phone.replace(/\D/g, '')
 
   const enter = async () => { await linkMyLogin(); router.replace('/queue') }
   const done = async () => {
@@ -47,6 +50,23 @@ export default function Login() {
     // Same words whether or not the address is known, as on the website.
     setSent(true)
   }
+  const sendWhatsApp = async () => {
+    setBusy(true); setErr('')
+    try { await clinicOtp({ action: 'request', phone: digits }); setSent(true) }
+    catch (e) { const m = (e as Error).message; setErr(WHATSAPP_CODE_ERRORS[m] ?? m) }
+    setBusy(false)
+  }
+  const verifyWhatsApp = async () => {
+    setBusy(true); setErr('')
+    try {
+      // clinic-otp checks the code and returns a one-time token for the
+      // number's login; exchanging it is what makes the session.
+      const { tokenHash } = await clinicOtp({ action: 'verify', phone: digits, code })
+      const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash!, type: 'email' })
+      if (error) throw new Error('Could not start your session. Please try again.')
+    } catch (e) { setErr((e as Error).message); setBusy(false); return }
+    await done()
+  }
   const verify = async () => {
     setBusy(true); setErr('')
     const { error } = await supabase.auth.verifyOtp({ email: addr, token: code, type: 'email' })
@@ -65,7 +85,7 @@ export default function Login() {
       <ScrollView contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
         <Text style={s.title}>{choose === 'expired' ? 'Your password has expired' : 'Choose a password'}</Text>
         <Text style={s.h}>{choose === 'expired'
-          ? `Choose a new one for ${addr} to carry on.`
+          ? `Choose a new one${addr ? ` for ${addr}` : ''} to carry on.`
           : `For ${addr}. Next time, sign in with this password or with an emailed code.`}</Text>
         <NewPassword onDone={enter} label="Save and continue" />
         {choose === 'reset' && <Pressable onPress={enter}><Text style={s.link}>Skip for now</Text></Pressable>}
@@ -76,7 +96,7 @@ export default function Login() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.wrap}>
       <View style={s.tabs}>
-        {(['code', 'password', 'reset'] as Mode[]).map(m => (
+        {(['code', 'whatsapp', 'password', 'reset'] as Mode[]).map(m => (
           <Pressable key={m} onPress={() => { setMode(m); setErr(''); setSent(false); setCode('') }} style={[s.tab, mode === m && s.tabOn]}>
             <Text style={[s.tabText, mode === m && { color: '#fff' }]}>{TAB[m]}</Text>
           </Pressable>
@@ -84,9 +104,16 @@ export default function Login() {
       </View>
       <Text style={s.h}>{mode === 'reset'
         ? 'Forgot your password, or never set one? We email you a code to prove it is you, then you choose a password.'
-        : 'Use the email you sign in with on Sehatsandhi.'}</Text>
-      <TextInput style={s.input} placeholder="Email" autoCapitalize="none" keyboardType="email-address"
-        autoComplete="email" value={email} onChangeText={t => { setEmail(t); setSent(false) }} editable={!sent} />
+        : mode === 'whatsapp'
+          ? 'Use the WhatsApp number registered on your clinic or doctor profile.'
+          : 'Use the email you sign in with on Sehatsandhi.'}</Text>
+      {mode === 'whatsapp' ? (
+        <TextInput style={s.input} placeholder="WhatsApp number" keyboardType="phone-pad"
+          autoComplete="tel" value={phone} onChangeText={t => { setPhone(t); setSent(false) }} editable={!sent} />
+      ) : (
+        <TextInput style={s.input} placeholder="Email" autoCapitalize="none" keyboardType="email-address"
+          autoComplete="email" value={email} onChangeText={t => { setEmail(t); setSent(false) }} editable={!sent} />
+      )}
 
       {mode === 'password' && (
         <TextInput style={s.input} placeholder="Password" secureTextEntry autoComplete="password"
@@ -94,7 +121,9 @@ export default function Login() {
       )}
       {mode !== 'password' && sent && (
         <>
-          <Text style={s.note}>If {addr} is registered, a 6-digit code is on its way. Check Spam too.</Text>
+          <Text style={s.note}>{mode === 'whatsapp'
+            ? `If ${phone.trim()} is registered, a 6-digit code is on its way on WhatsApp.`
+            : `If ${addr} is registered, a 6-digit code is on its way. Check Spam too.`}</Text>
           <TextInput style={[s.input, s.code]} placeholder="000000" keyboardType="number-pad" maxLength={6}
             autoComplete="one-time-code" value={code} onChangeText={t => setCode(t.replace(/\D/g, ''))} />
         </>
@@ -106,9 +135,14 @@ export default function Login() {
         <Btn busy={busy} disabled={!addr || !password} onPress={signIn} label="Sign in" />
       ) : sent ? (
         <>
-          <Btn busy={busy} disabled={code.length < 6} onPress={verify} label={mode === 'reset' ? 'Confirm and choose a password' : 'Confirm'} />
-          <Pressable onPress={() => { setSent(false); setCode('') }}><Text style={s.link}>Use a different email</Text></Pressable>
+          <Btn busy={busy} disabled={code.length < 6} onPress={mode === 'whatsapp' ? verifyWhatsApp : verify}
+            label={mode === 'reset' ? 'Confirm and choose a password' : 'Confirm'} />
+          <Pressable onPress={() => { setSent(false); setCode('') }}>
+            <Text style={s.link}>{mode === 'whatsapp' ? 'Use a different number' : 'Use a different email'}</Text>
+          </Pressable>
         </>
+      ) : mode === 'whatsapp' ? (
+        <Btn busy={busy} disabled={digits.length < 10} onPress={sendWhatsApp} label="Send me a code on WhatsApp" />
       ) : (
         <Btn busy={busy} disabled={!addr.includes('@')} onPress={sendCode} label="Send me a code" />
       )}
