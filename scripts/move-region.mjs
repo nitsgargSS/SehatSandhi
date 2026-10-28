@@ -18,6 +18,9 @@
 // Run on their own:
 //   auth-config copy Authentication settings (not the SMTP password)
 //   functions   deploy every Edge Function, with Tokyo's verify_jwt per function
+//   secrets     copy Tokyo's Edge Function secrets to Mumbai, through the one-off
+//               move-secrets function (deploy it to Tokyo first, delete after);
+//               the sending keys only with --cutover
 //   wipe        empty Mumbai again, after a rehearsal
 //   pause-tokyo / resume-tokyo   cutover only: stop / restart Tokyo's jobs
 //
@@ -396,7 +399,7 @@ async function functions() {
   step('functions')
   const live = await mgmt(`/projects/${SRC_REF}/functions`)
   const local = new Set(readdirSync('supabase/functions', { withFileTypes: true })
-    .filter(d => d.isDirectory() && !d.name.startsWith('_')).map(d => d.name))
+    .filter(d => d.isDirectory() && !d.name.startsWith('_') && d.name !== 'move-secrets').map(d => d.name))
   const group = (jwt) => live.filter(f => f.verify_jwt === jwt && local.has(f.slug)).map(f => f.slug)
   for (const f of live) if (!local.has(f.slug)) say(`  ! ${f.slug} is live in Tokyo but not in the repo — not deployed`)
   const all = [...group(true).map(s => [s, true]), ...group(false).map(s => [s, false])]
@@ -407,6 +410,22 @@ async function functions() {
       { stdio: ['ignore', 'ignore', 'inherit'] })
     if (r.status !== 0) die(`deploy of ${slug} failed — run "functions" again`)
   }
+}
+
+async function secrets() {
+  step('secrets')
+  if (!TOKEN) die('SUPABASE_ACCESS_TOKEN is not in .env.supabase')
+  const res = await fetch(`https://${SRC_REF}.supabase.co/functions/v1/move-secrets`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: TOKEN, includeSending: MODE === 'cutover' }),
+  })
+  const r = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+  if (res.status === 404) die('move-secrets is not deployed to Tokyo:\n  npx supabase functions deploy move-secrets --no-verify-jwt --project-ref ' + SRC_REF)
+  if (!r.ok) die(`move-secrets: ${r.error}`)
+  say(`${r.copied.length} copied: ${r.copied.join(', ')}`)
+  if (r.held.length) say(`held back until --cutover: ${r.held.join(', ')}`)
+  if (r.missing.length) say(`listed but not in Tokyo's environment: ${r.missing.join(', ')}`)
+  say(`Now delete it from Tokyo:\n  npx supabase functions delete move-secrets --project-ref ${SRC_REF}`)
 }
 
 async function wipe(dst) {
@@ -454,7 +473,7 @@ async function pauseTokyo(src, active) {
 // ── run ─────────────────────────────────────────────────────────────────────
 
 const ORDER = ['preflight', 'extensions', 'schema', 'managed', 'data', 'cron', 'vault', 'storage', 'verify']
-const known = [...ORDER, 'all', 'auth-config', 'functions', 'wipe', 'pause-tokyo', 'resume-tokyo']
+const known = [...ORDER, 'all', 'auth-config', 'functions', 'secrets', 'wipe', 'pause-tokyo', 'resume-tokyo']
 if (!known.includes(STEP)) die(`unknown step "${STEP}". Steps: ${known.join(', ')}`)
 if (!existsSync(join(BIN, 'pg_dump'))) die(`pg_dump not found in ${BIN} — install Postgres.app`)
 
@@ -464,6 +483,7 @@ const dst = await connect(DST_DB, 'Mumbai')
 try {
   if (STEP === 'auth-config') await authConfig()
   else if (STEP === 'functions') await functions()
+  else if (STEP === 'secrets') await secrets()
   else if (STEP === 'wipe') await wipe(dst)
   else if (STEP === 'pause-tokyo') await pauseTokyo(src, false)
   else if (STEP === 'resume-tokyo') await pauseTokyo(src, true)
