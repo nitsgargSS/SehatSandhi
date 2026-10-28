@@ -1,7 +1,7 @@
 # WhatsApp on Meta — rolling it out to production
 
 Written 9 Oct 2026, from what the two databases and projects actually hold on
-that day. Sandbox is `xmsycnlztqmyvtcyxkmg`, production `ctxkkqqtasegoowuqbmi`.
+that day. Sandbox is `xmsycnlztqmyvtcyxkmg`, production `ctxkkqqtasegoowuqbmi` (Tokyo) — moved to `tbmlhawtnrvvnemcljma` (Mumbai) on 28 Oct 2026; read the commands below with that ref.
 
 ## Where things stand
 

@@ -30,7 +30,7 @@ import pg from 'pg'
 import dotenv from 'dotenv'
 
 dotenv.config({ path: '.env.supabase', quiet: true })
-const PROD_REF = 'ctxkkqqtasegoowuqbmi'
+const PROD_REF = 'tbmlhawtnrvvnemcljma' // production since 28 Oct 2026 (Mumbai); Tokyo ctxkkqqtasegoowuqbmi retired
 const url = process.env.SUPABASE_DB_URL_SANDBOX
 if (!url || url.includes(PROD_REF)) { console.error('SUPABASE_DB_URL_SANDBOX missing or points at production.'); process.exit(1) }
 

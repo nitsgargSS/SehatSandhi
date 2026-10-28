@@ -24,7 +24,7 @@
 # makes a new inbound secret and points Meta at it.
 set -euo pipefail
 
-REF="${REF:-ctxkkqqtasegoowuqbmi}"      # production; REF=<ref> bash … for another project (the move to Mumbai)
+REF="${REF:-tbmlhawtnrvvnemcljma}"      # production (Mumbai since 28 Oct 2026); REF=<ref> bash … for another project
 [ "$#" -gt 0 ] || set -- 3997937100511018  # the provider's account holding +91 70153 99355
 WABA="$1"                                  # the token and app secret are checked against the first
 GRAPH="https://graph.facebook.com/v25.0"

@@ -11,6 +11,7 @@
 //   managed     what we added inside Supabase's schemas: triggers on auth.*,
 //               policies on storage.*
 //   data        our tables + logins (auth.users / identities / mfa), triggers off
+//   repoint     saved file links that name the Tokyo project now name Mumbai
 //   cron        the scheduled jobs
 //   vault       the Vault secrets — decrypted from Tokyo, recreated in Mumbai
 //   storage     buckets and every file in them
@@ -239,6 +240,29 @@ async function data(src, dst) {
     '-c', 'SET session_replication_role = replica', '-f', auth, '-f', app])
   const { rows: [u] } = await dst.query(`select count(*)::int n from auth.users`)
   say(`Loaded. ${u.n} logins.`)
+}
+
+async function repoint(src, dst) {
+  step('repoint')
+  // Public file links (letterheads, photos, broadcast images) are saved as full
+  // URLs with the project's address in them; after the move they must name Mumbai.
+  const schemas = await appSchemas(src)
+  const { rows: cols } = await dst.query(`
+    select c.table_schema s, c.table_name t, c.column_name col, c.data_type dt
+      from information_schema.columns c join pg_tables p on p.schemaname = c.table_schema and p.tablename = c.table_name
+     where c.table_schema = any($1) and c.data_type in ('text', 'character varying', 'jsonb', 'json')
+       and c.is_generated = 'NEVER'`, [schemas])
+  const from = `${SRC_REF}.supabase.co`, to = `${DST_REF}.supabase.co`
+  await dst.query('SET session_replication_role = replica')
+  let n = 0
+  for (const r of cols) {
+    const col = ident(r.col), tbl = `${ident(r.s)}.${ident(r.t)}`
+    const expr = r.dt.startsWith('json') ? `replace(${col}::text, $1, $2)::${r.dt}` : `replace(${col}, $1, $2)`
+    const res = await dst.query(`update ${tbl} set ${col} = ${expr} where ${col}::text like '%' || $1 || '%'`, [from, to])
+    if (res.rowCount) { n += res.rowCount; say(`  ${r.s}.${r.t}.${r.col}: ${res.rowCount}`) }
+  }
+  await dst.query('SET session_replication_role = origin')
+  say(`${n} values now point at Mumbai.`)
 }
 
 async function cron(src, dst) {
@@ -472,7 +496,7 @@ async function pauseTokyo(src, active) {
 
 // ── run ─────────────────────────────────────────────────────────────────────
 
-const ORDER = ['preflight', 'extensions', 'schema', 'managed', 'data', 'cron', 'vault', 'storage', 'verify']
+const ORDER = ['preflight', 'extensions', 'schema', 'managed', 'data', 'repoint', 'cron', 'vault', 'storage', 'verify']
 const known = [...ORDER, 'all', 'auth-config', 'functions', 'secrets', 'wipe', 'pause-tokyo', 'resume-tokyo']
 if (!known.includes(STEP)) die(`unknown step "${STEP}". Steps: ${known.join(', ')}`)
 if (!existsSync(join(BIN, 'pg_dump'))) die(`pg_dump not found in ${BIN} — install Postgres.app`)
@@ -489,7 +513,7 @@ try {
   else if (STEP === 'resume-tokyo') await pauseTokyo(src, true)
   else {
     mkdirSync(WORK, { recursive: true }); chmodSync(WORK, 0o700)
-    const steps = { preflight, extensions, schema, managed, data, cron, vault, storage, verify }
+    const steps = { preflight, extensions, schema, managed, data, repoint, cron, vault, storage, verify }
     for (const s of STEP === 'all' ? ORDER : [STEP]) await steps[s](src, dst)
   }
   say(`\nDone in ${Math.round((Date.now() - started) / 1000)} s.`)

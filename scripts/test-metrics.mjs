@@ -33,7 +33,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
 const ref = argv.includes('--ref') ? argv[argv.indexOf('--ref') + 1] : 'xmsycnlztqmyvtcyxkmg'
-if (ref === 'ctxkkqqtasegoowuqbmi') { console.error('Not on production: this test writes (and rolls back).'); process.exit(2) }
+if (ref === 'tbmlhawtnrvvnemcljma' || ref === 'ctxkkqqtasegoowuqbmi') { console.error('Not on production: this test writes (and rolls back).'); process.exit(2) }
 const token = readFileSync(join(ROOT, '.env.supabase'), 'utf8').match(/^SUPABASE_ACCESS_TOKEN=["']?([^"'\n]+)/m)?.[1]
 
 const A = '2026-03-01', B = '2026-04-01', C = '2026-05-01'
