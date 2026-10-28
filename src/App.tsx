@@ -33,6 +33,8 @@ const AmbulanceTrack = lazy(() => import('./pages/AmbulanceTrack'))
 const InsuranceTrack = lazy(() => import('./pages/InsuranceTrack'))
 const LabFilePage = lazy(() => import('./pages/LabFilePage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
+// 0282: a business's website, at /s/<slug> until <slug>.sehatsandhi.com is wired.
+const SiteFromPath = lazy(() => import('./site/SiteApp').then(m => ({ default: m.SiteFromPath })))
 const BusinessLanding = lazy(() => import('./pages/business/BusinessLanding'))
 const BusinessRegister = lazy(() => import('./pages/business/BusinessRegister'))
 const WhatsAppBookingDemo = lazy(() => import('./pages/business/WhatsAppBookingDemo'))
@@ -166,7 +168,8 @@ const PageViewTracker = () => {
 
 const WhatsAppFloat = () => {
   const { pathname } = useLocation()
-  if (FLOAT_HIDDEN_PATHS.includes(pathname)) return null
+  // A clinic's website (/s/…) books with that clinic, not Sehatsandhi's assistant.
+  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/')) return null
   return (
     <a href={waLink()}
        target="_blank" rel="noreferrer"
@@ -186,7 +189,8 @@ export default function App() {
       <BrowserRouter>
         {/* Outside <Routes> so the staging warning is present on every page. */}
         <StagingBanner />
-        <AnalyticsConsent />
+        {/* Not on a clinic's website (/s/…): Sehatsandhi's analytics question is not theirs to ask. */}
+        {!window.location.pathname.startsWith('/s/') && <AnalyticsConsent />}
         <Suspense fallback={
           <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">
             Loading…
@@ -201,6 +205,7 @@ export default function App() {
           <Route path="/browse" element={<Browse />} />
           <Route path="/speciality/:specId/:areaSlug" element={<SpecialityLanding />} />
           <Route path="/doctor/:slug" element={<DoctorProfile />} />
+          <Route path="/s/:slug/*" element={<SiteFromPath />} />
 
           {/* ── Business flow ───────────────────────────────────────────────
               /business is the whole pitch on one page — how it works, pricing
