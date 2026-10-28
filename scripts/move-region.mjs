@@ -40,6 +40,8 @@ import { createInterface } from 'node:readline/promises'
 import { createClient } from '@supabase/supabase-js'
 
 dotenv.config({ path: '.env.supabase', quiet: true })
+// Optional, never committed (.env.*.local): SMTP_PASS for auth-config.
+dotenv.config({ path: '.env.mumbai.local', quiet: true })
 
 const SRC_REF = 'ctxkkqqtasegoowuqbmi' // Tokyo, production today
 const DST_REF = 'tbmlhawtnrvvnemcljma' // Mumbai
@@ -355,15 +357,28 @@ async function authConfig() {
   step('auth-config')
   const cfg = await mgmt(`/projects/${SRC_REF}/config/auth`)
   // Same settings, with any mention of the Tokyo project pointed at Mumbai;
-  // secrets (the SMTP password among them) are not readable and not sent.
+  // secrets cannot be read from Tokyo and are not sent.
   const patch = {}
   for (const [k, v] of Object.entries(cfg)) {
     if (v === null || /(secrets?|pass(word)?|_key)$/i.test(k)) continue
     patch[k] = typeof v === 'string' ? v.replaceAll(SRC_REF, DST_REF) : v
   }
+  // Supabase refuses any SMTP setting (and the email rate limit, which only
+  // custom SMTP allows) unless the SMTP password comes in the same request.
+  // It is the ZeptoMail token; give it as SMTP_PASS in .env.mumbai.local to
+  // send them all, or leave it out and enter the SMTP card by hand.
+  const smtpKeys = Object.keys(patch).filter(k => k.startsWith('smtp_') || k === 'rate_limit_email_sent')
+  const pass = process.env.SMTP_PASS
+  if (pass && cfg.smtp_host) patch.smtp_pass = pass
+  else for (const k of smtpKeys) delete patch[k]
   await mgmt(`/projects/${DST_REF}/config/auth`, { method: 'PATCH', body: JSON.stringify(patch) })
-  say(`${Object.keys(patch).length} settings copied.`)
-  if (cfg.smtp_host) say(`Now type the SMTP password into Mumbai: Authentication → SMTP (host ${cfg.smtp_host}, user ${cfg.smtp_user}).`)
+  say(`${Object.keys(patch).length} settings copied${patch.smtp_pass ? ', SMTP included' : ''}.`)
+  if (cfg.smtp_host && !patch.smtp_pass) {
+    say('SMTP was left out. In Mumbai: Authentication → Emails → SMTP Settings → Enable custom SMTP, then:')
+    for (const k of ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_admin_email', 'smtp_sender_name']) if (cfg[k] != null) say(`  ${k.padEnd(18)} ${cfg[k]}`)
+    say('  password           the ZeptoMail SMTP token (the same one Tokyo uses)')
+    if (cfg.rate_limit_email_sent != null) say(`Then Authentication → Rate Limits → emails per hour: ${cfg.rate_limit_email_sent}`)
+  }
 }
 
 async function functions() {
