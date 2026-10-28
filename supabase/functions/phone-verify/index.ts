@@ -84,10 +84,10 @@ Deno.serve(async (req) => {
     }
 
     const code = code6()
-    const { error: iErr } = await db.from('phone_verifications').insert({
+    const { data: row, error: iErr } = await db.from('phone_verifications').insert({
       auth_uid: user.id, phone, code_hash: await sha256Hex(`${phone}:${code}`),
       expires_at: new Date(Date.now() + CODE_TTL_MIN * 60_000).toISOString(),
-    })
+    }).select('id').single()
     if (iErr) return json({ error: iErr.message }, 500)
 
     // templateParams is positional: the login_code template takes the code as
@@ -98,6 +98,9 @@ Deno.serve(async (req) => {
     })
     if (!sent.ok) {
       console.error(`phone-verify: ${sent.provider ?? 'whatsapp'}: ${sent.error}`)
+      // Nothing was sent, so it does not count towards the wait or the hourly
+      // limit — otherwise a failed send blocks them from trying again.
+      await db.from('phone_verifications').delete().eq('id', (row as { id: string }).id)
       return json({ error: 'We could not send a WhatsApp code to that number. Is it on WhatsApp?' }, 502)
     }
     return json({ ok: true })

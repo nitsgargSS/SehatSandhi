@@ -188,9 +188,12 @@ export async function graphSend(
     const body = await res.json().catch(() => ({})) as any
     if (res.ok) return { ok: true, id: body?.messages?.[0]?.id }
     const code = body?.error?.code
+    // Meta's message is often just "Invalid parameter"; which one is in
+    // error_data.details. Never contains the template's variables.
+    const details = body?.error?.error_data?.details
     return {
       ok: false,
-      error: `whatsapp ${res.status}: ${String(body?.error?.message ?? '').slice(0, 150)}${code ? ` (${code})` : ''}`,
+      error: `whatsapp ${res.status}: ${String(body?.error?.message ?? '').slice(0, 150)}${code ? ` (${code})` : ''}${details ? ` — ${String(details).slice(0, 200)}` : ''}`,
       // 131026: cannot deliver — most often the number has no WhatsApp account.
       // 131047: outside the allowed window for a non-template send.
       unreachable: code === 131026 || code === 131047,
