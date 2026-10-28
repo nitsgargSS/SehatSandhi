@@ -5,6 +5,9 @@
 #
 #   bash scripts/wa-connect-production.sh                      the provider's account holding the main number
 #   bash scripts/wa-connect-production.sh <account id> [<account id> …]
+#   REF=tbmlhawtnrvvnemcljma bash scripts/wa-connect-production.sh …   the same, into Mumbai
+#     (docs/2026-10-mumbai-migration.md). Run it in Terminal, not through Claude Code:
+#     it asks for the token and app secret with the typing hidden.
 #
 # Every account named gets the same new address, in one run. Each run makes a
 # new inbound secret, so an account left out of a run stops reaching
@@ -21,7 +24,7 @@
 # makes a new inbound secret and points Meta at it.
 set -euo pipefail
 
-REF="ctxkkqqtasegoowuqbmi"                 # production
+REF="${REF:-ctxkkqqtasegoowuqbmi}"      # production; REF=<ref> bash … for another project (the move to Mumbai)
 [ "$#" -gt 0 ] || set -- 3997937100511018  # the provider's account holding +91 70153 99355
 WABA="$1"                                  # the token and app secret are checked against the first
 GRAPH="https://graph.facebook.com/v25.0"

@@ -153,3 +153,48 @@ Supabase's custom domain add-on would let the API live at `api.sehatsandhi.com`,
 so a future move changes nothing in Vercel, the app, Meta or Razorpay. It needs a
 paid Supabase plan (the org is on Free today) plus the add-on. Worth deciding
 before the cutover, since adding it later means one more round of URL changes.
+
+---
+
+## Switch-night commands (as built, 28 Oct 2026)
+
+Everything up to here was rehearsed: copy 571 s, all checks green; auth settings
+copied (`auth-config`); 46 functions deployed (`functions`); 21 secrets copied
+(`secrets`), 5 held back. Run in this order; `!` = typed into Claude Code,
+**T** = run in the Terminal app (asks for hidden input).
+
+| # | Who | Command / action |
+|---|---|---|
+| 0 | N | Vercel → sehat-sandhi → Settings → Environment Variables (Production): `VITE_MAINTENANCE` = `true` → Deployments → latest → Redeploy. Site shows the maintenance page. |
+| 1 | ! | `npx supabase functions deploy move-secrets --no-verify-jwt --project-ref ctxkkqqtasegoowuqbmi` → `bash scripts/move-region.sh secrets --cutover` → `npx supabase functions delete move-secrets --project-ref ctxkkqqtasegoowuqbmi` (the 5 held-back keys; BEFORE step 1b, which empties one of them in Tokyo) |
+| 1b | ! | `npx supabase secrets unset WA_BOT_PHONE_IDS --project-ref ctxkkqqtasegoowuqbmi` (Tokyo's bot stops answering) |
+| 2 | ! | `bash scripts/move-region.sh pause-tokyo --cutover --yes` (Tokyo's scheduled jobs off; their state saved) |
+| 3 | ! | `bash scripts/move-region.sh wipe --yes` (empty the rehearsal copy) |
+| 4 | ! | `bash scripts/move-region.sh --cutover --yes` (the copy, ~10 min; jobs as they were in Tokyo; must end "✓ Everything matches") |
+| 6 | T | `REF=tbmlhawtnrvvnemcljma bash scripts/wa-connect-production.sh 1461510652560252 3997937100511018 1953329202322425` — new WA_INBOUND_SECRET in Mumbai, Meta's webhook → Mumbai. Mumbai already has `WA_BOT_PHONE_IDS` from step 1, so its bot answers once Meta points there. |
+| 7 | N | Razorpay → Settings → Webhooks → edit → URL `https://tbmlhawtnrvvnemcljma.supabase.co/functions/v1/razorpay-webhook` (secret unchanged). |
+| 8 | N | Vercel Production env: `VITE_SUPABASE_URL` = `https://tbmlhawtnrvvnemcljma.supabase.co`, `VITE_SUPABASE_ANON_KEY` = Mumbai's public key (same kind as now), `VITE_MAINTENANCE` = `false` → Redeploy. |
+| 9 | ! | `bash scripts/app-point.sh mumbai` (build + check) → `bash scripts/app-point.sh mumbai --publish`; commit `app/eas.json`. |
+| 10 | N+C | Smoke test on www.sehatsandhi.com: password + email-code login, a patient, Send prescription on WhatsApp (arrives), "Hi" to the bot (answers), a booking. |
+| 11 | ! | Revoke writes on Tokyo for anon/authenticated (C gives the SQL), so an app copy that has not updated yet fails instead of writing into Tokyo. |
+| 12 | N | Demo clinic → WhatsApp → Connect again (its own-number token was not copied). |
+| 13 | C | Privacy policy → Mumbai; `supabase/config.toml`, scripts and docs → new ref; delete `~/sehatsandhi-move/`. |
+
+Rollback (before Mumbai takes real writes): Vercel env back to Tokyo + redeploy,
+`bash scripts/app-point.sh tokyo --publish`, Razorpay URL back,
+`bash scripts/wa-connect-production.sh <ids>` (REF defaults to Tokyo),
+`bash scripts/move-region.sh resume-tokyo --cutover`, `npx supabase secrets set WA_BOT_PHONE_IDS=<main number id> --project-ref ctxkkqqtasegoowuqbmi` (the id is in docs/whatsapp-rollout.md).
+
+WhatsApp accounts for step 6 (WhatsApp Manager, 28 Oct 2026):
+
+| Account | ID | Number |
+|---|---|---|
+| Sehatsandhi Main | `1461510652560252` | +91 70153 99355 (patients, bot) |
+| Sehatsandhi | `3997937100511018` | also listed with +91 70153 99355 — Manager shows the number under both; passed too, so whichever really holds it is repointed |
+| Sehatsandhi Clinics | `1953329202322425` | +91 79886 20804 (to businesses: bills, alerts, login codes' replies) |
+| Sehatsandhi Direct, Test WhatsApp Business Account | `28511562831799665`, `28803655879267940` | +1 555 test numbers — not repointed |
+| Sehatsandhi Demo Clinic | `1080508188148557` | the demo's own number — reconnects with Connect (step 12) |
+| Sehatsandhi | `1586382356551948` | no phone numbers — not repointed |
+
+The script tries every account given and reports each; a refusal for one
+(say 3997937100511018, if it holds no number) does not stop the others.
