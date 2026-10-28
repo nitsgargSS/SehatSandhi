@@ -194,7 +194,7 @@ WhatsApp accounts for step 6 (WhatsApp Manager, 28 Oct 2026):
 | Sehatsandhi Clinics | `1953329202322425` | +91 79886 20804 (to businesses: bills, alerts, login codes' replies) |
 | Sehatsandhi Direct, Test WhatsApp Business Account | `28511562831799665`, `28803655879267940` | +1 555 test numbers — not repointed |
 | Sehatsandhi Demo Clinic | `1080508188148557` | the demo's own number — reconnects with Connect (step 12) |
-| Sehatsandhi | `1586382356551948` | not checked — look before the night |
+| Sehatsandhi | `1586382356551948` | no phone numbers — not repointed |
 
 The script tries every account given and reports each; a refusal for one
 (say 3997937100511018, if it holds no number) does not stop the others.
