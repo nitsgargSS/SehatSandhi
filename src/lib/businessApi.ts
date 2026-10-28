@@ -352,6 +352,15 @@ export const linkMyLogin = async (): Promise<void> => {
   await callFn('link-my-login', {}, session.access_token).then(() => undefined, () => undefined)
 }
 
+/**
+ * A login code on WhatsApp (clinic-otp). Errors come back as the function's own
+ * sentinel (WHATSAPP_UNREACHABLE, DELIVERY_FAILED…) or sentence, without the
+ * "clinic-otp failed:" prefix, so the form can word them.
+ */
+export const clinicOtp = (payload: { action: 'request' | 'verify'; phone: string; code?: string }) =>
+  callFn<{ message?: string; devCode?: string; tokenHash?: string }>('clinic-otp', payload)
+    .catch((e: Error) => { throw new Error(e.message.replace(/^clinic-otp failed: /, '')) })
+
 /** WhatsApp-number verification at signup (0130). Off until PHONE_VERIFY_ENABLED is set. */
 export const phoneVerify = async (action: 'status' | 'send' | 'verify', phone?: string, code?: string) => {
   const { data: { session } } = await supabase.auth.getSession()

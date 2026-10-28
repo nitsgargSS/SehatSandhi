@@ -1,16 +1,13 @@
-import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { activeConfig } from '../../lib/env'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { BIZ } from '../business/shared'
-import { Spinner } from '../../components/Loading'
 import SiteFooter from '../../components/SiteFooter'
 import EmailSignIn from '../../components/EmailSignIn'
 import IdleNotice from '../../components/IdleNotice'
 import { fetchPasswordState, mustChangeNow } from '../../lib/passwordState'
 
-// Sign in with email and password, or a code sent to that email.
+// Sign in with email and password, or a code sent by email or WhatsApp.
 //
 // 0079 made email mandatory at registration, so this is now the default for
 // everybody — doctor, business, staff — and it is the same EmailSignIn
@@ -18,98 +15,19 @@ import { fetchPasswordState, mustChangeNow } from '../../lib/passwordState'
 // the forgotten-password path have one implementation rather than two that
 // drift apart.
 //
-// The WhatsApp-number route is KEPT, below, and is not legacy clutter. Twelve
-// practitioners and nine businesses registered before 0079 and have no email
-// address at all; making email the only way in would lock out every account
-// that exists today. It stays until they have one — and it is the reason this
-// page still carries clinic-otp.
+// A code on WhatsApp is the third way in, inside the same form (its whatsapp
+// prop). It used to be a separate flow on this page, kept for the accounts
+// that registered before 0079 with no email; folded into EmailSignIn it also
+// serves everyone else — and it is the way in when email delivery is down.
 //
 // The order used to be the other way round, and for a good reason at the time:
 // the signup wizard collected email as optional and created no account, so
 // anyone who joined through it had no credentials at all. 0079 fixed the cause,
 // which is what makes email-first possible now.
 
-import { IS_STAGING } from '../../lib/env'
-
-type Step = 'phone' | 'code'
-
-// Sentinels from clinic-otp, not prose: the wording belongs to the screen, so
-// the function returns a code and the copy stays here.
-const SEND_ERRORS: Record<string, string> = {
-  // The number has no WhatsApp account. Nothing they can do on this screen.
-  WHATSAPP_UNREACHABLE:
-    "We couldn't reach that number on WhatsApp. Sign-in requires a WhatsApp account on this number.",
-  // Our side is not set up to send. Do not tell them to try again — it will
-  // fail identically until someone configures a provider.
-  DELIVERY_UNAVAILABLE:
-    'We cannot send login codes right now. This is a problem at our end, not with your number — please call us on +91 85708 89188 and we will get you in.',
-  // A provider was reachable but refused. This one might genuinely be transient.
-  DELIVERY_FAILED:
-    'We could not send your code just now. Please try again in a minute, or call us on +91 85708 89188 if it keeps happening.',
-}
-
 export default function DoctorLogin() {
   const { t } = useLanguage()
   const navigate = useNavigate()
-
-  const [step, setStep] = useState<Step>('phone')
-  const [phone, setPhone] = useState('')
-  const [code, setCode] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [devCode, setDevCode] = useState<string | null>(null)
-
-  // Email first. The phone route is the fallback for accounts that predate
-  // 0079 and have no address on file.
-  const [showLegacy, setShowLegacy] = useState(true)
-
-  const callOtp = async (payload: Record<string, unknown>) => {
-    const { url, anon } = activeConfig()
-    if (!url || !anon) throw new Error('Login is unavailable right now.')
-    const res = await fetch(`${url}/functions/v1/clinic-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${anon}`, apikey: anon },
-      body: JSON.stringify(payload),
-    })
-    const body = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(body.error || 'Something went wrong. Please try again.')
-    return body
-  }
-
-  const requestCode = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const r = await callOtp({ action: 'request', phone })
-      // The same message either way, deliberately: a different one would tell
-      // anyone which numbers belong to businesses on the platform.
-      setNotice(r.message ?? 'If that number is registered, a code is on its way.')
-      setDevCode(r.devCode ?? null)
-      setStep('code')
-    } catch (err) {
-      const message = (err as Error).message
-      // Login is WhatsApp-only with no SMS fallback, so a failed send is a dead
-      // end rather than something retrying fixes. Say which kind it is: whether
-      // the number needs WhatsApp, or whether the fault is ours.
-      setError(SEND_ERRORS[message] ?? message)
-    } finally { setBusy(false) }
-  }
-
-  const verifyCode = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setBusy(true); setError('')
-    try {
-      const r = await callOtp({ action: 'verify', phone, code })
-      // The function hands back a one-time token; exchanging it here is what
-      // creates the session, so the browser ends up holding a normal login.
-      const { error: vErr } = await supabase.auth.verifyOtp({ token_hash: r.tokenHash, type: 'email' })
-      if (vErr) throw new Error('Could not start your session. Please try again.')
-      navigate('/business/dashboard')
-    } catch (err) {
-      setError((err as Error).message)
-    } finally { setBusy(false) }
-  }
 
   return (
     // Same shell as the business wizard: cream page, dark rail carrying the
@@ -149,23 +67,19 @@ export default function DoctorLogin() {
           <Link to="/" aria-label="Sehatsandhi — home" className="block"><img src="/logo.png" alt="Sehatsandhi" className="h-14 mx-auto mb-4 lg:hidden" /></Link>
           <h1 className="text-2xl font-bold text-navy-700">{t('loginPage.title')}</h1>
           <p className="text-gray-400 text-sm mt-1">
-            {showLegacy
-              ? 'Sign in with the email address you registered with'
-              : step === 'phone'
-                ? 'Enter the WhatsApp number you registered with'
-                : `We sent a 6-digit code to ${phone}`}
+            Sign in with the email address or WhatsApp number you registered with
           </p>
         </div>
 
         <IdleNotice />
 
-        {showLegacy ? (
-          <div className="space-y-4">
+        <div className="space-y-4">
             {/* Nothing here decides who gets in — EmailSignIn proves the
                 address, and this decides what that entitles them to. A valid
                 Supabase user with no listing and no affiliation is somebody
                 else's patient account, not a clinic. */}
             <EmailSignIn
+              whatsapp
               submitLabel={t('loginPage.btnLogin')}
               onSignedIn={async () => {
                 // Before the clinic check, not after: 0081 empties
@@ -185,53 +99,7 @@ export default function DoctorLogin() {
                 return null
               }}
             />
-            <button type="button" onClick={() => { setShowLegacy(false); setError('') }}
-              className="w-full text-sm text-teal-600 py-1">
-              Registered before we asked for an email? Use your WhatsApp number
-            </button>
-          </div>
-        ) : step === 'phone' ? (
-          <form onSubmit={requestCode} className="space-y-4">
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">WhatsApp number</label>
-              <input className="input-field" type="tel" inputMode="tel" autoComplete="tel"
-                placeholder="98765 43210" value={phone}
-                onChange={e => setPhone(e.target.value)} required />
-            </div>
-            {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
-            <button type="submit" disabled={busy || phone.replace(/\D/g, '').length < 10}
-              className="btn-teal w-full justify-center py-3 text-base disabled:opacity-60">
-              {busy ? <><Spinner size={18} onDark label="Sending" /> Sending…</> : 'Send code'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={verifyCode} className="space-y-4">
-            {notice && <p className="text-xs text-gray-500 text-center">{notice}</p>}
-            {/* Sandbox only. The function returns the code when no WhatsApp or
-                SMS provider is configured, so the flow is testable without one. */}
-            {devCode && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2 text-center">
-                Test mode — your code is <strong>{devCode}</strong>
-              </p>
-            )}
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">6-digit code</label>
-              <input className="input-field text-center text-lg font-bold tracking-[0.4em]"
-                inputMode="numeric" autoComplete="one-time-code" maxLength={6}
-                placeholder="000000" value={code}
-                onChange={e => setCode(e.target.value.replace(/\D/g, ''))} required />
-            </div>
-            {error && <p className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</p>}
-            <button type="submit" disabled={busy || code.length !== 6}
-              className="btn-teal w-full justify-center py-3 text-base disabled:opacity-60">
-              {busy ? <><Spinner size={18} onDark label="Checking" /> Checking…</> : 'Log in'}
-            </button>
-            <button type="button" onClick={() => { setStep('phone'); setCode(''); setError('') }}
-              className="w-full text-sm text-gray-500 py-1">
-              Use a different number
-            </button>
-          </form>
-        )}
+        </div>
 
         <div className="mt-6 text-center space-y-2">
           <p className="text-sm text-gray-500">
@@ -240,28 +108,6 @@ export default function DoctorLogin() {
               {t('loginPage.registerHere')}
             </Link>
           </p>
-          {/* On staging this is not a legacy footnote, it is THE way in: every
-              seeded test account is email-and-password, and phone login would
-              mint a synthetic user against the number instead. Faint grey text
-              sitting directly under "Register here" got clicked past reliably,
-              and the next screen was a registration wizard — which looks like
-              the login being broken rather than the link being missed.
-
-              Prod keeps the quiet version, and the staging branch really is
-              dropped from the production bundle — verified against a build, not
-              assumed. See the note in env.ts about why that only works while
-              the comparison stays free of String(). */}
-          {!showLegacy && (IS_STAGING ? (
-            <button onClick={() => { setShowLegacy(true); setError('') }}
-              className="w-full text-sm font-medium text-teal-600 hover:underline border border-dashed border-teal-300 rounded-lg py-2">
-              Staging · log in with email and password
-            </button>
-          ) : (
-            <button onClick={() => { setShowLegacy(true); setError('') }}
-              className="text-xs text-gray-400 hover:text-gray-600">
-              Registered before with an email and password?
-            </button>
-          ))}
         </div>
       </div>
       </div>

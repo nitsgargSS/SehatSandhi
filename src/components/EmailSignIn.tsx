@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { isValidEmail, normEmail, passwordProblem, checkPassword, passwordSaveError } from '../lib/credentials'
-import { prepareEmailLogin, linkMyLogin } from '../lib/businessApi'
+import { prepareEmailLogin, linkMyLogin, clinicOtp } from '../lib/businessApi'
 import { markPasswordChanged } from '../lib/passwordState'
 import { Spinner } from './Loading'
 
@@ -27,7 +27,7 @@ import { Spinner } from './Loading'
 // setting — Authentication > Policies — and until it matches lib/credentials,
 // this form is the only thing asking for a special character.
 
-type Mode = 'password' | 'code' | 'reset'
+type Mode = 'password' | 'code' | 'reset' | 'whatsapp'
 type Step = 'enter' | 'code' | 'newPassword'
 
 export interface EmailSignInProps {
@@ -41,13 +41,33 @@ export interface EmailSignInProps {
   intro?: string
   /** Sign-in button label; the surfaces word it differently. */
   submitLabel?: string
+  /**
+   * Also offer a code on WhatsApp, to the number registered on a listing or a
+   * doctor (clinic-otp). For the clinic side, where everyone has one — and it is
+   * the way in when email delivery is down (28 Oct 2026: ZeptoMail credit ran
+   * out and no codes went for a day). Not for the admin panel: admins are not
+   * listings, so no number of theirs would match.
+   */
+  whatsapp?: boolean
 }
 
-export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in' }: EmailSignInProps) {
+// Sentinels from clinic-otp, not prose: the wording belongs to the screen.
+const WHATSAPP_ERRORS: Record<string, string> = {
+  WHATSAPP_UNREACHABLE:
+    "We couldn't reach that number on WhatsApp. Use the email code instead, or call us on +91 85708 89188.",
+  DELIVERY_UNAVAILABLE:
+    'We cannot send WhatsApp codes right now. This is a problem at our end — use the email code, or call us on +91 85708 89188.',
+  DELIVERY_FAILED:
+    'We could not send your code just now. Try again in a minute, or use the email code.',
+}
+
+export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in', whatsapp = false }: EmailSignInProps) {
   const [mode, setMode] = useState<Mode>('code')
   const [step, setStep] = useState<Step>('enter')
 
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [devCode, setDevCode] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [next, setNext] = useState('')
@@ -59,7 +79,7 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
 
   const reset = (m: Mode) => {
     setMode(m); setStep('enter'); setError(''); setNotice('')
-    setPassword(''); setCode(''); setNext(''); setConfirm('')
+    setPassword(''); setCode(''); setNext(''); setConfirm(''); setDevCode(null)
   }
 
   /** Hand the session to the caller, and undo it if they say no. */
@@ -122,11 +142,38 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
     } finally { setBusy(false) }
   }
 
+  const sendWhatsAppCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(''); setNotice('')
+    setBusy(true)
+    try {
+      const r = await clinicOtp({ action: 'request', phone })
+      // The same words whether or not the number is registered (clinic-otp).
+      setNotice(`${r.message ?? 'If that number is registered, a code is on its way.'} Look for it on WhatsApp.`)
+      setDevCode(r.devCode ?? null)
+      setStep('code')
+    } catch (err) {
+      const m = (err as Error).message
+      setError(WHATSAPP_ERRORS[m] ?? m)
+    } finally { setBusy(false) }
+  }
+
   const verifyCode = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(''); setNotice('')
     setBusy(true)
     try {
+      if (mode === 'whatsapp') {
+        // clinic-otp checks the code and hands back a one-time token for the
+        // number's login; exchanging it here is what makes the session.
+        let tokenHash: string | undefined
+        try { tokenHash = (await clinicOtp({ action: 'verify', phone, code: code.trim() })).tokenHash }
+        catch (err) { setError((err as Error).message); return }
+        const { data, error: err } = await supabase.auth.verifyOtp({ token_hash: tokenHash!, type: 'email' })
+        if (err || !data.user) { setError('Could not start your session. Please try again.'); return }
+        await finish(data.user.id, data.user.email ?? '')
+        return
+      }
       const { data, error: err } = await supabase.auth.verifyOtp({
         email: normEmail(email)!, token: code.trim(), type: 'email',
       })
@@ -167,7 +214,7 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
           — a manager who signed in by code — would not look under "Forgot". */}
       {step === 'enter' && (
         <div className="flex gap-2 flex-wrap">
-          {([['code', 'Email me a code'], ['password', 'Password'], ['reset', 'Set a password']] as [Mode, string][]).map(([m, label]) => (
+          {([['code', 'Email me a code'], ...(whatsapp ? [['whatsapp', 'WhatsApp code']] : []), ['password', 'Password'], ['reset', 'Set a password']] as [Mode, string][]).map(([m, label]) => (
             <button key={m} type="button" onClick={() => reset(m)}
               className={`text-sm font-semibold px-4 py-2 rounded-xl transition ${
                 mode === m ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
@@ -219,8 +266,25 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
         </form>
       )}
 
+      {step === 'enter' && mode === 'whatsapp' && (
+        <form onSubmit={sendWhatsAppCode} className="space-y-3">
+          <input className="input-field" type="tel" inputMode="tel" autoComplete="tel"
+            placeholder="WhatsApp number you registered with" value={phone}
+            onChange={e => setPhone(e.target.value)} required />
+          <button className="btn-teal w-full disabled:opacity-60" disabled={busy || phone.replace(/\D/g, '').length < 10}>
+            {busy ? <Spinner /> : 'Send me a code on WhatsApp'}
+          </button>
+        </form>
+      )}
+
       {step === 'code' && (
         <form onSubmit={verifyCode} className="space-y-3">
+          {/* Sandbox only: clinic-otp returns the code when no WhatsApp sender is set up. */}
+          {devCode && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2 text-center">
+              Test mode — your code is <strong>{devCode}</strong>
+            </p>
+          )}
           <input className="input-field text-center text-2xl tracking-[0.4em] font-mono"
             inputMode="numeric" autoComplete="one-time-code" maxLength={6}
             placeholder="000000" value={code}
@@ -230,7 +294,7 @@ export default function EmailSignIn({ onSignedIn, intro, submitLabel = 'Sign in'
           </button>
           <button type="button" onClick={() => { setStep('enter'); setCode(''); setError(''); setNotice('') }}
             className="text-sm text-gray-500 hover:underline">
-            Use a different address
+            {mode === 'whatsapp' ? 'Use a different number' : 'Use a different address'}
           </button>
         </form>
       )}

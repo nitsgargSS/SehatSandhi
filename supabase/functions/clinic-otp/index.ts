@@ -25,6 +25,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { sendTemplate } from '../_shared/whatsapp.ts'
+import { ensureLoginFor } from '../_shared/loginAccount.ts'
 
 const CODE_TTL_MINUTES = 10
 const MAX_ATTEMPTS = 5
@@ -223,8 +224,8 @@ Deno.serve(async (req) => {
     // user is resolved: the auth_uid already on these rows is how a returning
     // clinic — or doctor — is recognised.
     const [{ data: allBiz }, { data: allPeople }] = await Promise.all([
-      supabase.from('businesses').select('id, phone, auth_uid').not('phone', 'is', null),
-      supabase.from('practitioners').select('id, phone, auth_uid').not('phone', 'is', null),
+      supabase.from('businesses').select('id, phone, email, auth_uid').not('phone', 'is', null),
+      supabase.from('practitioners').select('id, phone, email, auth_uid').not('phone', 'is', null),
     ])
     const ours = (allBiz ?? []).filter(d => normalisePhone(String(d.phone)) === phone)
     const oursPeople = (allPeople ?? []).filter(d => normalisePhone(String(d.phone)) === phone)
@@ -238,6 +239,17 @@ Deno.serve(async (req) => {
       (ours.find(d => d.auth_uid) as { auth_uid?: string } | undefined)?.auth_uid
       ?? (oursPeople.find(d => d.auth_uid) as { auth_uid?: string } | undefined)?.auth_uid
       ?? null
+
+    // Not linked yet, but registered with an email: that address's login, the
+    // same one an emailed code would sign into. Without this, the first WhatsApp
+    // login made a separate phone-number account and moved the listing onto it,
+    // away from the email login.
+    if (!userId) {
+      const registered = [...ours, ...oursPeople]
+        .map(d => String((d as { email?: string | null }).email ?? '').trim().toLowerCase())
+        .find(e => e)
+      if (registered) userId = await ensureLoginFor(supabase, registered)
+    }
 
     if (!userId) {
       const { data: created } = await supabase.auth.admin.createUser({
@@ -267,9 +279,13 @@ Deno.serve(async (req) => {
     if (minePeople.length) await supabase.from('practitioners').update({ auth_uid: userId }).in('id', minePeople)
 
     // A magic-link token the browser exchanges for a real session. Supabase has
-    // no "mint a session" admin call; this is the supported way.
+    // no "mint a session" admin call; this is the supported way. It must name
+    // the login's own address: the synthetic one would sign an email user into a
+    // different, empty account. generateLink sends nothing, so this works when
+    // email delivery is down — which is the point of offering WhatsApp.
+    const { data: owner } = await supabase.auth.admin.getUserById(userId)
     const { data: link, error: linkErr } = await supabase.auth.admin.generateLink({
-      type: 'magiclink', email: syntheticEmail,
+      type: 'magiclink', email: owner?.user?.email ?? syntheticEmail,
     })
     if (linkErr || !link?.properties?.hashed_token) {
       return json({ error: 'Could not start your session. Please try again.' }, 500)
