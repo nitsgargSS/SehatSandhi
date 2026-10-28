@@ -25,7 +25,7 @@ type Section = { h: string; p?: string; list?: string[]; after?: string }
 const content: Record<'en' | 'hi', { title: string; updated: string; intro: string; sections: Section[]; settings: string }> = {
   en: {
     title: 'Privacy Policy',
-    updated: 'Last updated: 7 October 2026',
+    updated: 'Last updated: 28 October 2026',
     intro: `Sehatsandhi ("we", "us") is operated by NG Technologies. This notice explains, in plain words, what personal data we process, why, for how long, who else handles it, and how you can use your rights or complain. It is given under the Digital Personal Data Protection Act, 2023 and the Digital Personal Data Protection Rules, 2025, and the Information Technology Act, 2000 and the rules under it where they apply. We treat health information as sensitive personal data.`,
     settings: 'Change your Google Analytics choice',
     sections: [
@@ -75,7 +75,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
         h: '4. Who else handles your data',
         p: `We share your booking with the doctor or partner you choose, so they can serve you — and a medicine order, ambulance request or insurance request with the pharmacy, ambulance service or advisor as described in section 2. Once a partner has your details, it is responsible for using them only to serve you. To run the service we use these providers, each under contract and only for the purpose shown:`,
         list: [
-          `Supabase — secure hosting of our database and files (servers in Singapore).`,
+          `Supabase — secure hosting of our database and files (servers in Tokyo, Japan).`,
           `Vercel — hosting of this website.`,
           `AiSensy and Meta (WhatsApp Business) — sending and receiving WhatsApp messages. Meta's own terms apply to WhatsApp; its Cloud API keeps message content for up to 30 days.`,
           `MSG91 — SMS and email; Zoho ZeptoMail — email.`,
@@ -91,7 +91,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
       },
       {
         h: '5. Processing outside India',
-        p: `Our database is hosted in Singapore, and some providers above (Meta, Google, Anthropic, Vercel) may process data in other countries. Section 16 of the DPDP Act allows this except to countries the Government of India restricts; we will stop or move any processing if a restriction is notified. Wherever it is processed, your data stays under the protections in this policy and our contracts.`,
+        p: `Our database is hosted in Tokyo, Japan, and some providers above (Meta, Google, Anthropic, Vercel) may process data in other countries. Section 16 of the DPDP Act allows this except to countries the Government of India restricts; we will stop or move any processing if a restriction is notified. Wherever it is processed, your data stays under the protections in this policy and our contracts.`,
       },
       {
         h: '6. How long we keep it',
@@ -156,7 +156,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
   },
   hi: {
     title: 'गोपनीयता नीति',
-    updated: 'आखिरी अपडेट: 7 अक्टूबर 2026',
+    updated: 'आखिरी अपडेट: 28 अक्टूबर 2026',
     intro: `Sehatsandhi ("हम") NG Technologies द्वारा संचालित है। यह सूचना आसान शब्दों में बताती है कि हम कौनसा व्यक्तिगत डेटा प्रोसेस करते हैं, क्यों, कितने समय तक, और कौन-कौन उसे संभालता है, और आप अपने अधिकारों का इस्तेमाल या शिकायत कैसे कर सकते हैं। यह डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम, 2023 (DPDP Act) और DPDP नियम, 2025, और जहां लागू हो वहां सूचना प्रौद्योगिकी अधिनियम, 2000 और उसके नियमों के तहत दी गई है। स्वास्थ्य से जुड़ी जानकारी को हम संवेदनशील व्यक्तिगत डेटा मानते हैं।`,
     settings: 'Google Analytics के लिए अपनी पसंद बदलें',
     sections: [
@@ -206,7 +206,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
         h: '4. आपका डेटा और कौन संभालता है',
         p: `आपकी बुकिंग हम उसी डॉक्टर या पार्टनर के साथ शेयर करते हैं जिसे आप चुनते हैं, ताकि वे आपकी सेवा कर सकें — और दवाई का ऑर्डर, एम्बुलेंस या बीमा का अनुरोध उस फ़ार्मेसी, एम्बुलेंस सेवा या सलाहकार के साथ, जैसा सेक्शन 2 में बताया है। आपकी जानकारी मिलने के बाद पार्टनर की ज़िम्मेदारी है कि वह उसे सिर्फ आपकी सेवा के लिए इस्तेमाल करे। सेवा चलाने के लिए हम ये प्रोवाइडर इस्तेमाल करते हैं, हर एक कॉन्ट्रैक्ट के तहत और सिर्फ बताए गए काम के लिए:`,
         list: [
-          `Supabase — हमारे डेटाबेस और फ़ाइलों की सुरक्षित होस्टिंग (सर्वर सिंगापुर में)।`,
+          `Supabase — हमारे डेटाबेस और फ़ाइलों की सुरक्षित होस्टिंग (सर्वर टोक्यो, जापान में)।`,
           `Vercel — इस वेबसाइट की होस्टिंग।`,
           `AiSensy और Meta (WhatsApp Business) — WhatsApp मैसेज भेजना और पाना। WhatsApp पर Meta की अपनी शर्तें लागू होती हैं; उसका Cloud API मैसेज का कंटेंट 30 दिन तक रखता है।`,
           `MSG91 — SMS और ईमेल; Zoho ZeptoMail — ईमेल।`,
@@ -222,7 +222,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
       },
       {
         h: '5. भारत के बाहर प्रोसेसिंग',
-        p: `हमारा डेटाबेस सिंगापुर में होस्ट है, और ऊपर दिए कुछ प्रोवाइडर (Meta, Google, Anthropic, Vercel) दूसरे देशों में डेटा प्रोसेस कर सकते हैं। DPDP Act की धारा 16 इसकी इजाज़त देती है, सिवाय उन देशों के जिन पर भारत सरकार रोक लगाए; रोक की सूचना आने पर हम वह प्रोसेसिंग बंद करेंगे या कहीं और ले जाएंगे। डेटा जहां भी प्रोसेस हो, उस पर इस नीति और हमारे कॉन्ट्रैक्ट्स की सुरक्षा लागू रहती है।`,
+        p: `हमारा डेटाबेस टोक्यो, जापान में होस्ट है, और ऊपर दिए कुछ प्रोवाइडर (Meta, Google, Anthropic, Vercel) दूसरे देशों में डेटा प्रोसेस कर सकते हैं। DPDP Act की धारा 16 इसकी इजाज़त देती है, सिवाय उन देशों के जिन पर भारत सरकार रोक लगाए; रोक की सूचना आने पर हम वह प्रोसेसिंग बंद करेंगे या कहीं और ले जाएंगे। डेटा जहां भी प्रोसेस हो, उस पर इस नीति और हमारे कॉन्ट्रैक्ट्स की सुरक्षा लागू रहती है।`,
       },
       {
         h: '6. हम इसे कितने समय तक रखते हैं',
