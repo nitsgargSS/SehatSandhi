@@ -45,21 +45,37 @@ export function loadFacebookSdk(): Promise<void> {
 
 export interface SignupResult { code: string; wabaId: string; phoneNumberId: string }
 
+/** How long after Meta's window has closed (the page has focus again) with nothing back from Meta before onStalled. */
+const STALL_MS = 10_000
+
 /**
  * Open Embedded Signup. `coexistence`: the clinic brings the number it already
  * uses on the WhatsApp Business app, and keeps using the app on its phone.
  * Must be called from a click, or the browser blocks the window.
+ *
+ * `onStalled`: Meta's window can close without FB.login's callback ever firing
+ * (28 Oct 2026: the clinic left through "Add payment method", and the page sat
+ * on "Connecting…" for good). Once this page has had focus for STALL_MS with
+ * nothing from Meta, onStalled is called so the screen can let them try again.
+ * The promise stays open — if Meta's answer does arrive late, it still settles.
  */
-export function embeddedSignup(coexistence: boolean): Promise<SignupResult> {
+export function embeddedSignup(coexistence: boolean, onStalled?: () => void): Promise<SignupResult> {
   return new Promise((resolve, reject) => {
     if (!window.FB) { reject(new Error('Facebook is still loading. Please press Connect again in a moment.')); return }
     let code = ''
     let ids: { wabaId: string; phoneNumberId: string } | null = null
     let settled = false
+    let stall: ReturnType<typeof setTimeout> | undefined
+    // Focus comes back when Meta's window closes; going back to it (blur) means it is still in use.
+    const onFocus = () => { clearTimeout(stall); if (!settled && !code) stall = setTimeout(() => { if (!settled && !code) onStalled?.() }, STALL_MS) }
+    const onBlur = () => clearTimeout(stall)
     const finish = (err?: Error) => {
       if (settled) return
       if (!err && !(code && ids)) return
       settled = true
+      clearTimeout(stall)
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('blur', onBlur)
       window.removeEventListener('message', onMessage)
       if (err) reject(err)
       else resolve({ code, ...ids! })
@@ -81,6 +97,7 @@ export function embeddedSignup(coexistence: boolean): Promise<SignupResult> {
       }
     }
     window.addEventListener('message', onMessage)
+    if (onStalled) { window.addEventListener('focus', onFocus); window.addEventListener('blur', onBlur) }
 
     window.FB.login((response: Any) => {
       code = response?.authResponse?.code ?? ''
