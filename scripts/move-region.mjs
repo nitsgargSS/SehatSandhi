@@ -355,13 +355,16 @@ async function verify(src, dst) {
 
 async function authConfig() {
   step('auth-config')
-  const cfg = await mgmt(`/projects/${SRC_REF}/config/auth`)
-  // Same settings, with any mention of the Tokyo project pointed at Mumbai;
-  // secrets cannot be read from Tokyo and are not sent.
+  const [cfg, now] = await Promise.all([mgmt(`/projects/${SRC_REF}/config/auth`), mgmt(`/projects/${DST_REF}/config/auth`)])
+  // Only what differs from Mumbai, with any mention of the Tokyo project pointed
+  // at Mumbai. Sending everything trips over features that are off in both
+  // (OAuth server, hooks) but come with rules about being set together.
+  // Secrets cannot be read from Tokyo and are not sent.
   const patch = {}
-  for (const [k, v] of Object.entries(cfg)) {
-    if (v === null || /(secrets?|pass(word)?|_key)$/i.test(k)) continue
-    patch[k] = typeof v === 'string' ? v.replaceAll(SRC_REF, DST_REF) : v
+  for (const [k, v0] of Object.entries(cfg)) {
+    if (v0 === null || /(secrets?|pass(word)?|_key)$/i.test(k)) continue
+    const v = typeof v0 === 'string' ? v0.replaceAll(SRC_REF, DST_REF) : v0
+    if (JSON.stringify(v) !== JSON.stringify(now[k])) patch[k] = v
   }
   // Auth hooks that are off in Tokyo are left out entirely: some (password and
   // MFA verification attempts) cannot even be set to "off" on the Free plan.
@@ -377,8 +380,10 @@ async function authConfig() {
   const pass = process.env.SMTP_PASS
   if (pass && cfg.smtp_host) patch.smtp_pass = pass
   else for (const k of smtpKeys) delete patch[k]
+  if (!Object.keys(patch).length) { say('Mumbai already has the same settings.'); return }
   await mgmt(`/projects/${DST_REF}/config/auth`, { method: 'PATCH', body: JSON.stringify(patch) })
-  say(`${Object.keys(patch).length} settings copied${patch.smtp_pass ? ', SMTP included' : ''}.`)
+  say(`${Object.keys(patch).filter(k => k !== 'smtp_pass').length} settings copied${patch.smtp_pass ? ', SMTP included' : ''}:`)
+  for (const k of Object.keys(patch)) if (k !== 'smtp_pass') say(`  ${k}`)
   if (cfg.smtp_host && !patch.smtp_pass) {
     say('SMTP was left out. In Mumbai: Authentication → Emails → SMTP Settings → Enable custom SMTP, then:')
     for (const k of ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_admin_email', 'smtp_sender_name']) if (cfg[k] != null) say(`  ${k.padEnd(18)} ${cfg[k]}`)
