@@ -246,6 +246,14 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // Both are priced and checked by the server; the coupon is only sent once
   // "Apply" is pressed, so typing does not re-price on every keystroke.
   const [whatsapp, setWhatsapp] = useState(true)
+  // 0262: Basic (the shared Sehatsandhi number) or Pro (the clinic's own number,
+  // automatic messages). Pro needs a number that is not on WhatsApp yet — Meta
+  // registers it to the clinic's account, which it cannot do while the app is
+  // using it — and the clinic connects it from its dashboard after paying.
+  const [waPlan, setWaPlan] = useState<'basic' | 'pro'>('basic')
+  const [proNumber, setProNumber] = useState('')
+  const proDigits = phoneKey(proNumber)
+  const proNumberOk = /^[6-9]\d{9}$/.test(proDigits)
   const [couponInput, setCouponInput] = useState('')
   const [couponCode, setCouponCode] = useState('')
 
@@ -358,7 +366,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         // hospital saw one doctor's price and would have been charged for all of
         // them at checkout, where the real doctorId is finally passed.
         const res = await computePrice(zips, null, vertical, months, namedHospitalDoctors, tiered ? [] : modules, {
-          whatsapp, couponCode: couponCode || undefined, planAddons: tiered && coreVertical ? planAddons : undefined,
+          whatsapp, whatsappPlan: waPlan, couponCode: couponCode || undefined, planAddons: tiered && coreVertical ? planAddons : undefined,
         })
         if (id === priceReq.current) setServerPrice(res)
       } catch {
@@ -368,7 +376,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [zips, vertical, months, namedHospitalDoctors, modules, whatsapp, couponCode, tiered, coreVertical, planAddons])
+  }, [zips, vertical, months, namedHospitalDoctors, modules, whatsapp, waPlan, couponCode, tiered, coreVertical, planAddons])
 
   // What the summary shows: server total when we have one, else the local sum.
   const price = serverPrice ?? localPrice
@@ -393,6 +401,12 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         return { ...t, price: Math.round(quote.monthly * factorFor(t.months)), savings_note: saving > 0 ? `Save ${money(saving)}` : null }
       })
     : typeTerms
+  // WhatsApp's price for a term, Basic or Pro (0262: Pro defaults to twice Basic).
+  const waPrice = (term: object) => {
+    const t = term as { whatsapp_price?: number; whatsapp_pro_price?: number }
+    return waPlan === 'pro' ? (t.whatsapp_pro_price ?? (t.whatsapp_price ?? 0) * 2) : (t.whatsapp_price ?? 0)
+  }
+  const termNow = shownTerms.find(t => t.months === months) as { whatsapp_price?: number; whatsapp_pro_price?: number } | undefined
 
   // ── Step validation ──
   const stepValid = (s: number): boolean => {
@@ -669,6 +683,11 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         setSubmitting(false)
         return
       }
+      if (whatsapp && waPlan === 'pro' && !proNumberOk) {
+        setError('Enter the 10-digit number you want to use for WhatsApp Pro, or choose WhatsApp Basic.')
+        setSubmitting(false)
+        return
+      }
       if (couponCode && price.couponError) {
         setError(`${price.couponError} Remove the coupon to continue without it.`)
         setSubmitting(false)
@@ -676,6 +695,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       }
       const order = await createRazorpayOrder(zips, id, months, tiered ? [] : modules, {
         planAddons: tiered && coreVertical ? planAddons : undefined,
+        whatsappPlan: waPlan,
+        whatsappProNumber: whatsapp && waPlan === 'pro' ? proDigits : undefined,
         gstin: gstinState === 'ok' ? form.gstin : undefined,
         gstLegalName: form.gst_legal_name || undefined,
         billingAddress: form.address || undefined,
@@ -1420,16 +1441,16 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                         same localTax() the quote and the invoice use, so
                                         the three cannot disagree. */}
                                     {(() => {
-                                      const tt = localTax(t.price + (whatsapp ? ('whatsapp_price' in t ? t.whatsapp_price ?? 0 : 0) : 0), tax, form.gstin)
+                                      const tt = localTax(t.price + (whatsapp ? waPrice(t) : 0), tax, form.gstin)
                                       return tt.applied ? (
                                         <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3 }}>
                                           + {tt.rate}% GST · {money(tt.grandTotal)} payable today
                                         </span>
                                       ) : null
                                     })()}
-                                    {whatsapp && 'whatsapp_price' in t && (t.whatsapp_price ?? 0) > 0 && (
+                                    {whatsapp && waPrice(t) > 0 && (
                                       <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3 }}>
-                                        + WhatsApp {money(t.whatsapp_price ?? 0)}
+                                        + WhatsApp {waPlan === 'pro' ? 'Pro ' : ''}{money(waPrice(t))}
                                       </span>
                                     )}
                                     {t.savings_note && (
@@ -1453,20 +1474,67 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             <input type="checkbox" checked={whatsapp} onChange={e => setWhatsapp(e.target.checked)}
                               style={{ width: 18, height: 18, marginTop: 2, accentColor: BIZ.green, cursor: 'pointer' }} />
                             <span style={{ flex: 1 }}>
-                              <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                                <strong style={{ fontSize: 14.5, color: BIZ.ink }}>Add WhatsApp messaging</strong>
-                                <strong style={{ fontSize: 14.5, color: whatsapp ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
-                                  {money((shownTerms.find(t => t.months === months) as { whatsapp_price?: number } | undefined)?.whatsapp_price ?? 0)}
-                                  {' '}{termLabel(months).toLowerCase()}
-                                </strong>
-                              </span>
+                              <strong style={{ fontSize: 14.5, color: BIZ.ink }}>Add WhatsApp messaging</strong>
                               <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 4, lineHeight: 1.6 }}>
-                                WhatsApp Business Verification &amp; Activation Fee, charged every term while you keep it.
-                                Send camp, notice and health-tip messages to patients who agreed to hear from you;
-                                each message is paid separately from a wallet you top up. Untick it if you do not want it.
+                                Charged every term while you keep it. Untick it if you do not want it.
                               </span>
                             </span>
                           </label>
+                          {whatsapp && (
+                            <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+                              {([
+                                ['basic', 'WhatsApp Basic', 'From the Sehatsandhi number. Send camp, notice and health-tip messages to patients who agreed to hear from you; each message is paid from a wallet you top up.'],
+                                ['pro', 'WhatsApp Pro', 'From your clinic\'s own number, in your clinic\'s name. Welcome messages, prescriptions and bills after each visit, rating requests and follow-up reminders go out automatically. Meta charges your own card for the messages.'],
+                              ] as ['basic' | 'pro', string, string][]).map(([code, label, desc]) => {
+                                const on = waPlan === code
+                                return (
+                                  <label key={code} style={{
+                                    display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer',
+                                    padding: '13px 15px', borderRadius: 13,
+                                    border: `2px solid ${on ? BIZ.green : '#e9e2d5'}`, background: on ? '#f3faf6' : '#fff',
+                                  }}>
+                                    <input type="radio" name="wa-plan" checked={on} onChange={() => setWaPlan(code)}
+                                      style={{ width: 18, height: 18, marginTop: 2, accentColor: BIZ.green, cursor: 'pointer' }} />
+                                    <span style={{ flex: 1 }}>
+                                      <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                                        <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{label}</strong>
+                                        <strong style={{ fontSize: 14.5, color: on ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
+                                          {money(termNow ? (code === 'pro' ? (termNow.whatsapp_pro_price ?? (termNow.whatsapp_price ?? 0) * 2) : (termNow.whatsapp_price ?? 0)) : 0)}
+                                          {' '}{termLabel(months).toLowerCase()}
+                                        </strong>
+                                      </span>
+                                      <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3, lineHeight: 1.6 }}>{desc}</span>
+                                    </span>
+                                  </label>
+                                )
+                              })}
+                              {waPlan === 'pro' && (
+                                <div style={{ background: '#fffaf0', border: '1px solid #f1dfb8', borderRadius: 13, padding: '14px 15px' }}>
+                                  <label style={{ fontSize: 13.5, fontWeight: 800, color: BIZ.ink, display: 'block', marginBottom: 6 }}>
+                                    The number for WhatsApp Pro
+                                  </label>
+                                  <input value={proNumber} onChange={e => setProNumber(e.target.value)}
+                                    type="tel" inputMode="tel" placeholder="98765 43210" maxLength={16}
+                                    style={{
+                                      width: '100%', maxWidth: 260, padding: '11px 13px', borderRadius: 11,
+                                      border: `2px solid ${proNumber && !proNumberOk ? '#d94848' : proNumberOk ? BIZ.green : BIZ.inputBorder}`,
+                                      fontFamily: 'inherit', fontSize: 15, fontWeight: 700, color: BIZ.ink, background: '#fff',
+                                    }} />
+                                  <ul style={{ margin: '10px 0 0', paddingLeft: 18, fontSize: 12.5, color: '#6b5a33', lineHeight: 1.6 }}>
+                                    <li><strong>WhatsApp must not be active on this number</strong> — neither WhatsApp nor WhatsApp Business. If it is, delete the WhatsApp account on it first (in WhatsApp: Settings → Account → Delete account).</li>
+                                    <li>It must be able to receive an SMS or a call, for Meta's verification code.</li>
+                                    <li>Use a number other than the one you registered with above, so your own WhatsApp keeps working.</li>
+                                    <li>After payment you connect it from your dashboard in a few minutes. Until then, automatic messages go from the Sehatsandhi number.</li>
+                                  </ul>
+                                  {proNumberOk && phoneKey(form.phone ?? '') === proDigits && (
+                                    <p style={{ fontSize: 12.5, color: '#b45309', margin: '8px 0 0' }}>
+                                      This is the number you registered with. If WhatsApp is on it, it cannot be used for Pro until you delete that WhatsApp account.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 
