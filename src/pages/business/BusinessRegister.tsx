@@ -36,6 +36,7 @@ import { money, num } from '../../lib/format'
 import { getLeadFee } from '../../lib/insuranceApi'
 import { setNewDoctorSpecialities } from '../../lib/specialitiesApi'
 import SpecialityChooser from '../../components/SpecialityChooser'
+import { usePlanCatalogue } from '../../hooks/usePlanCatalogue'
 
 // Design 2b — 3-step onboarding wizard.
 // Layout: desktop = dark left step-rail + content pane; tablet (<900px) =
@@ -255,6 +256,15 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   const [modules, setModules] = useState<string[]>([])
   useEffect(() => { listCareModules().then(setCareModules).catch(() => setCareModules([])) }, [])
 
+  // 0272: once the plans by number of doctors are on, OPD comes with every plan
+  // and IPD, pathology, diagnostics and pharmacy are paid add-ons — chosen here
+  // instead of the free systems above, and priced by the server like them.
+  const catalogue = usePlanCatalogue()
+  const tiered = !!catalogue?.settings.tiered_live
+  const coreVertical = vertical === 'clinic' || vertical === 'hospital'
+  const [planAddons, setPlanAddons] = useState<string[]>([])
+  const coreAddons = (catalogue?.addons ?? []).filter(a => ['ipd', 'pathology', 'diagnostics', 'pharmacy'].includes(a.code))
+
   const coverage: CoverageArea[] = useMemo(() => {
     if (areas.length) {
       return areas.map(a => ({
@@ -347,7 +357,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         // yet — and its answer overrides the local one that does count them. A
         // hospital saw one doctor's price and would have been charged for all of
         // them at checkout, where the real doctorId is finally passed.
-        const res = await computePrice(zips, null, vertical, months, namedHospitalDoctors, modules, { whatsapp, couponCode: couponCode || undefined })
+        const res = await computePrice(zips, null, vertical, months, namedHospitalDoctors, tiered ? [] : modules, {
+          whatsapp, couponCode: couponCode || undefined, planAddons: tiered && coreVertical ? planAddons : undefined,
+        })
         if (id === priceReq.current) setServerPrice(res)
       } catch {
         if (id === priceReq.current) setServerPrice(null) // fall back to localPrice
@@ -356,7 +368,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [zips, vertical, months, namedHospitalDoctors, modules, whatsapp, couponCode])
+  }, [zips, vertical, months, namedHospitalDoctors, modules, whatsapp, couponCode, tiered, coreVertical, planAddons])
 
   // What the summary shows: server total when we have one, else the local sum.
   const price = serverPrice ?? localPrice
@@ -367,7 +379,20 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   const onCommission = typePriced ? (serverPrice?.subscriptionTotal ?? 0) === 0 : onCommissionPlan
   // Even a commission-only business pays today if it chose WhatsApp.
   const payableToday = typePriced ? (serverPrice?.tax.grandTotal ?? 0) : (onCommission ? 0 : price.tax?.grandTotal ?? price.total)
-  const shownTerms = typePriced && serverPrice?.terms?.length ? serverPrice.terms : termChoices
+  // The plan quote, when the plans by doctors priced this. Its term totals are
+  // the monthly figure × the term's factor (6 months for 5, 12 for 9) — the
+  // sum sehat_plan_quote charges — so the term choice is redrawn from it; the
+  // type's own term prices no longer apply. WhatsApp keeps its own price.
+  const quote = serverPrice?.plan?.live ? serverPrice.plan : null
+  const factorFor = (m: number) => !catalogue ? m
+    : m === 6 ? Number(catalogue.settings.months6_factor) : m === 12 ? Number(catalogue.settings.months12_factor) : m
+  const typeTerms = typePriced && serverPrice?.terms?.length ? serverPrice.terms : termChoices
+  const shownTerms = quote
+    ? typeTerms.map(t => {
+        const saving = Math.round(quote.monthly * (t.months - factorFor(t.months)))
+        return { ...t, price: Math.round(quote.monthly * factorFor(t.months)), savings_note: saving > 0 ? `Save ${money(saving)}` : null }
+      })
+    : typeTerms
 
   // ── Step validation ──
   const stepValid = (s: number): boolean => {
@@ -649,7 +674,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         setSubmitting(false)
         return
       }
-      const order = await createRazorpayOrder(zips, id, months, modules, {
+      const order = await createRazorpayOrder(zips, id, months, tiered ? [] : modules, {
+        planAddons: tiered && coreVertical ? planAddons : undefined,
         gstin: gstinState === 'ok' ? form.gstin : undefined,
         gstLegalName: form.gst_legal_name || undefined,
         billingAddress: form.address || undefined,
@@ -663,7 +689,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         key: order.keyId, amount: order.amount, currency: order.currency,
         order_id: order.orderId, name: 'Sehatsandhi Business',
         description: [verticalObj.label, `${zips.length} pincode${zips.length === 1 ? '' : 's'}`,
-          ...modules.map(c => careModules.find(m => m.code === c)?.label ?? c), 'monthly'].join(' · '),
+          ...(tiered
+            ? planAddons.map(c => coreAddons.find(a => a.code === c)?.label ?? c)
+            : modules.map(c => careModules.find(m => m.code === c)?.label ?? c)), 'monthly'].join(' · '),
         // Razorpay wants a bare 10-digit number or +91XXXXXXXXXX with nothing
         // else in it. Our field is placeholdered "+91 ", so what people type
         // usually carries a country code and spaces — passed through raw, the
@@ -1181,7 +1209,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                           <p style={{ fontSize: 13.5, color: BIZ.muted, margin: '0 0 16px', lineHeight: 1.6 }}>
                             Add each doctor who sees patients here. Every one gets their own profile, so a
                             patient searching for a cardiologist in your area finds them by name.
-                            {describeDoctorRate(plan) && <> {describeDoctorRate(plan)}</>}
+                            {tiered
+                              ? quote && <> Your plan follows the number of doctors: <strong>{quote.tier_label}</strong>, up to {quote.doctors_included}.</>
+                              : describeDoctorRate(plan) && <> {describeDoctorRate(plan)}</>}
                           </p>
 
                           {practitioners.some(d => d.is_owner) && (
@@ -1190,7 +1220,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             </p>
                           )}
                           {/* 0178: a clinic has at most 3 doctors, owner included — more is a hospital. */}
-                          {vertical === 'clinic' && practitioners.length >= CLINIC_MAX_DOCTORS && (
+                          {/* Not under the plans by doctors (0274): there the plan grows with the doctors instead. */}
+                          {!tiered && vertical === 'clinic' && practitioners.length >= CLINIC_MAX_DOCTORS && (
                             <p style={{ fontSize: 13, color: '#b45309', margin: '0 0 12px' }}>
                               A clinic can have up to {CLINIC_MAX_DOCTORS} doctors. For more, go back and register as a Hospital.
                             </p>
@@ -1198,7 +1229,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                           <PractitionerPicker
                             added={practitioners.filter(d => !d.is_owner)}
                             onAdd={d => {
-                              if (vertical === 'clinic' && practitioners.length >= CLINIC_MAX_DOCTORS) {
+                              if (!tiered && vertical === 'clinic' && practitioners.length >= CLINIC_MAX_DOCTORS) {
                                 setError(`A clinic can have up to ${CLINIC_MAX_DOCTORS} doctors. For more, register as a Hospital.`); return
                               }
                               setPractitioners(list => [...list, d])
@@ -1260,7 +1291,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                         <ReviewRow label="Total reach" value={`${num(price.residents)} residents`} />
                         {onCommission
                           ? <ReviewRow label="Plan" value="Free — launch offer" />
-                          : <ReviewRow label="Plan" value={flatPlan ? plan.label : (price.topTier?.tier_name ?? '—')} />}
+                          : <ReviewRow label="Plan" value={quote ? quote.tier_label : flatPlan ? plan.label : (price.topTier?.tier_name ?? '—')} />}
                         {typePriced && (price.lineItems ?? []).map(li => (
                           <ReviewRow key={li.label} label={li.label} value={li.amount < 0 ? `− ${money(-li.amount)}` : money(li.amount)} />
                         ))}
@@ -1467,7 +1498,50 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                           switched on the moment the payment clears — 0060.
                           NOT multiplied by consultant headcount: a ward system
                           is one system whoever is using it. */}
-                      {!onCommission && vertical !== 'pharmacy' && vertical !== 'ambulance' && vertical !== 'insurance' && careModules.length > 0 && (
+                      {tiered && coreVertical && coreAddons.length > 0 && catalogue && (
+                        <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
+                            Add to your plan
+                          </div>
+                          <p style={{ fontSize: 13, color: BIZ.muted, margin: '0 0 14px', lineHeight: 1.6 }}>
+                            The OPD system comes with every plan. Tick what else you run — it is switched on as soon
+                            as this payment clears, and you can add or drop add-ons later from your dashboard.
+                            Two add-ons: {Number(catalogue.settings.bundle2_pct)}% off them; three or more: {Number(catalogue.settings.bundle3_pct)}% off.
+                          </p>
+                          <div style={{ display: 'grid', gap: 10 }}>
+                            {coreAddons.map(a => {
+                              const on = planAddons.includes(a.code)
+                              return (
+                                <label key={a.code} style={{
+                                  display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer',
+                                  padding: '13px 15px', borderRadius: 13,
+                                  border: `2px solid ${on ? BIZ.green : '#e9e2d5'}`,
+                                  background: on ? '#f3faf6' : '#fff',
+                                }}>
+                                  <input type="checkbox" checked={on}
+                                    onChange={() => setPlanAddons(prev => prev.includes(a.code) ? prev.filter(c => c !== a.code) : [...prev, a.code])}
+                                    style={{ width: 18, height: 18, marginTop: 2, accentColor: BIZ.green, cursor: 'pointer' }} />
+                                  <span style={{ flex: 1 }}>
+                                    <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                                      <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{a.label}</strong>
+                                      <strong style={{ fontSize: 14.5, color: on ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>{money(a.monthly_price)}/mo</strong>
+                                    </span>
+                                    {a.description && <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3, lineHeight: 1.5 }}>{a.description}</span>}
+                                    {a.code === 'ipd' && (
+                                      <span style={{ display: 'block', fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 3 }}>
+                                        {catalogue.settings.ipd_beds_included} beds included · {money(catalogue.settings.ipd_bed_price)}/month a bed beyond
+                                      </span>
+                                    )}
+                                  </span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* The free systems — only while the plans by doctors are off. */}
+                      {!tiered && !onCommission && vertical !== 'pharmacy' && vertical !== 'ambulance' && vertical !== 'insurance' && careModules.length > 0 && (
                         <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
                           <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
                             Which systems do you want? <span style={{ color: BIZ.green }}>Free</span>

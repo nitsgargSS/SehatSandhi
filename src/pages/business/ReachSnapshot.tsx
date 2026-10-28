@@ -147,7 +147,8 @@ function DistrictRows({ rows, highlight }: { rows: DistrictRow[]; highlight?: st
   )
 }
 
-export default function ReachSnapshot() {
+/** tiered: the plans by number of doctors are on (0272), so IPD, lab and pharmacy are add-ons. */
+export default function ReachSnapshot({ tiered = false }: { tiered?: boolean }) {
   const { plan } = usePricing()
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
@@ -324,7 +325,7 @@ export default function ReachSnapshot() {
         {[
           { icon: <MessageCircle className="w-4 h-4" />, t: 'Families nearby find you on WhatsApp, in Hindi or English' },
           { icon: <CalendarCheck className="w-4 h-4" />, t: 'Bookings arrive straight at your desk — no missed calls' },
-          { icon: <Stethoscope className="w-4 h-4" />, t: 'OPD, IPD, lab and in-house pharmacy software included' },
+          { icon: <Stethoscope className="w-4 h-4" />, t: tiered ? 'OPD software in every plan — add IPD, lab and pharmacy as you need them' : 'OPD, IPD, lab and in-house pharmacy software included' },
         ].map(r => (
           <li key={r.t} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14, color: '#3f4a44', lineHeight: 1.5 }}>
             <span style={{ width: 26, height: 26, borderRadius: 8, background: BIZ.chipBg, color: BIZ.chipText, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>{r.icon}</span>

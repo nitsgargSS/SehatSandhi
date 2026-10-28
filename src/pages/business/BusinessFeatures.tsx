@@ -119,7 +119,8 @@ const GROUPS: Group[] = [
   },
 ]
 
-export default function BusinessFeatures() {
+/** tiered: the plans by number of doctors are on (0272), so IPD is an add-on rather than included. */
+export default function BusinessFeatures({ tiered = false }: { tiered?: boolean }) {
   return (
     <div id="features" style={{ scrollMarginTop: 90 }}>
       <div className="mx-auto" style={{ maxWidth: PAGE.maxWidth, padding: 'clamp(30px,7vw,60px) ' + PAGE.padX }}>
@@ -173,7 +174,9 @@ export default function BusinessFeatures() {
               One login. Every clinic. The whole day.
             </div>
             <div style={{ fontSize: 14.5, color: '#d6f2e6', marginTop: 6 }}>
-              The OPD and IPD systems are included — register once and switch on what you need.
+              {tiered
+                ? 'OPD comes with every plan — register once, and add IPD, lab and pharmacy when you need them.'
+                : 'The OPD and IPD systems are included — register once and switch on what you need.'}
             </div>
           </div>
           <Link to="/business/register" className="max-sm:w-full max-sm:justify-center max-sm:flex"

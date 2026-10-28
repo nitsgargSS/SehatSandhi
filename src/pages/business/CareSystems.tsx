@@ -8,6 +8,7 @@ import { PAGE } from '../../components/SiteHeader'
 import { BIZ } from './shared'
 import { listCareModules, CareModule } from '../../lib/businessApi'
 import { money } from '../../lib/format'
+import type { PlanCatalogue } from '../../hooks/usePlanCatalogue'
 
 // The OPD and IPD systems, sold as part of the listing rather than alongside it.
 //
@@ -24,6 +25,12 @@ import { money } from '../../lib/format'
 // So the headline is derived from care_modules.monthly_price, the same row
 // compute-price bills from. Free while it is ₹0, priced while it is not, and it
 // flips on its own the moment 0082 reaches production — no deploy, no edit here.
+//
+// The plans by number of doctors (0272) replaced that: OPD comes with every
+// plan and IPD is a paid add-on. While plan_settings.tiered_live is on, the
+// prices come from plan_addons instead and nothing says "free". Until the
+// catalogue has loaded nothing says "free" either, so the switch never flashes
+// the old offer.
 //
 // Everything claimed below is something the product actually does today. The
 // temptation on a page like this is to describe the roadmap; a doctor who signs
@@ -65,7 +72,7 @@ const WHOLE = [
   { icon: <ReceiptText className="w-5 h-5" />,  t: 'The books stay clean',      d: 'GST invoices for what you pay us, and records kept then deleted on a retention policy you set.' },
 ]
 
-export default function CareSystems() {
+export default function CareSystems({ catalogue }: { catalogue: PlanCatalogue | null }) {
   const [modules, setModules] = useState<CareModule[] | null>(null)
   useEffect(() => { listCareModules().then(setModules).catch(() => setModules([])) }, [])
 
@@ -74,10 +81,15 @@ export default function CareSystems() {
   const ipdPrice = priceOf('ipd')
   // Only claim "free" once both are actually ₹0 in the table that bills them.
   // While modules is still null we say nothing rather than flash a wrong price.
-  const bothFree = modules !== null && opdPrice === 0 && ipdPrice === 0
+  const tiered = !!catalogue?.settings.tiered_live
+  const bothFree = catalogue !== null && !tiered && modules !== null && opdPrice === 0 && ipdPrice === 0
 
   const priceLabel = (p: number | null) =>
     p === null ? '' : p === 0 ? 'Free' : `${money(p)}/month`
+  const ipdAddon = catalogue?.addons.find(a => a.code === 'ipd')
+  const opdLabel = tiered ? 'In every plan' : catalogue ? priceLabel(opdPrice) : ''
+  const ipdLabel = tiered ? (ipdAddon ? `Add-on · ${money(ipdAddon.monthly_price)}/month` : '')
+    : catalogue ? priceLabel(ipdPrice) : ''
 
   return (
     <div id="systems" style={{ background: '#fff', borderTop: `1px solid ${BIZ.border}`, borderBottom: `1px solid ${BIZ.border}` }}>
@@ -103,13 +115,15 @@ export default function CareSystems() {
 
         <div className="grid gap-5 md:grid-cols-2">
           <SystemCard title="OPD system" subtitle="Your outpatient day, end to end"
-            price={priceLabel(opdPrice)} features={OPD} />
+            price={opdLabel} features={OPD} />
           <SystemCard title="IPD system" subtitle="Wards, beds and inpatient care"
-            price={priceLabel(ipdPrice)} features={IPD} />
+            price={ipdLabel} features={IPD} />
         </div>
 
         <p style={{ fontSize: 13, color: BIZ.mutedWarm, margin: '16px 0 0', lineHeight: 1.6 }}>
-          Take one or both — it is a tick box when you register, and you can change your mind later.
+          {tiered && ipdAddon
+            ? `OPD comes with every plan. IPD includes ${catalogue!.settings.ipd_beds_included} beds, ${money(catalogue!.settings.ipd_bed_price)}/month a bed beyond — switch it on when you register or later. `
+            : 'Take one or both — it is a tick box when you register, and you can change your mind later. '}
           Nothing is installed: it runs in the browser your staff already use.
         </p>
 
@@ -139,7 +153,7 @@ export default function CareSystems() {
             style={{ background: BIZ.green, color: '#fff', fontWeight: 800, fontSize: 16, padding: '15px 26px', borderRadius: 14, textAlign: 'center' }}>
             {bothFree ? 'Get it free — register your clinic' : 'Register your clinic'}
           </Link>
-          <a href="#pricing" style={{ fontSize: 14, fontWeight: 700, color: BIZ.green }}>What the listing costs →</a>
+          <a href="#pricing" style={{ fontSize: 14, fontWeight: 700, color: BIZ.green }}>{tiered ? 'See the plans →' : 'What the listing costs →'}</a>
         </div>
       </div>
     </div>
