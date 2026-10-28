@@ -76,6 +76,12 @@ export interface PriceResult {
   couponError?: string | null
   lineItems?: { label: string; amount: number }[]
   terms?: { months: number; price: number; label: string | null; savings_note: string | null; whatsapp_price?: number; whatsapp_pro_price?: number }[]
+  /** 0272: the plan by number of doctors that priced this, when those plans are on. */
+  plan?: {
+    live: boolean; family: string; tier: string; tier_label: string
+    doctors: number; doctors_included: number; addons: string[]; bundle_pct: number
+    monthly: number; months: number; factor: number
+  } | null
 }
 
 export interface TaxBreakdown {
@@ -139,7 +145,7 @@ export const computePrice = (
   /** care_modules codes ticked in the wizard. Priced server-side, never here. */
   modules?: string[] | null,
   /** 0117: the WhatsApp add-on and a coupon code, both checked server-side. */
-  choices: { whatsapp?: boolean; couponCode?: string; whatsappPlan?: 'basic' | 'pro' } = {},
+  choices: { whatsapp?: boolean; couponCode?: string; whatsappPlan?: 'basic' | 'pro'; planAddons?: string[] } = {},
 ) => callFn<PriceResult>('compute-price', { pincodes, businessId, vertical, months, doctorCount, modules, ...choices })
 
 export interface RazorpayOrder {
@@ -218,6 +224,8 @@ export interface BuyerGstDetails {
   whatsappPlan?: 'basic' | 'pro'
   couponCode?: string
   autoRenew?: boolean
+  /** 0272: plan add-ons ticked at signup (ipd, pathology…), when the plans by doctors are on. */
+  planAddons?: string[]
 }
 
 // Signup calls this anonymously (no login exists yet); the dashboard passes the
