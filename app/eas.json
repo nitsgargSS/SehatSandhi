@@ -22,8 +22,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://ctxkkqqtasegoowuqbmi.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_3f7_Q4jM5jwpXT4sNltCBQ_vLGyc87n",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://tbmlhawtnrvvnemcljma.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_jR4wrLIVtOuoe49mwrT3IA_yRGUBEb2",
         "EXPO_PUBLIC_IS_STAGING": "false"
       },
       "channel": "production"
