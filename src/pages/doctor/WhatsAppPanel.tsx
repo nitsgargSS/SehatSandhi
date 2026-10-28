@@ -926,14 +926,27 @@ function OwnNumberCard({ businessId, account, onChange }: { businessId: string; 
   // Loaded now, so Connect can open Meta's window straight from the click.
   useEffect(() => { if (!connected) loadFacebookSdk().catch(() => undefined) }, [connected])
 
+  // Each press of Connect is an attempt; an older one that settles late is ignored.
+  const attempt = useRef(0)
   const connect = async () => {
+    const mine = ++attempt.current
     setBusy(true); setNote(null)
     try {
-      const r = await embeddedSignup(existing)
+      const r = await embeddedSignup(existing, () => {
+        if (mine !== attempt.current) return
+        // Meta's window is gone and nothing came back. Free the button rather than
+        // leave "Connecting…" forever; a late answer from Meta still completes.
+        setBusy(false)
+        setNote({ ok: false, text: 'Meta’s window closed before it handed the connection back. If you finished signing up, press Connect again and choose the same business and number — it takes a minute.' })
+      })
+      if (mine !== attempt.current) return
+      setBusy(true); setNote(null)
       const res = await waConnect(businessId, 'connect', { ...r, coexistence: existing })
       setNote({ ok: res.ok, text: res.message ?? (res.ok ? 'Connected.' : 'Could not connect.') })
       if (res.ok) onChange()
-    } catch (e) { setNote({ ok: false, text: (e as Error).message }) } finally { setBusy(false) }
+    } catch (e) {
+      if (mine === attempt.current) setNote({ ok: false, text: (e as Error).message })
+    } finally { if (mine === attempt.current) setBusy(false) }
   }
   const act = async (action: 'refresh' | 'disconnect') => {
     if (action === 'disconnect' && !window.confirm('Stop sending from your own number? Messages will go from the Sehatsandhi number again, paid from your wallet.')) return
