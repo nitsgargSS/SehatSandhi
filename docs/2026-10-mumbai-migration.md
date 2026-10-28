@@ -170,7 +170,7 @@ copied (`auth-config`); 46 functions deployed (`functions`); 21 secrets copied
 | 1b | ! | `npx supabase secrets unset WA_BOT_PHONE_IDS --project-ref ctxkkqqtasegoowuqbmi` (Tokyo's bot stops answering) |
 | 2 | ! | `bash scripts/move-region.sh pause-tokyo --cutover --yes` (Tokyo's scheduled jobs off; their state saved) |
 | 3 | ! | `bash scripts/move-region.sh wipe --yes` (empty the rehearsal copy) |
-| 4 | ! | `bash scripts/move-region.sh --cutover --yes` (the copy, ~10 min; jobs as they were in Tokyo; must end "✓ Everything matches") |
+| 4 | ! | `bash scripts/move-region.sh --cutover --yes` (the copy, ~11 min, now with a repoint step for saved file links; jobs as they were in Tokyo; must end "✓ Everything matches") |
 | 6 | T | `REF=tbmlhawtnrvvnemcljma bash scripts/wa-connect-production.sh 1461510652560252 3997937100511018 1953329202322425` — new WA_INBOUND_SECRET in Mumbai, Meta's webhook → Mumbai. Mumbai already has `WA_BOT_PHONE_IDS` from step 1, so its bot answers once Meta points there. |
 | 7 | N | Razorpay → Settings → Webhooks → edit → URL `https://tbmlhawtnrvvnemcljma.supabase.co/functions/v1/razorpay-webhook` (secret unchanged). |
 | 8 | N | Vercel Production env: `VITE_SUPABASE_URL` = `https://tbmlhawtnrvvnemcljma.supabase.co`, `VITE_SUPABASE_ANON_KEY` = Mumbai's public key (same kind as now), `VITE_MAINTENANCE` = `false` → Redeploy. |
