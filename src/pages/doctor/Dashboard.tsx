@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package, Ambulance, ShieldCheck, Globe } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package, Ambulance, ShieldCheck, Globe, Megaphone } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -33,6 +33,7 @@ import ClinicQrCard from './ClinicQrCard'
 import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
 import PublicProfileEditor from './PublicProfileEditor'
 import WebsitePanel from './WebsitePanel'
+import SocialPostsPanel from './SocialPostsPanel'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
@@ -142,8 +143,8 @@ export default function DoctorDashboard() {
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
   // 0280: a billing message links straight to ?tab=plan.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages' | 'website'>(
-    () => (['plan', 'whatsapp', 'bills', 'website'].includes(new URLSearchParams(window.location.search).get('tab') ?? '')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages' | 'website' | 'social'>(
+    () => (['plan', 'whatsapp', 'bills', 'website', 'social'].includes(new URLSearchParams(window.location.search).get('tab') ?? '')
       ? new URLSearchParams(window.location.search).get('tab') as 'plan' : 'today'))
 
   // What this login is at this business, and whether the database has a role
@@ -1061,6 +1062,16 @@ export default function DoctorDashboard() {
   // 0181: the account — plan, payments, Bills, WhatsApp, add-ons, doctors'
   // leave — is the owner's. A manager runs the floor (0180), not the account.
   const isOwner = !role.enforced || role.role === 'owner'
+  // 0292: the Social posts tab, only where posts are switched on (the pilot,
+  // later the add-on). RLS lets the business read its own settings row.
+  const [socialOn, setSocialOn] = useState(false)
+  useEffect(() => {
+    if (!doctor?.id || !isOwner) { setSocialOn(false); return }
+    let cancelled = false
+    supabase.from('social_settings').select('enabled').eq('business_id', doctor.id).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setSocialOn(!!data?.enabled) })
+    return () => { cancelled = true }
+  }, [doctor?.id, isOwner])
   const plans = usePlansLive(doctor?.id)
   const ROLE_WORD: Record<string, string> = { owner: 'Owner', doctor: 'Doctor', nurse: 'Nurse', receptionist: 'Reception', manager: 'Manager' }
   const whoIsIn = `${myName || signedInAs || 'Signed in'}${role.role ? ` · ${ROLE_WORD[role.role] ?? role.role}` : ''}`
@@ -1171,6 +1182,8 @@ export default function DoctorDashboard() {
         { id: 'whatsapp', label: 'WhatsApp', icon: <MessageCircle className="w-4 h-4" /> },
         // 0282: the business's own website — the owner's, as RLS has it.
         { id: 'website', label: 'Website', icon: <Globe className="w-4 h-4" /> },
+        // 0292: a post for Facebook and Instagram every day.
+        ...(socialOn ? [{ id: 'social', label: 'Social posts', icon: <Megaphone className="w-4 h-4" /> }] : []),
       ] : []),
     ] : []),
     // Reports sits with the clinicians, not the business cluster. How the
@@ -1966,6 +1979,10 @@ export default function DoctorDashboard() {
 
         {tab === 'website' && doctor && (
           <WebsitePanel businessId={doctor.id} businessName={doctor.name} />
+        )}
+
+        {tab === 'social' && doctor && socialOn && (
+          <SocialPostsPanel businessId={doctor.id} />
         )}
 
         {tab === 'bills' && (
