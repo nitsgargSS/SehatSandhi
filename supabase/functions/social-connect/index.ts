@@ -13,7 +13,7 @@
 //      the Vault, never to the browser. Instagram is the professional account
 //      linked to that Page, posted to with the same key.
 //
-// Request (signed-in owner):
+// Request (signed-in owner, or an admin — Sehatsandhi's own Page, 0296):
 //   { businessId, action: 'connect', code }
 //   { businessId, action: 'pick', pageId }
 //   { businessId, action: 'disconnect' }
@@ -71,9 +71,13 @@ Deno.serve(async (req) => {
   const db = who.asService
   let userId: string | null = null
   if (!who.isServiceRole) {
-    const { data: role, error } = await who.asCaller.rpc('sehat_caller_role', { p_business: businessId })
+    const [{ data: role, error }, { data: admin }] = await Promise.all([
+      who.asCaller.rpc('sehat_caller_role', { p_business: businessId }),
+      who.asCaller.rpc('sehat_is_admin'),
+    ])
     if (error) return json({ error: error.message }, 500)
-    if (role !== 'owner') return json({ ok: false, message: 'Only the owner can connect Facebook.' }, 403)
+    // An admin connects Sehatsandhi's own Page (0296) from Admin.
+    if (role !== 'owner' && !admin) return json({ ok: false, message: 'Only the owner can connect Facebook.' }, 403)
     try {
       const jwt = (req.headers.get('Authorization') ?? '').slice(7).split('.')[1] ?? ''
       userId = JSON.parse(atob(jwt.replace(/-/g, '+').replace(/_/g, '/'))).sub ?? null
