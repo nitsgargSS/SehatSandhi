@@ -13,6 +13,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { isServiceAuth } from '../_shared/serviceKey.ts'
 
 const BATCH = 50
 const MAX_ATTEMPTS = 5
@@ -20,7 +21,7 @@ const MAX_ATTEMPTS = 5
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  if ((req.headers.get('Authorization') ?? '') !== `Bearer ${serviceKey}`) return json({ error: 'unauthorised' }, 401)
+  if (!isServiceAuth(req.headers.get('Authorization'))) return json({ error: 'unauthorised' }, 401)
   const db = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey)
 
   // A run that died mid-send leaves rows at 'sending'; put them back after 5 minutes.
