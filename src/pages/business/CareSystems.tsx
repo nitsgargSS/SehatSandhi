@@ -57,6 +57,7 @@ const IPD: Feature[] = [
   { icon: <Users className="w-4 h-4" />,          text: 'Nurses work for their own doctors or a ward; only doctors prescribe' },
   { icon: <FileText className="w-4 h-4" />,       text: 'Discharge summaries written, issued and sent to the family' },
   { icon: <ReceiptText className="w-4 h-4" />,    text: 'Inpatient billing with bed charges posted for you' },
+  { icon: <ReceiptText className="w-4 h-4" />,    text: 'Pharmacy included — the ward sends orders, the pharmacy issues to the patient\'s bill, with deposits and returns' },
   { icon: <Search className="w-4 h-4" />,         text: 'Find any patient by surgery, diagnosis or anything you wrote — "lap chole", "mesh", "no lifting"' },
 ]
 

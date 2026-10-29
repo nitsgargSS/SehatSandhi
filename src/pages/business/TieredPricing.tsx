@@ -35,8 +35,9 @@ export default function TieredPricing({ catalogue, gstNote, ambulancePrice }: {
   const top = core[core.length - 1]
 
   // The worked example: the biggest plan with every add-on, at the bundle rate.
-  const allAddons = coreAddons.reduce((n, a) => n + a.monthly_price, 0)
-  const complete = top && coreAddons.length >= 3
+  // 0286: the pharmacy is included with IPD, so 'every add-on' does not pay for it twice.
+  const allAddons = coreAddons.filter(a => a.code !== 'pharmacy').reduce((n, a) => n + a.monthly_price, 0)
+  const complete = top && coreAddons.filter(a => a.code !== 'pharmacy').length >= 3
     ? Math.round(top.monthly_price + allAddons * (1 - s.bundle3_pct / 100)) : null
 
   const pct = (n: number) => `${Number(n)}%`
@@ -93,8 +94,11 @@ export default function TieredPricing({ catalogue, gstNote, ambulancePrice }: {
                 {a.description && <div style={{ fontSize: 13, color: BIZ.muted, lineHeight: 1.55, marginTop: 8 }}>{a.description}</div>}
                 {a.code === 'ipd' && (
                   <div style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 8 }}>
-                    {s.ipd_beds_included} beds included · {money(s.ipd_bed_price)}/month a bed beyond
+                    {s.ipd_beds_included} beds included · {money(s.ipd_bed_price)}/month a bed beyond · pharmacy included
                   </div>
+                )}
+                {a.code === 'pharmacy' && (
+                  <div style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 8 }}>For OPD-only clinics — included free with IPD</div>
                 )}
                 {a.logins_included > 0 && (
                   <div style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 8 }}>+ {a.logins_included} technician logins</div>

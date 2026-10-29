@@ -11,6 +11,7 @@ import BusinessFeatures from './BusinessFeatures'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { usePlanCatalogue } from '../../hooks/usePlanCatalogue'
 import TieredPricing from './TieredPricing'
+import WebsitePlans from './WebsitePlans'
 import { useTaxSettings } from '../../hooks/useTaxSettings'
 import { money } from '../../lib/format'
 import { getLeadFee } from '../../lib/insuranceApi'
@@ -87,6 +88,7 @@ export default function BusinessLanding() {
       <SiteHeader sticky>
         <HeaderLink href="#how">How it works</HeaderLink>
         <HeaderLink href="#systems">OPD &amp; IPD</HeaderLink>
+        <HeaderLink href="#website">Website</HeaderLink>
         <HeaderLink href="#features">Features</HeaderLink>
         <HeaderLink href="#pricing">Pricing</HeaderLink>
         <HeaderLink href="#partners">Partners</HeaderLink>
@@ -155,6 +157,9 @@ export default function BusinessLanding() {
           should be read before the price rather than after it. */}
       <CareSystems catalogue={catalogue} />
 
+      {/* 0282/0283: a website for every business; the own name plan makes it theirs. */}
+      <WebsitePlans />
+
       {/* The full feature list: multi-clinic doctors, the doctor's own practice,
           the pharmacy, billing, reports, the team. */}
       <BusinessFeatures tiered={tiered} />
@@ -188,7 +193,7 @@ export default function BusinessLanding() {
         </h2>
         <p style={{ fontSize: 15, color: BIZ.muted, textAlign: 'center', margin: '0 0 36px' }}>
           {tiered
-            ? 'Priced by the number of doctors, with the OPD system in every plan. Add IPD, lab and pharmacy as you need them.'
+            ? 'Priced by the number of doctors, with the OPD system and a free website in every plan. Add IPD (pharmacy included), lab, or your own name as you need them.'
             : plan.description
               ?? 'Every pincode has a monthly price set by its population tier. Your total is the sum of the pincodes you pick.'}
         </p>
