@@ -231,53 +231,67 @@ function pickTopic(cal: CalendarRow[], date: string, specs: string[], recent: st
   return null
 }
 
-// Sehatsandhi's own posts (0296), for doctors and clinic owners: one thing the
-// software does, told as the everyday problem it solves. Taken in turn, each
-// not again within 30 days; festivals and Doctors' Day come first.
+// Sehatsandhi's own posts (0296), for doctors and clinic owners. A series in
+// this order, each topic once: who we are first, then what a clinic uses every
+// day, then the bigger modules. Once every topic has been posted, they come
+// round again, none within 30 days. Festivals and Doctors' Day come first.
 const FEATURES: { title: string; angle: string }[] = [
+  // Introduction.
+  { title: 'Meet Sehatsandhi', angle: 'Introducing Sehatsandhi: one simple app that runs a clinic, hospital, lab or pharmacy, made in India for Indian towns, WhatsApp first, Hindi and English. Warm hello, no feature list yet.' },
+  { title: 'Who Sehatsandhi is for', angle: 'For a doctor with a small clinic, multi-speciality clinics, nursing homes and hospitals, diagnostic labs and pharmacies: each uses the parts it needs' },
+  { title: 'A clinic day with Sehatsandhi', angle: 'From booking to token, prescription, bill and follow-up reminder: the whole patient visit in one place, told as a calm day at the clinic' },
+  { title: 'Why we built Sehatsandhi', angle: 'Doctors should spend time on patients, not registers, phone calls and paper slips; we make the everyday work easier' },
+  // What a clinic uses every day.
+  { title: 'Appointments that fill themselves', angle: 'Patients book on WhatsApp or the app any time; the clinic sees the day\'s list in the morning' },
   { title: 'No more crowd at reception', angle: 'OPD queue: patients get a token on WhatsApp and see their turn, the waiting room stays calm' },
   { title: 'Prescriptions on WhatsApp', angle: 'The doctor writes once; the patient gets a clean prescription link on WhatsApp, no lost paper slips' },
   { title: 'Bills in one tap', angle: 'GST bills made at the counter and sent on WhatsApp; the day\'s collection at a glance' },
-  { title: 'Appointments that fill themselves', angle: 'Patients book on WhatsApp or the app any time; the clinic sees the day\'s list in the morning' },
+  { title: 'Patient records in one place', angle: 'Every visit, prescription, bill and report of a patient on one page, searchable in seconds' },
   { title: 'Patients come back on time', angle: 'Automatic follow-up reminders on WhatsApp, so patients return for their review visit' },
+  { title: 'Reception, doctor, owner: each sees their part', angle: 'Staff roles: reception books and bills, doctors see their patients, the owner sees everything' },
+  { title: 'Works on phone and computer', angle: 'Use it on the reception computer and the doctor\'s phone, nothing to install' },
+  { title: 'Bring your old patient list', angle: 'Upload an Excel sheet of existing patients and start the same day' },
+  { title: 'Myth: clinic software is costly and hard', angle: 'Myth vs fact: start with what you need, set up in a day, staff learn it in an hour' },
+  // Reaching patients.
   { title: 'A website for your clinic', angle: 'A clinic website with doctors, timings and a book button, made from what you already entered' },
   { title: 'Daily posts made for you', angle: 'A ready Facebook and Instagram post every day with your logo and photos; you just say OK' },
-  { title: 'Your own WhatsApp number', angle: 'Messages to patients go from the clinic\'s own WhatsApp number, with the clinic\'s name' },
-  { title: 'Lab reports to patients', angle: 'Lab results go to the patient on WhatsApp as a secure link the moment they are ready' },
-  { title: 'Pharmacy stock without registers', angle: 'Stock entered in strips, sold per tablet; low stock and expiry warnings before they hurt' },
-  { title: 'Beds and IPD on one screen', angle: 'Wards, beds, deposits and the running bill of every admitted patient, always up to date' },
-  { title: 'Discharge papers in minutes', angle: 'Discharge summary and final bill ready together, sent to the family on WhatsApp' },
-  { title: 'Surgery day, well prepared', angle: 'Reminders before a planned surgery and care messages after it, sent automatically' },
-  { title: 'Reception, doctor, owner: each sees their part', angle: 'Staff roles: reception books and bills, doctors see their patients, the owner sees everything' },
-  { title: 'Bring your old patient list', angle: 'Upload an Excel sheet of existing patients and start the same day' },
   { title: 'A QR poster at reception', angle: 'Patients scan the clinic\'s QR to join its WhatsApp list and book next time' },
   { title: 'Ratings that build trust', angle: 'After a visit, patients are asked once for a rating, so happy patients speak up' },
   { title: 'Health tips to your patients', angle: 'Send health tips and camp news to the patients who said yes, with a stop option for anyone' },
-  { title: 'Tests sent to a partner lab', angle: 'Send a test to another lab on Sehatsandhi and the report comes back into the patient\'s file' },
-  { title: 'Hospital and lab settle up', angle: 'Agreed terms, one ledger and monthly statements between hospitals, labs and pharmacies' },
-  { title: 'Know your clinic\'s numbers', angle: 'Daily and monthly reports: patients seen, collection, top services, follow-ups due' },
-  { title: 'Works on phone and computer', angle: 'Use it on the reception computer and the doctor\'s phone, nothing to install' },
-  { title: 'Made for Indian clinics', angle: 'Hindi and English, WhatsApp first, built for small-city clinics and hospitals' },
-  { title: 'Patient records in one place', angle: 'Every visit, prescription, bill and report of a patient on one page, searchable in seconds' },
+  { title: 'Your own WhatsApp number', angle: 'Messages to patients go from the clinic\'s own WhatsApp number, with the clinic\'s name' },
+  // Hospitals, labs, pharmacies.
   { title: 'Multi-doctor clinics, sorted', angle: 'Each doctor\'s own queue, slots and fees, one front desk for all' },
-  { title: 'Myth: clinic software is costly and hard', angle: 'Myth vs fact: start with what you need, set up in a day, staff learn it in an hour' },
+  { title: 'Beds and IPD on one screen', angle: 'Wards, beds, deposits and the running bill of every admitted patient, always up to date' },
+  { title: 'Discharge papers in minutes', angle: 'Discharge summary and final bill ready together, sent to the family on WhatsApp' },
+  { title: 'Surgery day, well prepared', angle: 'Reminders before a planned surgery and care messages after it, sent automatically' },
+  { title: 'Lab reports to patients', angle: 'Lab results go to the patient on WhatsApp as a secure link the moment they are ready' },
+  { title: 'Tests sent to a partner lab', angle: 'Send a test to another lab on Sehatsandhi and the report comes back into the patient\'s file' },
+  { title: 'Pharmacy stock without registers', angle: 'Stock entered in strips, sold per tablet; low stock and expiry warnings before they hurt' },
+  { title: 'Hospital and lab settle up', angle: 'Agreed terms, one ledger and monthly statements between hospitals, labs and pharmacies' },
+  // Trust, and the ask.
+  { title: 'Know your clinic\'s numbers', angle: 'Daily and monthly reports: patients seen, collection, top services, follow-ups due' },
   { title: 'Your data stays yours', angle: 'Data kept in India, encrypted, access by role, every opening of a record logged' },
+  { title: 'Made for Indian clinics', angle: 'Hindi and English, WhatsApp first, built for small-city clinics and hospitals' },
   { title: 'Try it with a free demo', angle: 'WhatsApp us for a free demo at your clinic or on a video call' },
 ]
 
-function pickDoctorsTopic(cal: CalendarRow[], date: string, recent: string[]): Topic {
+/** `everPosted`: every topic this business has had (other days), for the series order. */
+function pickDoctorsTopic(cal: CalendarRow[], date: string, recent: string[], everPosted: string[]): Topic {
   const [y, m, d] = date.split('-').map(Number)
   const day = cal.filter((r) => r.month === m && r.day === d && (r.year == null || r.year === y) && r.specialities.length === 0 &&
     (r.kind === 'festival' || r.title_en === "National Doctors' Day"))
-  if (day.length) {
+  // The series starts with the introduction: no greeting before Sehatsandhi has said hello.
+  const introduced = everPosted.some((t) => t.toLowerCase() === FEATURES[0].title.toLowerCase())
+  if (day.length && introduced) {
     const r = day[0]
     return { title: r.title_en, titleHi: r.title_hi, kind: r.kind, calendarId: r.id, dated: true,
       angle: `Greetings from Sehatsandhi to doctors, clinic teams and their patients for ${r.title_en}. No selling on this day.` }
   }
+  const ever = new Set(everPosted.map((t) => t.toLowerCase()))
+  const next = FEATURES.find((f) => !ever.has(f.title.toLowerCase()))
   const used = new Set(recent.map((t) => t.toLowerCase()))
-  const fresh = FEATURES.filter((f) => !used.has(f.title.toLowerCase()))
-  const pool = fresh.length ? fresh : FEATURES
-  const f = pool[Math.floor(Date.parse(date) / 864e5) % pool.length]
+  const pool = FEATURES.filter((f) => !used.has(f.title.toLowerCase()))
+  const f = next ?? (pool.length ? pool : FEATURES)[Math.floor(Date.parse(date) / 864e5) % (pool.length || FEATURES.length)]
   return { title: f.title, titleHi: null, kind: 'feature', angle: f.angle, calendarId: null, dated: false }
 }
 
@@ -584,8 +598,13 @@ async function makePost(db: Db, businessId: string, date: string, note: string |
     db.from('social_posts').select('topic').eq('business_id', businessId).gte('post_date', since).neq('post_date', date),
   ])
   const recent: string[] = (past ?? []).map((p: { topic: string }) => p.topic)
+  // Sehatsandhi's series goes in order (0296): every topic it has had, any day but this one.
+  const everPosted = s.audience === 'doctors'
+    ? ((await db.from('social_posts').select('topic').eq('business_id', businessId).neq('post_date', date).in('status', ['ready', 'published'])).data ?? [])
+      .map((p: { topic: string }) => p.topic)
+    : []
   const topic = s.audience === 'doctors'
-    ? pickDoctorsTopic(cal ?? [], date, recent)
+    ? pickDoctorsTopic(cal ?? [], date, recent, everPosted)
     : pickTopic(cal ?? [], date, biz.specialities, recent, s.blocked_topics ?? [])
 
   const { data: was } = await db.from('social_posts').select('status').eq('business_id', businessId).eq('post_date', date).maybeSingle()
