@@ -28,6 +28,7 @@ import { MyPractice, DoctorsOverview, OpdFee } from './DoctorWorkspace'
 import LetterheadSettings from './LetterheadSettings'
 import AbdmSettings from './AbdmSettings'
 import SurgeryMessagePlans from './SurgeryMessagePlans'
+import PartnerLedger from './PartnerLedger'
 import ClinicQrCard from './ClinicQrCard'
 import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
 import PublicProfileEditor from './PublicProfileEditor'
@@ -2192,6 +2193,14 @@ export default function DoctorDashboard() {
               <Fold ownCard title="Surgery messages" summary="before and after an operation, sent by themselves">
                 <SurgeryMessagePlans businessId={doctor.id} isOwner={isOwner}
                   canEdit={!role.enforced || ['owner', 'manager', 'doctor'].includes(role.role ?? '')} />
+              </Fold>
+            )}
+            {/* 0291: settling up with partner labs (or, for a lab, the hospitals that send it tests). */}
+            {doctor && emr && (myVertical === 'lab' || myVertical === 'clinic' || myVertical === 'hospital')
+              && (!role.enforced || ['owner', 'manager'].includes(role.role ?? '')) && (
+              <Fold ownCard title={myVertical === 'lab' ? 'Partner hospitals' : 'Partner labs'}
+                summary={myVertical === 'lab' ? 'terms, ledger and statements with hospitals that send you tests' : 'terms, ledger and statements with labs you send tests to'}>
+                <PartnerLedger businessId={doctor.id} isLab={myVertical === 'lab'} />
               </Fold>
             )}
             {/* 0287: ABDM IDs, once an admin has switched ABDM on for this clinic. */}
