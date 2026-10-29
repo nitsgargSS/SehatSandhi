@@ -32,8 +32,16 @@
 // privacy rules" in the build plan before adding any input here.
 //
 // Request:  { action: "plan" }                              service-role only
-//           { action: "make", businessId, date?: "YYYY-MM-DD" }
-//             owner or admin; date defaults to tomorrow (IST)
+//           { action: "make", businessId, date?: "YYYY-MM-DD", note? }
+//             owner or admin; date defaults to tomorrow (IST); note = the
+//             owner's own ask ("about cataract"), which then needs their OK
+//           { action: "preview" }   7 PM IST cron: tomorrow's post to the owner (0295)
+//           { action: "publish" }   10 AM IST cron: today's posts to Facebook and Instagram
+//           { action: "decide", postId, answer: "ok" | "skip" | "change" | "post", note?, from? }
+//             the owner's answer, from the app (owner) or from WhatsApp
+//             (whatsapp-inbound, service role, `from` = the number that answered)
+//           { action: "preview-template", wabaId }   service role, once per
+//             WhatsApp account: creates the social_post_preview template
 //
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 //      ANTHROPIC_API_KEY       the words (absent = posts cannot be made)
@@ -48,6 +56,8 @@
 import Anthropic from 'npm:@anthropic-ai/sdk'
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { caller } from '../_shared/caller.ts'
+import { APP_ID, GRAPH, graph } from '../_shared/metaGraph.ts'
+import { graphSend } from '../_shared/whatsapp.ts'
 
 const BUCKET = 'social-posts'
 const MODEL = 'claude-opus-5-5'
@@ -275,7 +285,7 @@ const SCHEMA = {
 
 async function write(
   anthropic: Anthropic, biz: Business, date: string, topic: Topic | null, imageLang: 'en' | 'hi', lang: Lang,
-  recent: string[], favourites: string[], problems: string[],
+  recent: string[], favourites: string[], problems: string[], note: string | null,
 ): Promise<Draft> {
   const brief = {
     date,
@@ -291,6 +301,7 @@ async function write(
     favourite_topics: favourites,
     recent_topics_do_not_repeat: recent,
     photos: biz.photos.map((p, i) => ({ index: i, shows: p.label })),
+    ...(note ? { the_owner_asks_for_this_post_it_wins_over_the_topic: note } : {}),
     ...(problems.length ? { your_last_draft_broke_these_rules_fix_them: problems } : {}),
   }
   const res = await anthropic.beta.messages.create({
@@ -458,7 +469,7 @@ async function render(template: string, size: 'square' | 'story', data: Record<s
 }
 
 // ── One post ────────────────────────────────────────────────────────────────
-async function makePost(db: Db, businessId: string, date: string): Promise<{ id: string; status: string; error?: string }> {
+async function makePost(db: Db, businessId: string, date: string, note: string | null = null): Promise<{ id: string; status: string; error?: string }> {
   const { data: s } = await db.from('social_settings').select('*').eq('business_id', businessId).maybeSingle()
   if (!s?.enabled) throw new Error('posts are not switched on for this business')
   const lang: Lang = s.languages
@@ -474,10 +485,14 @@ async function makePost(db: Db, businessId: string, date: string): Promise<{ id:
   const recent: string[] = (past ?? []).map((p: { topic: string }) => p.topic)
   const topic = pickTopic(cal ?? [], date, biz.specialities, recent, s.blocked_topics ?? [])
 
-  // Claim the day first so a second run does not make it twice.
+  const { data: was } = await db.from('social_posts').select('status').eq('business_id', businessId).eq('post_date', date).maybeSingle()
+  if (was?.status === 'published') throw new Error('this post is already on Facebook')
+  // Claim the day first so a second run does not make it twice. New words
+  // need a new answer from the owner, and a new preview.
   const { data: row, error: upErr } = await db.from('social_posts').upsert({
     business_id: businessId, post_date: date, topic: topic?.title ?? 'Everyday tip', template: 'tips',
     calendar_id: topic?.calendarId ?? null, status: 'planned', error: null, image_lang: imageLang, updated_at: new Date().toISOString(),
+    approval: null, approved_at: null, owner_note: note, needs_ok: !!note, preview_sent_at: null, preview_error: null, publish_error: null,
   }, { onConflict: 'business_id,post_date' }).select('id, image_url, story_url').single()
   if (upErr) throw new Error(upErr.message)
 
@@ -487,11 +502,11 @@ async function makePost(db: Db, businessId: string, date: string): Promise<{ id:
     const anthropic = new Anthropic({ apiKey: key })
     const favourites = s.favourite_topics ?? []
 
-    let draft = await write(anthropic, biz, date, topic, imageLang, lang, recent, favourites, [])
+    let draft = await write(anthropic, biz, date, topic, imageLang, lang, recent, favourites, [], note)
     let problems = safetyProblems(draft)
     let writtenBy: 'claude' | 'fallback' = 'claude'
     if (problems.length) {
-      draft = await write(anthropic, biz, date, topic, imageLang, lang, recent, favourites, problems)
+      draft = await write(anthropic, biz, date, topic, imageLang, lang, recent, favourites, problems, note)
       problems = safetyProblems(draft)
       if (problems.length) { draft = fallbackDraft(biz, imageLang); writtenBy = 'fallback' }
     }
@@ -553,11 +568,190 @@ async function makePost(db: Db, businessId: string, date: string): Promise<{ id:
   }
 }
 
+// ── 6. Preview, the owner's answer, and posting (0295) ──────────────────────
+// 7 PM: tomorrow's post goes to the owner on WhatsApp (our number, template
+// social_post_preview: the image, then OK / Change / Skip) and to the app.
+// 10 AM: the day's post goes to the Page and Instagram, if the rules allow.
+const PREVIEW_TEMPLATE = 'social_post_preview'
+const FIRST_POSTS_NEED_OK = 7
+const waNumber = (v: unknown): string | null => {
+  const d = String(v ?? '').replace(/\D/g, '')
+  if (d.length === 10 && /^[6-9]/.test(d)) return `91${d}`
+  if (d.length === 12 && d.startsWith('91')) return d
+  return null
+}
+const istHour = () => new Date(Date.now() + 5.5 * 3600e3).getUTCHours()
+
+/** Does this post wait for the owner's OK? */
+async function needsOk(db: Db, post: { business_id: string; needs_ok: boolean }, approval: string): Promise<boolean> {
+  if (post.needs_ok || approval === 'ask') return true
+  if (approval === 'auto') return false
+  const { count } = await db.from('social_posts').select('id', { count: 'exact', head: true })
+    .eq('business_id', post.business_id).eq('status', 'published')
+  return (count ?? 0) < FIRST_POSTS_NEED_OK
+}
+
+/** Where the preview goes: the owner's choice, their login phone, else the business's phone. */
+async function previewPhone(db: Db, businessId: string, chosen: string | null): Promise<string | null> {
+  if (waNumber(chosen)) return waNumber(chosen)
+  const { data: b } = await db.from('businesses').select('phone, auth_uid').eq('id', businessId).single()
+  if (b?.auth_uid) {
+    const { data } = await db.auth.admin.getUserById(b.auth_uid)
+    if (waNumber(data?.user?.phone)) return waNumber(data.user.phone)
+  }
+  return waNumber(b?.phone)
+}
+
+// deno-lint-ignore no-explicit-any
+async function sendPreview(db: Db, post: any, s: any): Promise<string | null> {
+  const wait = await needsOk(db, post, s.approval)
+  const { data: b } = await db.from('businesses').select('name, auth_uid').eq('id', post.business_id).single()
+  const rule = wait ? 'It goes out at 10 AM only after you say OK.' : 'It goes out at 10 AM unless you say otherwise.'
+  const to = await previewPhone(db, post.business_id, s.preview_phone)
+  let error: string | null = null
+  if (to) {
+    const button = (index: number, answer: string) => ({
+      type: 'button', sub_type: 'quick_reply', index, parameters: [{ type: 'payload', payload: `sp:${answer}:${post.id}` }],
+    })
+    const r = await graphSend({
+      to, type: 'template',
+      template: {
+        name: PREVIEW_TEMPLATE, language: { code: 'en' },
+        components: [
+          { type: 'header', parameters: [{ type: 'image', image: { link: post.image_url } }] },
+          { type: 'body', parameters: [b?.name ?? 'your clinic', post.topic, rule].map((text) => ({ type: 'text', text })) },
+          button(0, 'ok'), button(1, 'change'), button(2, 'skip'),
+        ],
+      },
+    })
+    if (!r.ok) error = r.error ?? 'not sent'
+  } else error = 'no phone number for the preview'
+  // The app too, for owners who have it.
+  if (b?.auth_uid) {
+    await db.rpc('sehat_queue_push', {
+      p_kind: 'social_preview', p_business: post.business_id, p_users: [b.auth_uid],
+      p_title: "Tomorrow's post is ready", p_body: `${post.topic}. ${rule} Open Social posts on sehatsandhi.com to see it.`,
+      p_data: { kind: 'social_preview', post_id: post.id },
+    }).then(() => undefined, () => undefined)
+  }
+  await db.from('social_posts').update({
+    preview_sent_at: error ? null : new Date().toISOString(), preview_to: to, preview_error: error,
+  }).eq('id', post.id)
+  return error
+}
+
+/** The post on the Page, then on Instagram. Either may fail on its own. */
+// deno-lint-ignore no-explicit-any
+async function publishPost(db: Db, post: any): Promise<{ ok: boolean; error?: string }> {
+  const { data: acct } = await db.from('social_accounts').select('*').eq('business_id', post.business_id).maybeSingle()
+  if (!acct) return { ok: false, error: 'Facebook is not connected' }
+  const { data: token } = await db.rpc('sehat_social_token', { p_business: post.business_id, p_kind: 'page' })
+  if (!token) return { ok: false, error: 'Facebook is not connected' }
+  const caption = [post.caption, (post.hashtags ?? []).join(' ')].filter(Boolean).join('\n\n')
+  const errors: string[] = []
+  let fbId: string | null = post.fb_post_id, igId: string | null = post.ig_media_id
+
+  if (!fbId) {
+    const r = await graph(`${acct.page_id}/photos`, token, { body: { url: post.image_url, caption } })
+    if (r.ok) fbId = String(r.body.post_id ?? r.body.id)
+    else errors.push(`Facebook: ${r.error}`)
+  }
+  if (acct.ig_user_id && !igId) {
+    const c = await graph(`${acct.ig_user_id}/media`, token, { body: { image_url: post.image_url, caption } })
+    if (!c.ok) errors.push(`Instagram: ${c.error}`)
+    else {
+      // Instagram fetches the image first; publishing before it has fails (9007).
+      for (let i = 0; i < 5 && !igId; i++) {
+        const p = await graph(`${acct.ig_user_id}/media_publish`, token, { body: { creation_id: c.body.id } })
+        if (p.ok) igId = String(p.body.id)
+        else if (p.code === 9007 && i < 4) await new Promise((r) => setTimeout(r, 4000))
+        else { errors.push(`Instagram: ${p.error}`); break }
+      }
+    }
+  }
+  const done = !!fbId && (!acct.ig_user_id || !!igId)
+  const error = errors.join('; ') || null
+  await db.from('social_posts').update({
+    fb_post_id: fbId, ig_media_id: igId, publish_error: error,
+    ...(fbId || igId ? { status: 'published', published_at: post.published_at ?? new Date().toISOString() } : {}),
+    updated_at: new Date().toISOString(),
+  }).eq('id', post.id)
+  if (error) await db.from('social_accounts').update({ last_error: error.slice(0, 500), updated_at: new Date().toISOString() }).eq('business_id', post.business_id)
+  return done ? { ok: true } : { ok: false, error: error ?? 'not posted' }
+}
+
+/** The owner's answer: OK, Skip, Change (with what to change), or Post now. */
+async function decide(db: Db, postId: string, answer: string, note: string | null): Promise<Record<string, unknown>> {
+  const { data: post } = await db.from('social_posts').select('*').eq('id', postId).maybeSingle()
+  if (!post) return { ok: false, message: 'That post is not there any more.' }
+  if (post.status === 'published') return { ok: false, message: 'This post is already on Facebook.' }
+  if (post.post_date < istDate(0)) return { ok: false, message: 'That day has passed.' }
+  const now = new Date().toISOString()
+
+  if (answer === 'skip') {
+    await db.from('social_posts').update({ status: 'skipped', approval: null, updated_at: now }).eq('id', postId)
+    return { ok: true, message: 'Skipped. Nothing goes out that day.' }
+  }
+  if (answer === 'change') {
+    if (!note) {
+      await db.from('social_posts').update({ approval: 'change', updated_at: now }).eq('id', postId)
+      return { ok: true, message: 'What should be different? Write it in one line — for example "about cataract", "in Hindi", "a different picture" — or write NEW for another topic.' }
+    }
+    const r = await makePost(db, post.business_id, post.post_date, /^new$/i.test(note.trim()) ? null : note)
+    if (r.status !== 'ready') return { ok: false, message: `The new post could not be made: ${r.error ?? 'unknown'}` }
+    const { data: fresh } = await db.from('social_posts').select('*').eq('id', r.id).single()
+    const { data: s } = await db.from('social_settings').select('*').eq('business_id', post.business_id).single()
+    const err = await sendPreview(db, fresh, s)
+    return { ok: true, message: err ? `The new post is ready in Social posts (the preview could not be sent: ${err}).` : 'Here is the new one.' }
+  }
+  if (post.status !== 'ready' && post.status !== 'skipped') return { ok: false, message: 'This post is not ready yet.' }
+  await db.from('social_posts').update({ status: 'ready', approval: 'ok', approved_at: now, updated_at: now }).eq('id', postId)
+  // OK after 10 AM on the day itself, or "Post now": it goes out straight away.
+  if (answer === 'post' || (post.post_date === istDate(0) && istHour() >= 10)) {
+    const r = await publishPost(db, { ...post, status: 'ready' })
+    return r.ok ? { ok: true, message: 'Posted on Facebook and Instagram.' } : { ok: false, message: `Not posted: ${r.error}` }
+  }
+  return { ok: true, message: 'OK — it goes out at 10 AM.' }
+}
+
+/** Creates social_post_preview in one WhatsApp account: an image header needs a sample image uploaded first. */
+async function createPreviewTemplate(wabaId: string): Promise<Record<string, unknown>> {
+  const token = Deno.env.get('META_ACCESS_TOKEN')
+  if (!token) return { ok: false, error: 'META_ACCESS_TOKEN not set' }
+  const sample = await fetch('https://www.sehatsandhi.com/logo.png')
+  if (!sample.ok) return { ok: false, error: `sample image: ${sample.status}` }
+  const bytes = new Uint8Array(await sample.arrayBuffer())
+  const start = await fetch(`${GRAPH}/${APP_ID}/uploads?file_name=sample.png&file_length=${bytes.length}&file_type=image/png&access_token=${encodeURIComponent(token)}`, { method: 'POST' })
+  const sb = await start.json().catch(() => ({}))
+  if (!sb?.id) return { ok: false, error: `upload start: ${JSON.stringify(sb).slice(0, 200)}` }
+  const up = await fetch(`${GRAPH}/${sb.id}`, { method: 'POST', headers: { Authorization: `OAuth ${token}`, file_offset: '0' }, body: bytes })
+  const ub = await up.json().catch(() => ({}))
+  if (!ub?.h) return { ok: false, error: `upload: ${JSON.stringify(ub).slice(0, 200)}` }
+  const r = await graph(`${wabaId}/message_templates`, token, {
+    body: {
+      name: PREVIEW_TEMPLATE, language: 'en', category: 'UTILITY',
+      components: [
+        { type: 'HEADER', format: 'IMAGE', example: { header_handle: [ub.h] } },
+        {
+          type: 'BODY',
+          text: "Tomorrow's social media post for {{1}} is ready: {{2}}.\n\n{{3}}\n\nTap OK to post it, Change for a different one, or Skip for no post that day.",
+          example: { body_text: [['SN Eye Hospital', 'Winter dry eyes', 'It goes out at 10 AM unless you say otherwise.']] },
+        },
+        { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'OK' }, { type: 'QUICK_REPLY', text: 'Change' }, { type: 'QUICK_REPLY', text: 'Skip' }] },
+      ],
+    },
+  })
+  return r.ok ? { ok: true, template: r.body } : { ok: false, error: r.error }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   const who = caller(req)
   if (!who) return json({ error: 'Sign in first.' }, 401)
-  let body: { action?: string; businessId?: string; date?: string; topic?: string; scene?: string; maker?: string; cfModel?: string }
+  let body: {
+    action?: string; businessId?: string; date?: string; topic?: string; scene?: string; maker?: string; cfModel?: string
+    note?: string; postId?: string; answer?: string; from?: string; wabaId?: string
+  }
   try { body = await req.json() } catch { return json({ error: 'Bad request.' }, 400) }
   const db = who.asService
 
@@ -600,6 +794,63 @@ Deno.serve(async (req) => {
     catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 400) }
   }
 
+  if (body.action === 'preview') {
+    if (!who.isServiceRole) return json({ error: 'Not allowed.' }, 403)
+    const date = istDate(1)
+    const { data: on } = await db.from('social_settings').select('*').eq('enabled', true).eq('paused', false).neq('approval', 'auto')
+    const results = []
+    for (const s of on ?? []) {
+      const { data: post } = await db.from('social_posts').select('*')
+        .eq('business_id', s.business_id).eq('post_date', date).eq('status', 'ready').is('preview_sent_at', null).maybeSingle()
+      if (post) results.push({ business: s.business_id, error: await sendPreview(db, post, s) })
+    }
+    return json({ date, results })
+  }
+
+  if (body.action === 'publish') {
+    if (!who.isServiceRole) return json({ error: 'Not allowed.' }, 403)
+    const date = istDate(0)
+    const { data: on } = await db.from('social_settings').select('*').eq('enabled', true).eq('paused', false)
+    const results = []
+    for (const s of on ?? []) {
+      const { data: post } = await db.from('social_posts').select('*')
+        .eq('business_id', s.business_id).eq('post_date', date).eq('status', 'ready').maybeSingle()
+      if (!post) continue
+      // In 'preview', no answer counts as yes only once the owner was asked.
+      const go = post.approval === 'ok' || (!(await needsOk(db, post, s.approval)) && (s.approval === 'auto' || !!post.preview_sent_at))
+      if (!go) {
+        await db.from('social_posts').update({ publish_error: 'Waiting for your OK' }).eq('id', post.id)
+        results.push({ business: s.business_id, status: 'waiting for OK' })
+        continue
+      }
+      results.push({ business: s.business_id, ...(await publishPost(db, post)) })
+    }
+    return json({ date, results })
+  }
+
+  if (body.action === 'decide') {
+    const postId = body.postId ?? '', answer = body.answer ?? ''
+    if (!postId || !['ok', 'skip', 'change', 'post'].includes(answer)) return json({ error: 'postId and answer required' }, 400)
+    const { data: post } = await db.from('social_posts').select('business_id, preview_to').eq('id', postId).maybeSingle()
+    if (!post) return json({ ok: false, message: 'That post is not there any more.' }, 404)
+    if (who.isServiceRole) {
+      // From WhatsApp: only the number the preview went to may answer.
+      if (body.from !== undefined && waNumber(body.from) !== post.preview_to) return json({ ok: false, message: 'Not your post.' }, 403)
+    } else {
+      const { data: owner } = await who.asCaller.rpc('sehat_caller_is_owner', { p_business: post.business_id })
+      if (!owner) return json({ error: 'Only the owner can answer.' }, 403)
+    }
+    const note = typeof body.note === 'string' ? body.note.trim().slice(0, 300) || null : null
+    try { return json(await decide(db, postId, answer, note)) }
+    catch (e) { return json({ ok: false, message: e instanceof Error ? e.message : String(e) }, 400) }
+  }
+
+  if (body.action === 'preview-template') {
+    if (!who.isServiceRole) return json({ error: 'Not allowed.' }, 403)
+    if (!body.wabaId || !/^\d+$/.test(body.wabaId)) return json({ error: 'wabaId required' }, 400)
+    return json(await createPreviewTemplate(body.wabaId))
+  }
+
   if (body.action === 'make') {
     const id = body.businessId
     if (!id) return json({ error: 'Which business?' }, 400)
@@ -618,7 +869,8 @@ Deno.serve(async (req) => {
     if (last && last.status === 'planned' && Date.now() - Date.parse(last.updated_at) < 120e3) {
       return json({ error: 'This post is already being made. Wait a minute.' }, 409)
     }
-    try { return json(await makePost(db, id, date)) }
+    const note = typeof body.note === 'string' ? body.note.trim().slice(0, 300) || null : null
+    try { return json(await makePost(db, id, date, note)) }
     catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 400) }
   }
 

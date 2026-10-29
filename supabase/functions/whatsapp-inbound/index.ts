@@ -102,7 +102,8 @@ function extract(p: Any): Extracted {
       phone: asPhone(m.from), name: v.contacts?.[0]?.profile?.name ?? null,
       text: m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? null,
       id: m.id ?? null, outbound: false,
-      replyId: m.interactive?.button_reply?.id ?? m.interactive?.list_reply?.id ?? null,
+      // A template's quick-reply button arrives as type 'button' with our payload.
+      replyId: m.interactive?.button_reply?.id ?? m.interactive?.list_reply?.id ?? m.button?.payload ?? null,
       toPhoneId: v.metadata?.phone_number_id ?? null,
       replyTo: m.context?.id ?? null,
       location: m.type === 'location' && m.location ? { latitude: Number(m.location.latitude), longitude: Number(m.location.longitude) } : null,
@@ -188,6 +189,39 @@ async function keepPrescription(db: Any, media: { id: string; mime: string }, ph
  * Answer one message. Returns a note for the inbound log. Never throws: the
  * webhook must still answer 200, or Meta retries and then switches it off.
  */
+// 0295: the owner answering the 7 PM preview of tomorrow's social post —
+// a button (payload sp:<answer>:<post id>), or, after Change, one line saying
+// what to change. Handled by social-posts; nothing here reaches the bot.
+// Remaking takes about a minute, longer than Meta waits for this webhook, so
+// the work carries on after the answer (EdgeRuntime.waitUntil).
+async function socialAnswer(db: Any, e: Extracted): Promise<string | null> {
+  let postId = '', answer = '', note: string | null = null
+  const m = /^sp:(ok|change|skip):([0-9a-f-]{36})$/.exec(e.replyId ?? '')
+  if (m) { answer = m[1]; postId = m[2] }
+  else if (e.text && !e.replyId) {
+    const { data } = await db.from('social_posts').select('id').eq('preview_to', e.phone).eq('approval', 'change')
+      .gte('updated_at', new Date(Date.now() - 3 * 3600e3).toISOString()).order('updated_at', { ascending: false }).limit(1)
+    if (!data?.length) return null
+    postId = data[0].id; answer = 'change'; note = String(e.text)
+  } else return null
+
+  const reply = (text: string) => graphSend({ to: e.phone, type: 'text', text: { body: text } }, e.toPhoneId ?? undefined)
+  const work = (async () => {
+    if (note) await reply('Making a new one — about a minute.')
+    const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/social-posts`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'decide', postId, answer, note, from: e.phone }),
+    })
+    const b = await res.json().catch(() => ({})) as Any
+    if (b?.message && !(note && b.ok && !/could not/.test(b.message))) await reply(String(b.message))
+  })().catch(() => undefined)
+  // deno-lint-ignore no-explicit-any
+  const rt = (globalThis as any).EdgeRuntime
+  if (rt?.waitUntil) rt.waitUntil(work); else await work
+  return `social post: ${answer}${note ? ' (what to change)' : ''}`
+}
+
 async function runBot(db: Any, e: Extracted, line: 'main' | 'clinic', token?: string): Promise<string> {
   try {
     const phone = e.phone!, from = e.toPhoneId!
@@ -353,6 +387,9 @@ Deno.serve(async (req) => {
     const { error: oErr } = await db.rpc('sehat_wa_platform_optin', { p_phone: e.phone, p_text: e.text, p_message_id: e.id })
     optedIn = !oErr
   }
+  const social = signed ? await socialAnswer(db, e) : null
+  if (social) { await log(true, social); return json({ ok: true }) }
+
   const ids = (v: string | undefined) => (v ?? '').split(',').map(x => x.trim()).filter(Boolean)
   const botIds = ids(Deno.env.get('WA_BOT_PHONE_IDS'))
   const clinicIds = ids(Deno.env.get('WA_CLINIC_PHONE_IDS') ?? Deno.env.get('META_CLINIC_PHONE_NUMBER_ID'))
