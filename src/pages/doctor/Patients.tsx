@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState, useCallback } from 'react'
 import StayMoney, { printMedicineSlip } from './StayMoney'
+import AbhaLine from './AbhaLine'
 import { SPECIALITIES } from '../../types'
 import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
@@ -895,6 +896,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
             <OtherNumbers businessId={businessId} memberId={memberId} />
             <PatientDetailsEditor businessId={businessId} memberId={memberId} summary={summary} onSaved={reload} />
             <PatientAddress businessId={businessId} memberId={memberId} />
+            <AbhaLine businessId={businessId} memberId={memberId} summary={summary} onSaved={reload} />
             <div style={{ fontSize: 12.5, color: BIZ.mutedWarm, marginTop: 3 }}>
               {summary.visits_here} visit{summary.visits_here === 1 ? '' : 's'} here
               {summary.last_seen_at && ` · last seen ${when(summary.last_seen_at)}`}

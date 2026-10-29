@@ -26,6 +26,7 @@ import WhatsAppPanel from './WhatsAppPanel'
 import PayListingPanel from './PayListingPanel'
 import { MyPractice, DoctorsOverview, OpdFee } from './DoctorWorkspace'
 import LetterheadSettings from './LetterheadSettings'
+import AbdmSettings from './AbdmSettings'
 import ClinicQrCard from './ClinicQrCard'
 import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
 import PublicProfileEditor from './PublicProfileEditor'
@@ -2183,6 +2184,12 @@ export default function DoctorDashboard() {
                 <LetterheadSettings businessId={doctor.id}
                   current={(doctor as typeof doctor & { letterhead_url?: string | null }).letterhead_url ?? null}
                   onSaved={url => setDoctor(d => d ? ({ ...d, letterhead_url: url } as typeof d) : d)} />
+              </Fold>
+            )}
+            {/* 0287: ABDM IDs, once an admin has switched ABDM on for this clinic. */}
+            {doctor && (doctor as typeof doctor & { abdm_enabled?: boolean }).abdm_enabled && (
+              <Fold ownCard title="ABDM (health IDs)" summary={(doctor as typeof doctor & { hfr_id?: string | null }).hfr_id ? 'facility ID set ✓' : 'facility ID not set'}>
+                <AbdmSettings businessId={doctor.id} canEdit={isOwner || role.role === 'manager'} />
               </Fold>
             )}
             {/* The doctors who work here. Shown for clinics too now: the roster
