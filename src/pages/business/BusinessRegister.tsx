@@ -1578,7 +1578,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                           </p>
                           <div style={{ display: 'grid', gap: 10 }}>
                             {coreAddons.map(a => {
-                              const on = planAddons.includes(a.code)
+                              // 0286: IPD includes the pharmacy.
+                              const included = a.code === 'pharmacy' && planAddons.includes('ipd')
+                              const on = included || planAddons.includes(a.code)
                               return (
                                 <label key={a.code} style={{
                                   display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer',
@@ -1586,13 +1588,13 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                   border: `2px solid ${on ? BIZ.green : '#e9e2d5'}`,
                                   background: on ? '#f3faf6' : '#fff',
                                 }}>
-                                  <input type="checkbox" checked={on}
+                                  <input type="checkbox" checked={on} disabled={included}
                                     onChange={() => setPlanAddons(prev => prev.includes(a.code) ? prev.filter(c => c !== a.code) : [...prev, a.code])}
                                     style={{ width: 18, height: 18, marginTop: 2, accentColor: BIZ.green, cursor: 'pointer' }} />
                                   <span style={{ flex: 1 }}>
                                     <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                                       <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{a.label}</strong>
-                                      <strong style={{ fontSize: 14.5, color: on ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>{money(a.monthly_price)}/mo</strong>
+                                      <strong style={{ fontSize: 14.5, color: on ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>{included ? 'Included with IPD' : `${money(a.monthly_price)}/mo`}</strong>
                                     </span>
                                     {a.description && <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3, lineHeight: 1.5 }}>{a.description}</span>}
                                     {a.code === 'ipd' && (

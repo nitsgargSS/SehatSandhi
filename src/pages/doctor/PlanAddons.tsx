@@ -142,7 +142,9 @@ export default function PlanAddons({ businessId, businessName, email, canChange,
       {addons.filter(a => (OFFERED[quote.family] ?? []).includes(a.code)).map(a => {
         const isOn = on.has(a.code)
         const free = !!quote.lines.find(l => l.code === a.code)?.free
-        const line = a.code === 'ipd' ? bedsLine?.label.replace(/^IPD — /, '') : null
+        const line = a.code === 'ipd' ? bedsLine?.label.replace(/^IPD( \+ Pharmacy)? — /, '') : null
+        // 0286: the pharmacy comes with IPD — no separate add-on while IPD is on.
+        const withIpd = a.code === 'pharmacy' && on.has('ipd')
         return (
           <div key={a.code} className="border border-gray-100 rounded-xl p-3 flex flex-wrap items-center gap-3 justify-between">
             <div className="flex items-start gap-3 min-w-0">
@@ -157,7 +159,9 @@ export default function PlanAddons({ businessId, businessName, email, canChange,
                 </div>
               </div>
             </div>
-            {canChange && (isOn && free ? (
+            {withIpd ? (
+              <span className="text-xs text-teal-700 font-semibold inline-flex items-center gap-1"><Check className="w-4 h-4" /> Included with IPD</span>
+            ) : canChange && (isOn && free ? (
               <span className="text-xs text-teal-700 font-semibold inline-flex items-center gap-1"><Check className="w-4 h-4" /> On · free</span>
             ) : isOn ? (
               <div className="flex items-center gap-2">
