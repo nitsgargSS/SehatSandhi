@@ -3,6 +3,7 @@ import { ExternalLink, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react
 import { supabase } from '../../lib/supabase'
 import Markdown from '../../site/Markdown'
 import type { L10n, SiteContent } from '../../site/siteData'
+import { FONT_PAIRS, fontPair, loadFontPair } from '../../site/fonts'
 
 // The business's own website (0282), edited by its owner: the address, colour,
 // logo and photos, the blocks of text the site prints, and the articles.
@@ -181,6 +182,26 @@ function Rows<T>({ items, blank, add, render, onChange }: { items: T[]; blank: (
   )
 }
 
+function FontPick({ value, onChange }: { value: string | undefined; onChange: (k: string) => void }) {
+  useEffect(() => { FONT_PAIRS.forEach(loadFontPair) }, [])
+  const current = fontPair(value).key
+  return (
+    <div>
+      <Label>Font style</Label>
+      <div className="grid sm:grid-cols-2 gap-2">
+        {FONT_PAIRS.map(f => (
+          <button key={f.key} type="button" onClick={() => onChange(f.key)}
+            className={`text-left rounded-xl border-2 px-4 py-3 bg-white ${current === f.key ? 'border-teal-600' : 'border-gray-100 hover:border-gray-300'}`}>
+            <span className="block text-2xl text-gray-900" style={{ fontFamily: `${f.head},serif`, fontWeight: f.headWeight }}>{f.label}: care close to home</span>
+            <span className="block text-sm text-gray-700 mt-0.5" style={{ fontFamily: `${f.body},sans-serif` }}>Gentle care for every patient. <span style={{ fontFamily: `${f.headHi},serif` }}>आँखों की देखभाल</span></span>
+            <span className="block text-xs text-gray-400 mt-1" style={{ fontFamily: 'inherit' }}>{f.note}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── The site ────────────────────────────────────────────────────────────────
 
 function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: SiteRow; onSaved: (s: SiteRow) => void }) {
@@ -245,6 +266,7 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
             <input type="color" value={s.brand_color ?? '#0f4c5c'} onChange={e => setS({ ...s, brand_color: e.target.value })} className="w-10 h-8 cursor-pointer" />
           </div>
         </div>
+        <FontPick value={c.font} onChange={k => setC({ font: k })} />
         <div className="grid sm:grid-cols-2 gap-4">
           <ImagePick businessId={businessId} label="Logo" name="logo" url={s.logo_url} onChange={u => setS({ ...s, logo_url: u })} />
           <ImagePick businessId={businessId} label="Main photo (top of the home page)" name="hero" url={s.hero_image_url} wide onChange={u => setS({ ...s, hero_image_url: u })} />

@@ -11,6 +11,7 @@ export const tr = (v: L10n | string | null | undefined, lang: Lang): string =>
 
 export interface SiteContent {
   kicker?: L10n; tagline?: L10n; intro?: L10n
+  font?: string   // fonts.ts FONT_PAIRS key; Elegant when unset
   google?: { rating?: number; url?: string }
   doctor?: {
     name: string; role?: L10n; qualification?: L10n; summary?: L10n; bio?: L10n

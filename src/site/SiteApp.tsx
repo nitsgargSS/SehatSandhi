@@ -3,6 +3,7 @@ import { Link, Route, Routes, useParams } from 'react-router-dom'
 import { Phone, MapPin, Clock, Star, ArrowRight, MessageCircle, CalendarCheck, ShieldCheck, Facebook, Instagram, Youtube, Menu, X } from 'lucide-react'
 import { getArticle, getSite, tr, type Article, type Lang, type PublicSite } from './siteData'
 import Markdown from './Markdown'
+import { fontPair, loadFontPair } from './fonts'
 import { clinicWaLink } from '../lib/qr'
 import { WA_NUMBER, SPECIALITIES } from '../types'
 
@@ -52,17 +53,24 @@ export default function SiteApp({ siteKey, base }: { siteKey: string; base: stri
   const [lang, setLang] = useState<Lang>(readLang)
   useEffect(() => { getSite(siteKey).then(setData).catch(() => setData(null)) }, [siteKey])
   useEffect(() => { if (data) document.title = data.business.name }, [data])
+  const font = fontPair(data?.site.content.font)
+  useEffect(() => { if (data) loadFontPair(font) }, [data, font])
   const switchLang = () => setLang(l => { const n: Lang = l === 'en' ? 'hi' : 'en'; try { localStorage.setItem(LANG_KEY, n) } catch { /* fine */ } return n })
 
   if (data === undefined) return <div style={{ minHeight: '100vh', background: '#f7f5f0' }} />
   if (data === null) return <Missing />
 
   const brand = data.site.brand_color || '#0f4c5c'
-  const style = { '--site-brand': brand, '--site-ink': '#16232a', '--site-muted': '#5b6870', '--site-cream': '#f7f5f0', '--site-line': '#e6e1d6' } as CSSProperties
+  // Latin face first in both languages: it has no Devanagari, so Hindi letters
+  // fall through to the partner face and English left untranslated keeps its own.
+  const style = { '--site-brand': brand, '--site-ink': '#16232a', '--site-muted': '#5b6870', '--site-cream': '#f7f5f0', '--site-line': '#e6e1d6',
+    '--site-head': `${font.head},${font.headHi},serif`,
+    '--site-body': `${font.body},${font.bodyHi},system-ui,sans-serif`,
+    '--site-head-weight': font.headWeight, '--site-head-track': font.headTrack } as CSSProperties
   const t = (k: UIKey) => tr(UI[k], lang)
 
   return (
-    <div className="site-root" style={{ ...style, background: 'var(--site-cream)', color: 'var(--site-ink)', minHeight: '100vh', fontFamily: lang === 'hi' ? "'Noto Sans Devanagari','Manrope',system-ui,sans-serif" : "'Manrope','Noto Sans Devanagari',system-ui,sans-serif" }}>
+    <div className="site-root" style={{ ...style, background: 'var(--site-cream)', color: 'var(--site-ink)', minHeight: '100vh' }}>
       <style>{SITE_CSS}</style>
       <Header d={data} base={base} lang={lang} t={t} onLang={switchLang} />
       <Routes>
@@ -118,7 +126,7 @@ function Header({ d, base, lang, t, onLang }: P & { onLang: () => void }) {
       <Wrap style={{ display: 'flex', alignItems: 'center', gap: 16, height: 68 }}>
         <Link to={`${base}/`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', minWidth: 0 }}>
           {d.site.logo_url && <img src={d.site.logo_url} alt="" style={{ height: 40, width: 'auto' }} />}
-          <span style={{ fontWeight: 800, fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.business.name}</span>
+          <span className="site-head" style={{ fontWeight: 800, fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.business.name}</span>
         </Link>
         <nav className="site-nav" style={{ marginLeft: 'auto', display: 'flex', gap: 22 }}>
           {links.map(([to, k]) => to.includes('#')
@@ -198,7 +206,7 @@ function Home({ d, base, lang, t }: P) {
               <div className="site-stats">
                 {c.highlights.map(h => (
                   <div key={h.value + tr(h.label, 'en')}>
-                    <div style={{ fontSize: 'clamp(30px,6vw,44px)', fontWeight: 800, color: 'var(--site-brand)', letterSpacing: '-.02em' }}>{h.value}</div>
+                    <div className="site-head" style={{ fontSize: 'clamp(30px,6vw,44px)', fontWeight: 800, color: 'var(--site-brand)', letterSpacing: '-.02em' }}>{h.value}</div>
                     <div style={{ color: 'var(--site-muted)', fontSize: 14 }}>{tr(h.label, lang)}</div>
                   </div>
                 ))}
@@ -541,6 +549,9 @@ function Missing() {
 }
 
 const SITE_CSS = `
+/* index.css sets Poppins on every element, so the site's faces are set on every element too. */
+.site-root, .site-root * { font-family: var(--site-body); }
+.site-root h1, .site-root h2, .site-root h3, .site-root .site-head { font-family: var(--site-head); font-weight: var(--site-head-weight) !important; letter-spacing: var(--site-head-track) !important; font-variant-numeric: lining-nums; }
 .site-root a { -webkit-tap-highlight-color: transparent; }
 .site-btn { display:inline-flex; align-items:center; gap:8px; background:var(--site-brand); color:#fff; font-weight:700; font-size:15.5px; padding:13px 20px; border-radius:12px; text-decoration:none; border:2px solid var(--site-brand); }
 .site-btn-ghost { background:transparent; color:var(--site-brand); }
