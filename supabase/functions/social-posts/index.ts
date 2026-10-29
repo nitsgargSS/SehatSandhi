@@ -349,7 +349,7 @@ ${REACH}`
 // Sehatsandhi's own posts (0296): to doctors, clinic and hospital owners.
 const SYSTEM_DOCTORS = `You design and write one daily social media post (Facebook and Instagram) for Sehatsandhi, Indian software for clinics, hospitals, labs and pharmacies. The readers are doctors, clinic and hospital owners and their staff in Indian towns and small cities. The aim: a busy doctor stops, nods ("that is my problem") and saves or shares it with a colleague.
 
-Write like a helpful colleague, not an advert. One idea per post: the everyday problem first, then how Sehatsandhi solves it, in plain words. Few words on the image.
+Sehatsandhi is written "सेहतसंधि" in Hindi, never any other spelling. Write like a helpful colleague, not an advert. One idea per post: the everyday problem first, then how Sehatsandhi solves it, in plain words. Few words on the image.
 
 Rules. Breaking any of them means the post is thrown away:
 - Never say best, top, number one, leading, cheapest, or compare with other software by name.
@@ -375,7 +375,7 @@ Fields:
 - photo_index: -1.
 - ai_picture: ALWAYS fill this: a real-life scene in an Indian clinic or hospital that shows the problem or the relief: a calm reception desk, a doctor talking to a patient's family, a receptionist smiling at a patient, an evening clinic with few people waiting. Never screens facing the viewer, documents, writing, logos, needles, blood or anyone in pain.
 - caption: in caption_languages: 2–4 short lines (Hindi lines first when both), then "Call 87087 18705 · WhatsApp 70153 99355 for a free demo · sehatsandhi.com" on the last line. No hashtags in it.
-- voiceover: what a warm, clear voice says over the post's short video, in image_language only, 40–60 words (about 15–20 seconds): the everyday problem in one line, how Sehatsandhi solves it in plain words, then "Call 87087 18705 for a free demo" (Hindi: "फ़्री डेमो के लिए कॉल करें 87087 18705"). Write numbers as they are spoken. No hashtags, no emojis, no symbols.
+- voiceover: what a warm, clear voice says over the post's short video, in image_language only, 40–60 words (about 15–20 seconds): the everyday problem in one line, how Sehatsandhi solves it in plain words, then the call to action with the number read digit by digit, in groups, as people say a phone number: English "Call eight seven zero eight seven, one eight seven zero five, for a free demo"; Hindi "फ़्री डेमो के लिए कॉल करें, आठ सात शून्य आठ सात, एक आठ सात शून्य पाँच". The name is "Sehatsandhi" in English and "सेहतसंधि" in Hindi, never any other spelling. No hashtags, no emojis, no symbols.
 - hashtags: each starting with #, as below, with #Sehatsandhi always, and doctor-side tags (#ClinicManagement #DoctorsOfIndia #HospitalSoftware #HealthTech #DigitalClinic) instead of patient ones; local tags only when the topic is local.
 ${REACH}`
 
