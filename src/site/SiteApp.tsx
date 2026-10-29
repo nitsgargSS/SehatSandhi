@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { Link, Route, Routes, useParams } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { Phone, MapPin, Clock, Star, ArrowRight, MessageCircle, CalendarCheck, ShieldCheck, Facebook, Instagram, Youtube, Menu, X } from 'lucide-react'
 import { getArticle, getSite, tr, type Article, type Lang, type PublicSite } from './siteData'
 import Markdown from './Markdown'
@@ -33,6 +33,7 @@ const UI = {
   findCondition: { en: 'Find your condition', hi: 'अपनी समस्या खोजें' }, back: { en: 'Back', hi: 'वापस' },
   myRecords: { en: 'Patient login: your prescriptions and reports', hi: 'मरीज़ लॉगिन: पर्चे और रिपोर्ट' },
   notFound: { en: 'This page is not here.', hi: 'यह पेज नहीं मिला।' }, powered: { en: 'Website and booking by', hi: 'वेबसाइट और बुकिंग' },
+  listed: { en: 'Listed on', hi: 'सूचीबद्ध:' }, findMore: { en: 'find more doctors near you', hi: 'आसपास और डॉक्टर खोजें' },
   ratedHere: { en: 'from patients who booked through us', hi: 'हमारे ज़रिए बुक करने वाले मरीज़ों से' },
 } as const
 type UIKey = keyof typeof UI
@@ -75,10 +76,13 @@ export default function SiteApp({ siteKey, base }: { siteKey: string; base: stri
       <Header d={data} base={base} lang={lang} t={t} onLang={switchLang} />
       <Routes>
         <Route index element={<Home d={data} base={base} lang={lang} t={t} />} />
-        <Route path="services" element={<Services d={data} lang={lang} t={t} />} />
-        <Route path="about" element={<About d={data} lang={lang} t={t} />} />
-        <Route path="posts" element={<Posts d={data} base={base} lang={lang} t={t} />} />
-        <Route path="post/:article" element={<Post siteKey={siteKey} d={data} base={base} lang={lang} t={t} />} />
+        {/* 0283: the free page is the home page alone. */}
+        {data.site.tier === 'full' ? <>
+          <Route path="services" element={<Services d={data} lang={lang} t={t} />} />
+          <Route path="about" element={<About d={data} lang={lang} t={t} />} />
+          <Route path="posts" element={<Posts d={data} base={base} lang={lang} t={t} />} />
+          <Route path="post/:article" element={<Post siteKey={siteKey} d={data} base={base} lang={lang} t={t} />} />
+        </> : <Route path="*" element={<Navigate to={`${base}/`} replace />} />}
         <Route path="*" element={<Wrap><p style={{ padding: '80px 0' }}>{t('notFound')}</p></Wrap>} />
       </Routes>
       <Footer d={data} base={base} lang={lang} t={t} />
@@ -120,7 +124,9 @@ function BookButtons({ d, t, light = false }: { d: PublicSite; t: P['t']; light?
 
 function Header({ d, base, lang, t, onLang }: P & { onLang: () => void }) {
   const [open, setOpen] = useState(false)
-  const links: [string, UIKey][] = [[`${base}/`, 'home'], [`${base}/services`, 'services'], [`${base}/about`, 'doctor'], [`${base}/posts`, 'insights'], [`${base}/#visit`, 'visit']]
+  const links: [string, UIKey][] = d.site.tier === 'full'
+    ? [[`${base}/`, 'home'], [`${base}/services`, 'services'], [`${base}/about`, 'doctor'], [`${base}/posts`, 'insights'], [`${base}/#visit`, 'visit']]
+    : [[`${base}/`, 'home'], [`${base}/#visit`, 'visit']]
   return (
     <header style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(247,245,240,.94)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--site-line)' }}>
       <Wrap style={{ display: 'flex', alignItems: 'center', gap: 16, height: 68 }}>
@@ -533,7 +539,9 @@ function Footer({ d, lang, t }: P) {
       </Wrap>
       <Wrap style={{ marginTop: 18, fontSize: 12, color: 'var(--site-muted)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <span>© {new Date().getFullYear()} {d.business.name}</span>
-        <a href="https://www.sehatsandhi.com" style={{ color: 'var(--site-muted)' }}>{t('powered')} <b>Sehatsandhi</b></a>
+        {d.site.tier === 'full'
+          ? <a href="https://www.sehatsandhi.com" style={{ color: 'var(--site-muted)' }}>{t('powered')} <b>Sehatsandhi</b></a>
+          : <a href="https://www.sehatsandhi.com" style={{ color: 'var(--site-brand)', fontSize: 13.5, fontWeight: 600 }}>{t('listed')} <b>Sehatsandhi</b> — {t('findMore')} →</a>}
       </Wrap>
       <span hidden>{lang}</span>
     </footer>

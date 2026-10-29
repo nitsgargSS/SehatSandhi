@@ -30,7 +30,7 @@ export interface SiteContent {
 }
 
 export interface PublicSite {
-  site: { slug: string; custom_domain: string | null; template: string; brand_color: string | null; logo_url: string | null; hero_image_url: string | null; content: SiteContent }
+  site: { slug: string; custom_domain: string | null; template: string; tier: 'free' | 'full'; brand_color: string | null; logo_url: string | null; hero_image_url: string | null; content: SiteContent }
   business: { id: string; name: string; vertical: string; category: string | null; address: string | null; phone: string | null; working_hours: string | null; photo_url: string | null; qr_code: string | null; city: string | null; district: string | null; pin_code: string | null }
   doctors: { practitioner_id: string; full_name: string; qualification: string | null; speciality: string | null; fee: number | null; reg_verified: boolean }[]
   rating: { average: number | null; count: number } | null

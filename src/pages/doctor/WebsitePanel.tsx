@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ExternalLink, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { ExternalLink, Plus, Trash2, ChevronDown, ChevronUp, Lock } from 'lucide-react'
+import { WA_NUMBER } from '../../types'
 import { supabase } from '../../lib/supabase'
 import Markdown from '../../site/Markdown'
 import type { L10n, SiteContent } from '../../site/siteData'
@@ -12,7 +13,7 @@ import { FONT_PAIRS, fontPair, loadFontPair } from '../../site/fonts'
 // RLS lets only the owner (or an admin) write; the tab is the owner's alone.
 
 interface SiteRow {
-  business_id: string; slug: string; custom_domain: string | null; is_live: boolean
+  business_id: string; slug: string; custom_domain: string | null; is_live: boolean; tier: 'free' | 'full'
   brand_color: string | null; logo_url: string | null; hero_image_url: string | null; content: SiteContent
 }
 interface ArticleRow {
@@ -42,7 +43,7 @@ export default function WebsitePanel({ businessId, businessName }: { businessId:
 
   const load = async () => {
     const [{ data: s, error: e1 }, { data: a, error: e2 }] = await Promise.all([
-      supabase.from('business_sites').select('business_id, slug, custom_domain, is_live, brand_color, logo_url, hero_image_url, content').eq('business_id', businessId).maybeSingle(),
+      supabase.from('business_sites').select('business_id, slug, custom_domain, is_live, tier, brand_color, logo_url, hero_image_url, content').eq('business_id', businessId).maybeSingle(),
       supabase.from('site_articles').select('id, slug, lang, title, summary, body, image_url, author, read_minutes, published_on, is_published').eq('business_id', businessId).order('published_on', { ascending: false, nullsFirst: true }),
     ])
     if (e1 || e2) { setErr((e1 ?? e2)!.message); setSite(null); return }
@@ -56,7 +57,9 @@ export default function WebsitePanel({ businessId, businessName }: { businessId:
   return (
     <div className="space-y-4">
       <SiteEditor businessId={businessId} site={site} onSaved={setSite} />
-      <Articles businessId={businessId} articles={articles} onChanged={load} siteUrl={siteUrl(site.slug)} />
+      {site.tier === 'full'
+        ? <Articles businessId={businessId} articles={articles} onChanged={load} siteUrl={siteUrl(site.slug)} />
+        : <div className="card shadow-sm"><h3 className="font-bold text-navy-700 flex items-center gap-2">Articles <PlanBadge /></h3><Upgrade /></div>}
     </div>
   )
 }
@@ -95,18 +98,30 @@ function CreateSite({ businessId, businessName, err: loadErr, onMade }: { busine
 
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
-function Section({ title, hint, open: startOpen = false, children }: { title: string; hint?: string; open?: boolean; children: ReactNode }) {
+// 0283: what the free page leaves out, offered with the own name plan.
+const upgradeLink = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('I want the own name plan for my website')}`
+const PlanBadge = () => <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 rounded-full px-2 py-0.5"><Lock className="w-3 h-3" /> Own name plan</span>
+const Upgrade = () => (
+  <p className="text-sm text-gray-600 mt-1">
+    The free page shows your basics. The own name plan (₹1,000 a month) adds this and the full website on your own domain, with booking,
+    patient login and reports on it. <a href={upgradeLink} target="_blank" rel="noreferrer" className="text-teal-700 font-semibold">Ask us on WhatsApp →</a>
+  </p>
+)
+
+function Section({ title, hint, open: startOpen = false, locked = false, children }: { title: string; hint?: string; open?: boolean; locked?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(startOpen)
   return (
     <div className="border border-gray-100 rounded-xl">
       <button type="button" onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-4 py-3 text-left">
         <span>
-          <span className="font-semibold text-navy-700">{title}</span>
+          <span className="font-semibold text-navy-700 inline-flex items-center gap-2">{title}{locked && <PlanBadge />}</span>
           {hint && <span className="block text-xs text-gray-500">{hint}</span>}
         </span>
         {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
       </button>
-      {open && <div className="px-4 pb-4 space-y-3">{children}</div>}
+      {open && (locked
+        ? <div className="px-4 pb-4 space-y-3"><Upgrade /><fieldset disabled className="space-y-3 opacity-50 pointer-events-none">{children}</fieldset></div>
+        : <div className="px-4 pb-4 space-y-3">{children}</div>)}
     </div>
   )
 }
@@ -211,6 +226,7 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
   const c = s.content ?? {}
   const setC = (patch: Partial<SiteContent>) => setS(x => ({ ...x, content: { ...x.content, ...patch } }))
   const dirty = JSON.stringify(s) !== JSON.stringify(site)
+  const free = site.tier !== 'full'
 
   const save = async () => {
     if (!SLUG_RE.test(s.slug)) { setMsg({ ok: false, text: 'The address takes 3–50 small letters, numbers and dashes.' }); return }
@@ -266,7 +282,9 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
             <input type="color" value={s.brand_color ?? '#0f4c5c'} onChange={e => setS({ ...s, brand_color: e.target.value })} className="w-10 h-8 cursor-pointer" />
           </div>
         </div>
-        <FontPick value={c.font} onChange={k => setC({ font: k })} />
+        {free
+          ? <div><Label>Font style</Label><p className="text-sm text-gray-600 flex items-center gap-2 flex-wrap">Elegant <PlanBadge /> Choose from four styles on the own name plan.</p></div>
+          : <FontPick value={c.font} onChange={k => setC({ font: k })} />}
         <div className="grid sm:grid-cols-2 gap-4">
           <ImagePick businessId={businessId} label="Logo" name="logo" url={s.logo_url} onChange={u => setS({ ...s, logo_url: u })} />
           <ImagePick businessId={businessId} label="Main photo (top of the home page)" name="hero" url={s.hero_image_url} wide onChange={u => setS({ ...s, hero_image_url: u })} />
@@ -277,15 +295,15 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
         <Bi label="Small line above the heading" value={c.kicker} onChange={v => setC({ kicker: v })} />
         <Bi label="Heading" value={c.tagline} onChange={v => setC({ tagline: v })} />
         <Bi label="Introduction" value={c.intro} rows={3} onChange={v => setC({ intro: v })} />
-        <Label>Figures (e.g. 15+ / Years of practice)</Label>
-        <Rows items={c.highlights ?? []} add="Add a figure" blank={() => ({ value: '', label: {} })} onChange={v => setC({ highlights: v })}
+        <Label>Figures (e.g. 15+ / Years of practice) {free && <PlanBadge />}</Label>
+        {!free && <Rows items={c.highlights ?? []} add="Add a figure" blank={() => ({ value: '', label: {} })} onChange={v => setC({ highlights: v })}
           render={(h, set) => (<>
             <Text label="Figure" value={h.value} onChange={x => set({ ...h, value: x })} placeholder="15+" />
             <Bi label="What it is" value={h.label} onChange={x => set({ ...h, label: x })} />
-          </>)} />
+          </>)} />}
       </Section>
 
-      <Section title="Lead doctor" hint="The doctor the site is about. Fees and other doctors come from Doctors.">
+      <Section locked={free} title="Lead doctor" hint="The doctor the site is about. Fees and other doctors come from Doctors.">
         <Text label="Name" value={doc.name} onChange={v => setDoc({ name: v })} placeholder="Dr. …" />
         <Bi label="Role" value={doc.role} onChange={v => setDoc({ role: v })} />
         <Bi label="Qualifications" value={doc.qualification} onChange={v => setDoc({ qualification: v })} />
@@ -302,7 +320,7 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
           )} />
       </Section>
 
-      <Section title="Treatments" hint="Featured ones show on the home page; all on Services">
+      <Section locked={free} title="Treatments" hint="Featured ones show on the home page; all on Services">
         <Bi label="Section heading" value={c.treatments_title} onChange={v => setC({ treatments_title: v })} />
         <Bi label="Section introduction" value={c.treatments_intro} rows={2} onChange={v => setC({ treatments_intro: v })} />
         <Rows items={c.treatments ?? []} add="Add a treatment" blank={() => ({ slug: '', title: {}, featured: true })} onChange={v => setC({ treatments: v })}
@@ -314,7 +332,7 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
           </>)} />
       </Section>
 
-      <Section title="Equipment">
+      <Section locked={free} title="Equipment">
         <Bi label="Section heading" value={tech.title} onChange={v => setC({ technology: { ...tech, title: v } })} />
         <Bi label="Introduction" value={tech.intro} rows={2} onChange={v => setC({ technology: { ...tech, intro: v } })} />
         <Rows<NonNullable<SiteContent['technology']>['items'][number]> items={tech.items} add="Add equipment" blank={() => ({ name: {} })} onChange={v => setC({ technology: { ...tech, items: v } })}
@@ -324,7 +342,7 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
           </>)} />
       </Section>
 
-      <Section title="What patients say" hint="Shown with your Sehatsandhi reviews">
+      <Section locked={free} title="What patients say" hint="Shown with your Sehatsandhi reviews">
         <Rows<NonNullable<SiteContent['testimonials']>[number]> items={c.testimonials ?? []} add="Add a testimonial" blank={() => ({ text: '', name: '' })} onChange={v => setC({ testimonials: v })}
           render={(t, set) => (<>
             <label className="block"><Label>What they said</Label>
@@ -337,7 +355,7 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
           </>)} />
       </Section>
 
-      <Section title="Insurance">
+      <Section locked={free} title="Insurance">
         <Bi label="Section heading" value={ins.title} onChange={v => setC({ insurance: { ...ins, title: v } })} />
         <Bi label="Introduction" value={ins.intro} rows={2} onChange={v => setC({ insurance: { ...ins, intro: v } })} />
         <label className="block"><Label>Insurers and TPAs, one per line</Label>
@@ -346,19 +364,20 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
         <Bi label="Note below the list" value={ins.note} rows={2} onChange={v => setC({ insurance: { ...ins, note: v } })} />
       </Section>
 
-      <Section title="Visit us and social links" hint="Phone and hours here replace the listing's on the website">
+      <Section title={free ? "Visit us" : "Visit us and social links"} hint="Phone and hours here replace the listing's on the website">
         <Text label="Phone" value={visit.phone} onChange={v => setC({ visit: { ...visit, phone: v } })} placeholder="+91 …" />
         <Bi label="Address" value={visit.address} rows={2} onChange={v => setC({ visit: { ...visit, address: v } })} />
         <Label>Hours, one line each</Label>
         <Rows items={visit.hours ?? []} add="Add a line" blank={() => ({})} onChange={v => setC({ visit: { ...visit, hours: v } })}
           render={(h, set) => <Bi label="" value={h} onChange={set} />} />
         <ImagePick businessId={businessId} label="Photo of the building" name="visit" url={visit.photo_url} wide onChange={u => setC({ visit: { ...visit, photo_url: u ?? undefined } })} />
-        <div className="grid sm:grid-cols-2 gap-2">
+        {free && <Label>Social links <PlanBadge /></Label>}
+        <fieldset disabled={free} className={`grid sm:grid-cols-2 gap-2 ${free ? 'opacity-50' : ''}`}>
           {(['google', 'facebook', 'instagram', 'youtube', 'justdial'] as const).map(k => (
             <Text key={k} label={k[0].toUpperCase() + k.slice(1) + ' link'} value={social[k]} placeholder="https://…"
               onChange={v => setC({ social: { ...social, [k]: v || undefined } })} />
           ))}
-        </div>
+        </fieldset>
       </Section>
 
       <div className="flex items-center gap-3 flex-wrap sticky bottom-0 bg-white py-2">
