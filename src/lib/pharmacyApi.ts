@@ -33,6 +33,8 @@ export interface PharmacyItem {
   business_id: string
   name: string
   generic_name: string | null
+  /** 0285: the company that makes it — chosen by in the stock report. */
+  manufacturer?: string | null
   strength: string | null
   form: string | null
   unit: string
@@ -500,4 +502,30 @@ export function matchItem(stock: StockRow[], drugName: string, strength?: string
   const st = (strength ?? '').toLowerCase().replace(/\s/g, '')
   return pool.find(s => st && (s.strength ?? '').toLowerCase().replace(/\s/g, '') === st)
     ?? pool.find(s => s.qty_available > 0) ?? pool[0]
+}
+
+// ── 0285: the stock report — register, stock added, dispensed ──────────────
+
+export interface StockRegisterRow {
+  item_id: string; name: string; generic: string | null; strength: string | null; company: string | null; unit: string
+  opening: number; received: number; dispensed: number; returned: number; adjusted: number; closing: number
+  in_hand: number; expired: number; next_expiry: string | null; value_cost: number; value_mrp: number; reorder: number
+}
+export interface StockAddedRow {
+  at: string; name: string; company: string | null; unit: string; batch: string | null; expiry: string | null; qty: number
+  unit_cost: number; unit_mrp: number; supplier: string | null; invoice: string | null; invoice_date: string | null; by: string | null
+}
+export interface DispensedRow {
+  at: string; bill_id: string; bill_no: string; patient: string; ipd: boolean; status: 'issued' | 'cancelled'
+  name: string; company: string | null; unit: string | null; batch: string | null
+  qty: number; returned: number; mrp: number; amount: number; net: number; by: string | null
+}
+export interface StockReport { companies: string[]; register: StockRegisterRow[]; added: StockAddedRow[]; dispensed: DispensedRow[] }
+
+export async function getStockReport(businessId: string, from: string, to: string, itemId?: string | null, company?: string | null): Promise<StockReport> {
+  const { data, error } = await supabase.rpc('sehat_pharmacy_stock_report', {
+    p_business: businessId, p_from: from, p_to: to, p_item: itemId || null, p_company: company || null,
+  })
+  oops(error)
+  return data as StockReport
 }
