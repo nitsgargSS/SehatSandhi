@@ -77,7 +77,7 @@ export default function SiteApp({ siteKey, base }: { siteKey: string; base: stri
       <Routes>
         <Route index element={<Home d={data} base={base} lang={lang} t={t} />} />
         {/* 0283: the free page is the home page alone. */}
-        {data.site.tier === 'full' ? <>
+        {data.site.tier !== 'free' ? <>
           <Route path="services" element={<Services d={data} lang={lang} t={t} />} />
           <Route path="about" element={<About d={data} lang={lang} t={t} />} />
           <Route path="posts" element={<Posts d={data} base={base} lang={lang} t={t} />} />
@@ -124,7 +124,7 @@ function BookButtons({ d, t, light = false }: { d: PublicSite; t: P['t']; light?
 
 function Header({ d, base, lang, t, onLang }: P & { onLang: () => void }) {
   const [open, setOpen] = useState(false)
-  const links: [string, UIKey][] = d.site.tier === 'full'
+  const links: [string, UIKey][] = d.site.tier !== 'free'
     ? [[`${base}/`, 'home'], [`${base}/services`, 'services'], [`${base}/about`, 'doctor'], [`${base}/posts`, 'insights'], [`${base}/#visit`, 'visit']]
     : [[`${base}/`, 'home'], [`${base}/#visit`, 'visit']]
   return (
@@ -539,7 +539,7 @@ function Footer({ d, lang, t }: P) {
       </Wrap>
       <Wrap style={{ marginTop: 18, fontSize: 12, color: 'var(--site-muted)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <span>© {new Date().getFullYear()} {d.business.name}</span>
-        {d.site.tier === 'full'
+        {d.site.tier !== 'free'
           ? <a href="https://www.sehatsandhi.com" style={{ color: 'var(--site-muted)' }}>{t('powered')} <b>Sehatsandhi</b></a>
           : <a href="https://www.sehatsandhi.com" style={{ color: 'var(--site-brand)', fontSize: 13.5, fontWeight: 600 }}>{t('listed')} <b>Sehatsandhi</b> — {t('findMore')} →</a>}
       </Wrap>
