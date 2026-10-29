@@ -101,7 +101,7 @@ const Kicker = ({ children }: { children: ReactNode }) =>
   <div style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--site-brand)', marginBottom: 10 }}>{children}</div>
 
 const H2 = ({ children }: { children: ReactNode }) =>
-  <h2 style={{ fontSize: 'clamp(26px,5vw,38px)', fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.15, margin: '0 0 14px' }}>{children}</h2>
+  <h2 style={{ fontSize: 'clamp(24px,3.2vw,32px)', fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.2, margin: '0 0 14px' }}>{children}</h2>
 
 // Doctors carry a speciality code (EYE, GYN…); the site prints its name.
 const specialityName = (code: string | null, lang: Lang) => {
@@ -129,15 +129,15 @@ function Header({ d, base, lang, t, onLang }: P & { onLang: () => void }) {
     : [[`${base}/`, 'home'], [`${base}/#visit`, 'visit']]
   return (
     <header style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(247,245,240,.94)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--site-line)' }}>
-      <Wrap style={{ display: 'flex', alignItems: 'center', gap: 16, height: 68 }}>
+      <Wrap style={{ display: 'flex', alignItems: 'center', gap: 16, height: 84 }}>
         <Link to={`${base}/`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', minWidth: 0 }}>
-          {d.site.logo_url && <img src={d.site.logo_url} alt="" style={{ height: 40, width: 'auto' }} />}
-          <span className="site-head" style={{ fontWeight: 800, fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.business.name}</span>
+          {d.site.logo_url && <img src={d.site.logo_url} alt="" className="site-logo" style={{ height: 58, width: 'auto' }} />}
+          <span className="site-head site-brandname" style={{ fontWeight: 800, fontSize: 24, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.business.name}</span>
         </Link>
         <nav className="site-nav" style={{ marginLeft: 'auto', display: 'flex', gap: 22 }}>
           {links.map(([to, k]) => to.includes('#')
-            ? <a key={k} href={to} style={{ color: 'var(--site-ink)', textDecoration: 'none', fontWeight: 600, fontSize: 14.5 }}>{t(k)}</a>
-            : <Link key={k} to={to} style={{ color: 'var(--site-ink)', textDecoration: 'none', fontWeight: 600, fontSize: 14.5 }}>{t(k)}</Link>)}
+            ? <a key={k} href={to} style={{ color: 'var(--site-ink)', textDecoration: 'none', fontWeight: 600, fontSize: 15.5 }}>{t(k)}</a>
+            : <Link key={k} to={to} style={{ color: 'var(--site-ink)', textDecoration: 'none', fontWeight: 600, fontSize: 15.5 }}>{t(k)}</Link>)}
         </nav>
         <button onClick={onLang} className="site-lang" aria-label="Language">{lang === 'en' ? 'हिंदी' : 'English'}</button>
         {telOf(d) && <a href={telOf(d)} className="site-btn site-call" style={{ padding: '9px 14px' }}><Phone size={16} /> <span className="site-hide-sm">{t('call')}</span></a>}
@@ -163,13 +163,13 @@ function Home({ d, base, lang, t }: P) {
   return (
     <main>
       {/* Hero */}
-      <section style={{ padding: 'clamp(40px,8vw,88px) 0 clamp(36px,6vw,64px)' }}>
+      <section style={{ padding: 'clamp(32px,5vw,64px) 0 clamp(32px,5vw,56px)' }}>
         <Wrap style={{ display: 'grid', gap: 40, alignItems: 'center' }} >
           <div className="site-hero">
             <div>
               {c.kicker && <Kicker>{tr(c.kicker, lang)}</Kicker>}
-              <h1 style={{ fontSize: 'clamp(34px,7vw,60px)', fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1.05, margin: '0 0 18px' }}>{tr(c.tagline, lang) || d.business.name}</h1>
-              {c.intro && <p style={{ fontSize: 'clamp(16px,2.6vw,19px)', color: 'var(--site-muted)', lineHeight: 1.6, margin: '0 0 26px', maxWidth: 560 }}>{tr(c.intro, lang)}</p>}
+              <h1 style={{ fontSize: 'clamp(28px,3.8vw,42px)', fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1.15, margin: '0 0 16px' }}>{tr(c.tagline, lang) || d.business.name}</h1>
+              {c.intro && <p style={{ fontSize: 'clamp(15.5px,1.6vw,17.5px)', color: 'var(--site-muted)', lineHeight: 1.65, margin: '0 0 26px', maxWidth: 560 }}>{tr(c.intro, lang)}</p>}
               <BookButtons d={d} t={t} />
               <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginTop: 22, fontSize: 14 }}>
                 {doc && <Link to={`${base}/about`} style={{ color: 'var(--site-brand)', fontWeight: 700, textDecoration: 'none' }}>{t('meet')} {doc.name} →</Link>}
@@ -193,7 +193,7 @@ function Home({ d, base, lang, t }: P) {
               <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
                 {(doc.avatar_url || doc.photo_url) && <img src={doc.avatar_url || doc.photo_url} alt={doc.name} style={{ width: 96, height: 96, borderRadius: 999, objectFit: 'cover', flex: '0 0 auto' }} />}
                 <div>
-                  <h2 style={{ fontSize: 28, fontWeight: 800, margin: '0 0 4px' }}>{doc.name}</h2>
+                  <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px' }}>{doc.name}</h2>
                   <div style={{ color: 'var(--site-muted)', fontSize: 14.5, marginBottom: 12 }}>{tr(doc.qualification, lang)}</div>
                   <p style={{ fontSize: 17, lineHeight: 1.6, margin: 0 }}>{tr(doc.summary, lang)}</p>
                   <Link to={`${base}/about`} style={{ display: 'inline-block', marginTop: 14, color: 'var(--site-brand)', fontWeight: 700, textDecoration: 'none' }}>{t('background')} →</Link>
@@ -212,7 +212,7 @@ function Home({ d, base, lang, t }: P) {
               <div className="site-stats">
                 {c.highlights.map(h => (
                   <div key={h.value + tr(h.label, 'en')}>
-                    <div className="site-head" style={{ fontSize: 'clamp(30px,6vw,44px)', fontWeight: 800, color: 'var(--site-brand)', letterSpacing: '-.02em' }}>{h.value}</div>
+                    <div className="site-head" style={{ fontSize: 'clamp(26px,3.4vw,36px)', fontWeight: 800, color: 'var(--site-brand)', letterSpacing: '-.02em' }}>{h.value}</div>
                     <div style={{ color: 'var(--site-muted)', fontSize: 14 }}>{tr(h.label, lang)}</div>
                   </div>
                 ))}
@@ -418,7 +418,7 @@ function Services({ d, lang, t }: P) {
     <main style={{ padding: 'clamp(40px,7vw,72px) 0' }}>
       <Wrap>
         <Kicker>{t('services')}</Kicker>
-        <h1 style={{ fontSize: 'clamp(32px,6vw,48px)', fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 14px' }}>{t('findCondition')}</h1>
+        <h1 style={{ fontSize: 'clamp(26px,3.6vw,38px)', fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 14px' }}>{t('findCondition')}</h1>
         {c.treatments_intro && <p style={{ fontSize: 18, color: 'var(--site-muted)', lineHeight: 1.6, maxWidth: 680 }}>{tr(c.treatments_intro, lang)}</p>}
         <div style={{ display: 'grid', gap: 14, marginTop: 28 }}>
           {(c.treatments ?? []).map((x, i) => (
@@ -452,14 +452,14 @@ function About({ d, lang, t }: P) {
         <div className="site-two" style={{ alignItems: 'start' }}>
           <div>
             <Kicker>{tr(doc.role, lang)}</Kicker>
-            <h1 style={{ fontSize: 'clamp(34px,6vw,52px)', fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 16px' }}>{doc.name}</h1>
+            <h1 style={{ fontSize: 'clamp(28px,3.8vw,40px)', fontWeight: 800, letterSpacing: '-.02em', margin: '0 0 16px' }}>{doc.name}</h1>
             <Markdown text={tr(doc.bio, lang)} />
           </div>
           {doc.photo_url && <img src={doc.photo_url} alt={doc.name} style={{ width: '100%', borderRadius: 20, objectFit: 'cover', maxHeight: 520 }} />}
         </div>
         {!!doc.training?.length && (
           <>
-            <h2 style={{ fontSize: 26, fontWeight: 800, margin: '44px 0 14px' }}>{t('training')}</h2>
+            <h2 style={{ fontSize: 24, fontWeight: 800, margin: '44px 0 14px' }}>{t('training')}</h2>
             <div className="site-grid3">
               {doc.training.map(f => (
                 <div key={f.title} className="site-card">
@@ -479,7 +479,7 @@ function About({ d, lang, t }: P) {
         )}
         {doc.team && (
           <div className="site-two" style={{ marginTop: 44, alignItems: 'center' }}>
-            <div><h2 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 10px' }}>{t('team')}</h2><p style={{ lineHeight: 1.65, fontSize: 17 }}>{tr(doc.team.text, lang)}</p></div>
+            <div><h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 10px' }}>{t('team')}</h2><p style={{ lineHeight: 1.65, fontSize: 17 }}>{tr(doc.team.text, lang)}</p></div>
             {doc.team.photo_url && <img src={doc.team.photo_url} alt="" style={{ width: '100%', borderRadius: 20, objectFit: 'cover', maxHeight: 380 }} />}
           </div>
         )}
@@ -493,7 +493,7 @@ function Posts({ d, base, lang, t }: P) {
     <main style={{ padding: 'clamp(40px,7vw,72px) 0' }}>
       <Wrap>
         <Kicker>{t('insights')}</Kicker>
-        <h1 style={{ fontSize: 'clamp(32px,6vw,48px)', fontWeight: 800, letterSpacing: '-.02em', margin: 0 }}>{t('written')}</h1>
+        <h1 style={{ fontSize: 'clamp(26px,3.6vw,38px)', fontWeight: 800, letterSpacing: '-.02em', margin: 0 }}>{t('written')}</h1>
         <ArticleGrid d={d} base={base!} lang={lang} t={t} />
       </Wrap>
     </main>
@@ -511,7 +511,7 @@ function Post({ siteKey, d, base, lang, t }: P & { siteKey: string }) {
     <main style={{ padding: 'clamp(40px,7vw,72px) 0' }}>
       <Wrap style={{ maxWidth: 760 }}>
         <Link to={`${base}/posts`} style={{ color: 'var(--site-brand)', fontWeight: 700, textDecoration: 'none', fontSize: 14 }}>← {t('insights')}</Link>
-        <h1 style={{ fontSize: 'clamp(30px,6vw,44px)', fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.15, margin: '14px 0 10px' }}>{a.title}</h1>
+        <h1 style={{ fontSize: 'clamp(26px,3.6vw,38px)', fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.2, margin: '14px 0 10px' }}>{a.title}</h1>
         <div style={{ color: 'var(--site-muted)', fontSize: 14, marginBottom: 26 }}>{[a.author, fmtDate(a.published_on, lang), a.read_minutes ? `${a.read_minutes} ${t('min')}` : ''].filter(Boolean).join(' · ')}</div>
         <Markdown text={a.body} />
         <div className="site-card" style={{ marginTop: 36 }}>
@@ -570,8 +570,8 @@ const SITE_CSS = `
 .site-drawer a { padding:12px 0; color:var(--site-ink); font-weight:700; text-decoration:none; border-bottom:1px solid var(--site-line); }
 .site-card { background:#fff; border:1px solid var(--site-line); border-radius:18px; padding:20px; }
 a.site-card:hover { border-color:var(--site-brand); }
-.site-hero { display:grid; grid-template-columns:1.1fr .9fr; gap:44px; align-items:center; }
-.site-hero-img { width:100%; aspect-ratio:4/5; object-fit:cover; border-radius:24px; }
+.site-hero { display:grid; grid-template-columns:1fr 1fr; gap:56px; align-items:center; }
+.site-hero-img { width:100%; aspect-ratio:1/1; max-height:500px; object-fit:cover; border-radius:24px; }
 .site-two { display:grid; grid-template-columns:1fr 1fr; gap:40px; }
 .site-grid4 { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; }
 .site-grid3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
@@ -593,6 +593,8 @@ a.site-card:hover { border-color:var(--site-brand); }
 }
 @media (max-width: 560px) {
   .site-grid3, .site-grid2 { grid-template-columns:1fr; }
+  .site-logo { height:44px !important; }
+  .site-brandname { font-size:18px !important; }
   .site-hide-sm { display:none; }
 }
 `
