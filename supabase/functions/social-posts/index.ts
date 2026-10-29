@@ -503,7 +503,10 @@ async function makePost(db: Db, businessId: string, date: string): Promise<{ id:
     if (!photo && draft.ai_picture) {
       // Shared per topic and speciality: an eye clinic's Diabetes Day picture
       // is not a heart clinic's.
-      photo = await aiPicture(db, `${topic?.title ?? draft.topic} ${biz.specialities[0] ?? ''}`, draft.ai_picture)
+      // Every picture maker failing (daily quotas) still leaves a post: the
+      // design's brand-colour backdrop.
+      try { photo = await aiPicture(db, `${topic?.title ?? draft.topic} ${biz.specialities[0] ?? ''}`, draft.ai_picture) }
+      catch (e) { console.warn(e instanceof Error ? e.message : e) }
       if (photo) photoSource = 'ai'
     }
     if (template === 'tips' && draft.points.length < 2) template = 'question'
