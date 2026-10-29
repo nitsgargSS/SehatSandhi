@@ -85,7 +85,7 @@ export interface LabOrder {
   patient_phone: string | null
   mrn: string | null
   visit_id: string | null
-  source: 'desk' | 'doctor' | 'app'
+  source: 'desk' | 'doctor' | 'app' | 'whatsapp' | 'referral'
   ordered_by_name: string | null
   referred_by: string | null
   collection: 'lab' | 'home'
@@ -107,6 +107,13 @@ export interface LabOrder {
   entered_count: number
   items: LabOrderItem[]
   latest_report: LabReportRef | null
+  /** 0288: when the lab took the order on — null for a doctor's or app order not yet accepted. */
+  accepted_at?: string | null
+  accepted_by_name?: string | null
+  /** 0290: sent by another business on Sehatsandhi. */
+  referral_from_name?: string | null
+  referral_payer?: 'patient' | 'hospital' | null
+  referral_amount?: number | null
 }
 
 export interface LabResult {
@@ -556,3 +563,113 @@ export async function setLabTests(businessId: string, categories: string[]): Pro
   return data as { lab_categories: string[]; lab_module: boolean }
 }
 
+
+/** 0288: the lab takes on an order a doctor (or a patient's app) placed. */
+export async function acceptOrder(orderId: string) {
+  const { error } = await supabase.rpc('sehat_lab_accept', { p_order: orderId })
+  oops(error)
+}
+
+/** 0288: reports signed for tests I ordered, not yet opened. */
+export interface ReportReady {
+  order_id: string
+  order_no: string
+  patient_member_id: string
+  patient_name: string
+  tests: string | null
+  approved_at: string
+  report_token: string
+  out_of_range: number
+}
+
+export async function getReportsReady(businessId: string): Promise<ReportReady[]> {
+  const { data, error } = await supabase.rpc('sehat_my_reports_ready', { p_business: businessId })
+  oops(error)
+  return (data ?? []) as ReportReady[]
+}
+
+export async function markReportSeen(orderId: string) {
+  const { error } = await supabase.rpc('sehat_lab_report_seen', { p_order: orderId })
+  oops(error)
+}
+
+// ── 0290: tests sent to another lab on Sehatsandhi ──────────────────────────
+
+export interface ReferralLab {
+  id: string
+  name: string
+  city: string | null
+  address: string | null
+  phone: string | null
+  categories: string[] | null
+  tests: number
+  same_city: boolean
+}
+
+export interface ReferralMenu {
+  tests: { id: string; name: string; category: LabCategory; department: string | null; price: number; tat_hours: number | null }[]
+  packages: { id: string; name: string; price: number }[]
+}
+
+export interface ReferredTest {
+  order_id: string
+  order_no: string
+  lab_id: string
+  lab_name: string
+  lab_phone: string | null
+  patient_member_id: string
+  patient_name: string
+  tests: string | null
+  status: OrderStatus
+  priority: 'routine' | 'urgent'
+  payer: 'patient' | 'hospital'
+  amount: number
+  ordered_by_name: string | null
+  note: string | null
+  created_at: string
+  accepted_at: string | null
+  collected_at: string | null
+  cancelled_reason: string | null
+  report_no: string | null
+  report_token: string | null
+  approved_at: string | null
+  out_of_range: number
+}
+
+/** Labs on Sehatsandhi that take orders. kind: 'pathology' or 'imaging' (scans and heart/lung tests). */
+export async function getReferralLabs(businessId: string, kind: 'pathology' | 'imaging' | null, query = ''): Promise<ReferralLab[]> {
+  const { data, error } = await supabase.rpc('sehat_referral_labs', { p_business: businessId, p_kind: kind, p_query: query.trim() || null })
+  oops(error)
+  return (data ?? []) as ReferralLab[]
+}
+
+export async function getReferralMenu(businessId: string, labId: string): Promise<ReferralMenu> {
+  const { data, error } = await supabase.rpc('sehat_referral_lab_menu', { p_business: businessId, p_lab: labId })
+  oops(error)
+  const m = data as ReferralMenu
+  return { tests: m.tests.map(t => ({ ...t, price: Number(t.price) })), packages: m.packages.map(p => ({ ...p, price: Number(p.price) })) }
+}
+
+export async function referTests(businessId: string, r: {
+  memberId: string; labId: string; testIds: string[]; packageIds: string[]
+  payer: 'patient' | 'hospital'; urgent: boolean; note: string; visitId?: string | null
+}): Promise<string> {
+  const { data, error } = await supabase.rpc('sehat_lab_refer', {
+    p_business: businessId, p_member: r.memberId, p_lab: r.labId, p_test_ids: r.testIds, p_package_ids: r.packageIds,
+    p_payer: r.payer, p_priority: r.urgent ? 'urgent' : 'routine', p_note: r.note.trim() || null, p_visit_id: r.visitId ?? null,
+  })
+  oops(error)
+  return data as string
+}
+
+export async function getReferredTests(businessId: string, memberId?: string): Promise<ReferredTest[]> {
+  const { data, error } = await supabase.rpc('sehat_referred_tests', { p_business: businessId, p_member: memberId ?? null })
+  oops(error)
+  return ((data ?? []) as ReferredTest[]).map(r => ({ ...r, amount: Number(r.amount ?? 0) }))
+}
+
+/** The hospital withdraws a referred order, or the lab declines it — before the sample is collected. */
+export async function withdrawReferral(orderId: string, reason: string) {
+  const { error } = await supabase.rpc('sehat_lab_referral_withdraw', { p_order: orderId, p_reason: reason })
+  oops(error)
+}

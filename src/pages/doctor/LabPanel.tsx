@@ -9,7 +9,7 @@ import {
   createOrder, getOrders, getOrder, markCollected, assignCollector, cancelOrder, getResults, getPreviousValues,
   saveResults, approveOrder, sendReport, rangeText, STATUS_LABEL,
   getFollowups, followupAction, getCrmSummary, getSegment, setRepeatDays, reminderLink,
-  getUploads, uploadReport, sendUpload, testVisible, CATEGORY_LABEL, DIAGNOSTIC_GROUPS,
+  getUploads, uploadReport, sendUpload, testVisible, CATEGORY_LABEL, DIAGNOSTIC_GROUPS, acceptOrder, withdrawReferral,
   type LabCategory,
   LabTest, LabPackage, LabOrder, LabParameter, OrderStatus, ParamKind, LabFollowup, CrmSummary, Segment, UploadedReport,
 } from '../../lib/labApi'
@@ -124,6 +124,8 @@ function OrderRow({ o, onOpen }: { o: LabOrder; onOpen: (id: string) => void }) 
         <b>{o.order_no}</b> · {o.patient_name}{o.patient_age != null ? ` · ${o.patient_age}y` : ''}
         {o.priority === 'urgent' && <span className="ml-2 text-xs font-bold text-red-600">URGENT</span>}
         {o.collection === 'home' && <span className="ml-2 text-xs font-bold text-teal-700">HOME</span>}
+        {o.status === 'ordered' && !o.accepted_at && <span className="ml-2 text-xs font-bold text-amber-700">NEW</span>}
+        {o.source === 'referral' && <span className="ml-2 text-xs font-bold text-indigo-700">FROM {o.referral_from_name?.toUpperCase() ?? 'HOSPITAL'}</span>}
         <span className="block text-xs text-gray-500">
           {o.items.map(i => i.name).join(', ')}
         </span>
@@ -136,10 +138,69 @@ function OrderRow({ o, onOpen }: { o: LabOrder; onOpen: (id: string) => void }) 
   )
 }
 
+// 0288: orders a doctor (or a patient's app) placed that the lab has not yet
+// taken on. Accept, or open it and collect the sample, which accepts it too.
+function NewOrders({ businessId, onOpen, onAccepted }: { businessId: string; onOpen: (id: string) => void; onAccepted: () => void }) {
+  const [orders, setOrders] = useState<LabOrder[]>([])
+  const [err, setErr] = useState('')
+  const load = useCallback(() => {
+    getOrders(businessId, { statuses: ['ordered'] }).then(os => setOrders(os.filter(o => !o.accepted_at))).catch(() => setOrders([]))
+  }, [businessId])
+  useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t) }, [load])
+  const accept = async (o: LabOrder) => {
+    setErr('')
+    try { await acceptOrder(o.id); load(); onAccepted() } catch (e) { setErr((e as Error).message) }
+  }
+  // 0290: a hospital's order the lab cannot take. The doctor who sent it is told why.
+  const [declining, setDeclining] = useState<{ id: string; why: string } | null>(null)
+  const decline = async () => {
+    if (!declining) return
+    setErr('')
+    try { await withdrawReferral(declining.id, declining.why.trim()); setDeclining(null); load(); onAccepted() } catch (e) { setErr((e as Error).message) }
+  }
+  if (!orders.length) return null
+  return (
+    <div className="card shadow-sm p-0 border-teal-300">
+      <p className="px-4 pt-3 font-semibold text-navy-700 text-sm">New orders to accept ({orders.length})</p>
+      <div className="divide-y">
+        {orders.map(o => (
+          <div key={o.id} className="px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+            <button onClick={() => onOpen(o.id)} className="text-left min-w-0">
+              <b>{o.order_no}</b> · {o.patient_name}
+              {o.priority === 'urgent' && <span className="ml-2 text-xs font-bold text-red-600">URGENT</span>}
+              {o.collection === 'home' && <span className="ml-2 text-xs font-bold text-teal-700">HOME</span>}
+              <span className="block text-xs text-gray-500">
+                {o.items.map(i => i.name).join(', ')} · {o.source === 'app' ? 'booked in the app'
+                  : o.source === 'referral' ? `sent by ${o.ordered_by_name ?? 'a doctor'} of ${o.referral_from_name ?? 'a hospital'} · ${o.referral_payer === 'hospital' ? 'the hospital pays' : 'the patient pays here'}`
+                  : `ordered by ${o.ordered_by_name ?? 'a doctor'}`} · {dt(o.created_at)}
+                {o.notes && <span className="block text-gray-600">Note: {o.notes}</span>}
+              </span>
+            </button>
+            <span className="flex gap-2">
+              <button onClick={() => accept(o)} className="btn-teal text-xs py-1.5 px-3 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Accept</button>
+              {o.source === 'referral' && <button onClick={() => setDeclining({ id: o.id, why: '' })} className="text-xs py-1.5 px-3 rounded-lg border border-gray-300 text-gray-600">Decline</button>}
+            </span>
+            {declining?.id === o.id && (
+              <div className="w-full flex gap-2">
+                <input className="input-field" autoFocus value={declining.why} onChange={e => setDeclining({ ...declining, why: e.target.value })}
+                  placeholder={`Why can't you take it? ${o.referral_from_name ?? 'The hospital'} will see this.`} />
+                <button className="btn-teal text-xs py-1.5 px-3" disabled={declining.why.trim().length < 3} onClick={decline}>Decline</button>
+                <button className="text-xs py-1.5 px-3 rounded-lg border border-gray-300" onClick={() => setDeclining(null)}>Keep</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {err && <p className="px-4 pb-3 text-sm text-red-600">{err}</p>}
+    </div>
+  )
+}
+
 function Queue({ businessId, onOpen }: { businessId: string; onOpen: (id: string) => void }) {
   const [filter, setFilter] = useState<QueueFilter>('active')
   const [orders, setOrders] = useState<LabOrder[] | null>(null)
   const [q, setQ] = useState('')
+  const [tick, setTick] = useState(0)
   useEffect(() => {
     const statuses: Record<QueueFilter, OrderStatus[] | undefined> = {
       active: ['ordered', 'collected', 'in_progress', 'ready'], ordered: ['ordered'],
@@ -148,11 +209,12 @@ function Queue({ businessId, onOpen }: { businessId: string; onOpen: (id: string
     setOrders(null)
     getOrders(businessId, { statuses: statuses[filter], since: filter === 'reported' || filter === 'all' ? new Date(Date.now() - 30 * 864e5).toISOString() : undefined })
       .then(setOrders).catch(() => setOrders([]))
-  }, [businessId, filter])
+  }, [businessId, filter, tick])
   const rows = (orders ?? []).filter(o => filter !== 'approve' || o.entered_count > 0)
     .filter(o => !q.trim() || `${o.order_no} ${o.patient_name} ${o.patient_phone ?? ''}`.toLowerCase().includes(q.trim().toLowerCase()))
   return (
     <div className="space-y-3">
+      <NewOrders businessId={businessId} onOpen={onOpen} onAccepted={() => setTick(t => t + 1)} />
       <div className="flex gap-1 flex-wrap">
         {([['active', 'All open'], ['ordered', 'To collect'], ['enter', 'Enter results'], ['approve', 'To approve'], ['reported', 'Reported (30 days)'], ['all', 'Everything (30 days)']] as [QueueFilter, string][])
           .map(([f, l]) => <button key={f} onClick={() => setFilter(f)} className={pill(filter === f)}>{l}</button>)}

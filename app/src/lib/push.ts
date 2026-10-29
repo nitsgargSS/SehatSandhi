@@ -65,5 +65,7 @@ export function routeFor(data: Record<string, unknown> | undefined): string | nu
   if (kind === 'medicine_order' && typeof data?.order_id === 'string') return `/order/${data.order_id}`
   if (kind === 'ambulance' && typeof data?.request_id === 'string') return `/trip/${data.request_id}`
   if (kind === 'insurance_lead' && typeof data?.lead_id === 'string') return `/lead/${data.lead_id}`
+  // 0288: a new test order for the lab, and a signed report back to the doctor who ordered it.
+  if ((kind === 'lab_order' || kind === 'lab_report') && typeof data?.order_id === 'string') return `/laborder/${data.order_id}`
   return kind === 'queue' || kind === 'appointment' ? '/queue' : null
 }

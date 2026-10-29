@@ -11,7 +11,7 @@ import {
   getDues, getBillsByIds, getStockMoves, Due, StockMove, PAYMENT_STATUS, payMethodLabel,
   StockRow, Batch, PharmacyBill, Purchase, RxForDispensing, PharmacySummary, PharmacySettings,
   PharmacyItem, PharmacyPayMethod, PurchaseLine, PAY_METHODS, GST_RATES,
-  getStockReport, StockReport,
+  getStockReport, StockReport, getWaitingPrescriptions, markPrescription, WaitingRx,
 } from '../../lib/pharmacyApi'
 import { phoneProblem } from '../../lib/credentials'
 import PhoneError from '../../components/PhoneError'
@@ -147,6 +147,16 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
   const [rxs, setRxs] = useState<RxForDispensing[]>([])
   const [rxId, setRxId] = useState<string | null>(null)
   const [unmatched, setUnmatched] = useState<string[]>([])
+  // 0288: OPD prescriptions that have come to the pharmacy, and the one chosen
+  // from that list (filled in once the patient's prescriptions have loaded).
+  const [waiting, setWaiting] = useState<WaitingRx[]>([])
+  const [pendingRx, setPendingRx] = useState<string | null>(null)
+  const reloadWaiting = useCallback(() => { getWaitingPrescriptions(businessId).then(setWaiting).catch(() => setWaiting([])) }, [businessId])
+  useEffect(() => {
+    reloadWaiting()
+    const t = setInterval(reloadWaiting, 60000)
+    return () => clearInterval(t)
+  }, [reloadWaiting])
   const [walkName, setWalkName] = useState('')
   const [walkPhone, setWalkPhone] = useState('')
   const [lines, setLines] = useState<Line[]>([])
@@ -189,6 +199,23 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
     setLines(next); setUnmatched(missing)
   }
 
+  useEffect(() => {
+    if (!pendingRx) return
+    const rx = rxs.find(r => r.prescription_id === pendingRx)
+    if (rx) { fromRx(rx); setPendingRx(null) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rxs, pendingRx])
+
+  const dispenseWaiting = (w: WaitingRx) => {
+    setMode('patient')
+    setPatient({ patient_member_id: w.patient_member_id, business_id: businessId, full_name: w.patient_name, relation: 'self',
+                 phone: w.phone ?? '', age_years: null, gender: null, mrn: w.mrn, last_seen_at: null, visit_count: 0 })
+    setPendingRx(w.prescription_id)
+  }
+  const notNeeded = async (w: WaitingRx) => {
+    try { await markPrescription(w.prescription_id, 'not_needed'); reloadWaiting() } catch (e) { setErr((e as Error).message) }
+  }
+
   const discount = Math.min(Math.max(Number(pct) || 0, 0), 100)
   const gross = lines.reduce((s, l) => s + l.qty * (l.item.unit_mrp ?? 0), 0)
   const estimate = Math.round(gross * (100 - discount) / 100)
@@ -218,7 +245,7 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
         payment: { amount: Number(pay) || 0, method, reference: ref },
       })
       printBill(id)
-      reset(); onSold()
+      reset(); onSold(); reloadWaiting()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -233,6 +260,27 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
   }
 
   return (
+    <div className="space-y-4">
+    {!patient && waiting.length > 0 && (
+      <div className="card shadow-sm space-y-2 border-teal-200">
+        <p className="font-semibold text-navy-700 text-sm">Prescriptions waiting ({waiting.length})</p>
+        <div className="divide-y">
+          {waiting.map(w => (
+            <div key={w.prescription_id} className="py-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="min-w-0">
+                <b>{w.patient_name}</b>{w.mrn ? ` · ${w.mrn}` : ''} · {w.prescription_no} · {shortDate(w.issued_at)} · {w.prescriber_name}
+                <span className="block text-xs text-gray-500">{w.items.map(i => [i.drug_name, i.strength].filter(Boolean).join(' ')).join(', ')}</span>
+              </span>
+              <span className="flex gap-2">
+                <button onClick={() => dispenseWaiting(w)} className="btn-teal text-xs py-1.5 px-3">Dispense</button>
+                <button onClick={() => notNeeded(w)} className="text-xs py-1.5 px-3 rounded-lg border border-gray-300 text-gray-600"
+                  title="The patient is buying these elsewhere">Not needed</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
     <div className="card shadow-sm space-y-4">
       <div className="flex gap-2">
         {(['patient', 'walkin'] as const).map(m => (
@@ -375,6 +423,7 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
           <Printer className="w-4 h-4" /> {busy ? 'Saving…' : 'Issue bill & print'}
         </button>
       </div>
+    </div>
     </div>
   )
 }

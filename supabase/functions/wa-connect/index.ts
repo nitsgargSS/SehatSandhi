@@ -243,7 +243,7 @@ async function createTemplates(db: Any, businessId: string, wabaId: string, toke
  * left out: ours have their own approved wording.
  */
 const HOUSE_NAMES = new Set(['welcome_patient', 'visit_summary', 'follow_up_reminder', 'follow_up_due',
-  'prescription_link', 'bill_link', 'lab_report_link', 'discharge_link'])
+  'prescription_link', 'bill_link', 'lab_report_link', 'discharge_link', 'surgery_reminder', 'surgery_aftercare'])
 
 async function houseTemplates(req: Request, body: Any) {
   const who = caller(req)

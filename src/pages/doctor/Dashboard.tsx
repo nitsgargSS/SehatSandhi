@@ -26,6 +26,9 @@ import WhatsAppPanel from './WhatsAppPanel'
 import PayListingPanel from './PayListingPanel'
 import { MyPractice, DoctorsOverview, OpdFee } from './DoctorWorkspace'
 import LetterheadSettings from './LetterheadSettings'
+import AbdmSettings from './AbdmSettings'
+import SurgeryMessagePlans from './SurgeryMessagePlans'
+import PartnerLedger from './PartnerLedger'
 import ClinicQrCard from './ClinicQrCard'
 import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
 import PublicProfileEditor from './PublicProfileEditor'
@@ -2183,6 +2186,27 @@ export default function DoctorDashboard() {
                 <LetterheadSettings businessId={doctor.id}
                   current={(doctor as typeof doctor & { letterhead_url?: string | null }).letterhead_url ?? null}
                   onSaved={url => setDoctor(d => d ? ({ ...d, letterhead_url: url } as typeof d) : d)} />
+              </Fold>
+            )}
+            {/* 0289: the messages a patient gets before and after a planned surgery. */}
+            {doctor && emr && (access.opd || access.ipd) && (
+              <Fold ownCard title="Surgery messages" summary="before and after an operation, sent by themselves">
+                <SurgeryMessagePlans businessId={doctor.id} isOwner={isOwner}
+                  canEdit={!role.enforced || ['owner', 'manager', 'doctor'].includes(role.role ?? '')} />
+              </Fold>
+            )}
+            {/* 0291: settling up with partner labs (or, for a lab, the hospitals that send it tests). */}
+            {doctor && emr && (myVertical === 'lab' || myVertical === 'clinic' || myVertical === 'hospital')
+              && (!role.enforced || ['owner', 'manager'].includes(role.role ?? '')) && (
+              <Fold ownCard title={myVertical === 'lab' ? 'Partner hospitals' : 'Partner labs'}
+                summary={myVertical === 'lab' ? 'terms, ledger and statements with hospitals that send you tests' : 'terms, ledger and statements with labs you send tests to'}>
+                <PartnerLedger businessId={doctor.id} isLab={myVertical === 'lab'} />
+              </Fold>
+            )}
+            {/* 0287: ABDM IDs, once an admin has switched ABDM on for this clinic. */}
+            {doctor && (doctor as typeof doctor & { abdm_enabled?: boolean }).abdm_enabled && (
+              <Fold ownCard title="ABDM (health IDs)" summary={(doctor as typeof doctor & { hfr_id?: string | null }).hfr_id ? 'facility ID set ✓' : 'facility ID not set'}>
+                <AbdmSettings businessId={doctor.id} canEdit={isOwner || role.role === 'manager'} />
               </Fold>
             )}
             {/* The doctors who work here. Shown for clinics too now: the roster

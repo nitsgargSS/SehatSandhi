@@ -86,11 +86,14 @@ const OWN_TEMPLATE: Record<string, string> = {
   AISENSY_APPOINTMENT_CAMPAIGN: 'appointment_update', AISENSY_RATING_CAMPAIGN: 'rating_request:hi',
   AISENSY_WELCOME_CAMPAIGN: 'welcome_patient', AISENSY_VISIT_SUMMARY_CAMPAIGN: 'visit_summary',
   AISENSY_FOLLOW_UP_CAMPAIGN: 'follow_up_reminder',
+  AISENSY_SURGERY_REMINDER_CAMPAIGN: 'surgery_reminder', AISENSY_SURGERY_AFTERCARE_CAMPAIGN: 'surgery_aftercare',
 }
 
 const AUTO_TEMPLATE: Record<string, string> = {
   AISENSY_WELCOME_CAMPAIGN: 'welcome_patient', AISENSY_VISIT_SUMMARY_CAMPAIGN: 'visit_summary',
   AISENSY_FOLLOW_UP_CAMPAIGN: 'follow_up_reminder',
+  // 0289: before and after a planned surgery, in the hospital's own words.
+  AISENSY_SURGERY_REMINDER_CAMPAIGN: 'surgery_reminder', AISENSY_SURGERY_AFTERCARE_CAMPAIGN: 'surgery_aftercare',
   // 0280: billing notices to a business (_shared/billingTemplates.ts). Meta only.
   AISENSY_PLAN_RENEWAL_CAMPAIGN: 'plan_renewal_reminder', AISENSY_PLAN_AUTO_DEBIT_CAMPAIGN: 'plan_auto_debit_notice',
   AISENSY_PLAN_CHANGE_CAMPAIGN: 'plan_change_notice',

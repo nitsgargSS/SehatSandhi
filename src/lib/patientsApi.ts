@@ -48,6 +48,10 @@ export interface PatientSummary {
   date_of_birth: string | null
   blood_group: string | null
   abha_number: string | null
+  /** 0287 */
+  abha_address?: string | null
+  /** 0287: set when ABDM itself confirmed the ABHA; typed in by staff is null. */
+  abha_verified_at?: string | null
   phone: string
   lang: string | null
   pin_code: string | null
