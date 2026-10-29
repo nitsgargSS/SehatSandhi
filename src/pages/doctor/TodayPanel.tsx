@@ -5,6 +5,7 @@ import { issueToken } from '../../lib/queueApi'
 import { setAppointmentStatus } from '../../lib/appointmentApi'
 import DeskBooking from './DeskBooking'
 import ReportsReady from './ReportsReady'
+import UpcomingSurgeries from './UpcomingSurgeries'
 
 // 0265: the Today tab — what needs attention right now, from sehat_today.
 //
@@ -74,6 +75,7 @@ export default function TodayPanel({ businessId, booksAppointments, onGoTo, onOp
   return (
     <div className="space-y-4">
       <ReportsReady businessId={businessId} onOpenPatient={onOpenPatient} />
+      <UpcomingSurgeries businessId={businessId} onOpenPatient={onOpenPatient} />
       {/* Only what is wrong. */}
       {!!d.alerts?.length && (
         <div className="space-y-2">

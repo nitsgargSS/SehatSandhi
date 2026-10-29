@@ -27,6 +27,7 @@ import PayListingPanel from './PayListingPanel'
 import { MyPractice, DoctorsOverview, OpdFee } from './DoctorWorkspace'
 import LetterheadSettings from './LetterheadSettings'
 import AbdmSettings from './AbdmSettings'
+import SurgeryMessagePlans from './SurgeryMessagePlans'
 import ClinicQrCard from './ClinicQrCard'
 import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
 import PublicProfileEditor from './PublicProfileEditor'
@@ -2184,6 +2185,13 @@ export default function DoctorDashboard() {
                 <LetterheadSettings businessId={doctor.id}
                   current={(doctor as typeof doctor & { letterhead_url?: string | null }).letterhead_url ?? null}
                   onSaved={url => setDoctor(d => d ? ({ ...d, letterhead_url: url } as typeof d) : d)} />
+              </Fold>
+            )}
+            {/* 0289: the messages a patient gets before and after a planned surgery. */}
+            {doctor && emr && (access.opd || access.ipd) && (
+              <Fold ownCard title="Surgery messages" summary="before and after an operation, sent by themselves">
+                <SurgeryMessagePlans businessId={doctor.id} isOwner={isOwner}
+                  canEdit={!role.enforced || ['owner', 'manager', 'doctor'].includes(role.role ?? '')} />
               </Fold>
             )}
             {/* 0287: ABDM IDs, once an admin has switched ABDM on for this clinic. */}

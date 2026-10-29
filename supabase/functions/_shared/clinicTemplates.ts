@@ -78,6 +78,20 @@ export const CLINIC_TEMPLATES: ClinicTemplate[] = [
     body: 'Hello {{1}}, {{2}} at {{3}} asked to see you again on {{4}}. Reply to this message to book a time, or call the clinic.',
     samples: ['Sunita Devi', 'Dr. Anita Verma', 'Family Health Clinic', 'Mon 3 Nov'],
   },
+  // 0289: before and after a planned surgery. {{5}} is the hospital's own
+  // instruction for that day, sent as one line.
+  {
+    name: 'surgery_reminder', language: 'en', category: 'UTILITY',
+    body: 'Hello {{1}}, this is {{2}} about your {{3}} planned for {{4}}. Instructions from your doctor: {{5}} Please reply to this message if you have any questions.',
+    samples: ['Sunita Devi', 'City Hospital', 'cataract surgery', 'Mon 3 Nov at 9:30 AM',
+              'Do not eat or drink anything after 10 pm tonight. Bring your reports and one attendant.'],
+  },
+  {
+    name: 'surgery_aftercare', language: 'en', category: 'UTILITY',
+    body: 'Hello {{1}}, this is {{2}} checking on you after your {{3}} on {{4}}. Care instructions from your doctor: {{5}} If anything worries you, please contact the hospital straight away.',
+    samples: ['Sunita Devi', 'City Hospital', 'cataract surgery', 'Mon 3 Nov',
+              'Use the eye drops four times a day and wear the eye shield at night. Do not rub the eye.'],
+  },
 ]
 
 /** The Graph API body that creates one of them. */

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, useCallback } from 'react'
 import StayMoney, { printMedicineSlip } from './StayMoney'
 import AbhaLine from './AbhaLine'
+import PlannedSurgeries from './PlannedSurgeries'
 import { SPECIALITIES } from '../../types'
 import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
@@ -45,7 +46,7 @@ import {
 import { getModuleAccess, getMyRole, isClinicalRole, mayPrescribe } from '../../lib/identityApi'
 import CounterInvoice from './CounterInvoice'
 import {
-  clinicalSearch, getSurgeries, recordSurgery, cancelSurgery, SOURCES, ANAESTHESIA,
+  clinicalSearch, getSurgeries, recordSurgery, cancelSurgery, SOURCES, ANAESTHESIA, markPlannedDone, type PlannedSurgery,
   ClinicalHit, RecordSource, OtType, Surgery, NewSurgery,
 } from '../../lib/surgeryApi'
 import { getLabSettings, getTests, getPackages, getOrders, createOrder, getUploads, STATUS_LABEL, LabTest, LabPackage, LabOrder, UploadedReport } from '../../lib/labApi'
@@ -1186,6 +1187,9 @@ function OperationsPane({ memberId, businessId, stays }: { memberId: string; bus
   const [err, setErr] = useState('')
   const [cancelling, setCancelling] = useState<string | null>(null)
   const [why, setWhy] = useState('')
+  // 0289: the planned surgery this record is being made from, if any.
+  const [fromPlan, setFromPlan] = useState<string | null>(null)
+  const [planTick, setPlanTick] = useState(0)
   const doctors = useDoctors(businessId)
   const load = useCallback(() => { getSurgeries(memberId, businessId).then(setList) }, [memberId, businessId])
   useEffect(load, [load])
@@ -1198,12 +1202,27 @@ function OperationsPane({ memberId, businessId, stays }: { memberId: string; bus
   )
   const save = async () => {
     setBusy(true); setErr('')
-    try { await recordSurgery(memberId, businessId, f); setAdding(false); setF(blankSurgery()); load() }
+    try {
+      const id = await recordSurgery(memberId, businessId, f)
+      if (fromPlan) await markPlannedDone(fromPlan, id)
+      setAdding(false); setF(blankSurgery()); setFromPlan(null); setPlanTick(t => t + 1); load()
+    }
     catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  const recordFromPlan = (p: PlannedSurgery) => {
+    const base = blankSurgery()
+    setF({ ...base, procedure_name: p.procedure_name, ot_type: p.ot_type, admission_id: p.admission_id,
+           // The planned day once it has come; today if it was done early.
+           performed_on: p.planned_on <= base.performed_on ? p.planned_on : base.performed_on,
+           surgeon_id: p.surgeon_id, surgeon_name: p.surgeon_id ? null : p.surgeon_name,
+           start_time: p.planned_time?.slice(0, 5) ?? null })
+    setFromPlan(p.id); setAdding(true)
   }
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      <PlannedSurgeries businessId={businessId} memberId={memberId} stays={stays} doctors={doctors}
+        onRecord={recordFromPlan} refreshKey={planTick} />
       {!adding && (
         <div><button style={btn(true)} onClick={() => {
           const open = stays.find(s => s.status === 'admitted')
@@ -1269,7 +1288,7 @@ function OperationsPane({ memberId, businessId, stays }: { memberId: string; bus
           <div style={{ display: 'flex', gap: 8 }}>
             <button style={btn(true)} disabled={busy || f.procedure_name.trim().length < 3 || !f.performed_on} onClick={save}>
               {busy ? 'Saving…' : 'Save operation'}</button>
-            <button style={btn()} onClick={() => setAdding(false)}>Cancel</button>
+            <button style={btn()} onClick={() => { setAdding(false); setFromPlan(null) }}>Cancel</button>
           </div>
         </div>
       )}
