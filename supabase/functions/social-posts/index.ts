@@ -186,7 +186,9 @@ async function loadBusiness(db: Db, id: string, focus: string[]): Promise<Busine
   const specialities = focus.length ? focus : [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
 
   return {
-    id, name: b.name, phone: showPhone(b.phone), city: b.own_city, hours: shortHours(b.working_hours),
+    // The number on the business's website (Website → Visit), which is the one
+    // patients should call; the listing's phone can be a doctor's own.
+    id, name: b.name, phone: showPhone(typeof c.visit?.phone === 'string' && c.visit.phone.trim() ? c.visit.phone : b.phone), city: b.own_city, hours: shortHours(b.working_hours),
     website: site ? (site.custom_domain ?? `sehatsandhi.com/s/${site.slug}`) : null,
     brand: site?.brand_color ?? null, logo: site?.logo_url ?? null,
     tagline: c.tagline?.en ?? null,
