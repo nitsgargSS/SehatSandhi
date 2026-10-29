@@ -25,6 +25,7 @@ import TypePricingCard from './TypePricingCard'
 import AddonPricingCard from './AddonPricingCard'
 import { IS_STAGING } from '../../lib/env'
 import { adminPricing } from '../../lib/businessApi'
+import WebsiteTierSwitch from './WebsiteTierSwitch'
 import PharmacySwitch from './PharmacySwitch'
 import LabSwitch from './LabSwitch'
 import { listBroadcastsForReview } from '../../lib/marketingApi'
@@ -1051,6 +1052,7 @@ export default function AdminDashboard() {
                         {d.vertical !== 'lab' && <LabSwitch businessId={d.id} on={!!d.lab_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, lab_module: on } : x))} />}
                         <FreeAddons businessId={d.id} vertical={d.vertical} canChange={!isManager} />
+                        <WebsiteTierSwitch businessId={d.id} canChange={!isManager} />
                       </div>
                     )}
                   </div>
@@ -1127,6 +1129,7 @@ export default function AdminDashboard() {
                         {d.vertical !== 'lab' && <LabSwitch businessId={d.id} on={!!d.lab_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, lab_module: on } : x))} />}
                         <FreeAddons businessId={d.id} vertical={d.vertical} canChange={!isManager} />
+                        <WebsiteTierSwitch businessId={d.id} canChange={!isManager} />
                           </div>
                         </td>
                       </tr>

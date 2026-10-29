@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package, Ambulance, ShieldCheck } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package, Ambulance, ShieldCheck, Globe } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -29,6 +29,7 @@ import LetterheadSettings from './LetterheadSettings'
 import ClinicQrCard from './ClinicQrCard'
 import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
 import PublicProfileEditor from './PublicProfileEditor'
+import WebsitePanel from './WebsitePanel'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
@@ -138,8 +139,8 @@ export default function DoctorDashboard() {
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
   // 0280: a billing message links straight to ?tab=plan.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages'>(
-    () => (['plan', 'whatsapp', 'bills'].includes(new URLSearchParams(window.location.search).get('tab') ?? '')
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages' | 'website'>(
+    () => (['plan', 'whatsapp', 'bills', 'website'].includes(new URLSearchParams(window.location.search).get('tab') ?? '')
       ? new URLSearchParams(window.location.search).get('tab') as 'plan' : 'today'))
 
   // What this login is at this business, and whether the database has a role
@@ -1163,6 +1164,8 @@ export default function DoctorDashboard() {
       ...(isOwner ? [
         { id: 'plan', label: 'Plan', icon: <Star className="w-4 h-4" /> },
         { id: 'whatsapp', label: 'WhatsApp', icon: <MessageCircle className="w-4 h-4" /> },
+        // 0282: the business's own website — the owner's, as RLS has it.
+        { id: 'website', label: 'Website', icon: <Globe className="w-4 h-4" /> },
       ] : []),
     ] : []),
     // Reports sits with the clinicians, not the business cluster. How the
@@ -1953,6 +1956,10 @@ export default function DoctorDashboard() {
         {tab === 'whatsapp' && doctor && (
           <WhatsAppPanel businessId={doctor.id} businessName={doctor.name} business={doctor}
             prefill={{ name: doctor.name, email: doctor.email ?? undefined, contact: doctor.phone ?? undefined }} />
+        )}
+
+        {tab === 'website' && doctor && (
+          <WebsitePanel businessId={doctor.id} businessName={doctor.name} />
         )}
 
         {tab === 'bills' && (
