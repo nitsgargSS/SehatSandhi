@@ -24,6 +24,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
+import { isServiceAuth } from '../_shared/serviceKey.ts'
 
 const BUCKET = 'patient-documents'
 // A cron tick, not a backlog drain. Bounded so one run cannot spend minutes
@@ -46,7 +47,7 @@ Deno.serve(async (req) => {
 
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const auth = req.headers.get('Authorization') ?? ''
-  if (!auth.includes(serviceKey)) return json({ error: 'unauthorised' }, 401)
+  if (!isServiceAuth(auth)) return json({ error: 'unauthorised' }, 401)
 
   let dryRun = false
   try {

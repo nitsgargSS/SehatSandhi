@@ -28,6 +28,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { sendStaffInvite } from '../_shared/staffInvite.ts'
 import { ADMIN_EMAIL, type Email, emailConfigured, esc, layout, sendEmail, type SendResult } from '../_shared/email.ts'
+import { isServiceAuth } from '../_shared/serviceKey.ts'
 
 const BATCH = 20
 const MAX_ATTEMPTS = 5
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
 
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const auth = req.headers.get('Authorization') ?? ''
-  if (auth !== `Bearer ${serviceKey}`) return json({ error: 'unauthorised' }, 401)
+  if (!isServiceAuth(auth)) return json({ error: 'unauthorised' }, 401)
 
   const db = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey)
   const site = (Deno.env.get('SITE_URL') ?? 'https://sehatsandhi.com').replace(/\/$/, '')

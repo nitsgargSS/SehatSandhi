@@ -23,6 +23,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { emailConfigured, esc, layout, sendEmail } from '../_shared/email.ts'
+import { isServiceAuth } from '../_shared/serviceKey.ts'
 
 const money = (n: number | null) =>
   `₹${Number(n ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -35,7 +36,7 @@ Deno.serve(async (req) => {
   // them. The anon key must never be able to trigger it.
   const auth = req.headers.get('Authorization') ?? ''
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  if (!auth.includes(serviceKey)) return json({ error: 'unauthorised' }, 401)
+  if (!isServiceAuth(auth)) return json({ error: 'unauthorised' }, 401)
 
   let token = ''
   try {

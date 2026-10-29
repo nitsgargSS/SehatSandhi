@@ -13,6 +13,7 @@
 // Service-role still works, for server-side resends and for cron.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { isServiceKey } from './serviceKey.ts'
 
 export interface Caller {
   /** RLS applies as the caller. Use this to READ the thing being acted on. */
@@ -43,7 +44,7 @@ export function caller(req: Request): Caller | null {
   if (!token) return null
 
   const asService = createClient(url, serviceKey)
-  if (token === serviceKey) {
+  if (isServiceKey(token)) {
     return { asCaller: asService, asService, isServiceRole: true }
   }
 
