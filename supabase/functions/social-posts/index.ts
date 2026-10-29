@@ -367,7 +367,7 @@ Fields:
 - badge: 1–4 words in a pill (e.g. "For clinics", "Doctor's tip"). icon: one icon from the list for the badge.
 - photo_index: -1.
 - ai_picture: ALWAYS fill this: a real-life scene in an Indian clinic or hospital that shows the problem or the relief: a calm reception desk, a doctor talking to a patient's family, a receptionist smiling at a patient, an evening clinic with few people waiting. Never screens facing the viewer, documents, writing, logos, needles, blood or anyone in pain.
-- caption: in caption_languages: 2–4 short lines (Hindi lines first when both), then "WhatsApp 70153 99355 for a free demo · sehatsandhi.com" on the last line. No hashtags in it.
+- caption: in caption_languages: 2–4 short lines (Hindi lines first when both), then "Call 87087 18705 · WhatsApp 70153 99355 for a free demo · sehatsandhi.com" on the last line. No hashtags in it.
 - hashtags: each starting with #, as below, with #Sehatsandhi always, and doctor-side tags (#ClinicManagement #DoctorsOfIndia #HospitalSoftware #HealthTech #DigitalClinic) instead of patient ones; local tags only when the topic is local.
 ${REACH}`
 
