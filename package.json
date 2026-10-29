@@ -27,6 +27,7 @@
     "@supabase/supabase-js": "^2.43.4",
     "emoji-picker-react": "^5.0.0",
     "exceljs": "^4.4.0",
+    "ffmpeg-static": "^5.3.0",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.2",
     "lucide-react": "^0.383.0",
