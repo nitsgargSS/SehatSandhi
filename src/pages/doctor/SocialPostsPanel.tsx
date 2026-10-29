@@ -111,7 +111,7 @@ export default function SocialPostsPanel({ businessId }: { businessId: string })
           <p className="text-sm text-gray-500">
             A post for Facebook and Instagram is made for you every afternoon for the next day — your logo, colours
             and photos, with words checked against medical advertising rules. At 7 PM you get a preview on WhatsApp
-            (OK, Change or Skip); at 10 AM it goes to your Page and Instagram.
+            (OK, Change or Skip); it goes to your Page at 10 AM and to Instagram at 7:30 PM, Stories included.
           </p>
         </div>
         <ConnectFacebook businessId={businessId} account={account} onChange={load} />
@@ -281,7 +281,9 @@ function PostCard({ p, busy, canChange, connected, onRemake, onSkip, onAnswer }:
           {p.fb_post_id && p.ig_media_id && ' · '}{p.ig_media_id && 'On Instagram'}
         </p>
       )}
-      {p.publish_error && p.status !== 'skipped' && <p className="text-xs text-red-600">{p.publish_error === 'Waiting for your OK' ? 'Not posted — waiting for your OK.' : `Not posted: ${p.publish_error}`}</p>}
+      {p.publish_error && p.status !== 'skipped' && <p className="text-xs text-red-600">{
+        p.publish_error === 'Waiting for your OK' ? 'Not posted — waiting for your OK.'
+        : p.status === 'published' ? `Partly posted: ${p.publish_error}` : `Not posted: ${p.publish_error}`}</p>}
       {p.preview_error && p.status === 'ready' && <p className="text-xs text-gray-500">The WhatsApp preview could not be sent: {p.preview_error}</p>}
       {p.written_by === 'fallback' && (
         <p className="text-xs text-gray-500">The usual words did not pass the medical advertising check, so a simple post was used.</p>

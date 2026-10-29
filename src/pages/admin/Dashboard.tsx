@@ -36,6 +36,11 @@ import TeamPanel, { ActivityFeed } from './TeamPanel'
 import ClinicStaffList from './ClinicStaffList'
 import MessageReviewPanel from './MessageReviewPanel'
 import PrivacyRequestsPanel from './PrivacyRequestsPanel'
+import SocialPostsPanel from '../doctor/SocialPostsPanel'
+
+// Sehatsandhi's own daily posts, for doctors (0296): a business row kept
+// pending so it is never listed; run from here, not from a clinic dashboard.
+const HOUSE_BUSINESS_ID = '5e4a75a0-0000-4000-8000-000000000001'
 
 // A listing as admin sees it: the business, plus the verification note a
 // reviewer leaves on it. organization_id and is_hospital_doctor are gone —
@@ -45,7 +50,7 @@ interface BusinessRow extends Business {
 }
 
 type Tab = 'pending' | 'all' | 'leads' | 'privacy' | 'whatsapp' | 'camps' | 'coupons' | 'billing' | 'reports' | 'partners'
-  | 'insights' | 'gst' | 'team' | 'account' | 'sandbox' | 'messages'
+  | 'insights' | 'gst' | 'team' | 'account' | 'sandbox' | 'messages' | 'social'
 
 // 0145: what a manager's panel shows. Billing is view-only for them. WhatsApp
 // (0155) is templates and message approvals only — no prices or wallets.
@@ -854,6 +859,7 @@ export default function AdminDashboard() {
               { id: 'privacy', label: 'Privacy', count: privacyOpen, badge: privacyOpen > 0 },
               { id: 'messages', label: 'Message review', count: msgReview, badge: msgReview > 0 },
               { id: 'whatsapp', label: 'WhatsApp', count: waPending, badge: waPending > 0 },
+              { id: 'social', label: 'Sehatsandhi posts', count: 0, badge: false },
               { id: 'coupons', label: t('adminDashboardPage.navCoupons'), count: 0, badge: false },
               { id: 'billing', label: t('adminDashboardPage.navBilling'), count: 0, badge: false },
               { id: 'reports', label: 'Reports', count: 0, badge: false },
@@ -2106,6 +2112,8 @@ export default function AdminDashboard() {
           {tab === 'whatsapp' && <WhatsAppMarketingPanel isManager={isManager} businesses={doctors.map(d => ({ id: d.id, name: d.name }))} />}
 
           {tab === 'insights' && <InsightsPanel />}
+
+          {tab === 'social' && !isManager && <SocialPostsPanel businessId={HOUSE_BUSINESS_ID} />}
 
           {tab === 'gst' && <GstFilingPanel />}
           {/* 0255: marketing partners and their incentives — admins only (the database refuses managers too). */}

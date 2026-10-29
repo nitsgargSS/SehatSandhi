@@ -3,7 +3,7 @@
 // local preview script (the Mac's own Chrome).
 //
 // The page may load only fonts and images from places we trust: Google Fonts,
-// our Supabase storage, and the stock-photo host. Everything else is refused,
+// our Supabase storage, the stock-photo host and our own site. Everything else is refused,
 // so a URL slipped into a post's data cannot make the renderer fetch anything
 // else (SSRF).
 
@@ -13,6 +13,8 @@ const ALLOWED = [
   /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
   /^https:\/\/[a-z0-9]+\.supabase\.co\/storage\/v1\/object\/public\//,
   /^https:\/\/images\.pexels\.com\//,
+  // Our own site: Sehatsandhi's logo on its own posts (0296).
+  /^https:\/\/www\.sehatsandhi\.com\//,
   /^data:/,
 ]
 export const allowedUrl = (u) => ALLOWED.some((re) => re.test(u))
