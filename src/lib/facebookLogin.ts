@@ -9,8 +9,8 @@ import { loadFacebookSdk } from './embeddedSignup'
 
 export { loadFacebookSdk }
 
-/** "Clinic social connect" in the Sehatsandhi Bot app. Empty until it is made in Meta. */
-export const SOCIAL_CONFIG_ID = ''
+/** "Clinic social connect" in the Sehatsandhi Bot app (User access token; Pages + Instagram permissions). */
+export const SOCIAL_CONFIG_ID = '4380016108917267'
 
 /** Opens Meta's window; must be called from a click. Resolves with the code. */
 export function facebookLogin(): Promise<string> {
