@@ -107,6 +107,9 @@ export interface LabOrder {
   entered_count: number
   items: LabOrderItem[]
   latest_report: LabReportRef | null
+  /** 0288: when the lab took the order on — null for a doctor's or app order not yet accepted. */
+  accepted_at?: string | null
+  accepted_by_name?: string | null
 }
 
 export interface LabResult {
@@ -556,3 +559,32 @@ export async function setLabTests(businessId: string, categories: string[]): Pro
   return data as { lab_categories: string[]; lab_module: boolean }
 }
 
+
+/** 0288: the lab takes on an order a doctor (or a patient's app) placed. */
+export async function acceptOrder(orderId: string) {
+  const { error } = await supabase.rpc('sehat_lab_accept', { p_order: orderId })
+  oops(error)
+}
+
+/** 0288: reports signed for tests I ordered, not yet opened. */
+export interface ReportReady {
+  order_id: string
+  order_no: string
+  patient_member_id: string
+  patient_name: string
+  tests: string | null
+  approved_at: string
+  report_token: string
+  out_of_range: number
+}
+
+export async function getReportsReady(businessId: string): Promise<ReportReady[]> {
+  const { data, error } = await supabase.rpc('sehat_my_reports_ready', { p_business: businessId })
+  oops(error)
+  return (data ?? []) as ReportReady[]
+}
+
+export async function markReportSeen(orderId: string) {
+  const { error } = await supabase.rpc('sehat_lab_report_seen', { p_order: orderId })
+  oops(error)
+}

@@ -152,6 +152,31 @@ export interface RxForDispensing {
   dispensed_bill_no: string | null
 }
 
+/** 0288: an OPD prescription that has come to the pharmacy and not been dispensed. */
+export interface WaitingRx {
+  prescription_id: string
+  prescription_no: string
+  issued_at: string
+  prescriber_name: string
+  patient_member_id: string
+  patient_name: string
+  phone: string | null
+  mrn: string | null
+  items: RxForDispensing['items']
+}
+
+export async function getWaitingPrescriptions(businessId: string): Promise<WaitingRx[]> {
+  const { data, error } = await supabase.rpc('sehat_pharmacy_rx_waiting', { p_business: businessId })
+  oops(error)
+  return (data ?? []) as WaitingRx[]
+}
+
+/** 0288: "not needed" (bought elsewhere), or back to waiting. */
+export async function markPrescription(prescriptionId: string, status: 'not_needed' | 'waiting') {
+  const { error } = await supabase.rpc('sehat_pharmacy_rx_mark', { p_prescription: prescriptionId, p_status: status })
+  oops(error)
+}
+
 export interface PharmacySummary {
   bills: number
   cancelled: number
