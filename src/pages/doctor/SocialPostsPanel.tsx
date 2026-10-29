@@ -213,7 +213,7 @@ function ConnectFacebook({ businessId, account, onChange }: { businessId: string
         </div>
       </> : <>
         <p className="text-navy-700">Connect your Facebook Page once, and posts go out by themselves. Instagram comes along when it is linked to the Page.</p>
-        <button disabled={busy || !SOCIAL_CONFIG_ID} onClick={() => go(async () => run({ action: 'connect', code: await facebookLogin() }))}
+        <button disabled={busy || !SOCIAL_CONFIG_ID} onClick={() => go(async () => run({ action: 'connect', token: await facebookLogin() }))}
           className="btn-teal px-4 py-1.5 inline-flex items-center gap-2">
           <Facebook className="w-4 h-4" /> {busy ? 'Connecting…' : SOCIAL_CONFIG_ID ? 'Connect Facebook & Instagram' : 'Connecting Facebook comes soon'}
         </button>
