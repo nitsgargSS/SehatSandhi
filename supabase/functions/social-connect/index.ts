@@ -3,9 +3,10 @@
 // The owner presses "Connect Facebook" in the Social posts tab. Meta's window
 // opens (Facebook Login for Business, configuration "Clinic social connect");
 // they pick their Page and the Instagram account linked to it, and the window
-// closes with a one-time code. The browser posts the code here:
+// closes with the owner's short-lived key. The browser posts it here:
 //
-//   1. the code becomes the owner's access key, then a 60-day one;
+//   1. the key is checked to be made for OUR app (debug_token), then swapped
+//      for a 60-day one;
 //   2. their Pages are listed. One Page → it is connected straight away.
 //      More than one → the list goes back and the owner picks ('pick'); the
 //      owner's key waits in the Vault until then;
@@ -14,7 +15,7 @@
 //      linked to that Page, posted to with the same key.
 //
 // Request (signed-in owner, or an admin — Sehatsandhi's own Page, 0296):
-//   { businessId, action: 'connect', code }
+//   { businessId, action: 'connect', token }
 //   { businessId, action: 'pick', pageId }
 //   { businessId, action: 'disconnect' }
 // Response: { ok, message?, account?, pages? }
@@ -104,21 +105,23 @@ Deno.serve(async (req) => {
   }
 
   // connect
-  const code = typeof body.code === 'string' ? body.code : ''
-  if (!code) return fail('Meta did not finish. Please try again.')
+  const short = typeof body.token === 'string' ? body.token : ''
+  if (!short) return fail('Meta did not finish. Please try again.')
   const secret = Deno.env.get('META_APP_SECRET')
   if (!secret) return fail('Connecting Facebook is not switched on yet. Sehatsandhi has been told.')
 
-  // 1. The code, then a 60-day key: a Page key made from it never expires.
+  // 1. Made for our app (a key from any other app is refused), then a 60-day
+  //    key: a Page key made from that never expires.
   let userToken = ''
   try {
     const s = encodeURIComponent(secret)
-    const res = await fetch(`${GRAPH}/oauth/access_token?client_id=${APP_ID}&client_secret=${s}&code=${encodeURIComponent(code)}`)
-    const tb = await res.json().catch(() => ({})) as Any
-    if (typeof tb?.access_token !== 'string') return fail(`Meta did not accept it: ${String(tb?.error?.message ?? res.status).slice(0, 150)}`)
-    const long = await fetch(`${GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${APP_ID}&client_secret=${s}&fb_exchange_token=${encodeURIComponent(tb.access_token)}`)
+    const dbg = await fetch(`${GRAPH}/debug_token?input_token=${encodeURIComponent(short)}&access_token=${APP_ID}|${s}`)
+    const d = (await dbg.json().catch(() => ({})) as Any)?.data
+    if (!d?.is_valid || String(d.app_id) !== APP_ID) return fail('Meta did not confirm this sign-in. Please press Connect again.')
+    const long = await fetch(`${GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${APP_ID}&client_secret=${s}&fb_exchange_token=${encodeURIComponent(short)}`)
     const lb = await long.json().catch(() => ({})) as Any
-    userToken = typeof lb?.access_token === 'string' ? lb.access_token : tb.access_token
+    if (typeof lb?.access_token !== 'string') return fail(`Meta did not accept it: ${String(lb?.error?.message ?? long.status).slice(0, 150)}`)
+    userToken = lb.access_token
   } catch (e) {
     return fail(`Meta could not be reached: ${String((e as Error).message ?? e)}`)
   }
