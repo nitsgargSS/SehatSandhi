@@ -41,6 +41,13 @@ async function pages(userToken: string): Promise<{ list?: Page[]; error?: string
 
 async function save(db: Any, businessId: string, page: Page, userId: string | null) {
   if (!page.access_token) return 'Meta did not give a key for that Page. Please connect again and allow posting.'
+  // One Page, one business (0297): someone who manages several Pages must not
+  // send one clinic's posts to another's Page.
+  const { data: taken } = await db.from('social_accounts').select('business_id').eq('page_id', page.id).neq('business_id', businessId).maybeSingle()
+  if (taken) {
+    const { data: other } = await db.from('businesses').select('name').eq('id', taken.business_id).maybeSingle()
+    return `${page.name} is already connected to ${other?.name ?? 'another business'} on Sehatsandhi. Pick this business's own Page.`
+  }
   const { error: tErr } = await db.rpc('sehat_social_token_set', { p_business: businessId, p_kind: 'page', p_token: page.access_token })
   if (tErr) return tErr.message
   const account = {
