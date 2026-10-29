@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, useCallback } from 'react'
-import StayMoney from './StayMoney'
+import StayMoney, { printMedicineSlip } from './StayMoney'
 import { SPECIALITIES } from '../../types'
 import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
@@ -18,7 +18,7 @@ import {
   PatientSearchResult, PatientSummary, Visit, Vital, Allergy, Condition, Medication,
 } from '../../lib/patientsApi'
 import {
-  getAdmissions, admitPatient, dischargePatient, getOccupancy,
+  getAdmissions, requestFromPharmacy, admitPatient, dischargePatient, getOccupancy,
   getAdmissionNotes, addAdmissionNote,
   getBedHistory, correctBedStay, undoBedMove,
   getMedicationOrders, getDueDoses, orderMedication, stopDrugOrder,
@@ -128,7 +128,7 @@ const SOURCE_LABEL: Record<string, string> = {
   prescription: 'Prescription',
 }
 
-export default function Patients({ businessId, practitionerId, doctorId, openMemberId, openVisitId }: {
+export default function Patients({ businessId, practitionerId, doctorId, openMemberId, openVisitId, openPane }: {
   businessId: string
   /** Who is signed in, when they are staff — the author of what they record. */
   practitionerId?: string | null
@@ -138,6 +138,8 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
   openMemberId?: string | null
   /** 0182: from the queue's Consult — open this visit, ready to fill in. */
   openVisitId?: string | null
+  /** 0284: from the bed board — open on the patient's stay. */
+  openPane?: 'ipd' | null
 }) {
   // 0277: a pathology lab registers patients without OPD.
   const [opdOn, setOpdOn] = useState(true)
@@ -455,12 +457,13 @@ export default function Patients({ businessId, practitionerId, doctorId, openMem
       )}
       {selected && (
         <PatientRecord
-          key={`${selected}:${openVisitId ?? ''}`}
+          key={`${selected}:${openVisitId ?? ''}:${openPane ?? ''}`}
           memberId={selected}
           businessId={businessId}
           practitionerId={practitionerId}
           doctorId={doctorId ?? null}
           focusVisitId={focusVisit ?? (selected === openMemberId ? (openVisitId ?? null) : null)}
+          startPane={selected === openMemberId ? openPane ?? null : null}
           onClose={() => setSelected(null)}
         />
       )}
@@ -751,13 +754,14 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
 // Mirrors the table list gated in 0057; if one moves, both move.
 const CLINICAL_PANES = new Set(['history', 'clinical', 'rx', 'docs', 'ot', 'lab'])
 
-function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVisitId, onClose }: {
+function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVisitId, startPane, onClose }: {
   memberId: string
   businessId: string
   practitionerId?: string | null
   /** The signed-in person when they are a doctor here (0178's myDoctorId). */
   doctorId?: string | null
   focusVisitId?: string | null
+  startPane?: 'ipd' | null
   onClose: () => void
 }) {
   const [summary, setSummary] = useState<PatientSummary | null>(null)
@@ -782,7 +786,7 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
   // A nurse is clinical but is not a prescriber. Same reason as above for
   // starting false: the ordering form is offered only once we know.
   const [prescriber, setPrescriber] = useState(false)
-  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'ot' | 'lab' | 'money' | 'refer'>('history')
+  const [pane, setPane] = useState<'history' | 'clinical' | 'vitals' | 'rx' | 'docs' | 'ipd' | 'ot' | 'lab' | 'money' | 'refer'>(startPane ?? 'history')
   // 0168: the Lab tests pane, where the clinic runs a lab (or is one).
   const [labOn, setLabOn] = useState(false)
   useEffect(() => { getLabSettings(businessId).then(s => setLabOn(s.on)).catch(() => setLabOn(false)) }, [businessId])
@@ -2685,7 +2689,7 @@ function AdmissionsPane({ stays, memberId, businessId, practitionerId, doctorId,
           )}
 
           {clinical && openDrugs === a.id && (
-            <DrugChart admissionId={a.id} memberId={memberId} prescriber={prescriber}
+            <DrugChart admissionId={a.id} memberId={memberId} prescriber={prescriber} stay={a}
               practitionerId={practitionerId} closed={a.status !== 'admitted'} />
           )}
 
@@ -2957,9 +2961,11 @@ const FREQUENCIES: [string, string][] = [
 ]
 const ROUTES = ['oral','iv','im','sc','sl','ng','pr','pv','topical','inhaled','eye','ear']
 
-function DrugChart({ admissionId, memberId, practitionerId, closed, prescriber }: {
+function DrugChart({ admissionId, memberId, practitionerId, closed, prescriber, stay }: {
   admissionId: string
   memberId: string
+  /** 0284: the stay, for sending the medicine to the pharmacy or printing a slip. */
+  stay: Admission
   practitionerId?: string | null
   closed: boolean
   prescriber: boolean
@@ -2968,6 +2974,14 @@ function DrugChart({ admissionId, memberId, practitionerId, closed, prescriber }
   const [doses, setDoses] = useState<DueDose[]>([])
   const [ordering, setOrdering] = useState(false)
   const [form, setForm] = useState({ drug: '', dose: '', freq: 'BD', route: 'oral', prn: false, indication: '', instructions: '' })
+  // 0284: where the medicine comes from — our pharmacy (sent now), the
+  // attendant (a printed slip), or what the ward already holds.
+  const [supply, setSupply] = useState<{ how: 'pharmacy' | 'slip' | 'ward'; qty: string }>({ how: 'ward', qty: '' })
+  const [pharmacyOn, setPharmacyOn] = useState(false)
+  useEffect(() => {
+    supabase.from('businesses').select('pharmacy_module').eq('id', stay.business_id).maybeSingle()
+      .then(({ data }) => { const on = !!(data as { pharmacy_module?: boolean } | null)?.pharmacy_module; setPharmacyOn(on); setSupply(x => ({ ...x, how: on ? 'pharmacy' : 'slip' })) })
+  }, [stay.business_id])
   const [warn, setWarn] = useState<{ substance: string; severity: string | null; reaction: string | null }[]>([])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -3020,7 +3034,7 @@ function DrugChart({ admissionId, memberId, practitionerId, closed, prescriber }
   })
 
   const submit = () => act(async () => {
-    await orderMedication(admissionId, {
+    const orderId = await orderMedication(admissionId, {
       drugName: form.drug.trim(),
       doseText: form.dose.trim(),
       frequencyCode: form.freq,
@@ -3033,6 +3047,10 @@ function DrugChart({ admissionId, memberId, practitionerId, closed, prescriber }
       allergyOverride: warn.length
         ? `prescribed despite ${warn.map(w => w.substance).join(', ')}` : null,
     }, practitionerId)
+    const item = { name: form.drug.trim(), qty: supply.qty.trim(), how: `${form.dose.trim()} ${form.freq}`.trim() }
+    if (supply.how === 'pharmacy') await requestFromPharmacy(admissionId, [{ name: item.name, qty: item.qty, order_id: orderId }])
+    if (supply.how === 'slip') printMedicineSlip(stay, [item])
+    setSupply(x => ({ ...x, qty: '' }))
     setForm({ drug: '', dose: '', freq: 'BD', route: 'oral', prn: false, indication: '', instructions: '' })
     setWarn([]); setOrdering(false)
   })
@@ -3099,10 +3117,22 @@ function DrugChart({ admissionId, memberId, practitionerId, closed, prescriber }
           <input style={input} placeholder="Instructions (optional) — after food, with water…"
             value={form.instructions} onChange={e => setForm({ ...form, instructions: e.target.value })} />
 
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 12.5 }}>
+            <span style={{ fontWeight: 700, color: BIZ.muted }}>Medicine from</span>
+            {pharmacyOn && <label><input type="radio" checked={supply.how === 'pharmacy'} onChange={() => setSupply({ ...supply, how: 'pharmacy' })} /> Send to our pharmacy</label>}
+            <label><input type="radio" checked={supply.how === 'slip'} onChange={() => setSupply({ ...supply, how: 'slip' })} /> Print slip for attendant</label>
+            <label><input type="radio" checked={supply.how === 'ward'} onChange={() => setSupply({ ...supply, how: 'ward' })} /> Ward already has it</label>
+            {supply.how !== 'ward' && (
+              <input style={{ ...input, width: 90 }} inputMode="numeric" placeholder="Qty" value={supply.qty}
+                onChange={e => setSupply({ ...supply, qty: e.target.value })} />
+            )}
+          </div>
+
           <div style={{ display: 'flex', gap: 8 }}>
             <button style={btn(true)} disabled={busy || !form.drug.trim() || !form.dose.trim()
-              || ((form.prn || form.freq === 'SOS') && !form.indication.trim())}
-              onClick={submit}>{busy ? 'Ordering…' : 'Order'}</button>
+              || ((form.prn || form.freq === 'SOS') && !form.indication.trim())
+              || (supply.how === 'pharmacy' && !supply.qty.trim())}
+              onClick={submit}>{busy ? 'Ordering…' : supply.how === 'pharmacy' ? 'Order & send to pharmacy' : supply.how === 'slip' ? 'Order & print slip' : 'Order'}</button>
             <button style={btn()} onClick={() => { setOrdering(false); setWarn([]); setErr('') }}>Cancel</button>
           </div>
         </div>

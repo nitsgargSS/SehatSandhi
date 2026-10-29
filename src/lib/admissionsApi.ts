@@ -563,10 +563,21 @@ export async function cancelWardRequest(id: string) {
 }
 
 /** Issue medicines from stock to an admitted patient: on their hospital bill, not paid at the counter. */
-export async function issueToAdmission(admissionId: string, lines: { item_id: string; qty: number }[], requestId?: string | null) {
-  const { data, error } = await supabase.rpc('sehat_pharmacy_issue_to_admission', { p_admission: admissionId, p_lines: lines, p_request: requestId ?? null })
+export async function issueToAdmission(admissionId: string, lines: { item_id: string; qty: number }[], requestId?: string | null,
+  discount?: { pct: number; reason: string } | null) {
+  const { data, error } = await supabase.rpc('sehat_pharmacy_issue_to_admission', {
+    p_admission: admissionId, p_lines: lines, p_request: requestId ?? null,
+    p_discount_pct: discount?.pct ?? 0, p_discount_reason: discount?.reason || null,
+  })
   oops(error)
   return data as { bill_id: string; bill_no: string; amount: number; money: AdmissionMoney }
+}
+
+/** 0284: part of a ward issue comes back — stock back, its charge off the stay, at the discounted price. */
+export async function returnFromWard(pharmacyBillId: string, lines: { bill_item_id: string; qty: number }[], reason: string) {
+  const { data, error } = await supabase.rpc('sehat_pharmacy_return_ipd', { p_bill: pharmacyBillId, p_lines: lines, p_reason: reason || null })
+  oops(error)
+  return data as { credit: number; money: AdmissionMoney }
 }
 
 export async function cancelWardIssue(pharmacyBillId: string, reason: string) {

@@ -84,6 +84,8 @@ export interface PharmacyBill {
   id: string
   business_id: string
   bill_no: string
+  /** 0270: set when issued to an admitted patient — paid with the hospital bill. */
+  admission_id?: string | null
   patient_member_id: string | null
   prescription_id: string | null
   customer_name: string

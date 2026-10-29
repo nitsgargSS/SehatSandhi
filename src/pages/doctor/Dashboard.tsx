@@ -337,7 +337,9 @@ export default function DoctorDashboard() {
   }, [doctor?.id])
   // 0182: a visit to open with the patient — the queue's Consult.
   const [openVisit, setOpenVisit] = useState<string | null>(null)
-  const openPatient = (memberId: string, visitId: string | null = null) => { setOpenMember(memberId); setOpenVisit(visitId); setTab('patients') }
+  // 0284: the bed board opens a patient straight on their stay (pane 'ipd').
+  const [openPane, setOpenPane] = useState<'ipd' | null>(null)
+  const openPatient = (memberId: string, visitId: string | null = null, pane: 'ipd' | null = null) => { setOpenMember(memberId); setOpenVisit(visitId); setOpenPane(pane); setTab('patients') }
   // A screen deep inside a tab asks for another one: the Send menu's "add WhatsApp to your plan".
   useEffect(() => {
     const go = (e: Event) => { const t = (e as CustomEvent<string>).detail; if (t === 'plan' || t === 'whatsapp') setTab(t) }
@@ -1853,7 +1855,8 @@ export default function DoctorDashboard() {
 
         {/* ══════════ BEDS — the ward board ══════════ */}
         {tab === 'beds' && emr && access.ipd && doctor && (
-          <Wards businessId={doctor.id} practitionerId={myPractitionerId} role={isOwner ? 'owner' : role.role} />
+          <Wards businessId={doctor.id} practitionerId={myPractitionerId} role={isOwner ? 'owner' : role.role}
+            onOpenPatient={m => openPatient(m, null, 'ipd')} />
         )}
 
         {/* ══════════ PHARMACY — in-house dispensing (0158) ══════════ */}
@@ -1895,7 +1898,7 @@ export default function DoctorDashboard() {
 
         {/* ══════════ PATIENTS — the clinic's own records ══════════ */}
         {tab === 'patients' && emr && (access.opd || access.ipd) && doctor && (
-          <Patients businessId={doctor.id} practitionerId={myPractitionerId} doctorId={myDoctorId} openMemberId={openMember} openVisitId={openVisit} />
+          <Patients businessId={doctor.id} practitionerId={myPractitionerId} doctorId={myDoctorId} openMemberId={openMember} openVisitId={openVisit} openPane={openPane} />
         )}
 
         {tab === 'mypractice' && doctor && myPractitionerId && (
