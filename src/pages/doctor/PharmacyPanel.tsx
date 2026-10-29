@@ -11,6 +11,7 @@ import {
   getDues, getBillsByIds, getStockMoves, Due, StockMove, PAYMENT_STATUS, payMethodLabel,
   StockRow, Batch, PharmacyBill, Purchase, RxForDispensing, PharmacySummary, PharmacySettings,
   PharmacyItem, PharmacyPayMethod, PurchaseLine, PAY_METHODS, GST_RATES,
+  getStockReport, StockReport,
 } from '../../lib/pharmacyApi'
 import { phoneProblem } from '../../lib/credentials'
 import PhoneError from '../../components/PhoneError'
@@ -22,7 +23,7 @@ import PhoneError from '../../components/PhoneError'
 // a manager or a doctor — the database refuses anyone else, so the hidden
 // sections are a courtesy, not the lock.
 
-type Section = 'sell' | 'ward' | 'bills' | 'dues' | 'stock' | 'purchases' | 'summary' | 'settings'
+type Section = 'sell' | 'ward' | 'bills' | 'dues' | 'stock' | 'purchases' | 'summary' | 'report' | 'settings'
 
 const printBill = (id: string) => window.open(`/business/print/pharmacy/${id}`, '_blank')
 const today = () => isoDate()
@@ -55,7 +56,7 @@ export default function PharmacyPanel({ businessId, canManage, canSettings, hasI
 
   const sections: [Section, string][] = [
     ['sell', 'New bill'], ...(hasIpd ? [['ward', 'Ward requests']] as [Section, string][] : []), ['bills', 'Bills'], ['dues', 'Dues'], ['stock', 'Stock'],
-    ...(canManage ? [['purchases', 'Purchases'], ['summary', 'Summary']] as [Section, string][] : []),
+    ...(canManage ? [['purchases', 'Purchases'], ['report', 'Stock report'], ['summary', 'Summary']] as [Section, string][] : []),
     ...(canSettings ? [['settings', 'Settings']] as [Section, string][] : []),
   ]
 
@@ -68,7 +69,7 @@ export default function PharmacyPanel({ businessId, canManage, canSettings, hasI
             In-house dispensing · {settings?.pharmacy_gstin ? `GST bills (GSTIN ${settings.pharmacy_gstin})` : 'bills without GST'}
           </p>
         </div>
-        <SectionPills sections={sections} primary={['sell', 'ward', 'bills', 'dues', 'stock']} value={section} onChange={setSection} />
+        <SectionPills sections={sections} primary={['sell', 'ward', 'bills', 'dues', 'stock', 'report']} value={section} onChange={setSection} />
       </div>
 
       {(low > 0 || expiring > 0) && section !== 'stock' && (
@@ -88,6 +89,11 @@ export default function PharmacyPanel({ businessId, canManage, canSettings, hasI
       {section === 'stock' && <StockSection businessId={businessId} stock={stock} canManage={canManage} reload={reloadStock} />}
       {section === 'purchases' && canManage && <PurchasesSection businessId={businessId} stock={stock} reload={reloadStock} />}
       {section === 'summary' && canManage && <SummarySection businessId={businessId} />}
+      {section === 'report' && canManage && <StockReportSection businessId={businessId} stock={stock} />}
+      {/* Companies already entered, offered when typing a new one. */}
+      <datalist id="pharmacy-companies">
+        {Array.from(new Set(stock.map(x => x.manufacturer?.trim()).filter(Boolean))).sort().map(c => <option key={c} value={c!} />)}
+      </datalist>
       {section === 'settings' && canSettings && settings && (
         <SettingsSection businessId={businessId} settings={settings}
           onSaved={() => getPharmacySettings(businessId).then(setSettings)} />
@@ -723,7 +729,8 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
       <h3 className="font-bold text-navy-700">{f.id ? 'Edit medicine' : 'Add a medicine'}</h3>
       <div className="grid sm:grid-cols-3 gap-2">
         {field('generic_name', 'Medicine / item name *', { placeholder: 'Paracetamol, Moxifloxacin, Syringe 5ml' })}
-        {field('name', 'Brand (company name)', { placeholder: 'Dolo, Vigamox — leave blank if none' })}
+        {field('name', 'Brand', { placeholder: 'Dolo, Vigamox — leave blank if none' })}
+        {field('manufacturer', 'Company', { placeholder: 'Micro Labs, Alcon, Cipla', list: 'pharmacy-companies' })}
         <label className="text-xs text-gray-500">Type
           <select className="input-field mt-1" value={f.form ?? ''} onChange={e => {
             const t = ITEM_FORMS.find(x => x.value === e.target.value)
@@ -1182,6 +1189,210 @@ function SummarySection({ businessId }: { businessId: string }) {
             </div>
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+// ── Stock report (0285) ─────────────────────────────────────────────────────
+// For the owner, a manager or a doctor: the whole pharmacy by dates, medicine
+// and company — what stock there was, what came in (from whom, on whose
+// invoice, added by whom), and what went out, bill by bill, day by day.
+
+const istDay = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' })
+const istTime = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit' })
+
+function downloadCsv(name: string, rows: (string | number | null | undefined)[][]) {
+  const cell = (v: string | number | null | undefined) => { const t = String(v ?? ''); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t }
+  const blob = new Blob([rows.map(r => r.map(cell).join(',')).join('\n')], { type: 'text/csv' })
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href)
+}
+
+function StockReportSection({ businessId, stock }: { businessId: string; stock: StockRow[] }) {
+  const [from, setFrom] = useState(today().slice(0, 8) + '01')
+  const [to, setTo] = useState(today())
+  const [item, setItem] = useState('')
+  const [company, setCompany] = useState('')
+  const [view, setView] = useState<'register' | 'added' | 'dispensed'>('register')
+  const [r, setR] = useState<StockReport | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    setBusy(true)
+    getStockReport(businessId, from, to, item, company).then(x => { setR(x); setErr('') })
+      .catch(e => setErr((e as Error).message)).finally(() => setBusy(false))
+  }, [businessId, from, to, item, company])
+
+  const lastMonth = () => { const d = new Date(today() + 'T00:00:00'); d.setDate(0); setTo(isoDate(d)); setFrom(isoDate(d).slice(0, 8) + '01') }
+  const meds = useMemo(() => [...stock].filter(x => !company || (x.manufacturer ?? '').trim().toLowerCase() === company.toLowerCase())
+    .sort((a, b) => a.name.localeCompare(b.name)), [stock, company])
+  const range = from === to ? istDay(from + 'T00:00:00+05:30') : `${istDay(from + 'T00:00:00+05:30')} – ${istDay(to + 'T00:00:00+05:30')}`
+
+  const reg = r?.register ?? []
+  const added = r?.added ?? []
+  const out = (r?.dispensed ?? []).filter(d => d.status === 'issued')
+  const sum = <T,>(xs: T[], f: (x: T) => number) => xs.reduce((a, x) => a + (Number(f(x)) || 0), 0)
+  const days = (xs: { at: string }[]) => Array.from(new Set(xs.map(x => istDay(x.at))))
+
+  const csv = () => {
+    if (view === 'register') downloadCsv(`stock-register-${from}-${to}.csv`, [
+      ['Medicine', 'Generic', 'Company', 'Unit', 'Opening', 'Received', 'Dispensed', 'Returned', 'Adjusted', 'Closing', 'Value at cost', 'Value at MRP'],
+      ...reg.map(x => [x.name, x.generic, x.company, x.unit, x.opening, x.received, x.dispensed, x.returned, x.adjusted, x.closing, x.value_cost, x.value_mrp])])
+    if (view === 'added') downloadCsv(`stock-added-${from}-${to}.csv`, [
+      ['Date', 'Medicine', 'Company', 'Batch', 'Expiry', 'Qty', 'Cost each', 'MRP each', 'Supplier', 'Supplier invoice', 'Added by'],
+      ...added.map(x => [istDay(x.at), x.name, x.company, x.batch, x.expiry, x.qty, x.unit_cost, x.unit_mrp, x.supplier, x.invoice, x.by])])
+    if (view === 'dispensed') downloadCsv(`dispensed-${from}-${to}.csv`, [
+      ['Date', 'Time', 'Bill no', 'Patient', 'IPD', 'Medicine', 'Company', 'Qty', 'Returned', 'Amount', 'Net after returns', 'Billed by'],
+      ...out.map(x => [istDay(x.at), istTime(x.at), x.bill_no, x.patient, x.ipd ? 'yes' : '', x.name, x.company, x.qty, x.returned, x.amount, x.net, x.by])])
+  }
+
+  const th = 'px-3 py-2 font-semibold'
+  const td = 'px-3 py-1.5'
+  return (
+    <div className="space-y-3">
+      <div className="card shadow-sm space-y-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <input type="date" className="input-field w-auto" value={from} max={to} onChange={e => setFrom(e.target.value)} />
+          <span className="text-gray-400">to</span>
+          <input type="date" className="input-field w-auto" value={to} min={from} onChange={e => setTo(e.target.value)} />
+          <button onClick={() => { setFrom(today()); setTo(today()) }} className="text-xs text-teal-700 font-semibold">Today</button>
+          <button onClick={() => { setFrom(plusDays(today(), -6)); setTo(today()) }} className="text-xs text-teal-700 font-semibold">7 days</button>
+          <button onClick={() => { setFrom(today().slice(0, 8) + '01'); setTo(today()) }} className="text-xs text-teal-700 font-semibold">This month</button>
+          <button onClick={lastMonth} className="text-xs text-teal-700 font-semibold">Last month</button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select className="input-field w-auto text-sm" value={company} onChange={e => { setCompany(e.target.value); setItem('') }}>
+            <option value="">All companies</option>
+            {(r?.companies ?? []).map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="input-field w-auto text-sm max-w-xs" value={item} onChange={e => setItem(e.target.value)}>
+            <option value="">All medicines</option>
+            {meds.map(m => <option key={m.id} value={m.id}>{itemLabel(m)}</option>)}
+          </select>
+          {(item || company) && <button onClick={() => { setItem(''); setCompany('') }} className="text-xs text-gray-500">Clear</button>}
+        </div>
+        {r && r.companies.length === 0 && <p className="text-xs text-gray-500">To choose by company, add each medicine's company in Stock → Edit.</p>}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <SectionPills sections={[['register', 'Stock register'], ['added', `Stock added${r ? ` (${added.length})` : ''}`], ['dispensed', `Dispensed${r ? ` (${out.length})` : ''}`]]}
+          primary={['register', 'added', 'dispensed']} value={view} onChange={setView} />
+        <span className="flex items-center gap-3">
+          {busy && <span className="text-xs text-gray-400">Loading…</span>}
+          <button onClick={csv} disabled={!r} className="btn-outline text-xs py-1.5 px-3">Download CSV</button>
+        </span>
+      </div>
+      <Err msg={err} />
+
+      {r && view === 'register' && (
+        <div className="card shadow-sm p-0 overflow-x-auto">
+          <p className="px-4 pt-3 text-xs text-gray-500">{range} · counted in the unit each is sold by · closing = opening + received − dispensed + returned ± adjusted</p>
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-gray-500 text-xs">
+              <th className={th}>Medicine</th><th className={th}>Company</th>
+              <th className={`${th} text-right`}>Opening</th><th className={`${th} text-right`}>Received</th><th className={`${th} text-right`}>Dispensed</th>
+              <th className={`${th} text-right`}>Returned</th><th className={`${th} text-right`}>Adjusted</th><th className={`${th} text-right`}>Closing</th>
+              <th className={`${th} text-right`}>On shelf now</th><th className={`${th} text-right`}>Value (cost / MRP)</th>
+            </tr></thead>
+            <tbody>
+              {reg.map(x => (
+                <tr key={x.item_id} className="border-t">
+                  <td className={td}><b className="text-gray-800">{x.name}</b>{x.strength ? ` ${x.strength}` : ''}<span className="block text-xs text-gray-500">{x.generic ?? ''} · per {x.unit}</span></td>
+                  <td className={td}>{x.company ?? <span className="text-gray-300">—</span>}</td>
+                  <td className={`${td} text-right`}>{x.opening}</td>
+                  <td className={`${td} text-right ${x.received ? 'text-teal-700' : 'text-gray-400'}`}>{x.received ? `+${x.received}` : 0}</td>
+                  <td className={`${td} text-right ${x.dispensed ? 'text-red-700' : 'text-gray-400'}`}>{x.dispensed ? `−${x.dispensed}` : 0}</td>
+                  <td className={`${td} text-right`}>{x.returned ? `+${x.returned}` : 0}</td>
+                  <td className={`${td} text-right`}>{x.adjusted > 0 ? `+${x.adjusted}` : x.adjusted}</td>
+                  <td className={`${td} text-right font-bold`}>{x.closing}</td>
+                  <td className={`${td} text-right`}>{x.in_hand}
+                    {x.in_hand <= x.reorder && <span className="block text-xs text-amber-700">low</span>}
+                    {x.expired > 0 && <span className="block text-xs text-red-600">{x.expired} expired</span>}</td>
+                  <td className={`${td} text-right whitespace-nowrap`}>{moneyExact(x.value_cost)}<span className="block text-xs text-gray-500">{moneyExact(x.value_mrp)}</span></td>
+                </tr>
+              ))}
+              {!reg.length && <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">No medicines match.</td></tr>}
+            </tbody>
+            {reg.length > 0 && <tfoot><tr className="border-t-2 font-bold">
+              <td className={td} colSpan={9}>Stock value now ({reg.length} medicine{reg.length === 1 ? '' : 's'})</td>
+              <td className={`${td} text-right whitespace-nowrap`}>{moneyExact(sum(reg, x => x.value_cost))}<span className="block text-xs text-gray-500 font-normal">{moneyExact(sum(reg, x => x.value_mrp))} at MRP</span></td>
+            </tr></tfoot>}
+          </table>
+        </div>
+      )}
+
+      {r && view === 'added' && (
+        <div className="card shadow-sm p-0 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-gray-500 text-xs">
+              <th className={th}>Medicine</th><th className={th}>Batch · expiry</th><th className={`${th} text-right`}>Qty</th>
+              <th className={`${th} text-right`}>Cost · MRP each</th><th className={`${th} text-right`}>Cost</th><th className={th}>Supplier · invoice</th><th className={th}>Added by</th>
+            </tr></thead>
+            <tbody>
+              {days(added).map(dy => {
+                const these = added.filter(x => istDay(x.at) === dy)
+                return [
+                  <tr key={dy} className="bg-gray-50"><td colSpan={7} className="px-3 py-1.5 font-bold text-navy-700">{dy}
+                    <span className="font-normal text-gray-500"> · {these.length} line{these.length === 1 ? '' : 's'} · {moneyExact(sum(these, x => x.qty * x.unit_cost))} at cost</span></td></tr>,
+                  ...these.map((x, k) => (
+                    <tr key={dy + k} className="border-t">
+                      <td className={td}><b className="text-gray-800">{x.name}</b><span className="block text-xs text-gray-500">{x.company ?? ''}</span></td>
+                      <td className={td}>{x.batch ?? '—'}<span className="block text-xs text-gray-500">{x.expiry ? shortDate(x.expiry) : ''}</span></td>
+                      <td className={`${td} text-right`}>{x.qty} {x.unit}</td>
+                      <td className={`${td} text-right whitespace-nowrap`}>{moneyExact(x.unit_cost)} · {moneyExact(x.unit_mrp)}</td>
+                      <td className={`${td} text-right`}>{moneyExact(x.qty * x.unit_cost)}</td>
+                      <td className={td}>{x.supplier ?? '—'}<span className="block text-xs text-gray-500">{x.invoice ? `Inv ${x.invoice}` : ''}{x.invoice_date ? ` · ${shortDate(x.invoice_date)}` : ''}</span></td>
+                      <td className={td}>{x.by ?? '—'}<span className="block text-xs text-gray-500">{istTime(x.at)}</span></td>
+                    </tr>
+                  )),
+                ]
+              })}
+              {!added.length && <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">No stock added in these dates.</td></tr>}
+            </tbody>
+            {added.length > 0 && <tfoot><tr className="border-t-2 font-bold">
+              <td className={td} colSpan={4}>Total added</td><td className={`${td} text-right`}>{moneyExact(sum(added, x => x.qty * x.unit_cost))}</td><td colSpan={2} />
+            </tr></tfoot>}
+          </table>
+        </div>
+      )}
+
+      {r && view === 'dispensed' && (
+        <div className="card shadow-sm p-0 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-gray-500 text-xs">
+              <th className={th}>Bill</th><th className={th}>Patient</th><th className={th}>Medicine</th>
+              <th className={`${th} text-right`}>Qty</th><th className={`${th} text-right`}>Returned</th><th className={`${th} text-right`}>Amount</th><th className={th}>By</th>
+            </tr></thead>
+            <tbody>
+              {days(out).map(dy => {
+                const these = out.filter(x => istDay(x.at) === dy)
+                const bills = new Set(these.map(x => x.bill_no)).size
+                return [
+                  <tr key={dy} className="bg-gray-50"><td colSpan={7} className="px-3 py-1.5 font-bold text-navy-700">{dy}
+                    <span className="font-normal text-gray-500"> · {bills} bill{bills === 1 ? '' : 's'} · {moneyExact(sum(these, x => x.net))}</span></td></tr>,
+                  ...these.map((x, k) => (
+                    <tr key={dy + k} className="border-t">
+                      <td className={td}><a href={`/business/print/pharmacy/${x.bill_id}`} target="_blank" rel="noreferrer" className="text-teal-700 font-semibold">{x.bill_no}</a>
+                        <span className="block text-xs text-gray-500">{istTime(x.at)}</span></td>
+                      <td className={td}>{x.patient}{x.ipd && <span className="ml-1 text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded">IPD</span>}</td>
+                      <td className={td}>{x.name}<span className="block text-xs text-gray-500">{x.company ?? ''}{x.batch ? ` · batch ${x.batch}` : ''}</span></td>
+                      <td className={`${td} text-right`}>{x.qty}</td>
+                      <td className={`${td} text-right`}>{x.returned || ''}</td>
+                      <td className={`${td} text-right whitespace-nowrap`}>{moneyExact(x.net)}{x.net !== Number(x.amount) && <span className="block text-xs text-gray-500 line-through">{moneyExact(x.amount)}</span>}</td>
+                      <td className={td}>{x.by ?? '—'}</td>
+                    </tr>
+                  )),
+                ]
+              })}
+              {!out.length && <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">Nothing dispensed in these dates.</td></tr>}
+            </tbody>
+            {out.length > 0 && <tfoot><tr className="border-t-2 font-bold">
+              <td className={td} colSpan={3}>{(n => `${n} bill${n === 1 ? '' : 's'}`)(new Set(out.map(x => x.bill_no)).size)} · {sum(out, x => x.qty - x.returned)} units</td>
+              <td colSpan={2} /><td className={`${td} text-right`}>{moneyExact(sum(out, x => x.net))}</td><td />
+            </tr></tfoot>}
+          </table>
+          <p className="text-xs text-gray-400 px-4 py-2">Amounts after discount and returns, GST included. IPD lines go on the hospital bill. Cancelled bills are left out.</p>
+        </div>
       )}
     </div>
   )

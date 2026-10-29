@@ -124,9 +124,14 @@ export default function PharmacyBillPage() {
               {bill.round_off !== 0 && row('Round off', `${bill.round_off > 0 ? '+' : '−'} ${rupees(Math.abs(bill.round_off))}`)}
               {row('Net payable', rupees(bill.net_payable), true)}
               {bill.credited > 0 && bill.status === 'issued' && row('Less returns', `− ${rupees(bill.credited)}`)}
-              {bill.status === 'issued' && row('Paid', rupees(bill.paid - bill.refunded))}
-              {bill.status === 'issued' && bill.balance_due > 0 && row('Balance due', rupees(bill.balance_due), true)}
-              {bill.status === 'issued' && row('Status', PAYMENT_STATUS[bill.payment_status]?.label ?? '')}
+              {/* 0270/0284: issued to an admitted patient — nothing is paid at the counter. */}
+              {bill.status === 'issued' && bill.admission_id
+                ? row('To the hospital bill', rupees(bill.net_payable - bill.credited), true)
+                : <>
+                  {bill.status === 'issued' && row('Paid', rupees(bill.paid - bill.refunded))}
+                  {bill.status === 'issued' && bill.balance_due > 0 && row('Balance due', rupees(bill.balance_due), true)}
+                  {bill.status === 'issued' && row('Status', PAYMENT_STATUS[bill.payment_status]?.label ?? '')}
+                </>}
             </tbody>
           </table>
         </div>

@@ -42,9 +42,11 @@ const WARD_KINDS = ['general', 'icu', 'hdu', 'private', 'semi_private', 'materni
 const daysSince = (iso: string) =>
   Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000))
 
-export default function Wards({ businessId, practitionerId, role }: {
+export default function Wards({ businessId, practitionerId, role, onOpenPatient }: {
   businessId: string
   practitionerId?: string | null
+  /** 0284: open the patient on their stay — orders, medicines, deposit, details. */
+  onOpenPatient?: (memberId: string) => void
   /** 0269: the owner and a manager set wards and beds up; others only use them. */
   role?: string | null
 }) {
@@ -145,7 +147,10 @@ export default function Wards({ businessId, practitionerId, role }: {
                   </div>
                   {b.occupied ? (
                     <div style={{ marginTop: 5 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: BIZ.ink }}>{b.patient_name}</div>
+                      {onOpenPatient && b.patient_member_id
+                        ? <button onClick={() => onOpenPatient(b.patient_member_id!)} title="Open the stay: orders, medicines, deposit, details"
+                            style={{ fontSize: 14, fontWeight: 700, color: BIZ.ink, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', textDecoration: 'underline', textUnderlineOffset: 3 }}>{b.patient_name}</button>
+                        : <div style={{ fontSize: 14, fontWeight: 700, color: BIZ.ink }}>{b.patient_name}</div>}
                       <div style={{ fontSize: 12, color: BIZ.muted }}>
                         {[b.age_years != null ? `${b.age_years}y` : null, b.gender].filter(Boolean).join(' · ')}
                         {b.admitted_at && ` · day ${daysSince(b.admitted_at) + 1}`}
@@ -172,7 +177,11 @@ export default function Wards({ businessId, practitionerId, role }: {
                 </div>
 
                 {b.occupied && (
-                  <div style={{ display: 'flex', gap: 5, marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 5, marginTop: 8, flexWrap: 'wrap' }}>
+                    {onOpenPatient && b.patient_member_id && (
+                      <button style={{ ...btn(true), fontSize: 11.5, padding: '5px 9px' }}
+                        onClick={() => onOpenPatient(b.patient_member_id!)}>Open</button>
+                    )}
                     <button style={{ ...btn(), fontSize: 11.5, padding: '5px 9px' }}
                       onClick={() => setMoving(b)}>Move</button>
                     <button style={{ ...btn(), fontSize: 11.5, padding: '5px 9px' }}

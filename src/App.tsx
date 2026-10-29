@@ -26,6 +26,7 @@ const DoctorDashboard = lazy(() => import('./pages/doctor/Dashboard'))
 const OpdSlipPage = lazy(() => import('./pages/doctor/OpdSlipPage'))
 const QrPosterPage = lazy(() => import('./pages/doctor/QrPosterPage'))
 const PharmacyBillPage = lazy(() => import('./pages/doctor/PharmacyBillPage'))
+const IpdMedicineStatement = lazy(() => import('./pages/doctor/IpdMedicineStatement'))
 const LabReportPage = lazy(() => import('./pages/LabReportPage'))
 const OrderTrack = lazy(() => import('./pages/OrderTrack'))
 const CheckinPage = lazy(() => import('./pages/CheckinPage'))
@@ -169,7 +170,7 @@ const PageViewTracker = () => {
 const WhatsAppFloat = () => {
   const { pathname } = useLocation()
   // A clinic's website (/s/…) books with that clinic, not Sehatsandhi's assistant.
-  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/')) return null
+  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/') || pathname.startsWith('/business/print/')) return null
   return (
     <a href={waLink()}
        target="_blank" rel="noreferrer"
@@ -224,6 +225,7 @@ export default function App() {
           <Route path="/business/print/opd/:id" element={<PasswordGate><OpdSlipPage /></PasswordGate>} />
           <Route path="/business/print/qr/:id" element={<PasswordGate><QrPosterPage /></PasswordGate>} />
           <Route path="/business/print/pharmacy/:id" element={<PasswordGate><PharmacyBillPage /></PasswordGate>} />
+          <Route path="/business/print/ipd-medicines/:id" element={<PasswordGate><IpdMedicineStatement /></PasswordGate>} />
 
           {/* Presentation view of the WhatsApp booking journey, for showing
               stakeholders the flow while the AISensy integration is built. All

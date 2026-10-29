@@ -58,10 +58,14 @@ export default function StayMoney({ stay, memberId, businessId, practitionerId, 
               {m.deposits > 0 ? 'Add deposit' : 'Take deposit'}
             </button>
             <button style={btn()} onClick={() => { setOpen(open === 'pharmacy' ? null : 'pharmacy'); setMsg(''); setErr('') }}>
-              Send to pharmacy
+              Get medicines
             </button>
           </span>
         )}
+        {/* 0284: every medicine given in this stay, date by date. */}
+        <a href={`/business/print/ipd-medicines/${stay.id}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: BIZ.green, fontWeight: 700 }}>
+          Medicine statement
+        </a>
       </div>
 
       {open === 'deposit' && (
@@ -128,6 +132,28 @@ function DepositForm({ stay, memberId, businessId, practitionerId, onDone, onErr
       <button style={btn(true)} disabled={busy || !(Number(amount) > 0)} onClick={save}>{busy ? 'Saving…' : 'Take deposit & print receipt'}</button>
     </div>
   )
+}
+
+/** 0284: the medicines on a slip the attendant takes to the pharmacy — ours or any other. */
+export async function printMedicineSlip(stay: Admission, items: { name: string; qty: string; how?: string }[], by?: string | null) {
+  const w = window.open('', '_blank', 'width=460,height=600')
+  if (!w) return
+  const { data: b } = await supabase.from('businesses').select('name, address, phone').eq('id', stay.business_id).maybeSingle()
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
+  w.document.write(`<!doctype html><html><head><title>Medicine slip — ${esc(stay.patient_name)}</title>
+<style>body{font-family:system-ui,sans-serif;padding:24px;color:#111}h1{font-size:18px;margin:0}small{color:#555}
+table{width:100%;margin-top:14px;border-collapse:collapse}th,td{padding:7px 4px;border-bottom:1px solid #ddd;font-size:14px;text-align:left}
+th{font-size:12px;color:#555;text-transform:uppercase}td:last-child,th:last-child{text-align:right}</style></head><body>
+<h1>${esc(b?.name)}</h1><small>${esc(b?.address)}${b?.phone ? ` · ${esc(b.phone)}` : ''}</small>
+<p style="margin-top:16px;font-weight:700">MEDICINES FOR THE WARD</p>
+<div style="font-size:14px;line-height:1.6">Patient: <b>${esc(stay.patient_name)}</b><br>
+Admission ${esc(stay.admission_no)}${stay.ward_name ? ` · ${esc(stay.ward_name)} ${esc(stay.bed_label ?? '')}` : ''}<br>
+${stay.attending_name ? `Doctor: ${esc(stay.attending_name)}<br>` : ''}${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}${by ? ` · ${esc(by)}` : ''}</div>
+<table><tr><th>Medicine</th><th>How</th><th>Qty</th></tr>
+${items.map(i => `<tr><td>${esc(i.name)}</td><td>${esc(i.how ?? '')}</td><td>${esc(i.qty)}</td></tr>`).join('')}</table>
+<p style="font-size:12px;color:#555;margin-top:18px">Show this slip at the pharmacy. At our pharmacy the medicines go on the patient's hospital bill.</p>
+<script>setTimeout(()=>window.print(),300)</script></body></html>`)
+  w.document.close()
 }
 
 // A plain receipt, printed from the browser.
@@ -204,9 +230,16 @@ function PharmacyRequestForm({ stay, clinical, left, onDone, onError }: {
       ))}
       <button style={{ ...btn(), justifySelf: 'start' }} onClick={() => setExtra(xs => [...xs, { name: '', qty: '' }])}>+ Another</button>
       <input style={input} placeholder="Note for the pharmacy (optional)" value={note} onChange={e => setNote(e.target.value)} />
-      <button style={{ ...btn(true), justifySelf: 'start' }} disabled={busy || items.length === 0} onClick={send}>
-        {busy ? 'Sending…' : 'Send to pharmacy'}
-      </button>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button style={btn(true)} disabled={busy || items.length === 0} onClick={send}>
+          {busy ? 'Sending…' : 'Send to pharmacy'}
+        </button>
+        {/* 0284: or the attendant fetches them, with a slip. */}
+        <button style={btn()} disabled={busy || items.length === 0}
+          onClick={() => { printMedicineSlip(stay, items.map(i => ({ name: i.name, qty: i.qty }))); onDone('Slip printed for the attendant.') }}>
+          Print slip for attendant
+        </button>
+      </div>
     </div>
   )
 }
