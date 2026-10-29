@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState, useCallback } from 'react'
 import StayMoney, { printMedicineSlip } from './StayMoney'
 import AbhaLine from './AbhaLine'
 import PlannedSurgeries from './PlannedSurgeries'
+import ReferTests, { ReferredList } from './ReferTests'
 import { SPECIALITIES } from '../../types'
 import { Search, AlertTriangle, Plus, X, Mic, MicOff, Calendar, Activity, FileText, Upload, Send, Trash2, BedDouble, MessageCircle } from 'lucide-react'
 import { BIZ } from '../business/shared'
@@ -979,7 +980,8 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
           ['history', 'Visits', true], ['clinical', 'Medical history', true],
           ['vitals', 'Vitals', false], ['rx', 'Prescriptions', true],
           ['docs', 'Documents', true], ['ipd', 'Admissions', false], ['ot', 'Operations', true],
-          ...(labOn || care?.isLab ? [['lab', care?.isLab ? 'Reports' : 'Lab tests', !care?.isLab] as const] : []),
+          // 0290: every clinic has Lab tests — with no lab of its own it sends them to another.
+          ['lab', care?.isLab ? 'Reports' : 'Lab tests', !care?.isLab] as const,
           ['money', 'Billing', false], ['refer', 'Refer to doctor', false],
         ] as const)
           .filter(([id, , needsClinical]) => (clinical || !needsClinical) && paneOn(id))
@@ -1039,8 +1041,9 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
           clinical={clinical} prescriber={prescriber}
         />
       )}
-      {shown === 'lab' && (labOn || care?.isLab) && (
-        <LabTestsPane memberId={memberId} businessId={businessId} visits={visits} />
+      {shown === 'lab' && (
+        <LabTestsPane memberId={memberId} businessId={businessId} visits={visits} labOn={labOn || !!care?.isLab}
+          admitted={stays.some(s => s.status === 'admitted')} />
       )}
       {shown === 'ot' && (
         <OperationsPane memberId={memberId} businessId={businessId} stays={stays} />
@@ -1071,8 +1074,13 @@ function PatientRecord({ memberId, businessId, practitionerId, doctorId, focusVi
 // lab; the order goes to the lab's queue and the charge onto the patient's
 // account. Results come back here as the approved report.
 
-function LabTestsPane({ memberId, businessId, visits }: { memberId: string; businessId: string; visits: Visit[] }) {
+function LabTestsPane({ memberId, businessId, visits, labOn, admitted }: {
+  memberId: string; businessId: string; visits: Visit[]; labOn: boolean; admitted: boolean
+}) {
   const [orders, setOrders] = useState<LabOrder[]>([])
+  // 0290: sending tests to another lab on Sehatsandhi.
+  const [referring, setReferring] = useState(false)
+  const [referTick, setReferTick] = useState(0)
   const [tests, setTests] = useState<LabTest[]>([])
   const [packages, setPackages] = useState<LabPackage[]>([])
   const [ordering, setOrdering] = useState(false)
@@ -1085,14 +1093,16 @@ function LabTestsPane({ memberId, businessId, visits }: { memberId: string; busi
   const [err, setErr] = useState('')
   const [uploads, setUploads] = useState<UploadedReport[]>([])
   const load = useCallback(() => {
+    if (!labOn) return
     getOrders(businessId, { memberId }).then(setOrders).catch(() => setOrders([]))
     getUploads(businessId, { memberId }).then(setUploads).catch(() => setUploads([]))
-  }, [businessId, memberId])
+  }, [businessId, memberId, labOn])
   useEffect(load, [load])
   useEffect(() => {
+    if (!labOn) return
     getTests(businessId).then(setTests).catch(() => setTests([]))
     getPackages(businessId).then(setPackages).catch(() => setPackages([]))
-  }, [businessId])
+  }, [businessId, labOn])
   const today = new Date().toISOString().slice(0, 10)
   const openOrder = () => {
     setVisitId(visits.find(v => (v.visit_date ?? '') === today)?.id ?? '')
@@ -1108,12 +1118,21 @@ function LabTestsPane({ memberId, businessId, visits }: { memberId: string; busi
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      {!ordering && (
-        <div><button style={btn(true)} onClick={openOrder} disabled={!tests.length}>
-          <Plus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />Order lab tests
-        </button>
-        {!tests.length && <span style={{ fontSize: 12.5, color: BIZ.muted, marginLeft: 10 }}>The lab has no tests set up yet.</span>}</div>
+      {!ordering && !referring && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {labOn && <button style={btn(true)} onClick={openOrder} disabled={!tests.length}>
+            <Plus className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4 }} />Order lab tests
+          </button>}
+          <button style={btn(!labOn)} onClick={() => setReferring(true)}>Send to another lab</button>
+          {labOn && !tests.length && <span style={{ fontSize: 12.5, color: BIZ.muted }}>Your lab has no tests set up yet.</span>}
+        </div>
       )}
+      {referring && (
+        <ReferTests businessId={businessId} memberId={memberId} admitted={admitted}
+          visitId={visits.find(v => (v.visit_date ?? '') === today)?.id ?? null}
+          onSent={() => { setReferring(false); setReferTick(t => t + 1) }} onClose={() => setReferring(false)} />
+      )}
+      <ReferredList businessId={businessId} memberId={memberId} reloadKey={referTick} />
       {ordering && (
         <div style={{ ...card, display: 'grid', gap: 10 }}>
           <TestPicker tests={tests} packages={packages} testIds={testIds} packageIds={packageIds} setTestIds={setTestIds} setPackageIds={setPackageIds} />
@@ -1132,7 +1151,7 @@ function LabTestsPane({ memberId, businessId, visits }: { memberId: string; busi
           </div>
         </div>
       )}
-      {orders.length === 0 && !ordering && <div style={{ ...card, color: BIZ.muted, fontSize: 13.5 }}>No lab tests for this patient.</div>}
+      {labOn && orders.length === 0 && !ordering && <div style={{ ...card, color: BIZ.muted, fontSize: 13.5 }}>No tests in our lab for this patient.</div>}
       {orders.map(o => (
         <div key={o.id} style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>

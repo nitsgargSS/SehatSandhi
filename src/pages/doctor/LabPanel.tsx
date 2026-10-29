@@ -9,7 +9,7 @@ import {
   createOrder, getOrders, getOrder, markCollected, assignCollector, cancelOrder, getResults, getPreviousValues,
   saveResults, approveOrder, sendReport, rangeText, STATUS_LABEL,
   getFollowups, followupAction, getCrmSummary, getSegment, setRepeatDays, reminderLink,
-  getUploads, uploadReport, sendUpload, testVisible, CATEGORY_LABEL, DIAGNOSTIC_GROUPS, acceptOrder,
+  getUploads, uploadReport, sendUpload, testVisible, CATEGORY_LABEL, DIAGNOSTIC_GROUPS, acceptOrder, withdrawReferral,
   type LabCategory,
   LabTest, LabPackage, LabOrder, LabParameter, OrderStatus, ParamKind, LabFollowup, CrmSummary, Segment, UploadedReport,
 } from '../../lib/labApi'
@@ -125,6 +125,7 @@ function OrderRow({ o, onOpen }: { o: LabOrder; onOpen: (id: string) => void }) 
         {o.priority === 'urgent' && <span className="ml-2 text-xs font-bold text-red-600">URGENT</span>}
         {o.collection === 'home' && <span className="ml-2 text-xs font-bold text-teal-700">HOME</span>}
         {o.status === 'ordered' && !o.accepted_at && <span className="ml-2 text-xs font-bold text-amber-700">NEW</span>}
+        {o.source === 'referral' && <span className="ml-2 text-xs font-bold text-indigo-700">FROM {o.referral_from_name?.toUpperCase() ?? 'HOSPITAL'}</span>}
         <span className="block text-xs text-gray-500">
           {o.items.map(i => i.name).join(', ')}
         </span>
@@ -150,6 +151,13 @@ function NewOrders({ businessId, onOpen, onAccepted }: { businessId: string; onO
     setErr('')
     try { await acceptOrder(o.id); load(); onAccepted() } catch (e) { setErr((e as Error).message) }
   }
+  // 0290: a hospital's order the lab cannot take. The doctor who sent it is told why.
+  const [declining, setDeclining] = useState<{ id: string; why: string } | null>(null)
+  const decline = async () => {
+    if (!declining) return
+    setErr('')
+    try { await withdrawReferral(declining.id, declining.why.trim()); setDeclining(null); load(); onAccepted() } catch (e) { setErr((e as Error).message) }
+  }
   if (!orders.length) return null
   return (
     <div className="card shadow-sm p-0 border-teal-300">
@@ -162,10 +170,24 @@ function NewOrders({ businessId, onOpen, onAccepted }: { businessId: string; onO
               {o.priority === 'urgent' && <span className="ml-2 text-xs font-bold text-red-600">URGENT</span>}
               {o.collection === 'home' && <span className="ml-2 text-xs font-bold text-teal-700">HOME</span>}
               <span className="block text-xs text-gray-500">
-                {o.items.map(i => i.name).join(', ')} · {o.source === 'app' ? 'booked in the app' : `ordered by ${o.ordered_by_name ?? 'a doctor'}`} · {dt(o.created_at)}
+                {o.items.map(i => i.name).join(', ')} · {o.source === 'app' ? 'booked in the app'
+                  : o.source === 'referral' ? `sent by ${o.ordered_by_name ?? 'a doctor'} of ${o.referral_from_name ?? 'a hospital'} · ${o.referral_payer === 'hospital' ? 'the hospital pays' : 'the patient pays here'}`
+                  : `ordered by ${o.ordered_by_name ?? 'a doctor'}`} · {dt(o.created_at)}
+                {o.notes && <span className="block text-gray-600">Note: {o.notes}</span>}
               </span>
             </button>
-            <button onClick={() => accept(o)} className="btn-teal text-xs py-1.5 px-3 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Accept</button>
+            <span className="flex gap-2">
+              <button onClick={() => accept(o)} className="btn-teal text-xs py-1.5 px-3 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Accept</button>
+              {o.source === 'referral' && <button onClick={() => setDeclining({ id: o.id, why: '' })} className="text-xs py-1.5 px-3 rounded-lg border border-gray-300 text-gray-600">Decline</button>}
+            </span>
+            {declining?.id === o.id && (
+              <div className="w-full flex gap-2">
+                <input className="input-field" autoFocus value={declining.why} onChange={e => setDeclining({ ...declining, why: e.target.value })}
+                  placeholder={`Why can't you take it? ${o.referral_from_name ?? 'The hospital'} will see this.`} />
+                <button className="btn-teal text-xs py-1.5 px-3" disabled={declining.why.trim().length < 3} onClick={decline}>Decline</button>
+                <button className="text-xs py-1.5 px-3 rounded-lg border border-gray-300" onClick={() => setDeclining(null)}>Keep</button>
+              </div>
+            )}
           </div>
         ))}
       </div>
