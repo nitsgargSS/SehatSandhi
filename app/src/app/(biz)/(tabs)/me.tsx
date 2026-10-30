@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ScrollView, StyleSheet, Text } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { useSession, ROLE_WORD } from '../../../lib/session'
 import { supabase } from '../../../lib/supabase'
@@ -69,8 +69,11 @@ export default function Me() {
       {!!s?.clinic && (s.clinic.vertical === 'pharmacy' || s.pharmacyModule) && (
         <Card>
           <Label>Pharmacy</Label>
-          <Text style={st.meta}>Stock on hand, what to reorder, what is expiring; add stock and new medicines.</Text>
-          <Btn small kind="ghost" label="Pharmacy stock" onPress={() => router.push('/stock')} />
+          <Text style={st.meta}>Bills with split payment, prescriptions waiting from the doctors; stock on hand, what to reorder, what is expiring.</Text>
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            <Btn small label="New bill" onPress={() => router.push('/pharmbill')} />
+            <Btn small kind="ghost" label="Pharmacy stock" onPress={() => router.push('/stock')} />
+          </View>
         </Card>
       )}
       {!!s?.clinic && (!s.role.enforced || ['owner', 'manager'].includes(s.role.role ?? '')) && (

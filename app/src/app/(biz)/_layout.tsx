@@ -20,6 +20,7 @@ export default function BizLayout() {
         <Stack.Screen name="labnew" options={{ title: 'New lab order' }} />
         <Stack.Screen name="doctors" options={{ title: 'Doctors, fees & hours' }} />
         <Stack.Screen name="stock" options={{ title: 'Pharmacy stock' }} />
+        <Stack.Screen name="pharmbill" options={{ title: 'Pharmacy bill' }} />
         <Stack.Screen name="plan" options={{ title: 'Plan' }} />
         <Stack.Screen name="privacy" options={{ title: 'Privacy requests' }} />
         <Stack.Screen name="businesses" options={{ title: 'Businesses' }} />
