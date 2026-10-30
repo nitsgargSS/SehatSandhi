@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { BIZ } from '../business/shared'
 import { moneyExact } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
+import PaymentSplit, { type PayRow, payRow, payProblem, payTotal, toPayments } from './PaymentSplit'
 import {
   type Charge, type ChargeCategory, type PaymentMethod, type PriceItem,
   HEAD_LABELS, INVOICE_GST_RATES, PAYMENT_METHOD_OPTIONS, counterInvoice, listPriceItems, savePriceItem, retirePriceItem,
@@ -60,9 +61,9 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
   const [skip, setSkip] = useState<Set<string>>(new Set())
   const [discount, setDiscount] = useState('')
   const [reason, setReason] = useState('')
-  const [paid, setPaid] = useState<string | null>(null)      // null: follows the total
-  const [method, setMethod] = useState<PaymentMethod>('cash')
-  const [reference, setReference] = useState('')
+  // 0301: one payment or several. Until the biller touches it, it is one payment of the whole total.
+  const [pays, setPays] = useState<PayRow<PaymentMethod>[]>(() => [payRow<PaymentMethod>('cash')])
+  const [follow, setFollow] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState<{ billNo: string; token: string; net: number; paid: number } | null>(null)
@@ -86,8 +87,10 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
     + carried.reduce((s, c) => s + Number(c.amount), 0))
   const gstTotal = paise(filled.reduce((s, l) => s + lineOf(l).tax, 0))
   const net = paise(subtotal - num(discount))
-  const paying = paid === null ? net : num(paid)
-  const valid = (filled.length > 0 || carried.length > 0) && net >= 0 && paying >= 0 && paying <= net
+  useEffect(() => { if (follow) setPays(ps => [{ ...ps[0], amount: net > 0 ? String(net) : '' }]) }, [follow, net])
+  const paying = paise(payTotal(pays))
+  const payErr = payProblem(pays, net)
+  const valid = (filled.length > 0 || carried.length > 0) && net >= 0 && !payErr
     && (num(discount) === 0 || reason.trim().length > 2)
 
   const set = (key: number, patch: Partial<Line>) => setLines(ls => ls.map(l => l.key === key ? { ...l, ...patch } : l))
@@ -95,7 +98,7 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
     const it = items.find(i => i.id === id)
     if (it) set(key, { category: it.category, description: it.name, unitPrice: String(it.price), gst: it.gst_rate })
   }
-  const reset = () => { setLines([blank(Date.now())]); setSkip(new Set()); setDiscount(''); setReason(''); setPaid(null); setMethod('cash'); setReference('') }
+  const reset = () => { setLines([blank(Date.now())]); setSkip(new Set()); setDiscount(''); setReason(''); setPays([payRow<PaymentMethod>('cash')]); setFollow(true) }
 
   const create = async () => {
     setBusy(true); setErr('')
@@ -105,7 +108,7 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
         lines: filled.map(l => ({ category: l.category, description: l.description.trim(), quantity: num(l.quantity || '1') || 1, unitPrice: num(l.unitPrice), gstRate: l.gst })),
         chargeIds: carried.map(c => c.id),
         discount: num(discount), discountReason: reason.trim(),
-        paid: paying, method, reference: reference.trim(), recordedBy: practitionerId ?? null,
+        payments: toPayments(pays), recordedBy: practitionerId ?? null,
       })
       setDone({ billNo: r.bill_no, token: r.token, net: Number(r.net), paid: Number(r.paid) })
       reset(); onChange()
@@ -227,22 +230,16 @@ export default function CounterInvoice({ memberId, businessId, practitionerId, c
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 13, color: BIZ.ink, fontWeight: 700 }}>Received now</span>
-        <input style={{ ...input, flex: '0 1 130px' }} inputMode="decimal" placeholder="Amount ₹" aria-label="Amount received"
-          value={paid === null ? (net > 0 ? String(net) : '') : paid} onChange={e => setPaid(e.target.value.replace(/[^0-9.]/g, ''))} />
-        <select style={{ ...input, flex: '0 1 150px' }} value={method} onChange={e => setMethod(e.target.value as PaymentMethod)} aria-label="How it was paid">
-          {PAYMENT_METHOD_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-        <input style={{ ...input, flex: '1 1 150px' }} placeholder="Reference (UPI ref, cheque no.)" value={reference} onChange={e => setReference(e.target.value)} />
+      <div style={{ fontSize: 13, color: BIZ.ink, fontWeight: 700 }}>Received now</div>
+      <PaymentSplit due={net} rows={pays} onChange={r => { setFollow(false); setPays(r) }} methods={PAYMENT_METHOD_OPTIONS} />
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 11.5, color: payErr ? '#a12626' : BIZ.mutedWarm }}>
+          {payErr ?? (paying < net && net > 0 ? `${moneyExact(net - paying)} will stay due on the patient's account.`
+            : 'Each payment shows in today\'s Collections under your name.')}
+        </div>
         <button style={{ ...btn(true), opacity: busy || !valid ? .5 : 1 }} disabled={busy || !valid} onClick={create}>
           {busy ? 'Making…' : 'Make invoice'}
         </button>
-      </div>
-      <div style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
-        {paying > net ? 'The amount received is more than the invoice.'
-          : paying < net && net > 0 ? `${moneyExact(net - paying)} will stay due on the patient's account. Enter 0 if nothing is paid now.`
-          : 'The payment shows in today\'s Collections under your name.'}
       </div>
     </div>
   )

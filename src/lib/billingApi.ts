@@ -22,6 +22,9 @@ export const HEAD_LABELS: Record<ChargeCategory | 'pharmacy', string> = {
   consumable: 'Consumable', product: 'Optical / products', other: 'Other', pharmacy: 'Pharmacy counter',
 }
 
+/** 0301: one part of a bill's payment — a bill can be paid in several (half UPI, half cash). */
+export interface SplitPayment<M extends string = string> { amount: number; method: M; reference?: string }
+
 export type PaymentMethod =
   | 'cash' | 'upi' | 'credit_card' | 'debit_card' | 'card' | 'netbanking' | 'cheque' | 'insurance' | 'other'
 
@@ -196,21 +199,19 @@ export interface CounterInvoiceInput {
   chargeIds?: string[]
   discount?: number
   discountReason?: string
-  /** Money taken now; 0 leaves the whole invoice due. */
-  paid: number
-  method: PaymentMethod
-  reference?: string
+  /** 0301: money taken now, in one or more payments; none leaves the whole invoice due. */
+  payments: SplitPayment<PaymentMethod>[]
   recordedBy?: string | null
 }
 
 /** Charges, a numbered bill and the payment against it, in one step. */
 export async function counterInvoice(i: CounterInvoiceInput): Promise<{ bill_id: string; bill_no: string; token: string; net: number; paid: number }> {
-  const { data, error } = await supabase.rpc('sehat_counter_invoice', {
+  const { data, error } = await supabase.rpc('sehat_counter_invoice_split', {
     p_business: i.businessId, p_member: i.memberId,
     p_lines: i.lines.map(l => ({ category: l.category, description: l.description, quantity: l.quantity, unit_price: l.unitPrice, gst_rate: l.gstRate ?? 0 })),
     p_charge_ids: i.chargeIds ?? [],
     p_discount: i.discount ?? 0, p_discount_reason: i.discountReason || null, p_round_off: 0,
-    p_paid: i.paid, p_method: i.method, p_reference: i.reference || null,
+    p_payments: i.payments.filter(x => x.amount > 0),
     p_recorded_by: i.recordedBy ?? null, p_doctor: null,
   })
   oops(error)

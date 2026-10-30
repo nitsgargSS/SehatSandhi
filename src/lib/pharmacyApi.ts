@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { SplitPayment } from './billingApi'
 
 // In-house dispensing (0158): a small clinic's own medicine counter.
 //
@@ -313,12 +314,12 @@ export interface NewPharmacyBill {
   prescriptionId?: string | null
   discountPct?: number
   discountReason?: string
-  /** Nothing, or 0, leaves the whole bill on credit. */
-  payment?: { amount: number; method: PharmacyPayMethod; reference?: string } | null
+  /** 0301: one or more payments (half UPI, half cash). None, or all 0, leaves the whole bill on credit. */
+  payments?: SplitPayment<PharmacyPayMethod>[]
 }
 
 export async function issueBill(businessId: string, b: NewPharmacyBill): Promise<string> {
-  const { data, error } = await supabase.rpc('sehat_pharmacy_issue_bill', {
+  const { data, error } = await supabase.rpc('sehat_pharmacy_issue_bill_split', {
     p_business: businessId,
     p_lines: b.lines,
     p_patient_member_id: b.patientMemberId ?? null,
@@ -327,7 +328,7 @@ export async function issueBill(businessId: string, b: NewPharmacyBill): Promise
     p_prescription_id: b.prescriptionId ?? null,
     p_discount_pct: b.discountPct ?? 0,
     p_discount_reason: b.discountReason ?? null,
-    p_payment: b.payment && b.payment.amount > 0 ? b.payment : null,
+    p_payments: (b.payments ?? []).filter(x => x.amount > 0),
   })
   oops(error)
   return data as string
