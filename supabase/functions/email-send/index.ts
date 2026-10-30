@@ -13,6 +13,8 @@
 //   wa_broadcast_rejected → the business: why a broadcast was not approved, and the refund (0155)
 //   wa_broadcast_waiting  → ADMIN_EMAIL: a picture broadcast is waiting for approval (0247)
 //   clinic_booking_cancelled → the clinic and the doctor: the patient cancelled (0248)
+//   demo_request         → DEMO_ALERT_EMAIL (default contact@sehatsandhi.com): a doctor asked
+//                          for a demo on WhatsApp; the lead is in Admin → Leads (0300)
 //   signup_reminder      → a business that registered and stopped at payment: what joining
 //                          gives it, and the link to finish (0223). payload.n is 1 or 2.
 //
@@ -105,6 +107,17 @@ Deno.serve(async (req) => {
     if (r.kind === 'wa_broadcast_rejected') {
       const res = await sendBroadcastRejected(db, r.business_id, r.payload, site)
       if (res === 'skip') { await finish({ status: 'skipped', last_error: 'business gone or no address' }); continue }
+      if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
+      else {
+        const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
+        await finish({ status: giveUp ? 'failed' : 'pending', last_error: res.error }); failed++
+      }
+      continue
+    }
+
+    // 0300: a doctor asked the bot for a demo — tell Sehatsandhi, to call them today.
+    if (r.kind === 'demo_request') {
+      const res = await sendDemoRequest(r.payload, site)
       if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
       else {
         const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
@@ -464,6 +477,22 @@ async function sendNurseUnassigned(db: any, businessId: string | null, nurseId: 
 // deno-lint-ignore no-explicit-any
 // 0247: to Sehatsandhi's admin — a picture broadcast is waiting to be read.
 // deno-lint-ignore no-explicit-any
+async function sendDemoRequest(payload: any, site: string): Promise<SendResult> {
+  const phone = String(payload?.phone ?? '').replace(/^91/, '')
+  const pretty = phone.length === 10 ? `${phone.slice(0, 5)} ${phone.slice(5)}` : phone
+  const details = String(payload?.details ?? '') || '(they did not say)'
+  const name = String(payload?.name ?? '')
+  const panel = `${site}/${Deno.env.get('ADMIN_PATH') ?? 'ng-ctrl-2026'}`
+  const html = layout('A doctor asked for a demo', `
+<p style="margin:0 0 12px">Someone asked for a free demo on WhatsApp. Call them today.</p>
+<p style="margin:0 0 6px"><b>Phone:</b> <a href="tel:+91${esc(phone)}" style="color:#0f6b4a">${esc(pretty)}</a> · <a href="https://wa.me/91${esc(phone)}" style="color:#0f6b4a">WhatsApp</a></p>
+<p style="margin:0 0 6px"><b>They wrote:</b> ${esc(details)}</p>
+${name ? `<p style="margin:0 0 6px"><b>WhatsApp name:</b> ${esc(name)}</p>` : ''}
+<p style="margin:14px 0 0"><a href="${panel}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold">Open Admin → Leads</a></p>`)
+  const text = `A doctor asked for a demo on WhatsApp. Call them today.\nPhone: ${pretty}\nThey wrote: ${details}\n${name ? `WhatsApp name: ${name}\n` : ''}Leads: ${panel}`
+  return sendEmail({ to: Deno.env.get('DEMO_ALERT_EMAIL') ?? 'contact@sehatsandhi.com', toName: 'Sehatsandhi', subject: `Demo request — ${pretty}${details !== '(they did not say)' ? ` — ${details.slice(0, 60)}` : ''}`, html, text })
+}
+
 async function sendBroadcastWaiting(db: any, businessId: string | null, payload: any, site: string): Promise<SendResult | 'skip'> {
   if (!businessId) return 'skip'
   const { data: b } = await db.from('businesses').select('name, own_city').eq('id', businessId).maybeSingle()

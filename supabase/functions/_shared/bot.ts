@@ -64,7 +64,7 @@ export interface Vars {
   /** Clinic line: they asked for all of Sehatsandhi — do not steer back to a clinic this conversation. */
   general?: boolean
   /** 0243: a request being put together — which one, what was just asked, and the answers so far. */
-  req?: { what: 'ambulance' | 'medicine' | 'insurance'; ask: string; f: Record<string, string> }
+  req?: { what: 'ambulance' | 'medicine' | 'insurance' | 'demo'; ask: string; f: Record<string, string> }
   /** 0245: the kind of test being looked for ('pathology' | 'radiology' | '' for any), and its name as chosen ("MRI"). */
   labKind?: string
   labWant?: string
@@ -582,9 +582,15 @@ const INS_TIME: Reply = {
   buttons: [{ id: 'req:time:Morning', title: '🌅 सुबह' }, { id: 'req:time:Afternoon', title: '☀️ दोपहर' }, { id: 'req:time:After 6 pm', title: '🌙 शाम 6 के बाद' }],
 }
 
+// 0300: a doctor asking for a demo of Sehatsandhi itself — the number in every
+// post and video. One question, then it is a lead in Admin → Leads and an email.
+const DEMO = /\bdemo\b|डेमो|\bsoftware\b|सॉफ़्टवेयर|सॉफ्टवेयर/i
+const DEMO_ASK = '🙏 सेहतसंधि का फ़्री डेमो — हमारी टीम आपको कॉल करेगी।\nअपना नाम, क्लिनिक / हॉस्पिटल और शहर एक मैसेज में लिखें — जैसे: Dr. Sharma, Sharma Clinic, Karnal\n\nFree demo: write your name, clinic and town in one message.'
+
 /** The first question of a request. `pin`: an area already known for it. */
 function requestStart(what: Req['what'], v: Vars, pin = ''): Step {
   const f: Record<string, string> = pin ? { pin } : {}
+  if (what === 'demo') return asking(v, { what, ask: 'who', f }, { kind: 'text', body: DEMO_ASK })
   if (what === 'ambulance') {
     return asking(v, { what, ask: 'kind', f }, {
       kind: 'buttons', body: AMB_FIRST,
@@ -598,7 +604,9 @@ function requestStart(what: Req['what'], v: Vars, pin = ''): Step {
 /** The request itself, and what the database says back (which names the page to follow it on). */
 async function requestSend(v: Vars, req: Req, m: Inbound, phone: string, rpc: Rpc): Promise<Step> {
   const f = req.f, name = (m.name ?? '').trim() || (v.lastPatient ?? '').split(',')[0].trim()
-  const r = req.what === 'ambulance'
+  const r = req.what === 'demo'
+    ? await rpc('bot_demo_request_json', { p_phone: phone, p_name: (m.name ?? '').trim(), p_details: f.who ?? '' })
+    : req.what === 'ambulance'
     ? await rpc('bot_ambulance_request_json', { p_phone: phone, p_pin: f.pin ?? '', p_name: name, p_kind: f.kind ?? 'emergency', p_address: f.address ?? '', p_need: f.need ?? '', p_lat: f.lat ?? '', p_lng: f.lng ?? '' })
     : req.what === 'medicine'
       ? await rpc('bot_medicine_order_json', { p_phone: phone, p_pin: f.pin ?? '', p_name: name, p_address: f.address ?? '', p_medicines: f.meds ?? '', p_rx_url: f.rx ?? '' })
@@ -612,7 +620,7 @@ async function requestSend(v: Vars, req: Req, m: Inbound, phone: string, rpc: Rp
   const lastPin = /^\d{6}$/.test(f.pin ?? '') ? f.pin : v.lastPin
   const sent: Step = { session: { state: 'idle', vars: carry({ ...v, ...(lastPin ? { lastPin } : {}) }) }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON] }] }
   // 0250: the app, after an order or a request — not after an ambulance call.
-  return r?.ok === true && req.what !== 'ambulance' ? invited(sent, phone, rpc) : sent
+  return r?.ok === true && req.what !== 'ambulance' && req.what !== 'demo' ? invited(sent, phone, rpc) : sent
 }
 
 /**
@@ -657,6 +665,12 @@ async function requestStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promis
       return send()
     }
     if (req.ask === 'need') { if (text) f.need = text.slice(0, 300); return send() }
+  }
+
+  if (req.what === 'demo') {
+    if (text.length < 2) return again({ kind: 'text', body: DEMO_ASK })
+    f.who = text.slice(0, 300)
+    return send()
   }
 
   if (req.what === 'medicine') {
@@ -1090,6 +1104,11 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
       const r = await rpc('bot_business_ask_json', { p_phone: phone, p_what: what })
       if (r?.found === true && str(r.text)) return { session: { state: 'idle', vars: carry(vars) }, replies: [{ kind: 'text', body: str(r.text) }] }
     }
+  }
+
+  // 0300: a doctor asking for a demo of Sehatsandhi (on our own number, not a clinic's).
+  if (typed && state === 'idle' && m.line !== 'clinic' && DEMO.test(text) && !CLINIC_CODE.test(text)) {
+    return requestStart('demo', vars)
   }
 
   // 0254: the clinic's review QR — "Review SS-XXXXX". A walk-in rates their visit; only a
