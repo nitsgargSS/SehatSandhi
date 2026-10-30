@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { activeConfig } from '../../lib/env'
 import { isoDate, shortDate } from '../../lib/format'
 import { facebookLogin, loadFacebookSdk, SOCIAL_CONFIG_ID } from '../../lib/facebookLogin'
+import { highlightFor } from '../../../supabase/functions/_shared/socialHighlights.ts'
 
 // The business's daily social media post (0292, 0295).
 // The social-posts function makes tomorrow's post every afternoon; at 7 PM the
@@ -275,6 +276,9 @@ function PostCard({ p, busy, canChange, connected, onRemake, onSkip, onAnswer }:
         <img src={p.image_url} alt={p.topic} className="w-full aspect-square object-cover rounded-lg border border-gray-100" loading="lazy" />
       )}
       {p.status === 'failed' && <p className="text-sm text-red-600">{p.error ?? 'Something went wrong.'}</p>}
+      {highlightFor(p.topic) && (
+        <p className="text-xs text-gray-600">Instagram highlight: <b>{highlightFor(p.topic)}</b> — Profile → Story archive → this Story → Highlight.</p>
+      )}
       {p.status === 'published' && (
         <p className="text-xs text-gray-600">
           {p.fb_post_id && <a className="text-teal-700 underline" href={`https://www.facebook.com/${p.fb_post_id}`} target="_blank" rel="noreferrer">See it on Facebook</a>}

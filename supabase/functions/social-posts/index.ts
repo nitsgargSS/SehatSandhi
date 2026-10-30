@@ -58,6 +58,7 @@ import { corsHeaders, json } from '../_shared/cors.ts'
 import { caller } from '../_shared/caller.ts'
 import { APP_ID, GRAPH, graph } from '../_shared/metaGraph.ts'
 import { graphSend } from '../_shared/whatsapp.ts'
+import { highlightFor } from '../_shared/socialHighlights.ts'
 
 const BUCKET = 'social-posts'
 const MODEL = 'claude-opus-5-5'
@@ -728,8 +729,11 @@ async function previewPhone(db: Db, businessId: string, chosen: string | null): 
 async function sendPreview(db: Db, post: any, s: any): Promise<string | null> {
   const wait = await needsOk(db, post, s.approval)
   const { data: b } = await db.from('businesses').select('name, auth_uid').eq('id', post.business_id).single()
-  const rule = wait ? 'It goes out (Facebook 10 AM, Instagram 7:30 PM) only after you say OK.'
-    : 'It goes out on Facebook at 10 AM and Instagram at 7:30 PM unless you say otherwise.'
+  // Sehatsandhi's own posts also say which Instagram highlight to file the Story in.
+  const highlight = s.audience === 'doctors' ? highlightFor(post.topic) : null
+  const rule = (wait ? 'It goes out (Facebook 10 AM, Instagram 7:30 PM) only after you say OK.'
+    : 'It goes out on Facebook at 10 AM and Instagram at 7:30 PM unless you say otherwise.') +
+    (highlight ? ` Instagram highlight: ${highlight}.` : '')
   const to = await previewPhone(db, post.business_id, s.preview_phone)
   let error: string | null = null
   if (to) {
