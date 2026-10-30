@@ -255,12 +255,14 @@ export async function addPayment(
  */
 export async function addPayments(
   memberId: string, businessId: string, parts: SplitPayment<PaymentMethod>[], recordedBy?: string | null,
+  admissionId?: string | null,
 ) {
   const rows = parts.filter(p => p.amount > 0)
   if (!rows.length) throw new Error('A payment has to be more than zero.')
   const { error } = await supabase.from('patient_payments').insert(rows.map(p => ({
     business_id: businessId,
     patient_member_id: memberId,
+    admission_id: admissionId ?? null,
     amount: p.amount,
     method: p.method,
     reference: p.reference || null,
