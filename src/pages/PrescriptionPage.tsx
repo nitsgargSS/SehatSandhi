@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { fetchPublicPrescription, PublicPrescription } from '../lib/prescriptionsApi'
+import FollowUs from '../components/FollowUs'
 
 // The patient's copy, opened from a WhatsApp or email link. No login: the token
 // in the URL is the authorisation, exactly as /invoice/:token works.
@@ -186,6 +187,8 @@ export default function PrescriptionPage() {
             away.
           </div>
         </footer>
+
+        <FollowUs />
 
         <div className="no-print" style={{ marginTop: 22, display: 'flex', gap: 10 }}>
           <button onClick={() => window.print()} style={{

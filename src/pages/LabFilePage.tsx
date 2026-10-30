@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getUploadedFile } from '../lib/labApi'
+import FollowUs from '../components/FollowUs'
 
 // An uploaded lab report (0169), at /lab/file/<token> — the WhatsApp link.
 //
@@ -49,6 +50,7 @@ export default function LabFilePage() {
         Shared by {f.lab_name ?? 'the lab'} exactly as issued. Available online until {new Date(f.expires_on).toLocaleDateString('en-IN', { dateStyle: 'medium' })}.
         Please save a copy if you need it after that.
       </p>
+      <FollowUs />
     </>,
   )
 }

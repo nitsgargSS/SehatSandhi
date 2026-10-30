@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getPublicLead, leadNotCalled, cancelLead, rateLead, type PublicLead } from '../lib/insuranceApi'
+import FollowUs from '../components/FollowUs'
 
 // The person's insurance request (0192), at /i/<token> — the link the WhatsApp
 // bot sends. No login. Who took it (name, phone, IRDAI licence), "they have
@@ -103,6 +104,7 @@ export default function InsuranceTrack() {
           {l.contacted_at && <div>बात हुई / Spoke to you: {when(l.contacted_at)}</div>}
         </div>
         {err && <div className="bg-red-50 text-red-600 text-sm rounded-xl p-3">{err}</div>}
+        <FollowUs />
       </div>
     </div>
   )

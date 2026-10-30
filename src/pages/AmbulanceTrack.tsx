@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getPublicTrip, cancelTripAsPatient, rateTrip, type PublicTrip } from '../lib/ambulanceApi'
+import FollowUs from '../components/FollowUs'
 
 // The patient's ambulance request (0191), at /a/<token> — the link the
 // WhatsApp bot sends. No login. Until a service accepts, it keeps 108 and the
@@ -139,6 +140,7 @@ export default function AmbulanceTrack() {
         ) : (
           <button onClick={() => setAskCancel(true)} className="text-sm text-gray-500 underline">एम्बुलेंस रद्द करें / Cancel ambulance</button>
         ))}
+        <FollowUs />
       </div>
     </div>
   )

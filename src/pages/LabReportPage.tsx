@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getPublicReport, rangeText, PublicReport } from '../lib/labApi'
+import FollowUs from '../components/FollowUs'
 
 // The patient's lab report (0168), at /lab/<token> — the link sent on WhatsApp.
 //
@@ -116,6 +117,7 @@ export default function LabReportPage() {
             <br /><span style={{ color: '#555' }}>Approved {d(r.approved_at)}</span>
           </span>
         </div>
+        <FollowUs />
       </div>
     </div>
   )
