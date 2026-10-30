@@ -59,7 +59,7 @@ import { listBusinessDoctors, BusinessDoctor, setPatientDoctor, getPatientDoctor
 import { inStockMedicines, suggestMedicines, rxFromStock, itemLabel, type StockRow } from '../../lib/pharmacyApi'
 import DoctorSelect from '../../components/DoctorSelect'
 import SendMenu from '../../components/SendMenu'
-import FeeChooser, { FeeChoice, FeePaidChooser, FeePaidNote, PAID_HOW_MISSING, emptyFee, feeDueOf, feeToCharge, feeValid, useFeePaidHow } from './FeeChooser'
+import FeeChooser, { FeeChoice, FeePaidChooser, FeePaidNote, emptyFee, feeDueOf, feePaidProblem, feePayments, feeToCharge, feeValid, useFeePaidHow } from './FeeChooser'
 import { opdVisit, opdSlipUrl, patientHistory, HistoryRow, vitalsLine, setTokenStatus } from '../../lib/queueApi'
 import { updatePatientDetails, setAlsoKnownAs, patientDetailChanges, patientPhones, addPatientPhone, removePatientPhone, type DetailChange, type OtherPhone } from '../../lib/patientsApi'
 import { phoneProblem } from '../../lib/credentials'
@@ -567,7 +567,8 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
   const opdDoctor = doctors.find(d => d.practitioner_id === opdDoctorId) ?? null
 
   const save = async () => {
-    if (toOpd && feeDueOf(fee, opdDoctor) > 0 && !paidHow) { setErr(PAID_HOW_MISSING); return }
+    const payErr = toOpd ? feePaidProblem(paidHow, feeDueOf(fee, opdDoctor)) : null
+    if (payErr) { setErr(payErr); return }
     setBusy(true); setErr('')
     try {
       const id = await registerPatient(businessId, {
@@ -592,7 +593,7 @@ function RegisterPatient({ businessId, initial, onCancel, onDone, practitionerId
       const r = await opdVisit({
         businessId, patientMemberId: id, practitionerId: doc,
         fee: feeToCharge(fee), discountReason: fee.mode === 'full' ? null : fee.reason.trim(),
-        paidMethod: feeDueOf(fee, opdDoctor) > 0 ? paidHow : null,
+        payments: feePayments(paidHow, feeDueOf(fee, opdDoctor)),
       })
       setDone({ id, queueId: r.queue_id, token: r.token_number, fee: Number(r.fee ?? 0), paid: Number(r.paid ?? 0) })
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
@@ -3571,13 +3572,14 @@ function OpdVisitCard({ memberId, businessId, practitionerId, onChange }: {
   const seenBy = Array.from(new Set(history.map(h => h.doctor_name).filter(Boolean)))
 
   const go = async () => {
-    if (feeDueOf(fee, chosen) > 0 && !paidHow) { setErr(PAID_HOW_MISSING); return }
+    const payErr = feePaidProblem(paidHow, feeDueOf(fee, chosen))
+    if (payErr) { setErr(payErr); return }
     setBusy(true); setErr('')
     try {
       const r = await opdVisit({
         businessId, patientMemberId: memberId, practitionerId: chosen?.practitioner_id ?? null,
         reason, fee: feeToCharge(fee), discountReason: fee.mode === 'full' ? null : fee.reason.trim(),
-        paidMethod: feeDueOf(fee, chosen) > 0 ? paidHow : null,
+        payments: feePayments(paidHow, feeDueOf(fee, chosen)),
       })
       setIssued({ id: r.queue_id, token: r.token_number, fee: Number(r.fee ?? 0), paid: Number(r.paid ?? 0) })
       setOpen(false); setFee(emptyFee); setReason('')

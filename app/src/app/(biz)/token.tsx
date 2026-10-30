@@ -120,7 +120,8 @@ export default function NewToken() {
         businessId: biz, patientMemberId: picked.id, practitionerId: doctor ?? s?.doctorId ?? null,
         fee: charge, discountReason: charge == null ? null : fee.reason.trim(), reason,
         priority: outOfTurn ? 10 : 0, priorityReason: outOfTurn ? why.trim() : null,
-        paidMethod: due > 0 ? paidHow : null,
+        // 0302: sent as one payment of the whole fee (split is on the web desk for now).
+        payments: due > 0 && paidHow && paidHow !== 'later' ? [{ amount: due, method: paidHow }] : [],
       })
       if (pre.appointment) await setAppointmentStatus(pre.appointment, 'completed').catch(() => {})
       setIssued({ token: r.token_number, name: picked.name, doctor: doc?.full_name ?? '', fee: r.fee, paid: Number(r.paid ?? 0), member: picked.id, queue: r.queue_id })

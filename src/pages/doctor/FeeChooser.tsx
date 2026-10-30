@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { BusinessDoctor } from '../../lib/doctorsApi'
 import { FEE_PAID_OPTIONS } from '../../lib/queueApi'
+import type { SplitPayment } from '../../lib/billingApi'
 import { moneyExact } from '../../lib/format'
 import { BIZ } from '../business/shared'
+import PaymentSplit, { type PayRow, payRow, payProblem, toPayments } from './PaymentSplit'
 
 // The OPD fee at the desk (0133/0135): the doctor's fee from the system, a
 // discount, or free — below the fee needs a reason, which the doctor's report
@@ -25,25 +27,47 @@ export const feeDueOf = (c: FeeChoice, d?: BusinessDoctor | null): number => {
 
 // 0226: how the fee was received at the desk. Asked once, then kept for the
 // next patient on any of the screens that give a token — a desk mostly takes
-// money the same way. '' = not said yet.
+// money the same way. how '' = not said yet; 'split' (0302) = the parts in rows.
+export interface FeePaid { how: string; rows: PayRow[] }
 let lastPaidHow = ''
-export function useFeePaidHow(): [string, (v: string) => void] {
-  const [v, setV] = useState(lastPaidHow)
-  return [v, (n: string) => { lastPaidHow = n; setV(n) }]
+export function useFeePaidHow(): [FeePaid, (v: FeePaid) => void] {
+  // A split is entered afresh for each patient; a single method is remembered.
+  const [v, setV] = useState<FeePaid>({ how: lastPaidHow, rows: [payRow('cash')] })
+  return [v, (n: FeePaid) => { lastPaidHow = n.how === 'split' ? '' : n.how; setV(n) }]
 }
 export const PAID_HOW_MISSING = 'Say how the fee was received — or choose "Not received now".'
 
+/** What is wrong with how the fee is said to be paid, or null. */
+export const feePaidProblem = (v: FeePaid, due: number): string | null =>
+  !(due > 0) ? null : !v.how ? PAID_HOW_MISSING : v.how === 'split' ? payProblem(v.rows, due) : null
+
+/** The payments to record with the token: the whole fee one way, the parts of a split, or none. */
+export const feePayments = (v: FeePaid, due: number): SplitPayment[] =>
+  !(due > 0) || !v.how || v.how === 'later' ? []
+    : v.how === 'split' ? toPayments(v.rows)
+    : [{ amount: due, method: v.how }]
+
+const SPLIT_METHODS = [['cash', 'Cash'], ['upi', 'UPI'], ['credit_card', 'Credit card'], ['debit_card', 'Debit card'], ['netbanking', 'Net banking']] as const
+
 /** "Fee received: Cash / UPI / … / Not received now" — shown only when there is a fee to take. */
-export function FeePaidChooser({ due, value, onChange }: { due: number; value: string; onChange: (v: string) => void }) {
+export function FeePaidChooser({ due, value, onChange }: { due: number; value: FeePaid; onChange: (v: FeePaid) => void }) {
   if (!(due > 0)) return null
+  // 0302: "Split" sits before "Not received now" — part one way, part another, or part now and the rest due.
+  const options = [...FEE_PAID_OPTIONS.filter(([v]) => v !== 'later'), ['split', 'Split / part'], ...FEE_PAID_OPTIONS.filter(([v]) => v === 'later')]
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
-      <span style={{ fontWeight: 700, color: BIZ.ink }}>Fee received:</span>
-      {FEE_PAID_OPTIONS.map(([v, l]) => (
-        <label key={v} style={{ display: 'flex', gap: 5, alignItems: 'center', cursor: 'pointer', color: v === 'later' ? BIZ.mutedWarm : BIZ.ink }}>
-          <input type="radio" checked={value === v} onChange={() => onChange(v)} /> {l}
-        </label>
-      ))}
+    <div style={{ display: 'grid', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
+        <span style={{ fontWeight: 700, color: BIZ.ink }}>Fee received:</span>
+        {options.map(([v, l]) => (
+          <label key={v} style={{ display: 'flex', gap: 5, alignItems: 'center', cursor: 'pointer', color: v === 'later' ? BIZ.mutedWarm : BIZ.ink }}>
+            <input type="radio" checked={value.how === v}
+              onChange={() => onChange({ how: v, rows: v === 'split' ? [payRow('cash')] : value.rows })} /> {l}
+          </label>
+        ))}
+      </div>
+      {value.how === 'split' && (
+        <PaymentSplit due={due} rows={value.rows} onChange={rows => onChange({ ...value, rows })} methods={SPLIT_METHODS} credit={false} />
+      )}
     </div>
   )
 }

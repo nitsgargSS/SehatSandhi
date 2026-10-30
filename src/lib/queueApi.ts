@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { SplitPayment } from './billingApi'
 import type { Vital } from './patientsApi'
 
 // The OPD line.
@@ -163,9 +164,8 @@ export interface OpdVisitInput {
   reason?: string | null
   priority?: number
   priorityReason?: string | null
-  /** 0226: how the fee was paid at the desk (cash, upi…). Left out, the fee stays due. */
-  paidMethod?: string | null
-  paidReference?: string | null
+  /** 0226/0302: what was paid at the desk — one payment or several. None leaves the fee due. */
+  payments?: SplitPayment[]
 }
 
 /** 0226: the ways an OPD fee is taken at the desk; 'later' records no payment. */
@@ -174,11 +174,11 @@ export const FEE_PAID_OPTIONS: [string, string][] = [
 ]
 
 export async function opdVisit(i: OpdVisitInput): Promise<{ queue_id: string; token_number: number; fee: number; list_price: number | null; paid?: number }> {
-  const { data, error } = await supabase.rpc('sehat_opd_visit', {
+  const { data, error } = await supabase.rpc('sehat_opd_visit_split', {
     p_business: i.businessId, p_member: i.patientMemberId, p_practitioner: i.practitionerId,
     p_fee: i.fee ?? null, p_discount_reason: i.discountReason || null, p_reason: i.reason || null,
     p_priority: i.priority ?? 0, p_priority_reason: i.priorityReason || null,
-    p_paid_method: i.paidMethod && i.paidMethod !== 'later' ? i.paidMethod : null, p_paid_reference: i.paidReference || null,
+    p_payments: (i.payments ?? []).filter(x => x.amount > 0),
   })
   if (error) {
     throw new Error(error.message.includes('already has a live token')
