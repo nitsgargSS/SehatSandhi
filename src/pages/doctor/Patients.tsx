@@ -39,7 +39,7 @@ import {
 } from '../../lib/dischargeApi'
 import {
   getCharges, getPayments, getAccount, addCharge, removeCharge,
-  addPayment, removePayment, postBedCharges, refundPayment,
+  addPayments, removePayment, postBedCharges, refundPayment,
   getBills, issueBill, cancelBill,
   Charge, Payment as PatientPayment, Account, ChargeCategory, PaymentMethod, Bill,
   PAYMENT_METHOD_OPTIONS, methodLabel, downloadCsv,
@@ -59,6 +59,7 @@ import { listBusinessDoctors, BusinessDoctor, setPatientDoctor, getPatientDoctor
 import { inStockMedicines, suggestMedicines, rxFromStock, itemLabel, type StockRow } from '../../lib/pharmacyApi'
 import DoctorSelect from '../../components/DoctorSelect'
 import SendMenu from '../../components/SendMenu'
+import PaymentSplit, { type PayRow, payRow, payTotal, toPayments } from './PaymentSplit'
 import FeeChooser, { FeeChoice, FeePaidChooser, FeePaidNote, emptyFee, feeDueOf, feePaidProblem, feePayments, feeToCharge, feeValid, useFeePaidHow } from './FeeChooser'
 import { opdVisit, opdSlipUrl, patientHistory, HistoryRow, vitalsLine, setTokenStatus } from '../../lib/queueApi'
 import { updatePatientDetails, setAlsoKnownAs, patientDetailChanges, patientPhones, addPatientPhone, removePatientPhone, type DetailChange, type OtherPhone } from '../../lib/patientsApi'
@@ -3784,7 +3785,8 @@ function BillingPane({
   // Which doctor this charge is credited to (0121). Blank = automatic: the
   // admission's attending doctor, else nobody.
   const [creditTo, setCreditTo] = useState<string | null>(null)
-  const [p, setP] = useState({ amount: '', method: 'cash' as PaymentMethod, reference: '' })
+  // 0301: a payment in parts — half UPI, half cash.
+  const [p, setP] = useState<PayRow<PaymentMethod>[]>(() => [payRow<PaymentMethod>('cash')])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [note, setNote] = useState('')
@@ -3974,23 +3976,18 @@ function BillingPane({
 
       <div style={card}>
         <div style={{ ...label, marginBottom: 9 }}>Record a payment</div>
-        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-          <input style={{ ...input, flex: '0 1 130px' }} inputMode="decimal" placeholder="Amount ₹"
-            value={p.amount} onChange={e => setP({ ...p, amount: e.target.value })} />
-          <select style={{ ...input, flex: '0 1 150px' }} value={p.method}
-            onChange={e => setP({ ...p, method: e.target.value as PaymentMethod })}>
-            {PAYMENT_METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <input style={{ ...input, flex: '1 1 160px' }} placeholder="Reference (UPI ref, cheque no.)"
-            value={p.reference} onChange={e => setP({ ...p, reference: e.target.value })} />
-          <button style={btn(true)} disabled={busy || !(Number(p.amount) > 0)}
-            onClick={() => guard(async () => {
-              await addPayment(memberId, businessId, {
-                amount: Number(p.amount), method: p.method,
-                reference: p.reference, admissionId: openStay?.id ?? null,
-              }, practitionerId)
-              setP({ amount: '', method: 'cash', reference: '' })
-            })}>Record</button>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <PaymentSplit due={Math.max(balance, 0)} rows={p} onChange={setP} methods={PAYMENT_METHODS} credit={false} />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11.5, color: BIZ.mutedWarm }}>
+              {payTotal(p) > Math.max(balance, 0) ? 'Anything above what is owed is kept as an advance.' : 'Each payment shows in today\'s Collections under your name.'}
+            </span>
+            <button style={btn(true)} disabled={busy || !toPayments(p).length}
+              onClick={() => guard(async () => {
+                await addPayments(memberId, businessId, toPayments(p), practitionerId, openStay?.id ?? null)
+                setP([payRow<PaymentMethod>('cash')])
+              })}>{toPayments(p).length > 1 ? `Record ${toPayments(p).length} payments` : 'Record'}</button>
+          </div>
         </div>
       </div>
 

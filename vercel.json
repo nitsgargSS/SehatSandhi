@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ':(exclude)app' ':(exclude)marketing'",
   "functions": {
     "api/social-render.js": {
       "memory": 2048,
