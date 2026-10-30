@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { billTax, fetchPublicBill, PublicBill } from '../lib/billingApi'
 import { moneyExact } from '../lib/format'
+import FollowUs from '../components/FollowUs'
 
 // The patient's bill, opened from a WhatsApp or email link. No login: the token
 // in the URL is the authorisation, as with /rx/, /ds/ and /invoice/.
@@ -300,6 +301,8 @@ export default function BillPage() {
             changing it.
           </div>
         </footer>
+
+        <FollowUs />
 
         <div className="no-print" style={{ marginTop: 22, display: 'flex', gap: 10 }}>
           <button onClick={() => window.print()} style={{

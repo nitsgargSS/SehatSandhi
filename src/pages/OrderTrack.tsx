@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getPublicOrder, patientStep, patientFeedback, rupees, type PublicOrder } from '../lib/medicineOrdersApi'
+import FollowUs from '../components/FollowUs'
 
 // The patient's medicine order (0189), at /o/<token> — the link the WhatsApp
 // bot sends. No login: the 24-character token is the key, as with /bill/ and
@@ -174,6 +175,7 @@ export default function OrderTrack() {
             <button onClick={() => setAskCancel(true)} className="text-sm text-gray-500 underline">ऑर्डर रद्द करें / Cancel order</button>
           )
         )}
+        <FollowUs />
       </div>
     </div>
   )

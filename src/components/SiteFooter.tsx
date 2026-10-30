@@ -97,17 +97,19 @@ export default function SiteFooter() {
           </a>
         </p>
 
-        {/* The icon is 19px, so each link pads out to a ~40px tap target and the
-            row uses negative margin to stay visually tight despite it. */}
-        <div style={{
+        {/* Named, not icons alone: people follow what they can read. Each link
+            pads out to a ~40px tap target; the negative margin keeps the row tight. */}
+        <div className="flex-wrap" style={{
           display: 'flex', justifyContent: 'center', alignItems: 'center',
-          gap: 4, margin: '0 -10px 12px',
+          gap: '0 6px', margin: '0 -10px 12px',
         }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: HEADER.muted }}>
+            {hi ? 'हमें फ़ॉलो करें:' : 'Follow us:'}
+          </span>
           {SOCIALS.map(({ href, label, Icon }) => (
             <a key={label} href={href} target="_blank" rel="noreferrer"
-              aria-label={label} title={label}
-              style={{ display: 'inline-flex', padding: 10, color: HEADER.muted, lineHeight: 0 }}>
-              <Icon size={19} strokeWidth={1.9} aria-hidden />
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: 10, fontSize: 13.5, fontWeight: 700, color: HEADER.green }}>
+              <Icon size={19} strokeWidth={1.9} aria-hidden /> {label}
             </a>
           ))}
         </div>
