@@ -8,7 +8,7 @@ import {
   QueueEntry, getVitalsDone, getTodaysVitals, vitalsLine, tokenVisit, reopenToken, visitHasDiagnosis,
 } from '../../lib/queueApi'
 import { searchPatients, PatientSearchResult, registerPatient, addVital, Vital } from '../../lib/patientsApi'
-import FeeChooser, { FeeChoice, FeePaidChooser, FeePaidNote, PAID_HOW_MISSING, emptyFee, feeDueOf, feeToCharge, feeValid, useFeePaidHow } from './FeeChooser'
+import FeeChooser, { FeeChoice, FeePaidChooser, FeePaidNote, emptyFee, feeDueOf, feePaidProblem, feePayments, feeToCharge, feeValid, useFeePaidHow } from './FeeChooser'
 import { listBusinessDoctors, BusinessDoctor } from '../../lib/doctorsApi'
 import DoctorSelect from '../../components/DoctorSelect'
 import { phoneProblem } from '../../lib/credentials'
@@ -483,7 +483,8 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, arriva
     if (priority && !why.trim()) { onError('Say why this token goes out of turn.'); return }
     if (doctors.length > 1 && !forDoctor) { onError('Choose which doctor this token is for.'); return }
     if (!feeValid(fee, chosenDoctor)) { onError('For a discount or free visit, enter the amount and say why.'); return }
-    if (feeDue > 0 && !paidHow) { onError(PAID_HOW_MISSING); return }
+    const payErr = feePaidProblem(paidHow, feeDue)
+    if (payErr) { onError(payErr); return }
     setBusy(true)
     try {
       const r = await opdVisit({
@@ -495,7 +496,7 @@ function IssueToken({ businessId, practitionerId, doctors, defaultDoctor, arriva
         discountReason: fee.mode === 'full' ? null : fee.reason.trim(),
         priority: priority ? 10 : 0,
         priorityReason: priority ? why.trim() : undefined,
-        paidMethod: feeDue > 0 ? paidHow : null,
+        payments: feePayments(paidHow, feeDue),
       })
       setIssued({ id: r.queue_id, token: r.token_number, fee: Number(r.fee ?? 0), paid: Number(r.paid ?? 0) })
       // 0251/0252: the entry is closed against this patient, and the address they typed goes on their record.
