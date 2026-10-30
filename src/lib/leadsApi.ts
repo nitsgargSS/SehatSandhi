@@ -21,6 +21,8 @@ export const LEAD_SOURCES: { id: string; label: string }[] = [
   { id: 'video_founder_intro', label: 'Video: founder intro' },
   { id: 'video_doctors_flow', label: 'Video: doctors flow' },
   { id: 'meta_ad', label: 'Meta ad' },
+  // 0300: asked the WhatsApp bot for a demo — made by the database.
+  { id: 'whatsapp_demo', label: 'WhatsApp demo request' },
   // 0223: registered on the website and stopped at the payment screen — made by the database.
   { id: 'signup_unfinished', label: 'Unfinished registration' },
   { id: 'inbound_call', label: 'Inbound call' },
