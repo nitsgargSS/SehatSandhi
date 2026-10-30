@@ -1,8 +1,19 @@
 {
   "functions": {
-    "api/social-render.js": { "memory": 2048, "maxDuration": 60 }
+    "api/social-render.js": {
+      "memory": 2048,
+      "maxDuration": 60
+    },
+    "api/social-reel.js": {
+      "memory": 2048,
+      "maxDuration": 300,
+      "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
+    }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

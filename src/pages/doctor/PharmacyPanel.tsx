@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import SectionPills from '../../components/SectionPills'
 import WardPharmacy from './WardPharmacy'
+import PaymentSplit, { type PayRow, payRow, toPayments } from './PaymentSplit'
 import { AlertTriangle, Package, Plus, Printer, Search, Trash2 } from 'lucide-react'
 import { moneyExact, shortDate, isoDate } from '../../lib/format'
 import { searchPatients, PatientSearchResult } from '../../lib/patientsApi'
@@ -113,7 +114,7 @@ function MedicinePicker({ stock, onPick, placeholder = 'Add a medicine — type 
   const hits = useMemo(() => {
     const t = q.trim().toLowerCase()
     if (!t) return []
-    return stock.filter(s => s.is_active && (s.name.toLowerCase().includes(t) || (s.generic_name ?? '').toLowerCase().includes(t))).slice(0, 8)
+    return stock.filter(s => s.is_active && (s.name.toLowerCase().includes(t) || (s.generic_name ?? '').toLowerCase().includes(t) || (s.manufacturer ?? '').toLowerCase().includes(t))).slice(0, 8)
   }, [q, stock])
   return (
     <div className="relative">
@@ -124,7 +125,7 @@ function MedicinePicker({ stock, onPick, placeholder = 'Add a medicine — type 
           {hits.map(s => (
             <button key={s.id} type="button" onClick={() => { onPick(s); setQ('') }}
               className="w-full text-left px-3 py-2 text-sm hover:bg-teal-50 flex justify-between gap-2">
-              <span>{itemLabel(s)}</span>
+              <span>{itemLabel(s)}{s.manufacturer && <span className="text-gray-500 text-xs"> · {s.manufacturer}</span>}</span>
               <span className={s.qty_available > 0 ? 'text-gray-500' : 'text-red-500'}>
                 {s.qty_available} {s.unit}{s.unit_mrp ? ` · ${moneyExact(s.unit_mrp)}` : ''}
               </span>
@@ -143,6 +144,8 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
   const [mode, setMode] = useState<'patient' | 'walkin'>('patient')
   const [q, setQ] = useState('')
   const [found, setFound] = useState<PatientSearchResult[]>([])
+  const [searched, setSearched] = useState(false)
+  const [looseFor, setLooseFor] = useState<string | null>(null)
   const [patient, setPatient] = useState<PatientSearchResult | null>(null)
   const [rxs, setRxs] = useState<RxForDispensing[]>([])
   const [rxId, setRxId] = useState<string | null>(null)
@@ -162,15 +165,16 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
   const [lines, setLines] = useState<Line[]>([])
   const [pct, setPct] = useState('')
   const [reason, setReason] = useState('')
-  const [pay, setPay] = useState('')
-  const [method, setMethod] = useState<PharmacyPayMethod>('cash')
-  const [ref, setRef] = useState('')
+  // 0301: one payment or several (half UPI, half cash).
+  const [pays, setPays] = useState<PayRow<PharmacyPayMethod>[]>(() => [payRow<PharmacyPayMethod>('cash')])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
   useEffect(() => {
     if (mode !== 'patient' || patient) return
-    const t = setTimeout(() => { searchPatients(q, businessId).then(setFound).catch(() => setFound([])) }, 250)
+    const t = setTimeout(() => {
+      searchPatients(q, businessId).then(setFound).catch(() => setFound([])).finally(() => setSearched(true))
+    }, 250)
     return () => clearTimeout(t)
   }, [q, mode, patient, businessId])
 
@@ -178,6 +182,12 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
     setRxs([]); setRxId(null); setUnmatched([])
     if (patient) getPrescriptionsForDispensing(businessId, patient.patient_member_id).then(setRxs).catch(() => setRxs([]))
   }, [patient, businessId])
+
+  // A line keeps the stock row it was added with; refresh it when stock reloads
+  // (after "Sell single tablets" its unit, price and count have changed).
+  useEffect(() => {
+    setLines(ls => ls.map(l => { const fresh = stock.find(x => x.id === l.item.id); return fresh && fresh !== l.item ? { ...l, item: fresh } : l }))
+  }, [stock])
 
   const add = (s: StockRow, qty = 1) => setLines(ls => {
     const at = ls.findIndex(l => l.item.id === s.id)
@@ -219,10 +229,11 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
   const discount = Math.min(Math.max(Number(pct) || 0, 0), 100)
   const gross = lines.reduce((s, l) => s + l.qty * (l.item.unit_mrp ?? 0), 0)
   const estimate = Math.round(gross * (100 - discount) / 100)
-  useEffect(() => { setPay(estimate ? String(estimate) : '') }, [estimate])
+  // While it is one payment it follows the total; once split, the counter has set the parts.
+  useEffect(() => { setPays(ps => ps.length === 1 ? [{ ...ps[0], amount: estimate ? String(estimate) : '' }] : ps) }, [estimate])
 
   const reset = () => {
-    setLines([]); setPct(''); setReason(''); setRef(''); setRxId(null); setUnmatched([])
+    setLines([]); setPct(''); setReason(''); setPays([payRow<PharmacyPayMethod>('cash')]); setRxId(null); setUnmatched([])
     setPatient(null); setQ(''); setWalkName(''); setWalkPhone('')
   }
 
@@ -233,6 +244,7 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
     if (mode === 'walkin' && !walkName.trim()) { setErr('Give the customer\'s name.'); return }
     if (mode === 'walkin' && phoneProblem(walkPhone, false, true)) { setErr(phoneProblem(walkPhone, false, true)!); return }
     if (discount > 0 && !reason.trim()) { setErr('Say why there is a discount.'); return }
+    if (pays.some(p => Number(p.amount) < 0)) { setErr('A payment cannot be below zero.'); return }
     setBusy(true)
     try {
       const id = await issueBill(businessId, {
@@ -242,7 +254,7 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
         customerPhone: mode === 'walkin' ? walkPhone : undefined,
         prescriptionId: rxId,
         discountPct: discount, discountReason: reason,
-        payment: { amount: Number(pay) || 0, method, reference: ref },
+        payments: toPayments(pays),
       })
       printBill(id)
       reset(); onSold(); reloadWaiting()
@@ -314,16 +326,20 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
           </div>
         ) : (
           <div>
-            <input className="input-field" value={q} onChange={e => setQ(e.target.value)} placeholder="Find the patient — name, phone or file number" />
+            <input className="input-field" value={q} onChange={e => { setQ(e.target.value); setSearched(false) }} placeholder="Find the patient — name, phone or file (UID) number" />
             {found.length > 0 && (
               <div className="border border-gray-200 rounded-lg mt-1 divide-y">
                 {found.slice(0, 8).map(p => (
                   <button key={p.patient_member_id} onClick={() => { setPatient(p); setFound([]) }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-teal-50">
-                    <b>{p.full_name}</b> {p.age_years != null ? `· ${p.age_years}y` : ''} {p.mrn ? `· ${p.mrn}` : ''} · {p.phone}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-teal-50 flex flex-wrap justify-between gap-x-3">
+                    <span><b>{p.full_name}</b>{p.age_years != null ? ` · ${p.age_years}y` : ''}{p.gender ? ` · ${p.gender[0].toUpperCase()}` : ''}</span>
+                    <span className="text-gray-600">{p.mrn ? <>File <b className="text-navy-700">{p.mrn}</b> · </> : ''}{p.phone}</span>
                   </button>
                 ))}
               </div>
+            )}
+            {searched && found.length === 0 && q.trim().length >= 2 && (
+              <p className="text-xs text-gray-500 mt-1">No patient here matches "{q.trim()}". Check the spelling, or bill them as a walk-in customer.</p>
             )}
           </div>
         )
@@ -352,7 +368,7 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
               <th className="py-1">Medicine</th><th>In stock</th><th>Qty</th><th className="text-right">MRP each</th><th className="text-right">Amount</th><th />
             </tr></thead>
             <tbody>
-              {lines.map(l => (
+              {lines.flatMap(l => [
                 <tr key={l.key} className="border-t">
                   <td className="py-2">{itemLabel(l.item)}</td>
                   <td className={l.qty > l.item.qty_available ? 'text-red-600 font-semibold' : 'text-gray-500'}>
@@ -361,6 +377,15 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
                   <td>
                     <input type="number" min={1} className="w-20 border border-gray-300 rounded px-2 py-1" value={l.qty}
                       onChange={e => setLines(ls => ls.map(x => x.key === l.key ? { ...x, qty: Math.max(1, parseInt(e.target.value, 10) || 1) } : x))} />
+                    {/* 30 Oct 2026: still counted in whole strips, so single tablets cannot be billed yet. */}
+                    {countedInStrips(l.item) && looseFor !== l.key && (
+                      <div className="text-[11px] text-amber-800 mt-0.5 max-w-[220px]">
+                        Counted in whole strips.{' '}
+                        {canManage
+                          ? <button type="button" className="underline text-teal-700 font-semibold" onClick={() => setLooseFor(l.key)}>Sell single tablets</button>
+                          : 'To sell single tablets, ask the owner or a manager to set it in Stock.'}
+                      </div>
+                    )}
                     {/* 0253: counted loose — the number is tablets; a full strip is one tap. */}
                     {l.item.pack_size > 1 && (
                       <div className="text-[11px] text-gray-500 mt-0.5">
@@ -374,8 +399,17 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
                   <td className="text-right">
                     <button onClick={() => setLines(ls => ls.filter(x => x.key !== l.key))} className="text-gray-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>
                   </td>
-                </tr>
-              ))}
+                </tr>,
+                looseFor === l.key && (
+                  <tr key={`${l.key}-loose`}><td colSpan={6}>
+                    <LooseSetup item={l.item} compact onCancel={() => setLooseFor(null)} onDone={n => {
+                      // Same amount, now in tablets: 2 strips of 10 become 20 tablets.
+                      setLines(ls => ls.map(x => x.key === l.key ? { ...x, qty: x.qty * n } : x))
+                      setLooseFor(null); onSold()
+                    }} />
+                  </td></tr>
+                ),
+              ])}
             </tbody>
           </table>
         </div>
@@ -402,18 +436,7 @@ function SellSection({ businessId, stock, onSold, gst, goStock, canManage }: {
         <div className="flex justify-between text-sm">
           <span title="Exact total on the bill — each batch has its own MRP.">About {moneyExact(estimate)} to pay{gst ? ' (GST included)' : ''}</span>
         </div>
-        <div className="grid sm:grid-cols-3 gap-2">
-          <input type="number" min={0} className="input-field" value={pay} onChange={e => setPay(e.target.value)} placeholder="Amount received" />
-          <select className="input-field" value={method} onChange={e => setMethod(e.target.value as PharmacyPayMethod)}>
-            {PAY_METHODS.map(([m, label]) => <option key={m} value={m}>{label}</option>)}
-          </select>
-          <input className="input-field" value={ref} onChange={e => setRef(e.target.value)} placeholder="UPI / card reference (optional)" />
-        </div>
-        <div className="flex gap-2 flex-wrap text-xs">
-          <button type="button" onClick={() => setPay(String(estimate))} className={`px-3 py-1 rounded-full border ${Number(pay) >= estimate && estimate > 0 ? 'border-green-600 bg-green-50 text-green-700' : 'border-gray-200'}`}>Paid in full</button>
-          <button type="button" onClick={() => setPay('')} className={`px-3 py-1 rounded-full border ${!Number(pay) ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200'}`}>Nothing now (credit)</button>
-          {Number(pay) > 0 && Number(pay) < estimate && <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800">Part payment · {moneyExact(estimate - Number(pay))} will be due</span>}
-        </div>
+        <PaymentSplit due={estimate} rows={pays} onChange={setPays} methods={PAY_METHODS} />
       </div>
       </>}
 
@@ -752,6 +775,8 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
   const set = (k: keyof PharmacyItem) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF(x => ({ ...x, [k]: e.target.value }))
   const [opening, setOpening] = useState<StockIn>(blankStockIn)
+  const brandNow = (f.name ?? '').trim()
+  const sameAsCompany = !!brandNow && brandNow.toLowerCase() === (f.manufacturer ?? '').trim().toLowerCase()
   const save = async () => {
     const generic = (f.generic_name ?? '').trim()
     const brand = (f.name ?? '').trim()
@@ -778,8 +803,8 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
       <h3 className="font-bold text-navy-700">{f.id ? 'Edit medicine' : 'Add a medicine'}</h3>
       <div className="grid sm:grid-cols-3 gap-2">
         {field('generic_name', 'Medicine / item name *', { placeholder: 'Paracetamol, Moxifloxacin, Syringe 5ml' })}
-        {field('name', 'Brand', { placeholder: 'Dolo, Vigamox — leave blank if none' })}
-        {field('manufacturer', 'Company', { placeholder: 'Micro Labs, Alcon, Cipla', list: 'pharmacy-companies' })}
+        {field('name', 'Brand name (printed big on the strip)', { placeholder: 'Dolo 650, Vigamox — blank if none' })}
+        {field('manufacturer', 'Company (who makes it)', { placeholder: 'Micro Labs, Alcon, Cipla', list: 'pharmacy-companies' })}
         <label className="text-xs text-gray-500">Type
           <select className="input-field mt-1" value={f.form ?? ''} onChange={e => {
             const t = ITEM_FORMS.find(x => x.value === e.target.value)
@@ -804,6 +829,10 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
         </label>
         {field('reorder_level', 'Warn when stock is at or below', { type: 'number', min: 0 })}
       </div>
+      {/* 30 Oct 2026: brand and company were being mixed up — the company's name typed as the brand. */}
+      {sameAsCompany
+        ? <p className="text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">Brand and company are the same here. The brand is the medicine's own trade name (Dolo 650); the company is who makes it (Micro Labs). If {brandNow} is the company, clear the brand or type the strip's brand name.</p>
+        : <p className="text-xs text-gray-500">Brand and company are different: <b>Dolo 650</b> is the brand, made by the company <b>Micro Labs</b>. Both are on the strip.</p>}
       <p className="text-xs text-gray-500">GST rate and HSN are used only if your clinic has a GSTIN for the pharmacy (Settings).</p>
       {!f.id && (
         <div className="border-t border-gray-100 pt-3 space-y-2">
@@ -825,6 +854,55 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
   )
 }
 
+// A tablet or capsule still counted in whole strips — entered before 0253, or
+// with "1 per pack" — cannot be billed a few tablets at a time (30 Oct 2026).
+const countedInStrips = (s: Pick<StockRow, 'pack_size' | 'form' | 'unit'>) =>
+  s.pack_size <= 1 && (/tab|cap/i.test(s.form ?? '') || /tab|cap|strip/i.test(s.unit ?? ''))
+
+/** Re-count one medicine in single tablets (0253): 1 strip = N tablets. */
+function LooseSetup({ item, onDone, onCancel, compact = false }: {
+  item: StockRow; onDone: (perPack: number) => void; onCancel?: () => void; compact?: boolean
+}) {
+  const [perPack, setPerPack] = useState('10')
+  const [unit, setUnit] = useState(/cap/i.test(item.form ?? '') ? 'capsule' : 'tablet')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const n = parseInt(perPack, 10) || 0
+  const all = item.qty_available + item.qty_expired
+  const go = async () => {
+    setBusy(true); setErr('')
+    try { await splitPack(item.id, n, unit); onDone(n) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <div className="mt-2 mb-2 text-xs bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 space-y-2">
+      {!compact && (
+        <p className="text-gray-700">
+          Use this when you entered <b>strips</b> but give patients <b>part of a strip</b>. The stock, the price and your past bills for {item.name} are
+          re-counted in single {unit}s — no bill amount changes. It is done once and cannot be undone.
+        </p>
+      )}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span>One strip / pack of {item.name} has</span>
+        <input type="number" min={2} max={1000} className="w-20 border border-gray-300 rounded px-2 py-1" value={perPack} onChange={e => setPerPack(e.target.value)} aria-label="How many in one strip" />
+        <select className="border border-gray-300 rounded px-2 py-1" value={unit} onChange={e => setUnit(e.target.value)} aria-label="Counted as">
+          <option value="tablet">tablets</option><option value="capsule">capsules</option><option value="piece">pieces</option><option value="sachet">sachets</option>
+        </select>
+      </div>
+      {n >= 2 && (
+        <p className="text-gray-800">
+          Stock: <b>{all} {item.unit}</b> → <b>{all * n} {unit}s</b>
+          {item.unit_mrp ? <> · MRP: <b>{moneyExact(item.unit_mrp)}</b> a strip → <b>{moneyExact(Number(item.unit_mrp) / n)}</b> a {unit}</> : null}
+        </p>
+      )}
+      {err && <p className="text-red-600">{err}</p>}
+      <div className="flex gap-2">
+        <button disabled={busy || n < 2} onClick={go} className="btn-teal text-xs py-1.5 px-3 disabled:opacity-50">{busy ? 'Re-counting…' : `Yes, count in ${unit}s`}</button>
+        {onCancel && <button onClick={onCancel} className="underline text-gray-600">Cancel</button>}
+      </div>
+    </div>
+  )
+}
+
 function StockSection({ businessId, stock, canManage, reload }: { businessId: string; stock: StockRow[]; canManage: boolean; reload: () => void }) {
   const [editing, setEditing] = useState<Partial<PharmacyItem> | null>(null)
   const [adding, setAdding] = useState<StockRow | null>(null)
@@ -836,17 +914,8 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
   const [deleting, setDeleting] = useState<string | null>(null)
   // 0253: opening a strip — counting one medicine in tablets, so part of a strip can be billed.
   const [splitting, setSplitting] = useState<string | null>(null)
-  const [perPack, setPerPack] = useState('10')
-  const [looseUnit, setLooseUnit] = useState('tablet')
-  const [splitBusy, setSplitBusy] = useState(false)
-  const [splitErr, setSplitErr] = useState('')
-  const split = async (s: StockRow) => {
-    setSplitBusy(true); setSplitErr('')
-    try {
-      await splitPack(s.id, parseInt(perPack, 10) || 0, looseUnit)
-      setSplitting(null); reload(); getBatches(s.id).then(setBatches)
-    } catch (e) { setSplitErr((e as Error).message) } finally { setSplitBusy(false) }
-  }
+  const [looseOpen, setLooseOpen] = useState<string | null>(null)
+  const [showAllStrips, setShowAllStrips] = useState(false)
   const [delBusy, setDelBusy] = useState(false)
   const [delNote, setDelNote] = useState<{ id: string | null; ok: boolean; text: string } | null>(null)
   const remove = async (s: StockRow) => {
@@ -867,6 +936,7 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
     : s.qty_expired > 0 || (s.qty_available > 0 && soon(s.next_expiry, 60))))
     .filter(s => !q.trim() || itemLabel(s).toLowerCase().includes(q.trim().toLowerCase()) || (s.generic_name ?? '').toLowerCase().includes(q.trim().toLowerCase()))
   const value = stock.reduce((s, r) => s + r.stock_value, 0)
+  const inStrips = stock.filter(s => s.is_active && countedInStrips(s))
 
   if (editing) return <ItemForm businessId={businessId} item={editing} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload() }} />
 
@@ -885,6 +955,28 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
           {canManage && <button onClick={() => setEditing({ ...blankItem })} className="btn-teal text-xs py-2 px-4"><Plus className="w-4 h-4" /> Medicine</button>}
         </div>
       </div>
+      {canManage && inStrips.length > 0 && (
+        <div className="card shadow-sm border-amber-200 bg-amber-50/40 space-y-2">
+          <p className="text-sm text-amber-900">
+            <b>{inStrips.length} tablet / capsule medicine{inStrips.length === 1 ? ' is' : 's are'} counted in whole strips</b>, so single tablets cannot be billed.
+            Set how many are in a strip once and they are sold by the tablet from then on — stock, prices and past bills are re-counted, no amount changes.
+          </p>
+          <div className="divide-y divide-amber-100">
+            {inStrips.slice(0, showAllStrips ? undefined : 5).map(s => (
+              <div key={s.id} className="py-1.5 text-sm">
+                <div className="flex flex-wrap justify-between gap-2 items-center">
+                  <span>{itemLabel(s)} <span className="text-gray-500 text-xs">· {s.qty_available} {s.unit} in stock</span></span>
+                  {looseOpen !== s.id && <button onClick={() => setLooseOpen(s.id)} className="btn-outline text-xs py-1 px-3">Sell by tablet</button>}
+                </div>
+                {looseOpen === s.id && <LooseSetup item={s} compact onCancel={() => setLooseOpen(null)} onDone={() => { setLooseOpen(null); reload() }} />}
+              </div>
+            ))}
+          </div>
+          {inStrips.length > 5 && (
+            <button onClick={() => setShowAllStrips(v => !v)} className="text-xs text-teal-700 font-semibold">{showAllStrips ? 'Show fewer' : `Show all ${inStrips.length}`}</button>
+          )}
+        </div>
+      )}
       <input className="input-field" value={q} onChange={e => setQ(e.target.value)} placeholder="Search medicines" />
       {rows.length === 0 ? <div className="card shadow-sm text-sm text-gray-500 py-10 text-center">Nothing here.</div> : (
         <div className="card shadow-sm p-0 divide-y">
@@ -893,6 +985,7 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
               <button onClick={() => setOpen(open === s.id ? null : s.id)} className="w-full text-left px-4 py-3 text-sm flex flex-wrap justify-between gap-2 hover:bg-gray-50">
                 <span className={s.is_active ? '' : 'text-gray-400'}>
                   <b>{itemLabel(s)}</b>
+                  {s.manufacturer && <span className="text-gray-500"> · {s.manufacturer}</span>}
                   {!s.is_active && ' · not stocked'}
                 </span>
                 <span className="flex gap-3 text-xs items-center">
@@ -914,40 +1007,14 @@ function StockSection({ businessId, stock, canManage, reload }: { businessId: st
                   {canManage && <button onClick={() => setAdding(s)} className="btn-teal text-xs py-1.5 px-3 mr-2">Add stock</button>}
                   {canManage && <button onClick={() => setEditing(s)} className="btn-outline text-xs py-1.5 px-3 mr-2">Edit medicine</button>}
                   {canManage && s.pack_size <= 1 && splitting !== s.id && (
-                    <button onClick={() => { setSplitting(s.id); setSplitErr(''); setPerPack('10'); setLooseUnit(/cap/i.test(s.form ?? '') ? 'capsule' : 'tablet') }}
+                    <button onClick={() => setSplitting(s.id)}
                       className="btn-outline text-xs py-1.5 px-3 mr-2">Sell loose (by tablet)</button>
                   )}
                   {s.pack_size > 1 && <span className="text-xs text-gray-500 mr-2">Counted loose · {s.pack_size} {s.unit}s in a strip</span>}
-                  {canManage && splitting === s.id && (() => {
-                    const n = parseInt(perPack, 10) || 0
-                    const all = s.qty_available + s.qty_expired
-                    return (
-                      <div className="mt-2 mb-2 text-xs bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 space-y-2">
-                        <p className="text-gray-700">
-                          Use this when you entered <b>strips</b> but give patients <b>part of a strip</b>. The stock, the price and your past bills for {s.name} are
-                          re-counted in single {looseUnit}s — no bill amount changes. It is done once and cannot be undone.
-                        </p>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span>One strip / pack has</span>
-                          <input type="number" min={2} max={1000} className="w-20 border border-gray-300 rounded px-2 py-1" value={perPack} onChange={e => setPerPack(e.target.value)} />
-                          <select className="border border-gray-300 rounded px-2 py-1" value={looseUnit} onChange={e => setLooseUnit(e.target.value)}>
-                            <option value="tablet">tablets</option><option value="capsule">capsules</option><option value="piece">pieces</option><option value="sachet">sachets</option>
-                          </select>
-                        </div>
-                        {n >= 2 && (
-                          <p className="text-gray-800">
-                            Stock: <b>{all} {s.unit}</b> → <b>{all * n} {looseUnit}s</b>
-                            {s.unit_mrp ? <> · MRP: <b>{moneyExact(s.unit_mrp)}</b> a strip → <b>{moneyExact(Number(s.unit_mrp) / n)}</b> a {looseUnit}</> : null}
-                          </p>
-                        )}
-                        {splitErr && <p className="text-red-600">{splitErr}</p>}
-                        <div className="flex gap-2">
-                          <button disabled={splitBusy || n < 2} onClick={() => split(s)} className="btn-teal text-xs py-1.5 px-3 disabled:opacity-50">{splitBusy ? 'Re-counting…' : `Yes, count in ${looseUnit}s`}</button>
-                          <button onClick={() => setSplitting(null)} className="underline text-gray-600">Cancel</button>
-                        </div>
-                      </div>
-                    )
-                  })()}
+                  {canManage && splitting === s.id && (
+                    <LooseSetup item={s} onCancel={() => setSplitting(null)}
+                      onDone={() => { setSplitting(null); reload(); getBatches(s.id).then(setBatches) }} />
+                  )}
                   {canManage && deleting !== s.id && (
                     <button onClick={() => { setDeleting(s.id); setDelNote(null) }} className="btn-outline text-xs py-1.5 px-3 text-red-600">Delete medicine</button>
                   )}

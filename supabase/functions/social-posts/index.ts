@@ -40,6 +40,8 @@
 //           { action: "decide", postId, answer: "ok" | "skip" | "change" | "post", note?, from? }
 //             the owner's answer, from the app (owner) or from WhatsApp
 //             (whatsapp-inbound, service role, `from` = the number that answered)
+//           { action: "reels" }   cron, every 10 min 1:40–7:20 PM IST: the next missing Reel (0299)
+//           { action: "reel", postId }   owner or admin: this post's Reel, now
 //           { action: "preview-template", wabaId }   service role, once per
 //             WhatsApp account: creates the social_post_preview template
 //
@@ -51,6 +53,8 @@
 //      CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_AI_TOKEN
 //                              AI pictures (Workers AI, FLUX.1 schnell)
 //      POLLINATIONS_KEY        AI pictures when Cloudflare fails (Pollen wallet)
+//      ELEVENLABS_API_KEY      the Reel's voice, for businesses with voiceover on (0299)
+//      ELEVENLABS_VOICE_ID     which voice (default: a stock multilingual one)
 //                              none set = own photos only
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
@@ -95,6 +99,8 @@ interface Draft {
   points: { icon: string; text: string }[]; myth: string; fact: string; motif: string
   photo_index: number; ai_picture: string
   caption: string; hashtags: string[]
+  /** What the Reel's voice says (0299): Sehatsandhi's only; empty otherwise. */
+  voiceover: string
 }
 interface Business {
   id: string; name: string; phone: string | null; city: string | null; hours: string | null
@@ -123,7 +129,7 @@ const SAFETY_RULES: [RegExp, string][] = [
 ]
 
 function safetyProblems(d: Draft): string[] {
-  const text = [d.badge, d.headline, d.body, d.myth, d.fact, ...d.points.map((p) => p.text), d.caption, ...d.hashtags].join('\n')
+  const text = [d.badge, d.headline, d.body, d.myth, d.fact, ...d.points.map((p) => p.text), d.caption, ...d.hashtags, d.voiceover ?? ''].join('\n')
   return SAFETY_RULES.filter(([re]) => re.test(text)).map(([, why]) => why)
 }
 
@@ -337,13 +343,14 @@ Fields:
   Examples: problem — "an elderly Indian man in a kurta squinting and frowning, holding a medicine strip at arm's length to read it, on his home balcony"; good habit — "a schoolgirl doing homework at a desk by a window in daylight, sitting upright"; festival — "glowing clay diyas on a rangoli at night, marigolds".
   Show a problem gently and respectfully: no pain distorting the face, no crying, no injury. For festivals, the festival itself (e.g. "glowing clay diyas on a rangoli at night, marigolds"). Never a patient being examined, a procedure, a hospital bed, needles, blood, a close-up of an eye, medicines, text or a logo. Avoid anything with writing on it (newspapers, book pages, signboards, phone or laptop screens facing the viewer): AI pictures turn writing into nonsense letters. Keep the lower part of the scene simple, words go over it.
 - caption: the text posted under the image, in caption_languages: 2–4 short lines (when both languages, Hindi lines first then English), then the business name, phone and website on the last line. No hashtags in it.
+- voiceover: "" (empty).
 - hashtags: each starting with #, as below.
 ${REACH}`
 
 // Sehatsandhi's own posts (0296): to doctors, clinic and hospital owners.
 const SYSTEM_DOCTORS = `You design and write one daily social media post (Facebook and Instagram) for Sehatsandhi, Indian software for clinics, hospitals, labs and pharmacies. The readers are doctors, clinic and hospital owners and their staff in Indian towns and small cities. The aim: a busy doctor stops, nods ("that is my problem") and saves or shares it with a colleague.
 
-Write like a helpful colleague, not an advert. One idea per post: the everyday problem first, then how Sehatsandhi solves it, in plain words. Few words on the image.
+Sehatsandhi is written "सेहतसंधि" in Hindi, never any other spelling. Write like a helpful colleague, not an advert. One idea per post: the everyday problem first, then how Sehatsandhi solves it, in plain words. Few words on the image.
 
 Rules. Breaking any of them means the post is thrown away:
 - Never say best, top, number one, leading, cheapest, or compare with other software by name.
@@ -369,13 +376,14 @@ Fields:
 - photo_index: -1.
 - ai_picture: ALWAYS fill this: a real-life scene in an Indian clinic or hospital that shows the problem or the relief: a calm reception desk, a doctor talking to a patient's family, a receptionist smiling at a patient, an evening clinic with few people waiting. Never screens facing the viewer, documents, writing, logos, needles, blood or anyone in pain.
 - caption: in caption_languages: 2–4 short lines (Hindi lines first when both), then "Call 87087 18705 · WhatsApp 70153 99355 for a free demo · sehatsandhi.com" on the last line. No hashtags in it.
+- voiceover: what a warm, clear voice says over the post's short video, in image_language only, 40–60 words (about 15–20 seconds): the everyday problem in one line, how Sehatsandhi solves it in plain words, then the call to action with the number read digit by digit, in groups, as people say a phone number: English "Call eight seven zero eight seven, one eight seven zero five, for a free demo"; Hindi "फ़्री डेमो के लिए कॉल करें, आठ सात शून्य आठ सात, एक आठ सात शून्य पाँच". The name is "Sehatsandhi" in English and "सेहतसंधि" in Hindi, never any other spelling. No hashtags, no emojis, no symbols.
 - hashtags: each starting with #, as below, with #Sehatsandhi always, and doctor-side tags (#ClinicManagement #DoctorsOfIndia #HospitalSoftware #HealthTech #DigitalClinic) instead of patient ones; local tags only when the topic is local.
 ${REACH}`
 
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['topic', 'template', 'icon', 'badge', 'headline', 'highlight', 'body', 'points', 'myth', 'fact', 'motif', 'photo_index', 'ai_picture', 'caption', 'hashtags'],
+  required: ['topic', 'template', 'icon', 'badge', 'headline', 'highlight', 'body', 'points', 'myth', 'fact', 'motif', 'photo_index', 'ai_picture', 'caption', 'hashtags', 'voiceover'],
   properties: {
     topic: { type: 'string' },
     template: { type: 'string', enum: [...TEMPLATES] },
@@ -395,6 +403,7 @@ const SCHEMA = {
     ai_picture: { type: 'string' },
     caption: { type: 'string' },
     hashtags: { type: 'array', items: { type: 'string' } },
+    voiceover: { type: 'string' },
   },
 }
 
@@ -437,6 +446,7 @@ async function write(
   const d = JSON.parse(text) as Draft
   if (!TEMPLATES.includes(d.template)) d.template = 'tips'
   d.points = (d.points ?? []).slice(0, 3)
+  d.voiceover = typeof d.voiceover === 'string' ? d.voiceover : ''
   d.hashtags = [...new Set((d.hashtags ?? []).filter((h) => /^#[\p{L}\p{N}_]+$/u.test(h)))].slice(0, 10)
   return d
 }
@@ -452,7 +462,7 @@ function fallbackDraft(biz: Business, imageLang: 'en' | 'hi'): Draft {
       ...(biz.phone ? [{ icon: 'phone', text: hi ? `कॉल करें ${biz.phone}` : `Call ${biz.phone}` }] : []),
       ...(biz.city ? [{ icon: 'heart', text: biz.city }] : []),
     ],
-    myth: '', fact: '', motif: 'stars', photo_index: -1, ai_picture: '',
+    myth: '', fact: '', motif: 'stars', photo_index: -1, ai_picture: '', voiceover: '',
     caption: [`${biz.name}${biz.city ? `, ${biz.city}` : ''}`, biz.hours, [biz.phone, biz.website].filter(Boolean).join(' · ')].filter(Boolean).join('\n'),
     hashtags: biz.city ? [`#${biz.city.replace(/\s+/g, '')}`, '#Health'] : ['#Health'],
   }
@@ -616,6 +626,7 @@ async function makePost(db: Db, businessId: string, date: string, note: string |
     business_id: businessId, post_date: date, topic: topic?.title ?? 'Everyday tip', template: 'tips',
     calendar_id: topic?.calendarId ?? null, status: 'planned', error: null, image_lang: imageLang, updated_at: new Date().toISOString(),
     approval: null, approved_at: null, owner_note: note, needs_ok: !!note, preview_sent_at: null, preview_error: null, publish_error: null,
+    reel_url: null, reel_error: null, reel_attempts: 0,
   }, { onConflict: 'business_id,post_date' }).select('id, image_url, story_url').single()
   if (upErr) throw new Error(upErr.message)
 
@@ -675,6 +686,7 @@ async function makePost(db: Db, businessId: string, date: string, note: string |
       headline_en: imageLang === 'en' ? draft.headline : null, subline_en: imageLang === 'en' ? draft.body || null : null,
       headline_hi: imageLang === 'hi' ? draft.headline : null, subline_hi: imageLang === 'hi' ? draft.body || null : null,
       caption: draft.caption, hashtags: draft.hashtags, photo_url: photo, photo_source: photoSource,
+      reel_script: s.voiceover && draft.voiceover?.trim() ? draft.voiceover.trim().slice(0, 600) : null,
       image_url: pub(paths.square), story_url: pub(paths.story),
       status: 'ready', error: null, written_by: writtenBy, updated_at: new Date().toISOString(),
     }).eq('id', row.id)
@@ -688,6 +700,73 @@ async function makePost(db: Db, businessId: string, date: string, note: string |
     const msg = e instanceof Error ? e.message : String(e)
     await db.from('social_posts').update({ status: 'failed', error: msg.slice(0, 500), updated_at: new Date().toISOString() }).eq('id', row.id)
     return { id: row.id, status: 'failed', error: msg }
+  }
+}
+
+// ── 5b. Reel (0299) ─────────────────────────────────────────────────────────
+// The story design, moving, with music (and Sehatsandhi's voice), made by the
+// render worker (/api/social-reel) and uploaded straight to storage through a
+// one-time link. One per call: each takes a minute or two.
+const REEL_TRIES = 3
+
+/** The voice: ElevenLabs, multilingual (Hindi and English). */
+async function speak(text: string): Promise<Uint8Array> {
+  const key = Deno.env.get('ELEVENLABS_API_KEY')
+  if (!key) throw new Error('ELEVENLABS_API_KEY is not set')
+  const voice = Deno.env.get('ELEVENLABS_VOICE_ID') ?? '21m00Tcm4TlvDq8ikWAM'
+  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`, {
+    method: 'POST',
+    headers: { 'xi-api-key': key, 'content-type': 'application/json', accept: 'audio/mpeg' },
+    body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } }),
+  })
+  if (!r.ok) throw new Error(`voice ${r.status}: ${(await r.text()).slice(0, 200)}`)
+  return new Uint8Array(await r.arrayBuffer())
+}
+
+/** The day's music: the tracks under music/ in the bucket, in turn by date. None = no music. */
+async function musicFor(db: Db, date: string): Promise<string | null> {
+  const { data } = await db.storage.from(BUCKET).list('music', { limit: 100, sortBy: { column: 'name', order: 'asc' } })
+  const tracks = (data ?? []).filter((f: { name: string }) => /\.(mp3|m4a|aac|wav)$/i.test(f.name))
+  if (!tracks.length) return null
+  const t = tracks[Math.floor(Date.parse(date) / 864e5) % tracks.length]
+  return db.storage.from(BUCKET).getPublicUrl(`music/${t.name}`).data.publicUrl
+}
+
+// deno-lint-ignore no-explicit-any
+async function makeReel(db: Db, post: any): Promise<{ ok: boolean; error?: string }> {
+  const url = Deno.env.get('SOCIAL_RENDER_URL'), secret = Deno.env.get('SOCIAL_RENDER_SECRET')
+  if (!url || !secret) return { ok: false, error: 'the render worker is not set up' }
+  const { data: s } = await db.from('social_settings').select('*').eq('business_id', post.business_id).single()
+  await db.from('social_posts').update({ reel_attempts: (post.reel_attempts ?? 0) + 1 }).eq('id', post.id)
+  try {
+    const biz = { ...await loadBusiness(db, post.business_id, s.focus_specialities ?? []), ...profileOf(s.profile) }
+    const stamp = Date.now()
+    let voiceUrl: string | undefined
+    if (s.voiceover && post.reel_script) {
+      const path = `reels/${post.business_id}/${post.post_date}-${stamp}-voice.mp3`
+      const { error } = await db.storage.from(BUCKET).upload(path, await speak(post.reel_script), { contentType: 'audio/mpeg', upsert: true })
+      if (error) throw new Error(`storing the voice: ${error.message}`)
+      voiceUrl = db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
+    }
+    const musicUrl = (await musicFor(db, post.post_date)) ?? undefined
+    const path = `reels/${post.business_id}/${post.post_date}-${stamp}.mp4`
+    const { data: up, error: upErr } = await db.storage.from(BUCKET).createSignedUploadUrl(path, { upsert: true })
+    if (upErr || !up?.signedUrl) throw new Error(`upload link: ${upErr?.message ?? 'none'}`)
+    const data = { ...post.design, brand: biz.brand, logo: biz.logo, photo: post.photo_url, clinic: biz.name, phone: biz.phone, website: biz.website }
+    const r = await fetch(url.replace(/social-render$/, 'social-reel'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-render-secret': secret },
+      body: JSON.stringify({ template: post.template, data, voiceUrl, musicUrl, uploadUrl: up.signedUrl }),
+    })
+    if (!r.ok) throw new Error(`reel ${r.status}: ${(await r.text()).slice(0, 200)}`)
+    const old = post.reel_url ? String(post.reel_url).split(`/${BUCKET}/`)[1] : null
+    await db.from('social_posts').update({ reel_url: db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl, reel_error: null }).eq('id', post.id)
+    if (old) await db.storage.from(BUCKET).remove([old])
+    return { ok: true }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    await db.from('social_posts').update({ reel_error: msg.slice(0, 300) }).eq('id', post.id)
+    return { ok: false, error: msg }
   }
 }
 
@@ -769,6 +848,22 @@ async function sendPreview(db: Db, post: any, s: any): Promise<string | null> {
 
 type Channel = 'facebook' | 'instagram' | 'both'
 
+/** A Reel: Instagram fetches and processes the video first (status FINISHED), up to ~2 minutes. */
+async function igPublishReel(igUser: string, token: string, videoUrl: string, caption: string): Promise<{ id?: string; error?: string }> {
+  const c = await graph(`${igUser}/media`, token, { body: { media_type: 'REELS', video_url: videoUrl, caption, share_to_feed: true } })
+  if (!c.ok) return { error: c.error }
+  for (let i = 0; i < 24; i++) {
+    await new Promise((r) => setTimeout(r, 5000))
+    const st = await graph(`${c.body.id}?fields=status_code,status`, token)
+    if (st.body?.status_code === 'FINISHED') {
+      const p = await graph(`${igUser}/media_publish`, token, { body: { creation_id: c.body.id } })
+      return p.ok ? { id: String(p.body.id) } : { error: p.error }
+    }
+    if (st.body?.status_code === 'ERROR' || st.body?.status_code === 'EXPIRED') return { error: String(st.body?.status ?? st.body.status_code) }
+  }
+  return { error: 'Instagram was still processing the video' }
+}
+
 /** Instagram makes the media from the image URL first; publishing before it has fails (9007). */
 async function igPublish(igUser: string, token: string, media: Record<string, unknown>): Promise<{ id?: string; error?: string }> {
   const c = await graph(`${igUser}/media`, token, { body: media })
@@ -795,7 +890,7 @@ async function publishPost(db: Db, post: any, channel: Channel = 'both'): Promis
   if (!token) return { ok: false, error: 'Facebook is not connected' }
   const caption = [post.caption, (post.hashtags ?? []).join(' ')].filter(Boolean).join('\n\n')
   const errors: string[] = [], notes: string[] = []
-  const ids = { fb_post_id: post.fb_post_id, fb_story_id: post.fb_story_id, ig_media_id: post.ig_media_id, ig_story_id: post.ig_story_id }
+  const ids = { fb_post_id: post.fb_post_id, fb_story_id: post.fb_story_id, ig_media_id: post.ig_media_id, ig_story_id: post.ig_story_id, ig_reel_id: post.ig_reel_id }
 
   if (channel !== 'instagram') {
     if (!ids.fb_post_id) {
@@ -811,6 +906,11 @@ async function publishPost(db: Db, post: any, channel: Channel = 'both'): Promis
     }
   }
   if (channel !== 'facebook' && acct.ig_user_id) {
+    // 0299: the Reel when there is one; the image when there is not, or it fails.
+    if (!ids.ig_media_id && post.reel_url) {
+      const r = await igPublishReel(acct.ig_user_id, token, post.reel_url, caption)
+      if (r.id) { ids.ig_media_id = r.id; ids.ig_reel_id = r.id } else notes.push(`Instagram Reel: ${r.error}`)
+    }
     if (!ids.ig_media_id) {
       const r = await igPublish(acct.ig_user_id, token, { image_url: post.image_url, caption })
       if (r.id) ids.ig_media_id = r.id; else errors.push(`Instagram: ${r.error}`)
@@ -968,26 +1068,25 @@ Deno.serve(async (req) => {
     const channel: Channel = body.channel === 'facebook' || body.channel === 'instagram' ? body.channel : 'both'
     const date = istDate(0)
     const { data: on } = await db.from('social_settings').select('*').eq('enabled', true).eq('paused', false)
-    const results = []
-    for (const s of on ?? []) {
+    // All businesses at once: an Instagram Reel can take a minute to process (0299).
+    const results = await Promise.all((on ?? []).map(async (s: Record<string, any>) => {
       const { data: post } = await db.from('social_posts').select('*')
         .eq('business_id', s.business_id).eq('post_date', date).in('status', ['ready', 'published']).maybeSingle()
-      if (!post) continue
+      if (!post) return null
       // Instagram's run: already on Instagram, nothing to do.
-      if (channel === 'instagram' && post.ig_media_id) continue
-      if (channel === 'facebook' && post.fb_post_id) continue
+      if (channel === 'instagram' && post.ig_media_id) return null
+      if (channel === 'facebook' && post.fb_post_id) return null
       // In 'preview', no answer counts as yes only once the owner was asked.
       // Already on Facebook means it was allowed.
       const go = post.status === 'published' || post.approval === 'ok' ||
         (!(await needsOk(db, post, s.approval)) && (s.approval === 'auto' || !!post.preview_sent_at))
       if (!go) {
         await db.from('social_posts').update({ publish_error: 'Waiting for your OK' }).eq('id', post.id)
-        results.push({ business: s.business_id, status: 'waiting for OK' })
-        continue
+        return { business: s.business_id, status: 'waiting for OK' }
       }
-      results.push({ business: s.business_id, ...(await publishPost(db, post, channel)) })
-    }
-    return json({ date, results })
+      return { business: s.business_id, ...(await publishPost(db, post, channel)) }
+    }))
+    return json({ date, results: results.filter(Boolean) })
   }
 
   if (body.action === 'decide') {
@@ -1015,6 +1114,32 @@ Deno.serve(async (req) => {
     if (!who.isServiceRole) return json({ error: 'Not allowed.' }, 403)
     if (!body.wabaId || !/^\d+$/.test(body.wabaId)) return json({ error: 'wabaId required' }, 400)
     return json(await createPreviewTemplate(body.wabaId))
+  }
+
+  // 0299: the next missing Reel (cron, every 10 minutes in the afternoon), or
+  // one post's Reel now (owner / admin, "Make Reel").
+  if (body.action === 'reels') {
+    if (!who.isServiceRole) return json({ error: 'Not allowed.' }, 403)
+    const { data: on } = await db.from('social_settings').select('business_id').eq('enabled', true).eq('paused', false).eq('reels', true)
+    const ids = (on ?? []).map((r: { business_id: string }) => r.business_id)
+    if (!ids.length) return json({ made: null })
+    const { data: next } = await db.from('social_posts').select('*').in('business_id', ids).in('post_date', [istDate(0), istDate(1)])
+      .eq('status', 'ready').is('reel_url', null).lt('reel_attempts', REEL_TRIES).order('post_date').order('updated_at').limit(1)
+    if (!next?.length) return json({ made: null })
+    return json({ post: next[0].id, ...(await makeReel(db, next[0])) })
+  }
+  if (body.action === 'reel') {
+    const { data: post } = await db.from('social_posts').select('*').eq('id', body.postId ?? '').maybeSingle()
+    if (!post) return json({ error: 'That post is not there any more.' }, 404)
+    if (!who.isServiceRole) {
+      const [{ data: owner }, { data: admin }] = await Promise.all([
+        who.asCaller.rpc('sehat_caller_is_owner', { p_business: post.business_id }),
+        who.asCaller.rpc('sehat_is_admin'),
+      ])
+      if (!owner && !admin) return json({ error: 'Only the owner can make Reels.' }, 403)
+    }
+    if (post.status !== 'ready' && post.status !== 'published') return json({ error: 'The post is not ready yet.' }, 400)
+    return json(await makeReel(db, { ...post, reel_attempts: 0 }))
   }
 
   if (body.action === 'make') {

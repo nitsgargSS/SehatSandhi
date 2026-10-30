@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Download, Share2, Copy, RefreshCw, EyeOff, Check, Send, ThumbsUp, Facebook } from 'lucide-react'
+import { Download, Share2, Copy, RefreshCw, EyeOff, Check, Send, ThumbsUp, Facebook, Film } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { activeConfig } from '../../lib/env'
 import { isoDate, shortDate } from '../../lib/format'
@@ -20,8 +20,9 @@ interface Post {
   status: 'planned' | 'ready' | 'failed' | 'skipped' | 'published'; error: string | null; written_by: 'claude' | 'fallback' | null
   approval: 'ok' | 'change' | null; preview_sent_at: string | null; preview_error: string | null
   fb_post_id: string | null; ig_media_id: string | null; publish_error: string | null
+  reel_url: string | null; reel_error: string | null; reel_attempts: number
 }
-interface Settings { paused: boolean; languages: 'en' | 'hi' | 'both'; approval: 'preview' | 'ask' | 'auto'; preview_phone: string | null }
+interface Settings { paused: boolean; languages: 'en' | 'hi' | 'both'; approval: 'preview' | 'ask' | 'auto'; preview_phone: string | null; reels: boolean }
 interface Account { page_id: string; page_name: string; ig_username: string | null; last_error?: string | null }
 
 const tomorrow = () => isoDate(new Date(Date.now() + 864e5))
@@ -60,15 +61,24 @@ export default function SocialPostsPanel({ businessId }: { businessId: string })
   const load = async () => {
     const [{ data: p, error: e1 }, { data: s, error: e2 }, { data: a }] = await Promise.all([
       supabase.from('social_posts')
-        .select('id, post_date, topic, template, badge, caption, hashtags, image_url, story_url, status, error, written_by, approval, preview_sent_at, preview_error, fb_post_id, ig_media_id, publish_error')
+        .select('id, post_date, topic, template, badge, caption, hashtags, image_url, story_url, status, error, written_by, approval, preview_sent_at, preview_error, fb_post_id, ig_media_id, publish_error, reel_url, reel_error, reel_attempts')
         .eq('business_id', businessId).order('post_date', { ascending: false }).limit(30),
-      supabase.from('social_settings').select('paused, languages, approval, preview_phone').eq('business_id', businessId).maybeSingle(),
+      supabase.from('social_settings').select('paused, languages, approval, preview_phone, reels').eq('business_id', businessId).maybeSingle(),
       supabase.from('social_accounts').select('page_id, page_name, ig_username, last_error').eq('business_id', businessId).maybeSingle(),
     ])
     if (e1 || e2) setErr((e1 ?? e2)!.message)
     setPosts((p as Post[]) ?? [])
     setSettings((s as Settings) ?? null)
     setAccount((a as Account) ?? null)
+  }
+
+  const makeReel = async (p: Post) => {
+    setBusy(p.post_date); setErr(''); setNote('')
+    try {
+      const r = await call('social-posts', { action: 'reel', postId: p.id })
+      if (r?.ok === false || r?.error) setErr(`The Reel could not be made: ${r.error ?? r.message}`)
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)) }
+    setBusy(null); load()
   }
 
   const answer = async (p: Post, a: 'ok' | 'post') => {
@@ -132,6 +142,10 @@ export default function SocialPostsPanel({ businessId }: { businessId: string })
               </select>
             </label>
             <label className="flex items-center gap-2">
+              <input type="checkbox" checked={settings.reels} onChange={e => saveSettings({ reels: e.target.checked })} />
+              A Reel too (Instagram, 7:30 PM)
+            </label>
+            <label className="flex items-center gap-2">
               Before posting
               <select className="input-field py-1 w-auto" value={settings.approval}
                 onChange={e => saveSettings({ approval: e.target.value as Settings['approval'] })}>
@@ -165,7 +179,8 @@ export default function SocialPostsPanel({ businessId }: { businessId: string })
 
       <div className="grid gap-4 sm:grid-cols-2">
         {posts.map(p => <PostCard key={p.id} p={p} busy={busy === p.post_date} canChange={p.post_date >= isoDate() && p.status !== 'published'}
-          connected={!!account} onRemake={() => remake(p.post_date)} onSkip={() => skip(p)} onAnswer={a => answer(p, a)} />)}
+          connected={!!account} reels={!!settings?.reels} onRemake={() => remake(p.post_date)} onSkip={() => skip(p)}
+          onAnswer={a => answer(p, a)} onReel={() => makeReel(p)} />)}
       </div>
     </div>
   )
@@ -224,10 +239,11 @@ function ConnectFacebook({ businessId, account, onChange }: { businessId: string
   )
 }
 
-function PostCard({ p, busy, canChange, connected, onRemake, onSkip, onAnswer }: {
-  p: Post; busy: boolean; canChange: boolean; connected: boolean
-  onRemake: () => void; onSkip: () => void; onAnswer: (a: 'ok' | 'post') => void
+function PostCard({ p, busy, canChange, connected, reels, onRemake, onSkip, onAnswer, onReel }: {
+  p: Post; busy: boolean; canChange: boolean; connected: boolean; reels: boolean
+  onRemake: () => void; onSkip: () => void; onAnswer: (a: 'ok' | 'post') => void; onReel: () => void
 }) {
+  const [showReel, setShowReel] = useState(false)
   const [copied, setCopied] = useState(false)
   const [shareErr, setShareErr] = useState('')
   const day = p.post_date === isoDate() ? 'Today' : p.post_date === tomorrow() ? 'Tomorrow' : shortDate(p.post_date)
@@ -272,8 +288,19 @@ function PostCard({ p, busy, canChange, connected, onRemake, onSkip, onAnswer }:
         </span>
       </div>
 
-      {p.image_url && p.status !== 'failed' && (
-        <img src={p.image_url} alt={p.topic} className="w-full aspect-square object-cover rounded-lg border border-gray-100" loading="lazy" />
+      {p.image_url && p.status !== 'failed' && (showReel && p.reel_url
+        ? <video src={p.reel_url} controls playsInline className="w-full max-h-[32rem] rounded-lg border border-gray-100 bg-black" />
+        : <img src={p.image_url} alt={p.topic} className="w-full aspect-square object-cover rounded-lg border border-gray-100" loading="lazy" />
+      )}
+      {p.reel_url && (
+        <button onClick={() => setShowReel(v => !v)} className="text-xs text-teal-700 underline inline-flex items-center gap-1">
+          <Film className="w-3.5 h-3.5" /> {showReel ? 'Show the picture' : 'Watch the Reel'}
+        </button>
+      )}
+      {reels && !p.reel_url && p.status === 'ready' && canChange && (
+        <p className="text-xs text-gray-500">{p.reel_error && p.reel_attempts >= 3
+          ? `The Reel could not be made (${p.reel_error}); Instagram gets the picture.`
+          : 'The Reel is made this afternoon.'}</p>
       )}
       {p.status === 'failed' && <p className="text-sm text-red-600">{p.error ?? 'Something went wrong.'}</p>}
       {highlightFor(p.topic) && (
@@ -305,6 +332,7 @@ function PostCard({ p, busy, canChange, connected, onRemake, onSkip, onAnswer }:
           </button>
           <button onClick={() => download(p.image_url!, 'square')} className="btn-outline px-3 py-1.5 inline-flex items-center gap-1"><Download className="w-4 h-4" /> Post</button>
           {p.story_url && <button onClick={() => download(p.story_url!, 'story')} className="btn-outline px-3 py-1.5 inline-flex items-center gap-1"><Download className="w-4 h-4" /> Story</button>}
+          {p.reel_url && <a href={p.reel_url} download={`reel-${p.post_date}.mp4`} className="btn-outline px-3 py-1.5 inline-flex items-center gap-1"><Download className="w-4 h-4" /> Reel</a>}
         </>}
         {canChange && connected && (p.status === 'ready' || p.status === 'skipped') && <>
           {p.approval !== 'ok' && p.post_date !== isoDate() && (
@@ -318,6 +346,11 @@ function PostCard({ p, busy, canChange, connected, onRemake, onSkip, onAnswer }:
           <button onClick={onRemake} disabled={busy} className="btn-outline px-3 py-1.5 inline-flex items-center gap-1">
             <RefreshCw className={`w-4 h-4 ${busy ? 'animate-spin' : ''}`} /> {busy ? 'Making…' : 'Make again'}
           </button>
+          {reels && p.status === 'ready' && (
+            <button onClick={onReel} disabled={busy} className="btn-outline px-3 py-1.5 inline-flex items-center gap-1">
+              <Film className="w-4 h-4" /> {busy ? 'Making… (2 min)' : p.reel_url ? 'Make Reel again' : 'Make Reel now'}
+            </button>
+          )}
           {p.status !== 'failed' && p.status !== 'planned' && (
             <button onClick={onSkip} className="btn-outline px-3 py-1.5 inline-flex items-center gap-1">
               <EyeOff className="w-4 h-4" /> {p.status === 'skipped' ? 'Use it' : 'Skip'}

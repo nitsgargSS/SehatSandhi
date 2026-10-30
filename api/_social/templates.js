@@ -55,7 +55,12 @@ function headline(d) {
  *   dateDay?: string, dateMonth?: string, motif?: string
  * }} d
  */
-export function postHtml(template, size, d) {
+/**
+ * `reel` (0299): the story design, moving. The picture zooms slowly and the
+ * parts appear one after another; the renderer steps through it frame by
+ * frame with window.__seek(seconds), so nothing depends on real time.
+ */
+export function postHtml(template, size, d, reel = null) {
   if (!TEMPLATES.includes(template)) throw new Error(`unknown template ${template}`)
   const px = SIZES[size]
   if (!px) throw new Error(`unknown size ${size}`)
@@ -91,15 +96,32 @@ body{font-family:Poppins,sans-serif;color:var(--ink);background:var(--brand-dark
 .web b{display:block;font-size:${story ? 30 : 26}px;font-weight:700}
 .foot{display:flex;align-items:center;justify-content:space-between;gap:20px}
 .shadow-text{text-shadow:0 2px 18px rgba(0,0,0,.35)}
-</style></head><body><div class="page t-${template}">${BODIES[template](d, story, hi)}</div>
+</style></head><body><div class="page t-${template}${reel ? ' reel' : ''}">${BODIES[template](d, story, hi)}</div>
 <script>
 // Shrink each .fit box's text until it fits, then tell the renderer. Glyphs
 // overhang a tight line box a little, so overflow under a third of a line is fine.
 function fit(el){let s=parseFloat(getComputedStyle(el).fontSize);while((el.scrollHeight>el.clientHeight+s*0.3||el.scrollWidth>el.clientWidth+1)&&s>18){s-=2;el.style.fontSize=s+'px'}}
 Promise.all([document.fonts.ready,...[...document.images].map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r}))])
-  .then(()=>{document.querySelectorAll('.fit').forEach(fit);window.__ready=true})
-</script></body></html>`
+  .then(()=>{document.querySelectorAll('.fit').forEach(fit);${reel ? `reel(${Number(reel.duration) || 12})` : ''};window.__ready=true})
+${reel ? REEL_SCRIPT : ''}</script></body></html>`
 }
+
+// The Reel's motion: the picture zooms in over the whole clip; logo, badge,
+// headline, body, each tip or card and the call button rise in, one by one,
+// over the first ~55% of it, then everything holds so it can be read.
+const REEL_SCRIPT = `
+function reel(D){
+  const anims=[];
+  const pic=document.querySelector('.pic');
+  if(pic)anims.push(pic.animate([{transform:'scale(1)'},{transform:'scale(1.12)'}],{duration:D*1000,fill:'both',easing:'linear'}));
+  const parts=[...document.querySelectorAll('.logo-card,.badge,.h1,.body,.step,.foot')];
+  const span=D*0.55, gap=parts.length>1?(span-0.6)/(parts.length-1):0;
+  parts.forEach((el,i)=>anims.push(el.animate([{opacity:0,transform:'translateY(36px)'},{opacity:1,transform:'none'}],
+    {duration:600,delay:(0.3+i*gap)*1000,fill:'both',easing:'cubic-bezier(.2,.8,.2,1)'})));
+  anims.forEach(a=>a.pause());
+  window.__seek=(t)=>anims.forEach(a=>{a.currentTime=t*1000});
+  window.__seek(0);
+}`
 
 const pad = (story) => (story ? 64 : 52)
 const picture = (d, style = '') => d.photo ? `<img class="pic" src="${esc(d.photo)}" style="${style}">` : '<div class="nopic"></div>'
@@ -144,7 +166,7 @@ const BODIES = {
       <div style="position:absolute;top:-30px;left:${p}px">${badge(d, story)}</div>
       <div class="fit h1" style="font-size:${story ? 80 : 54}px;max-height:${story ? 210 : 130}px;margin-top:${d.badge ? 14 : 0}px">${headline(d)}</div>
       <div style="display:flex;gap:${story ? 22 : 16}px;margin-top:${story ? 40 : 22}px;flex-direction:${story ? 'column' : 'row'}">
-        ${points.map((t) => `<div style="flex:1;display:flex;${story ? 'align-items:center;gap:24px' : 'flex-direction:column;gap:12px'};background:var(--brand-soft);border-radius:24px;padding:${story ? '26px 28px' : '20px 20px 24px'}">
+        ${points.map((t) => `<div class="step" style="flex:1;display:flex;${story ? 'align-items:center;gap:24px' : 'flex-direction:column;gap:12px'};background:var(--brand-soft);border-radius:24px;padding:${story ? '26px 28px' : '20px 20px 24px'}">
           <div style="flex:none;width:${story ? 84 : 60}px;height:${story ? 84 : 60}px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center">${icon(t.icon || d.icon || 'check', story ? 44 : 32, '#fff', 2.3)}</div>
           <div style="font-size:${story ? 38 : 28}px;font-weight:600;line-height:${hi ? 1.4 : 1.22}">${esc(t.text)}</div></div>`).join('')}
       </div>
@@ -175,7 +197,7 @@ const BODIES = {
     const card = (kind, text) => {
       const myth = kind === 'myth'
       const c = myth ? '#dc2626' : '#16a34a'
-      return `<div style="flex:1;display:flex;gap:18px;align-items:flex-start;background:${myth ? '#fef2f2' : '#f0fdf4'};border-radius:26px;padding:${story ? '30px 28px' : '20px 22px'};border:2px solid ${myth ? '#fecaca' : '#bbf7d0'}">
+      return `<div class="step" style="flex:1;display:flex;gap:18px;align-items:flex-start;background:${myth ? '#fef2f2' : '#f0fdf4'};border-radius:26px;padding:${story ? '30px 28px' : '20px 22px'};border:2px solid ${myth ? '#fecaca' : '#bbf7d0'}">
         <div style="flex:none;width:${story ? 70 : 54}px;height:${story ? 70 : 54}px;border-radius:50%;background:${c};display:flex;align-items:center;justify-content:center">${icon(myth ? 'x' : 'check', story ? 38 : 30, '#fff', 3)}</div>
         <div><div style="font-size:${story ? 26 : 20}px;font-weight:800;letter-spacing:3px;color:${c};text-transform:uppercase">${myth ? (hi ? 'भ्रम' : 'Myth') : (hi ? 'सच' : 'Fact')}</div>
         <div class="fit" style="font-size:${story ? 38 : 27}px;font-weight:600;line-height:${hi ? 1.4 : 1.22};margin-top:4px;max-height:${story ? 260 : 120}px">${esc(text)}</div></div></div>`
