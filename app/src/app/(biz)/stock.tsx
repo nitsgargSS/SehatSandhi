@@ -204,7 +204,7 @@ export default function Stock() {
           </Card>
         ))}
         {!rows.length && <Note>{loading ? 'Loading…' : stock.length ? 'Nothing here.' : 'No medicines yet.'}</Note>}
-        <Note>Bills, purchases with an invoice, and editing a medicine's details are on the computer (Pharmacy).</Note>
+        <Note>New bills are under Me → Pharmacy → New bill. Purchases with an invoice, returns and editing a medicine's details are on the computer (Pharmacy).</Note>
       </ScrollView>
     </KeyboardAvoidingView>
   )
