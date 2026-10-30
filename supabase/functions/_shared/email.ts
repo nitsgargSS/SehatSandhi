@@ -78,7 +78,7 @@ ${bodyHtml}
 </td></tr>
 <tr><td style="padding:16px 24px;background:#f7faf8;font-size:12px;color:#5b6b63;line-height:1.5">
 Questions? Reply to this email or write to <a href="mailto:${EMAIL_REPLY_TO}" style="color:#0f6b4a">${EMAIL_REPLY_TO}</a>.<br>
-Sehatsandhi · sehatsandhi.com · Follow us on <a href="https://www.facebook.com/sehatsandhi" style="color:#0f6b4a">Facebook</a> and <a href="https://www.instagram.com/sehatsandhi/" style="color:#0f6b4a">Instagram</a>
+Sehatsandhi · sehatsandhi.com · Follow us on <a href="https://www.facebook.com/profile.php?id=1282324324955748" style="color:#0f6b4a">Facebook</a> and <a href="https://www.instagram.com/sehatsandhi/" style="color:#0f6b4a">Instagram</a>
 </td></tr>
 </table></td></tr></table></body></html>`
 }

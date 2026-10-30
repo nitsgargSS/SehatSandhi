@@ -35,7 +35,7 @@ const LINKS = [
 // so a handle that changes cannot end up right in one place and stale in the
 // other — which is exactly the mismatch a verification reviewer looks for.
 export const SOCIALS = [
-  { href: 'https://www.facebook.com/sehatsandhi', label: 'Facebook', handle: '@sehatsandhi', Icon: Facebook },
+  { href: 'https://www.facebook.com/profile.php?id=1282324324955748', label: 'Facebook', handle: 'Sehatsandhi', Icon: Facebook },
   { href: 'https://www.instagram.com/sehatsandhi/', label: 'Instagram', handle: '@sehatsandhi', Icon: Instagram },
 ]
 
