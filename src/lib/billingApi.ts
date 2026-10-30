@@ -249,6 +249,26 @@ export async function addPayment(
   oops(error)
 }
 
+/**
+ * 0301: a payment taken in parts — half UPI, half cash — on the patient's
+ * account. One insert, so either every part is recorded or none is.
+ */
+export async function addPayments(
+  memberId: string, businessId: string, parts: SplitPayment<PaymentMethod>[], recordedBy?: string | null,
+) {
+  const rows = parts.filter(p => p.amount > 0)
+  if (!rows.length) throw new Error('A payment has to be more than zero.')
+  const { error } = await supabase.from('patient_payments').insert(rows.map(p => ({
+    business_id: businessId,
+    patient_member_id: memberId,
+    amount: p.amount,
+    method: p.method,
+    reference: p.reference || null,
+    recorded_by: recordedBy ?? null,
+  })))
+  oops(error)
+}
+
 export async function removePayment(id: string) {
   // 0159: only the owner or a manager may; for anyone else RLS removes nothing
   // rather than erroring, so ask for the row back to know which it was.

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import {
-  getAccount, getCharges, getBills, addPayment, issueBill, methodLabel, PAYMENT_METHOD_OPTIONS,
+  getAccount, getCharges, getBills, addPayments, issueBill, methodLabel, PAYMENT_METHOD_OPTIONS,
   type Account, type Bill, type Charge, type PaymentMethod,
 } from '@web/lib/billingApi'
-import { Btn, Card, Chip, Err, Field, Label, Note, toDmy } from './kit'
+import { Btn, Card, Err, Label, Note, toDmy } from './kit'
+import PaySplit from './PaySplit'
+import { type PayRow, payRow, payTotal, toPayments } from '@web/lib/splitPayments'
 import SendSheet from './SendSheet'
 import { C } from './theme'
 
@@ -20,7 +22,8 @@ export default function BillCard({ biz, member, recordedBy }: { biz: string; mem
   const [acct, setAcct] = useState<Account | null>(null)
   const [charges, setCharges] = useState<Charge[]>([])
   const [bills, setBills] = useState<Bill[]>([])
-  const [pay, setPay] = useState<{ amount: string; method: PaymentMethod; reference: string } | null>(null)
+  // 0301: one payment or several (half UPI, half cash); null while not taking one.
+  const [pay, setPay] = useState<PayRow<PaymentMethod>[] | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
@@ -53,7 +56,7 @@ export default function BillCard({ biz, member, recordedBy }: { biz: string; mem
 
       {!pay ? (
         <View style={st.row}>
-          <Btn small label="Take payment" onPress={() => { setMsg(''); setPay({ amount: balance > 0 ? String(balance) : '', method: 'cash', reference: '' }) }} />
+          <Btn small label="Take payment" onPress={() => { setMsg(''); setPay([payRow<PaymentMethod>('cash', balance > 0 ? String(balance) : '')]) }} />
           {unbilled.length > 0 && (
             <Btn small kind="ghost" label={`Make bill (${rs(unbilledSum)})`} busy={busy === 'bill'}
               onPress={() => run('bill', () => issueBill({ patientMemberId: member, businessId: biz, issuedBy: recordedBy, supersedes: liveBill?.id ?? null }),
@@ -62,15 +65,17 @@ export default function BillCard({ biz, member, recordedBy }: { biz: string; mem
         </View>
       ) : (
         <View style={{ gap: 8 }}>
-          <Field label="Amount (₹)" keyboardType="decimal-pad" value={pay.amount} onChangeText={t => setPay({ ...pay, amount: t.replace(/[^0-9.]/g, '') })} autoFocus />
-          <View style={st.row}>{PAYMENT_METHOD_OPTIONS.map(([m, l]) => <Chip key={m} label={l} on={pay.method === m} onPress={() => setPay({ ...pay, method: m })} />)}</View>
-          {pay.method !== 'cash' && <Field placeholder="Reference — UPI / card slip / cheque no. (optional)" value={pay.reference} onChangeText={t => setPay({ ...pay, reference: t })} />}
+          <PaySplit due={Math.max(balance, 0)} rows={pay} onChange={setPay} methods={PAYMENT_METHOD_OPTIONS} credit={false} />
+          {payTotal(pay) > Math.max(balance, 0) && <Note>Anything above what is owed is kept as an advance.</Note>}
           <View style={st.row}>
-            <Btn small label={`Record ${pay.amount ? rs(Number(pay.amount)) : ''} ${methodLabel(pay.method)}`} busy={busy === 'pay'} disabled={!(Number(pay.amount) > 0)}
+            <Btn small busy={busy === 'pay'} disabled={!toPayments(pay).length}
+              label={toPayments(pay).length > 1 ? `Record ${rs(payTotal(pay))} in ${toPayments(pay).length} payments`
+                : `Record ${payTotal(pay) > 0 ? rs(payTotal(pay)) : ''} ${methodLabel(pay.find(p => Number(p.amount) > 0)?.method ?? pay[0].method)}`}
               onPress={() => run('pay', async () => {
-                await addPayment(member, biz, { amount: Number(pay.amount), method: pay.method, reference: pay.reference.trim() }, recordedBy)
+                const parts = toPayments(pay)
+                await addPayments(member, biz, parts, recordedBy)
                 setPay(null)
-              }, '✓ Payment recorded')} />
+              }, toPayments(pay).length > 1 ? `✓ ${toPayments(pay).length} payments recorded` : '✓ Payment recorded')} />
             <Btn small kind="ghost" label="Cancel" onPress={() => setPay(null)} />
           </View>
         </View>
