@@ -995,8 +995,12 @@ Deno.serve(async (req) => {
       // From WhatsApp: only the number the preview went to may answer.
       if (body.from !== undefined && waNumber(body.from) !== post.preview_to) return json({ ok: false, message: 'Not your post.' }, 403)
     } else {
-      const { data: owner } = await who.asCaller.rpc('sehat_caller_is_owner', { p_business: post.business_id })
-      if (!owner) return json({ error: 'Only the owner can answer.' }, 403)
+      // An admin answers for Sehatsandhi's own posts (0296), from Admin.
+      const [{ data: owner }, { data: admin }] = await Promise.all([
+        who.asCaller.rpc('sehat_caller_is_owner', { p_business: post.business_id }),
+        who.asCaller.rpc('sehat_is_admin'),
+      ])
+      if (!owner && !admin) return json({ ok: false, message: 'Only the owner can answer.' }, 403)
     }
     const note = typeof body.note === 'string' ? body.note.trim().slice(0, 300) || null : null
     try { return json(await decide(db, postId, answer, note)) }
