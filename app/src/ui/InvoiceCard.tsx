@@ -5,6 +5,8 @@ import {
   type Charge, type ChargeCategory, type PaymentMethod, type PriceItem,
 } from '@web/lib/billingApi'
 import { Btn, Card, Chip, Err, Field, Label, Note } from './kit'
+import PaySplit from './PaySplit'
+import { type PayRow, payRow, payProblem, payTotal, toPayments } from '@web/lib/splitPayments'
 import SendSheet from './SendSheet'
 import { C } from './theme'
 
@@ -42,9 +44,9 @@ export default function InvoiceCard({ biz, member, recordedBy, onDone }: {
   const [skip, setSkip] = useState<Set<string>>(new Set())
   const [discount, setDiscount] = useState('')
   const [reason, setReason] = useState('')
-  const [paid, setPaid] = useState<string | null>(null)      // null: follows the total
-  const [method, setMethod] = useState<PaymentMethod>('cash')
-  const [reference, setReference] = useState('')
+  // 0301: one payment or several. Until the biller touches it, it is one payment of the whole total.
+  const [pays, setPays] = useState<PayRow<PaymentMethod>[]>(() => [payRow<PaymentMethod>('cash')])
+  const [follow, setFollow] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState<{ id: string; billNo: string; net: number; paid: number } | null>(null)
@@ -63,13 +65,15 @@ export default function InvoiceCard({ biz, member, recordedBy, onDone }: {
   const subtotal = paise(filled.reduce((s, l) => s + lineOf(l).total, 0) + carried.reduce((s, c) => s + Number(c.amount), 0))
   const gstTotal = paise(filled.reduce((s, l) => s + lineOf(l).tax, 0))
   const net = paise(subtotal - num(discount))
-  const paying = paid === null ? net : num(paid)
-  const valid = (filled.length > 0 || carried.length > 0) && net >= 0 && paying >= 0 && paying <= net
+  useEffect(() => { if (follow) setPays(ps => [{ ...ps[0], amount: net > 0 ? String(net) : '' }]) }, [follow, net])
+  const paying = paise(payTotal(pays))
+  const payErr = payProblem(pays, net)
+  const valid = (filled.length > 0 || carried.length > 0) && net >= 0 && !payErr
     && (num(discount) === 0 || reason.trim().length > 2)
 
   const set = (key: number, patch: Partial<Line>) => setLines(ls => ls.map(l => l.key === key ? { ...l, ...patch } : l))
   const pick = (key: number, it: PriceItem) => set(key, { category: it.category, description: it.name, unitPrice: String(it.price), gst: it.gst_rate })
-  const reset = () => { setLines([blank(Date.now())]); setSkip(new Set()); setDiscount(''); setReason(''); setPaid(null); setMethod('cash'); setReference('') }
+  const reset = () => { setLines([blank(Date.now())]); setSkip(new Set()); setDiscount(''); setReason(''); setPays([payRow<PaymentMethod>('cash')]); setFollow(true) }
 
   const create = async () => {
     setBusy(true); setErr(''); setSent('')
@@ -79,7 +83,7 @@ export default function InvoiceCard({ biz, member, recordedBy, onDone }: {
         lines: filled.map(l => ({ category: l.category, description: l.description.trim(), quantity: num(l.quantity || '1') || 1, unitPrice: num(l.unitPrice), gstRate: l.gst })),
         chargeIds: carried.map(c => c.id),
         discount: num(discount), discountReason: reason.trim(),
-        paid: paying, method, reference: reference.trim(), recordedBy,
+        payments: toPayments(pays), recordedBy,
       })
       setDone({ id: r.bill_id, billNo: r.bill_no, net: Number(r.net), paid: Number(r.paid) })
       reset(); load(); onDone()
@@ -172,17 +176,14 @@ export default function InvoiceCard({ biz, member, recordedBy, onDone }: {
         <Text style={st.big}>{rs(Math.max(net, 0))}</Text>
       </View>
 
-      <Field label="Received now (₹) — 0 if they will pay later" keyboardType="decimal-pad"
-        value={paid === null ? (net > 0 ? String(net) : '') : paid} onChangeText={v => setPaid(v.replace(/[^0-9.]/g, ''))} />
-      {paying > 0 && (
-        <>
-          <View style={st.row}>{PAYMENT_METHOD_OPTIONS.map(([m, lbl]) => <Chip key={m} label={lbl} on={method === m} onPress={() => setMethod(m)} />)}</View>
-          {method !== 'cash' && <Field placeholder="Reference — UPI / card slip / cheque no. (optional)" value={reference} onChangeText={setReference} />}
-        </>
-      )}
-      {paying > net && <Text style={{ color: C.danger }}>More than the invoice total.</Text>}
+      <Label>Received now</Label>
+      <PaySplit due={net} rows={pays} onChange={r => { setFollow(false); setPays(r) }} methods={PAYMENT_METHOD_OPTIONS} />
+      {payErr && <Text style={{ color: C.danger }}>{payErr}</Text>}
       <Err msg={err} />
-      <Btn label={paying > 0 ? `Make invoice · ${rs(paying)} ${methodLabel(method)}` : 'Make invoice · to pay later'} busy={busy} disabled={!valid} onPress={create} />
+      <Btn label={paying <= 0 ? 'Make invoice · to pay later'
+        : toPayments(pays).length > 1 ? `Make invoice · ${rs(paying)} in ${toPayments(pays).length} payments`
+        : `Make invoice · ${rs(paying)} ${methodLabel(pays.find(p => Number(p.amount) > 0)?.method ?? 'cash')}`}
+        busy={busy} disabled={!valid} onPress={create} />
     </Card>
   )
 }

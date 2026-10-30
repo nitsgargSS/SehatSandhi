@@ -1,30 +1,14 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { moneyExact } from '../../lib/format'
-import type { SplitPayment } from '../../lib/billingApi'
+import { type PayRow, payRow, payTotal, payLeft, nextPayMethod } from '../../lib/splitPayments'
 
 // How a bill is being paid (0301): one payment, or several — half by net
 // banking and half in cash. Used where a bill is made and paid in one step:
 // the pharmacy counter and the counter invoice. Each part is saved as its own
 // payment, so collections still show every method and who took it.
 
-export interface PayRow<M extends string = string> { key: number; amount: string; method: M; reference: string }
-
-let seq = 0
-export const payRow = <M extends string>(method: M, amount = ''): PayRow<M> => ({ key: ++seq, amount, method, reference: '' })
-
-export const payTotal = (rows: PayRow[]) => rows.reduce((s, r) => s + (Number(r.amount) || 0), 0)
-
-export const toPayments = <M extends string>(rows: PayRow<M>[]): SplitPayment<M>[] =>
-  rows.filter(r => Number(r.amount) > 0)
-    .map(r => ({ amount: Math.round(Number(r.amount) * 100) / 100, method: r.method, reference: r.reference.trim() }))
-
-/** A problem with the payments as entered, or null. */
-export const payProblem = (rows: PayRow[], due: number): string | null => {
-  if (rows.some(r => Number(r.amount) < 0)) return 'A payment cannot be below zero.'
-  if (payTotal(rows) > due + 0.001) return `The payments come to more than the bill (${moneyExact(due)}).`
-  return null
-}
+export { type PayRow, payRow, payTotal, toPayments, payProblem } from '../../lib/splitPayments'
 
 export default function PaymentSplit<M extends string>({ due, rows, onChange, methods, credit = true }: {
   /** What the bill comes to. */
@@ -36,14 +20,13 @@ export default function PaymentSplit<M extends string>({ due, rows, onChange, me
   credit?: boolean
 }) {
   const received = payTotal(rows)
-  const left = Math.round((due - received) * 100) / 100
+  const left = payLeft(rows, due)
   const set = (key: number, patch: Partial<PayRow<M>>) => onChange(rows.map(r => r.key === key ? { ...r, ...patch } : r))
-  // 30 Oct 2026: once what is entered is less than the bill, the next payment
-  // line offers itself — for the rest, by a method not used yet. Left empty,
-  // the rest stays on credit. It becomes a real line only when used.
-  const used = new Set(rows.map(r => r.method))
-  const nextMethod = methods.find(([m]) => !used.has(m))?.[0] ?? methods[0][0]
-  const offerNext = left > 0 && rows.length < 6 && rows.every(r => Number(r.amount) > 0)
+  // Once what is entered is less than the bill, the next payment line offers
+  // itself; left empty, the rest stays due. It becomes a real line only when used.
+  const offered = nextPayMethod(rows, due, methods)
+  const offerNext = offered !== null
+  const nextMethod = offered ?? methods[0][0]
   // Typing in the offered line turns it into a real one; keep the cursor in it.
   const [focusKey, setFocusKey] = useState<number | null>(null)
   const addRow = (patch: Partial<PayRow<M>> = {}, focus = false) => {

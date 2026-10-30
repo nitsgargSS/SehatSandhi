@@ -8,6 +8,8 @@ import { printOpdSlip } from '../../lib/printSlip'
 import { listBusinessDoctors, type BusinessDoctor } from '@web/lib/doctorsApi'
 import { setAppointmentStatus } from '@web/lib/appointmentApi'
 import { Btn, Card, Chip, Err, Field, Label, Note } from '../../ui/kit'
+import PaySplit from '../../ui/PaySplit'
+import { type PayRow, payRow, payProblem, toPayments } from '@web/lib/splitPayments'
 import { C } from '../../ui/theme'
 
 // The front desk on a phone — the website's "Who is it for?" (src/pages/doctor/
@@ -21,6 +23,7 @@ const GENDERS: [string, string][] = [['male', 'Male'], ['female', 'Female'], ['o
 type Fee = { mode: 'full' | 'discount' | 'free'; price: string; reason: string }
 const fullFee = (d?: BusinessDoctor | null) => d ? (d.discounted_fee ?? d.consultation_fee ?? 0) : 0
 const rs = (n: number) => `₹${n.toLocaleString('en-IN')}`
+const SPLIT_METHODS = [['cash', 'Cash'], ['upi', 'UPI'], ['credit_card', 'Credit card'], ['debit_card', 'Debit card'], ['netbanking', 'Net banking']] as const
 
 export default function NewToken() {
   const { s } = useSession()
@@ -43,6 +46,8 @@ export default function NewToken() {
   const [issued, setIssued] = useState<{ token: number; name: string; doctor: string; fee: number; paid: number; member: string; queue: string } | null>(null)
   // 0226: how the fee was paid — asked once, kept for the next patient.
   const [paidHow, setPaidHow] = useState('')
+  // 0302: 'split' — the fee in parts (₹200 UPI + ₹300 cash), or part now and the rest due.
+  const [split, setSplit] = useState<PayRow[]>(() => [payRow('cash')])
   // 0258: who is already registered on the mobile typed for a new patient, so a
   // returning patient is picked rather than registered again under a new spelling.
   const [found, setFound] = useState<{ phone: string; rows: PatientSearchResult[] }>({ phone: '', rows: [] })
@@ -113,6 +118,8 @@ export default function NewToken() {
     }
     const due = full <= 0 ? 0 : fee.mode === 'full' ? full : fee.mode === 'free' ? 0 : Number(fee.price) || 0
     if (due > 0 && !paidHow) { setErr('Say how the fee was received — or choose "Not received now".'); return }
+    const splitErr = due > 0 && paidHow === 'split' ? payProblem(split, due) : null
+    if (splitErr) { setErr(splitErr); return }
     setBusy(true)
     try {
       const charge = full <= 0 || fee.mode === 'full' ? null : fee.mode === 'free' ? 0 : Number(fee.price)
@@ -120,8 +127,9 @@ export default function NewToken() {
         businessId: biz, patientMemberId: picked.id, practitionerId: doctor ?? s?.doctorId ?? null,
         fee: charge, discountReason: charge == null ? null : fee.reason.trim(), reason,
         priority: outOfTurn ? 10 : 0, priorityReason: outOfTurn ? why.trim() : null,
-        // 0302: sent as one payment of the whole fee (split is on the web desk for now).
-        payments: due > 0 && paidHow && paidHow !== 'later' ? [{ amount: due, method: paidHow }] : [],
+        // 0302: the whole fee one way, the parts of a split, or nothing now.
+        payments: !(due > 0) || !paidHow || paidHow === 'later' ? []
+          : paidHow === 'split' ? toPayments(split) : [{ amount: due, method: paidHow }],
       })
       if (pre.appointment) await setAppointmentStatus(pre.appointment, 'completed').catch(() => {})
       setIssued({ token: r.token_number, name: picked.name, doctor: doc?.full_name ?? '', fee: r.fee, paid: Number(r.paid ?? 0), member: picked.id, queue: r.queue_id })
@@ -229,8 +237,14 @@ export default function NewToken() {
               {fee.mode !== 'free' && <>
                 <Label>Fee received</Label>
                 <View style={st.row}>
-                  {FEE_PAID_OPTIONS.map(([v, l]) => <Chip key={v} label={l} on={paidHow === v} onPress={() => setPaidHow(v)} />)}
+                  {FEE_PAID_OPTIONS.filter(([v]) => v !== 'later').map(([v, l]) => <Chip key={v} label={l} on={paidHow === v} onPress={() => setPaidHow(v)} />)}
+                  <Chip label="Split / part" on={paidHow === 'split'} onPress={() => { setPaidHow('split'); setSplit([payRow('cash')]) }} />
+                  {FEE_PAID_OPTIONS.filter(([v]) => v === 'later').map(([v, l]) => <Chip key={v} label={l} on={paidHow === v} onPress={() => setPaidHow(v)} />)}
                 </View>
+                {paidHow === 'split' && (
+                  <PaySplit due={full <= 0 ? 0 : fee.mode === 'full' ? full : Number(fee.price) || 0} rows={split} onChange={setSplit}
+                    methods={SPLIT_METHODS} credit={false} />
+                )}
               </>}
             </> : <Note>{doc.full_name} has no OPD fee set — no charge will be added.</Note>)}
 
