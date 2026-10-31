@@ -109,6 +109,53 @@ export default function WebsiteMessages({ businessId }: { businessId: string }) 
           </li>
         ))}
       </ul>
+      <BotAnswers businessId={businessId} />
+    </div>
+  )
+}
+
+// 0305: what the site's "Ask the doctor" bot told visitors, newest first, so
+// the doctor can check it and answer the gaps (questions marked "Not covered").
+interface Ask { id: number; question: string; lang: string | null; kind: string; answer: string | null; created_at: string }
+const ASK_KIND: Record<string, { label: string; cls: string }> = {
+  answer: { label: 'Answered', cls: 'bg-emerald-100 text-emerald-800' },
+  personal: { label: 'Sent to consultation', cls: 'bg-sky-100 text-sky-800' },
+  emergency: { label: 'Told to come now', cls: 'bg-red-100 text-red-800' },
+  doctor: { label: 'Not covered', cls: 'bg-amber-100 text-amber-800' },
+  error: { label: 'Failed', cls: 'bg-gray-100 text-gray-600' },
+}
+
+function BotAnswers({ businessId }: { businessId: string }) {
+  const [asks, setAsks] = useState<Ask[] | null>(null)
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    if (!show || asks) return
+    supabase.from('clinic_site_asks').select('id, question, lang, kind, answer, created_at')
+      .eq('business_id', businessId).order('created_at', { ascending: false }).limit(100)
+      .then(({ data }) => setAsks((data as Ask[]) ?? []))
+  }, [show, businessId, asks])
+  return (
+    <div className="border-t border-gray-100 pt-3">
+      <button type="button" className="text-sm font-semibold text-teal-700" onClick={() => setShow(!show)}>
+        {show ? 'Hide' : 'Show'} what the website's question bot answered
+      </button>
+      {show && (
+        <div className="mt-2 space-y-2">
+          <p className="text-xs text-gray-500">The bot answers only from your published articles and answers. "Not covered" questions are good topics for a new article or a published answer.</p>
+          {asks === null && <p className="text-sm text-gray-400">Loading…</p>}
+          {asks?.length === 0 && <p className="text-sm text-gray-400">No questions yet.</p>}
+          {asks?.map((a) => (
+            <details key={a.id} className="rounded-lg border border-gray-100 p-2 text-sm">
+              <summary className="cursor-pointer flex items-center gap-2 flex-wrap">
+                <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${ASK_KIND[a.kind]?.cls ?? ''}`}>{ASK_KIND[a.kind]?.label ?? a.kind}</span>
+                <span className="text-gray-700">{a.question}</span>
+                <span className="text-xs text-gray-400">{when(a.created_at)}</span>
+              </summary>
+              <p className="mt-2 whitespace-pre-wrap text-gray-600 bg-gray-50 rounded p-2">{a.answer}</p>
+            </details>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
