@@ -12,6 +12,7 @@ import Wards from './Wards'
 import Queue from './Queue'
 import { getMyRole, isBusinessRole, isClinicalRole, mayPrescribe, hasPatientRecords, getModuleAccess, RoleLookup, ModuleAccess, AffiliationRole } from '../../lib/identityApi'
 import RevenuePanel from './RevenuePanel'
+import WebsiteVisitsCard from './WebsiteVisitsCard'
 import PharmacyPanel from './PharmacyPanel'
 import OrdersPanel from './OrdersPanel'
 import TripsPanel from './TripsPanel'
@@ -2175,6 +2176,8 @@ export default function DoctorDashboard() {
                 billed its own patients. Only shown where there is billing to
                 report — a listing-only business has no charges. The RPC gates
                 on owner/manager/doctor regardless of what is drawn here. */}
+            {/* 0303: visits and taps on the clinic's own website, when it has one. */}
+            {doctor && isOwner && <WebsiteVisitsCard businessId={doctor.id} days={reportDays} />}
             {emr && (access.opd || access.ipd) && doctor && (
               <Fold ownCard title="Your billing" summary="billed and collected, by stream">
                 <RevenuePanel businessId={doctor.id} onOpen={() => setTab('collections')} />
