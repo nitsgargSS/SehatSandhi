@@ -4,6 +4,7 @@ import { WA_NUMBER } from '../../types'
 import { supabase } from '../../lib/supabase'
 import Markdown from '../../site/Markdown'
 import type { L10n, SiteContent } from '../../site/siteData'
+import WebsiteMessages from './WebsiteMessages'
 import { FONT_PAIRS, fontPair, loadFontPair } from '../../site/fonts'
 
 // The business's own website (0282), edited by its owner: the address, colour,
@@ -56,6 +57,8 @@ export default function WebsitePanel({ businessId, businessName }: { businessId:
   if (site === null) return <CreateSite businessId={businessId} businessName={businessName} err={err} onMade={load} />
   return (
     <div className="space-y-4">
+      {/* 0304: messages from the clinic's own website (full sites only). */}
+      {site.tier === 'full' && <WebsiteMessages businessId={businessId} />}
       <SiteEditor businessId={businessId} site={site} onSaved={setSite} />
       {site.tier === 'full'
         ? <Articles businessId={businessId} articles={articles} onChanged={load} siteUrl={siteUrl(site.slug)} />
