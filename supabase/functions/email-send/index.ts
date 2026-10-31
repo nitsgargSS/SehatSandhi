@@ -13,6 +13,8 @@
 //   wa_broadcast_rejected → the business: why a broadcast was not approved, and the refund (0155)
 //   wa_broadcast_waiting  → ADMIN_EMAIL: a picture broadcast is waiting for approval (0247)
 //   clinic_booking_cancelled → the clinic and the doctor: the patient cancelled (0248)
+//   clinic_site_message  → the business: a message from its own website — Contact us,
+//                          international patient questionnaire, or a question for the doctor (0304)
 //   demo_request         → DEMO_ALERT_EMAIL (default contact@sehatsandhi.com): a doctor asked
 //                          for a demo on WhatsApp; the lead is in Admin → Leads (0300)
 //   signup_reminder      → a business that registered and stopped at payment: what joining
@@ -107,6 +109,18 @@ Deno.serve(async (req) => {
     if (r.kind === 'wa_broadcast_rejected') {
       const res = await sendBroadcastRejected(db, r.business_id, r.payload, site)
       if (res === 'skip') { await finish({ status: 'skipped', last_error: 'business gone or no address' }); continue }
+      if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
+      else {
+        const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
+        await finish({ status: giveUp ? 'failed' : 'pending', last_error: res.error }); failed++
+      }
+      continue
+    }
+
+    // 0304: a message from the clinic's own website — tell the clinic.
+    if (r.kind === 'clinic_site_message') {
+      const res = await sendSiteMessage(db, r.business_id, r.payload, site)
+      if (res === 'skip') { await finish({ status: 'skipped', last_error: 'message gone or no address' }); continue }
       if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
       else {
         const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
@@ -476,6 +490,48 @@ async function sendNurseUnassigned(db: any, businessId: string | null, nurseId: 
 /** 0155: a broadcast Sehatsandhi did not approve — why, and that the money is back. */
 // deno-lint-ignore no-explicit-any
 // 0247: to Sehatsandhi's admin — a picture broadcast is waiting to be read.
+const SITE_MESSAGE_KIND: Record<string, string> = {
+  contact: 'Contact us',
+  international: 'International patient',
+  question: 'Question for the doctor',
+}
+const DETAIL_LABEL: Record<string, string> = {
+  procedure: 'Treatment needed', city: 'City', age: 'Age', travel_from: 'Travel from', travel_to: 'Travel to',
+  companions: 'People coming with the patient', room: 'Room', airport: 'Arriving at', pickup: 'Airport pickup and drop',
+  visa_letter: 'Needs a visa letter', passport_country: 'Passport country', language: 'Language', reports: 'Reports',
+  contact_by: 'Contact by', subject: 'Subject', bot_answer: 'Bot replied',
+}
+
+// 0304: a message from the clinic's own website, to the clinic's email.
+// deno-lint-ignore no-explicit-any
+async function sendSiteMessage(db: any, businessId: string | null, payload: any, site: string): Promise<SendResult | 'skip'> {
+  if (!businessId) return 'skip'
+  const { data: m } = await db.from('clinic_site_messages')
+    .select('kind, name, phone, email, country, message, details, created_at').eq('id', payload?.message_id ?? '').maybeSingle()
+  const { data: b } = await db.from('businesses').select('name, email').eq('id', businessId).maybeSingle()
+  const to = String(b?.email ?? '').trim().toLowerCase()
+  if (!m || !to.includes('@')) return 'skip'
+  const kind = SITE_MESSAGE_KIND[m.kind] ?? 'Message'
+  const rows: [string, string][] = [
+    ['From', m.name ?? '—'],
+    ['Phone', m.phone ?? '—'],
+    ['Email', m.email ?? '—'],
+    ...(m.country ? [['Country', m.country] as [string, string]] : []),
+    ...Object.entries((m.details ?? {}) as Record<string, unknown>)
+      .filter(([, v]) => v !== null && v !== '' && v !== false)
+      .map(([k, v]) => [DETAIL_LABEL[k] ?? k, v === true ? 'Yes' : String(v)] as [string, string]),
+  ]
+  const dash = `${site}/business/dashboard`
+  const html = layout(`${kind} — from your website`, `
+<p style="margin:0 0 12px;white-space:pre-wrap">${esc(m.message)}</p>
+<table cellpadding="0" cellspacing="0" style="width:100%;font-size:14px;border-collapse:collapse">
+${rows.map(([k, v]) => `<tr><td style="padding:6px 10px 6px 0;color:#5b6b63;white-space:nowrap;vertical-align:top">${esc(k)}</td><td style="padding:6px 0;border-bottom:1px solid #eef2ef">${esc(v)}</td></tr>`).join('')}
+</table>
+<p style="margin:16px 0 0"><a href="${dash}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:bold">Open Website → Messages</a></p>`)
+  const text = [`${kind} — from your website`, '', m.message, '', ...rows.map(([k, v]) => `${k}: ${v}`), '', `Dashboard: ${dash}`].join('\n')
+  return sendEmail({ to, toName: b?.name ?? undefined, subject: `${kind} from your website — ${m.name ?? m.phone ?? m.email ?? 'a visitor'}`, html, text })
+}
+
 // deno-lint-ignore no-explicit-any
 async function sendDemoRequest(payload: any, site: string): Promise<SendResult> {
   const phone = String(payload?.phone ?? '').replace(/^91/, '')
