@@ -24,6 +24,10 @@
 --    Sehatsandhi's own visitors, so neither report is mixed into the other.
 --    No cookies, no personal data: a random per-tab session id only.
 --    sehat_site_visit_report gives the owner the numbers.
+-- 5. sehat_public_reviews(key): patients' ratings on Sehatsandhi — average,
+--    count, how the stars spread, and the latest written reviews. Every
+--    rating comes from a real visit booked through Sehatsandhi; no names or
+--    phone numbers leave, only the stars, the words and the date.
 -- ============================================================================
 
 -- ── 1. Which business a site key belongs to ────────────────────────────────
@@ -176,5 +180,25 @@ begin
 end $$;
 revoke all on function sehat_site_visit_report(uuid, integer) from public, anon;
 grant execute on function sehat_site_visit_report(uuid, integer) to authenticated;
+
+-- ── 5. Patients' ratings on Sehatsandhi ────────────────────────────────────
+create or replace function sehat_public_reviews(p_key text, p_limit integer default 6)
+returns jsonb language sql stable security definer set search_path = public as $$
+  with r as (
+    select overall_rating, review_text, created_at from ratings
+     where business_id = sehat_site_business(p_key) and is_visible and overall_rating between 1 and 5
+  )
+  select jsonb_build_object(
+    'average', (select round(avg(overall_rating)::numeric, 1) from r),
+    'count', (select count(*) from r),
+    'stars', (select jsonb_object_agg(n, (select count(*) from r where overall_rating = n)) from generate_series(1, 5) n),
+    'reviews', coalesce((select jsonb_agg(jsonb_build_object('rating', overall_rating, 'text', btrim(review_text), 'on', (created_at at time zone 'Asia/Kolkata')::date)) from (
+        select * from r where coalesce(btrim(review_text), '') <> ''
+         order by created_at desc limit least(greatest(coalesce(p_limit, 6), 1), 20)) t), '[]'::jsonb)
+  )
+  where sehat_site_business(p_key) is not null;
+$$;
+revoke all on function sehat_public_reviews(text, integer) from public;
+grant execute on function sehat_public_reviews(text, integer) to anon, authenticated;
 
 notify pgrst, 'reload schema';
