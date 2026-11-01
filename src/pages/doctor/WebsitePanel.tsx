@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ExternalLink, Plus, Trash2, ChevronDown, ChevronUp, Lock } from 'lucide-react'
-import { WA_NUMBER } from '../../types'
+import { SPECIALITIES, WA_NUMBER } from '../../types'
 import { supabase } from '../../lib/supabase'
 import Markdown from '../../site/Markdown'
 import type { L10n, SiteContent } from '../../site/siteData'
@@ -15,6 +15,7 @@ import { FONT_PAIRS, fontPair, loadFontPair } from '../../site/fonts'
 
 interface SiteRow {
   business_id: string; slug: string; custom_domain: string | null; is_live: boolean; tier: 'free' | 'full'
+  template: 'clinic' | 'hospital'
   brand_color: string | null; logo_url: string | null; hero_image_url: string | null; content: SiteContent
 }
 interface ArticleRow {
@@ -44,7 +45,7 @@ export default function WebsitePanel({ businessId, businessName }: { businessId:
 
   const load = async () => {
     const [{ data: s, error: e1 }, { data: a, error: e2 }] = await Promise.all([
-      supabase.from('business_sites').select('business_id, slug, custom_domain, is_live, tier, brand_color, logo_url, hero_image_url, content').eq('business_id', businessId).maybeSingle(),
+      supabase.from('business_sites').select('business_id, slug, custom_domain, is_live, tier, template, brand_color, logo_url, hero_image_url, content').eq('business_id', businessId).maybeSingle(),
       supabase.from('site_articles').select('id, slug, lang, title, summary, body, image_url, author, read_minutes, published_on, is_published').eq('business_id', businessId).order('published_on', { ascending: false, nullsFirst: true }),
     ])
     if (e1 || e2) { setErr((e1 ?? e2)!.message); setSite(null); return }
@@ -236,7 +237,7 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
     setBusy(true); setMsg(null)
     const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.from('business_sites').update({
-      slug: s.slug, is_live: s.is_live, brand_color: s.brand_color, logo_url: s.logo_url, hero_image_url: s.hero_image_url,
+      slug: s.slug, is_live: s.is_live, template: s.template, brand_color: s.brand_color, logo_url: s.logo_url, hero_image_url: s.hero_image_url,
       content: s.content, updated_at: new Date().toISOString(), updated_by: user?.id ?? null,
     }).eq('business_id', businessId)
     setBusy(false)
@@ -250,6 +251,22 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
   const ins = c.insurance ?? {}
   const visit = c.visit ?? {}
   const social = c.social ?? {}
+  const hospital = s.template === 'hospital'
+  const emergency = c.emergency ?? {}
+
+  // The hospital's doctors, for photos and OPD days (names match the site's doctor list).
+  const [doctors, setDoctors] = useState<{ name: string; speciality: string | null }[]>([])
+  useEffect(() => {
+    if (!hospital) return
+    supabase.from('business_practitioners').select('practitioners(full_name, speciality)')
+      .eq('business_id', businessId).eq('role', 'doctor').eq('status', 'active').order('sort_order')
+      .then(({ data }) => setDoctors(((data ?? []) as unknown as { practitioners: { full_name: string; speciality: string | null } | null }[])
+        .map(r => r.practitioners).filter(Boolean).map(p => ({ name: p!.full_name, speciality: p!.speciality }))))
+  }, [hospital, businessId])
+  const profiles = c.doctor_profiles ?? []
+  const profileFor = (name: string) => profiles.find(p => p.name === name) ?? { name }
+  const setProfile = (name: string, patch: Partial<NonNullable<SiteContent['doctor_profiles']>[number]>) =>
+    setC({ doctor_profiles: [...profiles.filter(p => p.name !== name), { ...profileFor(name), ...patch }] })
 
   return (
     <div className="card shadow-sm space-y-4">
@@ -275,6 +292,18 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
           <input type="checkbox" checked={s.is_live} onChange={e => setS({ ...s, is_live: e.target.checked })} />
           Website is on (untick to take it offline)
         </label>
+        <div>
+          <Label>Layout {free && <PlanBadge />}</Label>
+          <div className="flex gap-2 flex-wrap">
+            {([['clinic', 'Clinic', 'One lead doctor, treatments'], ['hospital', 'Hospital', 'Departments, doctor directory, facilities, packages']] as const).map(([k, label, note]) => (
+              <button key={k} type="button" disabled={free} onClick={() => setS({ ...s, template: k })}
+                className={`text-left rounded-xl border-2 px-4 py-2 bg-white disabled:opacity-50 ${s.template === k ? 'border-teal-600' : 'border-gray-100 hover:border-gray-300'}`}>
+                <span className="block font-semibold text-gray-900">{label}</span>
+                <span className="block text-xs text-gray-500">{note}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <div>
           <Label>Colour</Label>
           <div className="flex items-center gap-2 flex-wrap">
@@ -306,7 +335,7 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
           </>)} />}
       </Section>
 
-      <Section locked={free} title="Lead doctor" hint="The doctor the site is about. Fees and other doctors come from Doctors.">
+      {!hospital && <Section locked={free} title="Lead doctor" hint="The doctor the site is about. Fees and other doctors come from Doctors.">
         <Text label="Name" value={doc.name} onChange={v => setDoc({ name: v })} placeholder="Dr. …" />
         <Bi label="Role" value={doc.role} onChange={v => setDoc({ role: v })} />
         <Bi label="Qualifications" value={doc.qualification} onChange={v => setDoc({ qualification: v })} />
@@ -321,9 +350,85 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
               <Text label="Where" value={t.place} onChange={x => set({ ...t, place: x })} placeholder="Hospital, city" />
             </div>
           )} />
-      </Section>
+      </Section>}
 
-      <Section locked={free} title="Treatments" hint="Featured ones show on the home page; all on Services">
+      {hospital && <>
+        <Section locked={free} title="24×7 emergency" hint="A red strip with a call button at the top of the home page">
+          <Text label="Emergency phone" value={emergency.phone} onChange={v => setC({ emergency: { ...emergency, phone: v || undefined } })} placeholder="+91 …" />
+          <Bi label="One line" value={emergency.text} onChange={v => setC({ emergency: { ...emergency, text: v } })} />
+        </Section>
+
+        <Section locked={free} title="Departments" hint="Leave empty and the site makes one per speciality of your doctors. Each one you add shows the doctors of its speciality.">
+          <Bi label="Section heading" value={c.treatments_title} onChange={v => setC({ treatments_title: v })} />
+          <Bi label="Section introduction" value={c.treatments_intro} rows={2} onChange={v => setC({ treatments_intro: v })} />
+          <Rows<NonNullable<SiteContent['departments']>[number]> items={c.departments ?? []} add="Add a department" blank={() => ({ slug: '', title: {} })} onChange={v => setC({ departments: v })}
+            render={(d, set) => (<>
+              <Bi label="Name" value={d.title} onChange={x => set({ ...d, title: x, slug: d.slug || slugify(x.en ?? '', 60) })} />
+              <label className="block"><Label>Doctors of this speciality show under it</Label>
+                <select className="input-field" value={d.speciality ?? ''} onChange={e => set({ ...d, speciality: e.target.value || undefined })}>
+                  <option value="">—</option>
+                  {SPECIALITIES.map(x => <option key={x.id} value={x.id}>{x.en}</option>)}
+                </select></label>
+              <Bi label="One line" value={d.teaser} onChange={x => set({ ...d, teaser: x })} />
+              <Bi label="More detail" value={d.body} rows={3} onChange={x => set({ ...d, body: x })} />
+            </>)} />
+        </Section>
+
+        <Section locked={free} title="Doctor photos & OPD days" hint="Your doctors come from Doctors; add a photo, a line about them and their OPD days">
+          {doctors.length === 0 && <p className="text-sm text-gray-500">No doctors yet. Add them under Doctors.</p>}
+          {doctors.map(d => {
+            const p = profileFor(d.name)
+            return (
+              <div key={d.name} className="border border-gray-100 rounded-lg p-3 bg-gray-50/60 space-y-2">
+                <p className="font-semibold text-navy-700">{d.name}</p>
+                <ImagePick businessId={businessId} label="Photo" name="doctor" url={p.photo_url} onChange={u => setProfile(d.name, { photo_url: u ?? undefined })} />
+                <Bi label="OPD days and time" value={p.opd} onChange={x => setProfile(d.name, { opd: x })} />
+                <Bi label="One line about them" value={p.bio} rows={2} onChange={x => setProfile(d.name, { bio: x })} />
+              </div>
+            )
+          })}
+        </Section>
+
+        <Section locked={free} title="Facilities" hint="ICU, operation theatre, lab, pharmacy, rooms…">
+          <Rows<NonNullable<SiteContent['facilities']>[number]> items={c.facilities ?? []} add="Add a facility" blank={() => ({ name: {} })} onChange={v => setC({ facilities: v })}
+            render={(f, set) => (<>
+              <Bi label="Name" value={f.name} onChange={x => set({ ...f, name: x })} />
+              <Bi label="One line" value={f.text} onChange={x => set({ ...f, text: x })} />
+              <ImagePick businessId={businessId} label="Photo" name="facility" url={f.image_url} wide onChange={u => set({ ...f, image_url: u ?? undefined })} />
+            </>)} />
+        </Section>
+
+        <Section locked={free} title="Health check-up packages">
+          <Rows<NonNullable<SiteContent['packages']>[number]> items={c.packages ?? []} add="Add a package" blank={() => ({ name: {} })} onChange={v => setC({ packages: v })}
+            render={(p, set) => (<>
+              <Bi label="Name" value={p.name} onChange={x => set({ ...p, name: x })} />
+              <Text label="Price (optional)" value={p.price} onChange={x => set({ ...p, price: x || undefined })} placeholder="₹1,499" />
+              <div className="grid sm:grid-cols-2 gap-2">
+                {(['en', 'hi'] as const).map(lang => (
+                  <label key={lang} className="block"><Label>{lang === 'en' ? 'What it includes, one per line' : 'हिंदी में (optional)'}</Label>
+                    <textarea className="input-field" rows={4} value={(p.includes ?? []).map(x => x[lang] ?? '').join('\n')}
+                      onChange={e => {
+                        const lines = e.target.value.split('\n')
+                        const n = Math.max(lines.length, (p.includes ?? []).length)
+                        const next = Array.from({ length: n }, (_, i) => ({ ...(p.includes?.[i] ?? {}), [lang]: lines[i] ?? (p.includes?.[i]?.[lang] ?? '') }))
+                        set({ ...p, includes: next.filter((x, i) => x.en || x.hi || i === n - 1) })
+                      }} /></label>
+                ))}
+              </div>
+              <Bi label="Note" value={p.note} onChange={x => set({ ...p, note: x })} />
+            </>)} />
+        </Section>
+
+        <Section locked={free} title="Patient guide" hint="Admission, visiting hours, billing, discharge…">
+          <Rows<NonNullable<SiteContent['patient_guide']>[number]> items={c.patient_guide ?? []} add="Add a topic" blank={() => ({ title: {}, body: {} })} onChange={v => setC({ patient_guide: v })}
+            render={(g, set) => (<>
+              <Bi label="Topic" value={g.title} onChange={x => set({ ...g, title: x })} />
+              <Bi label="What patients need to know" value={g.body} rows={4} onChange={x => set({ ...g, body: x })} />
+            </>)} />
+        </Section>
+      </>}
+
+      {!hospital && <Section locked={free} title="Treatments" hint="Featured ones show on the home page; all on Services">
         <Bi label="Section heading" value={c.treatments_title} onChange={v => setC({ treatments_title: v })} />
         <Bi label="Section introduction" value={c.treatments_intro} rows={2} onChange={v => setC({ treatments_intro: v })} />
         <Rows items={c.treatments ?? []} add="Add a treatment" blank={() => ({ slug: '', title: {}, featured: true })} onChange={v => setC({ treatments: v })}
@@ -333,7 +438,7 @@ function SiteEditor({ businessId, site, onSaved }: { businessId: string; site: S
             <Bi label="More detail (Services page)" value={t.body} rows={3} onChange={x => set({ ...t, body: x })} />
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!t.featured} onChange={e => set({ ...t, featured: e.target.checked })} /> Show on the home page</label>
           </>)} />
-      </Section>
+      </Section>}
 
       <Section locked={free} title="Equipment">
         <Bi label="Section heading" value={tech.title} onChange={v => setC({ technology: { ...tech, title: v } })} />
