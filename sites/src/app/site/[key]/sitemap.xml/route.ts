@@ -10,7 +10,10 @@ export async function GET(_req: Request, { params }: { params: { key: string } }
   const d = await getSite(key);
   if (!d || d.site.tier !== 'full') return new Response('Not found', { status: 404 });
   const base = d.site.custom_domain ? `https://www.${d.site.custom_domain.replace(/^www\./, '')}` : `https://${d.site.slug}.sehatsandhi.com`;
-  const pages = ['/', '/services/', '/about/', '/posts/', '/social/', '/contact/'];
+  const c = d.site.content;
+  const pages = d.site.template === 'hospital'
+    ? ['/', '/departments/', '/doctors/', ...(c.facilities?.length || c.technology?.items?.length ? ['/facilities/'] : []), ...(c.packages?.length ? ['/packages/'] : []), '/patients/', '/posts/', '/social/', '/contact/']
+    : ['/', '/services/', '/about/', '/posts/', '/social/', '/contact/'];
   const urls: { loc: string; en: string; hi: string; lastmod?: string }[] = pages.map((p) => ({ loc: '', en: `${base}${langPath('en', p)}`, hi: `${base}${langPath('hi', p)}` }));
   const arts = (await getArticles(key)) ?? [];
   const groups = new Map<string, { langs: Set<string>; date: string | null }>();

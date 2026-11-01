@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+
 import { getReviews } from '@/lib/sehat';
 import { Shell } from '@/site/chrome';
 import { leadDoctor } from '@/site/ctx';
@@ -17,6 +19,8 @@ export async function generateMetadata({ params }: { params: Params }) {
 
 export default async function Page({ params }: { params: Params }) {
   const c = await ctxFor(params);
+  // A hospital's equivalent page.
+  if (c.hospital) redirect(c.href('/doctors/'));
   const reviews = await getReviews(c.key);
   return (
     <Shell c={c} path="/about/" current="doctor">
