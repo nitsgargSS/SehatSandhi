@@ -24,6 +24,7 @@ const LINKS = [
   { to: '/privacy', en: 'Privacy Policy', hi: 'गोपनीयता नीति' },
   { to: '/terms', en: 'Terms', hi: 'नियम व शर्तें' },
   { to: '/refund', en: 'Refund Policy', hi: 'रिफंड नीति' },
+  { to: '/data-deletion', en: 'Data deletion', hi: 'डेटा डिलीट करना' },
 ]
 
 // Only accounts that actually exist go here. Meta's business verification
