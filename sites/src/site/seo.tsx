@@ -32,7 +32,7 @@ export function clinicSchema(c: Ctx) {
   return [
     {
       '@context': 'https://schema.org',
-      '@type': ['MedicalClinic', 'MedicalOrganization'],
+      '@type': c.hospital ? ['Hospital', 'MedicalOrganization'] : ['MedicalClinic', 'MedicalOrganization'],
       '@id': clinicId,
       name: c.name,
       url: c.base,
@@ -51,9 +51,15 @@ export function clinicSchema(c: Ctx) {
       isAcceptingNewPatients: true,
       ...(s.treatments?.length ? { availableService: s.treatments.map((x) => ({ '@type': 'MedicalProcedure', name: x.title.en || x.title.hi, url: `${c.base}/services/#${x.slug}` })) } : {}),
       ...(sameAs.length ? { sameAs } : {}),
-      ...(doc ? { employee: { '@id': docId } } : {}),
+      ...(doc && !c.hospital ? { employee: { '@id': docId } } : {}),
     },
-    ...(doc ? [{
+    // A hospital lists every doctor; a clinic, its lead doctor.
+    ...(c.hospital ? d.doctors.map((x) => ({
+      '@context': 'https://schema.org', '@type': 'Physician', name: x.full_name,
+      ...(x.qualification ? { description: x.qualification } : {}),
+      worksFor: { '@id': clinicId }, url: `${c.base}/doctors/`,
+    })) : []),
+    ...(doc && !c.hospital ? [{
       '@context': 'https://schema.org',
       '@type': 'Physician',
       '@id': docId,

@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+
 import { Shell } from '@/site/chrome';
 import { TreatmentsPage } from '@/site/pages';
 import { type Params, ctxFor } from '@/site/route';
@@ -16,6 +18,8 @@ export async function generateMetadata({ params }: { params: Params }) {
 
 export default async function Page({ params }: { params: Params }) {
   const c = await ctxFor(params);
+  // A hospital's equivalent page.
+  if (c.hospital) redirect(c.href('/departments/'));
   return (
     <Shell c={c} path="/services/" current="services">
       <JsonLd data={clinicSchema(c)} />

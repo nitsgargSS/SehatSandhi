@@ -9,13 +9,30 @@ import Tracker from './track';
 // fixed Call / WhatsApp / Book bar. Book opens Sehatsandhi's WhatsApp booking
 // for this clinic, so appointments land in the clinic's own queue.
 
-const NAV: { key: string; href: string; label: { en: string; hi: string } }[] = [
+type NavItem = { key: string; href: string; label: { en: string; hi: string } };
+
+const CLINIC_NAV: NavItem[] = [
   { key: 'services', href: '/services/', label: { en: 'Treatments', hi: 'इलाज' } },
   { key: 'doctor', href: '/about/', label: { en: 'Doctor', hi: 'डॉक्टर' } },
   { key: 'articles', href: '/posts/', label: { en: 'Articles', hi: 'लेख' } },
   { key: 'social', href: '/social/', label: { en: 'Health tips', hi: 'सेहत टिप्स' } },
   { key: 'contact', href: '/contact/', label: { en: 'Contact', hi: 'संपर्क' } },
 ];
+
+/** Hospital menu: Facilities and Packages only when the hospital has filled them in. */
+function hospitalNav(c: Ctx): NavItem[] {
+  const s = c.d.site.content;
+  return [
+    { key: 'departments', href: '/departments/', label: { en: 'Departments', hi: 'विभाग' } },
+    { key: 'doctors', href: '/doctors/', label: { en: 'Doctors', hi: 'डॉक्टर' } },
+    ...(s.facilities?.length || s.technology?.items?.length ? [{ key: 'facilities', href: '/facilities/', label: { en: 'Facilities', hi: 'सुविधाएँ' } }] : []),
+    ...(s.packages?.length ? [{ key: 'packages', href: '/packages/', label: { en: 'Packages', hi: 'पैकेज' } }] : []),
+    { key: 'patients', href: '/patients/', label: { en: 'Patients', hi: 'मरीज़' } },
+    { key: 'contact', href: '/contact/', label: { en: 'Contact', hi: 'संपर्क' } },
+  ];
+}
+
+const navOf = (c: Ctx) => (c.hospital ? hospitalNav(c) : CLINIC_NAV);
 
 function LangSwitch({ c, path }: { c: Ctx; path: string }) {
   return (
@@ -27,6 +44,7 @@ function LangSwitch({ c, path }: { c: Ctx; path: string }) {
 }
 
 function Header({ c, path, current }: { c: Ctx; path: string; current?: string }) {
+  const NAV = navOf(c);
   const book = c.lang === 'hi' ? 'अपॉइंटमेंट बुक करें' : 'Book appointment';
   const s = c.d.site;
   return (
@@ -72,6 +90,7 @@ function Header({ c, path, current }: { c: Ctx; path: string; current?: string }
 }
 
 function Footer({ c }: { c: Ctx }) {
+  const NAV = c.hospital ? [...hospitalNav(c), CLINIC_NAV[2], CLINIC_NAV[3]] : CLINIC_NAV;
   const soc = c.d.site.content.social ?? {};
   const links: [string | undefined, string][] = [[soc.facebook, 'Facebook'], [soc.instagram, 'Instagram'], [soc.youtube, 'YouTube'], [soc.google, 'Google']];
   return (
