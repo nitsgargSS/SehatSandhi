@@ -1,1 +1,4 @@
-app/
+# Keep the Expo phone app (top-level app/) out of web deploys. Anchored with a
+# leading slash: a bare "app/" also matched sites/src/app and emptied the
+# clinic-sites deploy (1 Nov 2026).
+/app/
