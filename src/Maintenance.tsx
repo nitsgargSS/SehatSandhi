@@ -28,7 +28,7 @@ export default function Maintenance() {
         </p>
         <div style={{ fontSize: 14, color: BIZ.mutedWarm, lineHeight: 1.6 }}>
           Urgent? Call us · ज़रूरी हो तो कॉल करें<br />
-          <a href="tel:+918570889188" style={{ color: BIZ.green, fontWeight: 800, fontSize: 17 }}>+91 85708 89188</a>
+          <a href="tel:+918708718705" style={{ color: BIZ.green, fontWeight: 800, fontSize: 17 }}>+91 87087 18705</a>
         </div>
         <p style={{ fontSize: 13, color: BIZ.mutedWarm, margin: '20px 0 0' }}>
           In an emergency call 108 · आपातकाल में 108 पर कॉल करें
