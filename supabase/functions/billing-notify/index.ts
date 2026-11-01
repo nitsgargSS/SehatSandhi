@@ -66,7 +66,7 @@ function compose(n: Any, link: string, gstIncluded: boolean) {
   }
   if (n.kind === 'plan_change_notice') {
     const from = day(p.plans_from)
-    const params = [from, name, String(p.tier ?? 'your new plan'), rupees(p.monthly), link]
+    const params = [name, from, String(p.tier ?? 'your new plan'), rupees(p.monthly), link]
     return { params, subject: `Your Sehatsandhi plan from ${from}`,
       lines: [`From <b>${esc(from)}</b>, the Sehatsandhi plan for <b>${esc(name)}</b> will be <b>${esc(p.tier)}</b> at <b>${esc(rupees(p.monthly))}</b> a month + GST, for what you use today.`,
               'Until then nothing changes — you keep everything you have, at what you pay now.',
