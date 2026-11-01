@@ -27,6 +27,16 @@ export interface SiteContent {
   insurance?: { title?: L10n; intro?: L10n; points?: L10n[]; panel?: string[]; note?: L10n }
   visit?: { phone?: string; hours?: L10n[]; address?: L10n; photo_url?: string }
   social?: { google?: string; facebook?: string; instagram?: string; youtube?: string; justdial?: string }
+  // Hospital layout (business_sites.template = 'hospital'), read by the
+  // Complete-package site template (sites/); all optional.
+  emergency?: { phone?: string; text?: L10n }
+  /** Departments; when absent the site makes one per speciality of the doctors. */
+  departments?: { slug: string; title: L10n; teaser?: L10n; body?: L10n; speciality?: string; image_url?: string }[]
+  facilities?: { name: L10n; text?: L10n; image_url?: string }[]
+  packages?: { name: L10n; includes?: L10n[]; price?: string; note?: L10n }[]
+  patient_guide?: { title: L10n; body: L10n }[]
+  /** Photo, short bio and OPD days per doctor, matched to Sehatsandhi's doctors by name. */
+  doctor_profiles?: { name: string; photo_url?: string; bio?: L10n; opd?: L10n }[]
 }
 
 export interface PublicSite {
