@@ -21,10 +21,13 @@ export const BILLING_TEMPLATES: ClinicTemplate[] = [
     body: 'Hello, the Sehatsandhi plan for {{1}} renews automatically on {{2}}. {{3}} ({{4}}) will be charged to your saved payment method. To change your plan, open: {{5}}' + THANKS,
     samples: ['Family Health Clinic', '31 Dec 2026', '₹11,000 + GST', 'monthly', LINK],
   },
+  // plan_change_notice (same message) was filed as Marketing by Meta —
+  // "choose your add-ons" read as a sales line. This one is worded like the
+  // two notices above, which Meta approved as Utility.
   {
-    name: 'plan_change_notice', language: 'en', category: 'UTILITY',
-    body: 'Hello, from {{1}} the Sehatsandhi plan for {{2}} will be {{3}} at {{4}} a month + GST, for what you use today. Until then nothing changes. See the details and choose your add-ons here: {{5}}' + THANKS,
-    samples: ['31 Dec 2026', 'Family Health Clinic', 'Multi-speciality', '₹11,000', LINK],
+    name: 'plan_change_update', language: 'en', category: 'UTILITY',
+    body: 'Hello, the Sehatsandhi plan for {{1}} changes on {{2}}. From that date it is the {{3}} plan at {{4}} a month + GST, based on what you use today. Nothing changes before then. Plan details: {{5}}' + THANKS,
+    samples: ['Family Health Clinic', '31 Dec 2026', 'Multi-speciality', '₹11,000', LINK],
   },
 ]
 
@@ -32,5 +35,5 @@ export const BILLING_TEMPLATES: ClinicTemplate[] = [
 export const BILLING_TEMPLATE_FOR: Record<string, string> = {
   renewal_reminder: 'plan_renewal_reminder',
   pre_debit_notice: 'plan_auto_debit_notice',
-  plan_change_notice: 'plan_change_notice',
+  plan_change_notice: 'plan_change_update',
 }

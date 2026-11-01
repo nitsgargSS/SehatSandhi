@@ -901,7 +901,9 @@ function Composer({ insurance = false, businessId, businessName, settings, balan
 const TEMPLATE_LABEL: Record<string, string> = {
   prescription_link: 'Prescription', bill_link: 'Bill', lab_report_link: 'Lab report', discharge_link: 'Discharge summary',
   appointment_update: 'Appointment update', rating_request: 'Rating request', welcome_patient: 'Welcome on registration',
-  visit_summary: 'Prescription and bill after the visit', follow_up_reminder: 'Follow-up reminder',
+  visit_summary: 'Prescription and bill after the visit', follow_up_due: 'Follow-up reminder',
+  follow_up_reminder: 'Follow-up reminder (old, no longer used)',
+  surgery_reminder: 'Before surgery', surgery_aftercare: 'After surgery',
 }
 const TEMPLATE_STATUS: Record<string, [string, string]> = {
   APPROVED: ['Approved', 'bg-green-50 text-green-700'], PENDING: ['Waiting for Meta', 'bg-amber-50 text-amber-700'],
