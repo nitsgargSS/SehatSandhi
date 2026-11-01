@@ -183,8 +183,8 @@ export const WA_START = 'Hi'
 export const WA_LINK = `https://wa.me/${WA_NUMBER}?text=${WA_START}`
 // WA_NUMBER is a WhatsApp Business API number: it takes messages, not calls.
 // This is the number people call. Same digits-only form; tel: links add the '+'.
-export const CALL_NUMBER = '918570889188'
-/** 918570889188 → +91 85708 89188 */
+export const CALL_NUMBER = '918708718705'
+/** 918708718705 → +91 87087 18705 (Sehatsandhi's contact number) */
 export const prettyPhone = (digits: string) =>
   /^91\d{10}$/.test(digits) ? `+91 ${digits.slice(2, 7)} ${digits.slice(7)}` : `+${digits}`
 // National emergency ambulance: free, 24x7, works from any phone without data.

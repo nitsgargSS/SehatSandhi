@@ -375,9 +375,9 @@ export const clinicOtp = (payload: { action: 'request' | 'verify'; phone: string
  *  the website's sign-in form and the app's login. */
 export const WHATSAPP_CODE_ERRORS: Record<string, string> = {
   WHATSAPP_UNREACHABLE:
-    "We couldn't reach that number on WhatsApp. Use the email code instead, or call us on +91 85708 89188.",
+    "We couldn't reach that number on WhatsApp. Use the email code instead, or call us on +91 87087 18705.",
   DELIVERY_UNAVAILABLE:
-    'We cannot send WhatsApp codes right now. This is a problem at our end — use the email code, or call us on +91 85708 89188.',
+    'We cannot send WhatsApp codes right now. This is a problem at our end — use the email code, or call us on +91 87087 18705.',
   DELIVERY_FAILED:
     'We could not send your code just now. Try again in a minute, or use the email code.',
 }
