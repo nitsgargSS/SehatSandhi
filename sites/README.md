@@ -30,7 +30,11 @@ npm run dev                    # http://localhost:3100  (?site=<slug> switches c
 
 ## Hosting
 
-A separate Vercel project with **Root Directory = `sites`**. Add each
+A separate Vercel project (`sehatsandhi-sites`) with **Root Directory =
+`sites`**; `sites/vercel.json` makes it build as Next.js and only when
+something under `sites/` changes. The repo's `.vercelignore` must stay
+anchored (`/app/`) — a bare `app/` strips `sites/src/app` and leaves an empty
+site. Add each
 clinic's domain to that project; the clinic points its DNS at Vercel. No
 code change per clinic.
 
