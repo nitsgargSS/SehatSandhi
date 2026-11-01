@@ -6,6 +6,7 @@ import Contact from './pages/Contact'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import Terms from './pages/Terms'
 import RefundPolicy from './pages/RefundPolicy'
+import DataDeletion from './pages/DataDeletion'
 
 // Renders the legal pages to static HTML at build time.
 //
@@ -16,7 +17,7 @@ import RefundPolicy from './pages/RefundPolicy'
 // most likely way a verification reviewer concludes a policy page is missing
 // while we can plainly see it ourselves.
 //
-// Only these five routes are prerendered, and they are the ones that can be:
+// Only these six routes are prerendered, and they are the ones that can be:
 // their import graph is lucide, react-router, LanguageContext, types and the
 // header/footer — no Supabase client, no analytics, no env resolution, nothing
 // that needs a browser or a network call. The rest of the app stays a normal
@@ -57,6 +58,11 @@ export const PAGES: Page[] = [
     title: 'Refund & Cancellation Policy — Sehatsandhi',
     description: 'Refund and cancellation terms for doctors and partners who pay a listing fee. Sehatsandhi is free for patients.',
   },
+  {
+    path: '/data-deletion',
+    title: 'Data deletion — Sehatsandhi',
+    description: 'How a business that connected its Facebook Page and Instagram to Sehatsandhi can delete that connection, and how to ask us to delete data.',
+  },
 ]
 
 const COMPONENTS: Record<string, () => JSX.Element> = {
@@ -65,6 +71,7 @@ const COMPONENTS: Record<string, () => JSX.Element> = {
   '/privacy': PrivacyPolicy,
   '/terms': Terms,
   '/refund': RefundPolicy,
+  '/data-deletion': DataDeletion,
 }
 
 /** Render one route's body markup. Throws rather than emitting an empty page. */

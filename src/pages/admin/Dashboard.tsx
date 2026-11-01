@@ -29,6 +29,7 @@ import WebsiteTierSwitch from './WebsiteTierSwitch'
 import AbdmSwitch from './AbdmSwitch'
 import PharmacySwitch from './PharmacySwitch'
 import LabSwitch from './LabSwitch'
+import SocialSwitch from './SocialSwitch'
 import { listBroadcastsForReview } from '../../lib/marketingApi'
 import { PhoneVerifyCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import DisableBusinessModal from './DisableBusinessModal'
@@ -1060,6 +1061,7 @@ export default function AdminDashboard() {
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, lab_module: on } : x))} />}
                         <FreeAddons businessId={d.id} vertical={d.vertical} canChange={!isManager} />
                         <WebsiteTierSwitch businessId={d.id} canChange={!isManager} />
+                        <SocialSwitch businessId={d.id} canChange={!isManager} />
                         <AbdmSwitch businessId={d.id} canChange={!isManager} />
                       </div>
                     )}
@@ -1138,6 +1140,7 @@ export default function AdminDashboard() {
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, lab_module: on } : x))} />}
                         <FreeAddons businessId={d.id} vertical={d.vertical} canChange={!isManager} />
                         <WebsiteTierSwitch businessId={d.id} canChange={!isManager} />
+                        <SocialSwitch businessId={d.id} canChange={!isManager} />
                         <AbdmSwitch businessId={d.id} canChange={!isManager} />
                           </div>
                         </td>

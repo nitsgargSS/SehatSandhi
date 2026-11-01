@@ -25,7 +25,7 @@ type Section = { h: string; p?: string; list?: string[]; after?: string }
 const content: Record<'en' | 'hi', { title: string; updated: string; intro: string; sections: Section[]; settings: string }> = {
   en: {
     title: 'Privacy Policy',
-    updated: 'Last updated: 28 October 2026',
+    updated: 'Last updated: 1 November 2026',
     intro: `Sehatsandhi ("we", "us") is operated by NG Technologies. This notice explains, in plain words, what personal data we process, why, for how long, who else handles it, and how you can use your rights or complain. It is given under the Digital Personal Data Protection Act, 2023 and the Digital Personal Data Protection Rules, 2025, and the Information Technology Act, 2000 and the rules under it where they apply. We treat health information as sensitive personal data.`,
     settings: 'Change your Google Analytics choice',
     sections: [
@@ -55,6 +55,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `Clinic and marketing messages: a clinic may send you health camp, reminder or offer messages only if you agreed — for example by scanning its QR code or telling the clinic — and only that clinic. To stop them from every clinic at once, send STOP on our WhatsApp; send START to turn them back on. Appointment, prescription, bill and report messages continue either way (section 7).`,
           `Doctors, businesses and their staff: name, phone, email, qualification and registration number (checked against the National Medical Commission's Indian Medical Register), a pharmacy's drug licence and an insurance advisor's IRDAI licence or POSP code, clinic address, GST details if you give them, sign-in details for each staff member, who did each step of an order, trip or lead, wallet top-ups and lead fees, and payments of fees — made through Razorpay; we never see or store your card, UPI PIN or bank password. If staff use the Sehatsandhi app, we keep their phone's notification token so alerts reach them; it is removed when they sign out.`,
           `Contact form: your name, phone or email and your message, so we can reply.`,
+          `Daily social posts, for businesses that use them: if a business connects its Facebook Page (and the Instagram account linked to it) through Facebook Login, we receive the Page's name and ID, the linked Instagram account's ID and username, and a key from Meta that lets us post to that Page and account. We use them only to publish the posts the business approved — the daily health-awareness image, as a post and a story, and on Instagram as a photo, story or reel — and to show the business which Page and account are connected. We do not read the Page's or account's followers, messages, comments, insights or any other content, and we never use them for advertising. The keys are kept encrypted on our servers and are never shown to anyone. The business can remove our access at any time with Disconnect, or in its Facebook settings; see sehatsandhi.com/data-deletion.`,
           `Using our website: anonymous usage events on our own systems — pages opened, what speciality or area was searched, which listings were shown, viewed or tapped, and when the WhatsApp or call button was used — with a temporary per-tab identifier that is discarded when you close the tab, your device type and the website you came from. Search text is removed from page addresses. These are never linked to your name or phone number, and are not recorded at all if your browser sends "Do Not Track".`,
           `Approximate location of a visit: worked out from your internet address by a lookup service (ipwho.is), accurate at best to a town and often wrong on mobile networks. We keep one location per visit, not a history, never linked to your name, phone or bookings. Not recorded under "Do Not Track".`,
           `Counting how Sehatsandhi is used: we count how Sehatsandhi is used — for example how many people booked in a month, through which channel and in which area — as totals that do not identify anyone, to run the service and to report on it, including to investors, grant bodies and banks. These reports never contain names, phone numbers or health details.`,
@@ -78,6 +79,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `Supabase — secure hosting of our database and files (servers in Mumbai, India).`,
           `Vercel — hosting of this website.`,
           `AiSensy and Meta (WhatsApp Business) — sending and receiving WhatsApp messages. Meta's own terms apply to WhatsApp; its Cloud API keeps message content for up to 30 days.`,
+          `Meta (Facebook and Instagram) — publishing a business's approved daily posts to its own Facebook Page and Instagram account, only if the business connects them. Meta's own terms and privacy policy apply to Facebook and Instagram.`,
           `MSG91 — SMS and email; Zoho ZeptoMail — email.`,
           `Razorpay — payments.`,
           `Expo (expo.dev) — delivering notifications to the Sehatsandhi app on staff phones; a notification carries only a short line such as an order number or a patient's first name.`,
@@ -105,6 +107,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `Anonymous website usage events: about 13 months.`,
           `Area searches on the page for businesses: 12 months.`,
           `Contact form messages: 24 months.`,
+          `A business's Facebook and Instagram connection (Page and account names and IDs, and the posting keys): until the business presses Disconnect or removes Sehatsandhi in its Facebook settings — then deleted at once — or when its Social posts service ends. Posts already published stay on its own Page and account, which it controls.`,
           `Used or expired sign-in codes: deleted daily. Phone verification codes: 30 days after use or expiry.`,
           `Records of messages we sent (number, template and delivery status): 12 months. Queued notifications and emails: 90 days after they were sent or failed.`,
           `WhatsApp conversation records: 12 months after the conversation closed; the record that a number wrote to us: 24 months after its last message.`,
@@ -156,7 +159,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
   },
   hi: {
     title: 'गोपनीयता नीति',
-    updated: 'आखिरी अपडेट: 28 अक्टूबर 2026',
+    updated: 'आखिरी अपडेट: 1 नवंबर 2026',
     intro: `Sehatsandhi ("हम") NG Technologies द्वारा संचालित है। यह सूचना आसान शब्दों में बताती है कि हम कौनसा व्यक्तिगत डेटा प्रोसेस करते हैं, क्यों, कितने समय तक, और कौन-कौन उसे संभालता है, और आप अपने अधिकारों का इस्तेमाल या शिकायत कैसे कर सकते हैं। यह डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम, 2023 (DPDP Act) और DPDP नियम, 2025, और जहां लागू हो वहां सूचना प्रौद्योगिकी अधिनियम, 2000 और उसके नियमों के तहत दी गई है। स्वास्थ्य से जुड़ी जानकारी को हम संवेदनशील व्यक्तिगत डेटा मानते हैं।`,
     settings: 'Google Analytics के लिए अपनी पसंद बदलें',
     sections: [
@@ -186,6 +189,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `क्लिनिक और मार्केटिंग मैसेज: कोई क्लिनिक आपको हेल्थ कैंप, रिमाइंडर या ऑफ़र के मैसेज सिर्फ तभी भेज सकता है जब आपने सहमति दी हो — जैसे उसका QR कोड स्कैन करके या क्लिनिक को बताकर — और सिर्फ वही क्लिनिक। सभी क्लिनिक्स के ये मैसेज एक साथ रोकने के लिए हमारे WhatsApp पर STOP भेजें; फिर से शुरू करने के लिए START भेजें। अपॉइंटमेंट, पर्चे, बिल और रिपोर्ट के मैसेज दोनों हालात में आते रहेंगे (सेक्शन 7)।`,
           `डॉक्टर, बिज़नेस और उनका स्टाफ़: नाम, फ़ोन, ईमेल, क्वालिफ़िकेशन और रजिस्ट्रेशन नंबर (राष्ट्रीय चिकित्सा आयोग के इंडियन मेडिकल रजिस्टर से जांचा जाता है), फ़ार्मेसी का ड्रग लाइसेंस और बीमा सलाहकार का IRDAI लाइसेंस या POSP कोड, क्लिनिक का पता, दिए जाने पर GST डिटेल्स, हर स्टाफ़ सदस्य की लॉगिन डिटेल्स, ऑर्डर, यात्रा या लीड का हर कदम किसने उठाया, वॉलेट टॉप-अप और लीड फ़ीस, और फ़ीस के पेमेंट — जो Razorpay से होते हैं; हम आपका कार्ड, UPI PIN या बैंक पासवर्ड न देखते हैं न रखते हैं। स्टाफ़ Sehatsandhi ऐप इस्तेमाल करे तो अलर्ट पहुँचाने के लिए हम उनके फ़ोन का नोटिफ़िकेशन टोकन रखते हैं; लॉग आउट करने पर वह हट जाता है।`,
           `संपर्क फ़ॉर्म: आपका नाम, फ़ोन या ईमेल और आपका मैसेज, ताकि हम जवाब दे सकें।`,
+          `रोज़ की सोशल मीडिया पोस्ट, जो बिज़नेस इसका इस्तेमाल करते हैं: अगर कोई बिज़नेस Facebook Login से अपना Facebook पेज (और उससे जुड़ा Instagram अकाउंट) जोड़ता है, तो हमें पेज का नाम और ID, जुड़े Instagram अकाउंट की ID और यूज़रनेम, और Meta की ओर से एक key मिलती है जिससे हम उस पेज और अकाउंट पर पोस्ट कर सकें। इनका इस्तेमाल सिर्फ बिज़नेस की मंज़ूर की हुई पोस्ट डालने के लिए होता है — रोज़ की स्वास्थ्य-जागरूकता तस्वीर, पोस्ट और स्टोरी के रूप में, और Instagram पर फ़ोटो, स्टोरी या रील के रूप में — और बिज़नेस को यह दिखाने के लिए कि कौनसा पेज और अकाउंट जुड़ा है। हम पेज या अकाउंट के फ़ॉलोअर, मैसेज, कमेंट, इनसाइट या कोई और कंटेंट नहीं पढ़ते, और इन्हें कभी विज्ञापन के लिए इस्तेमाल नहीं करते। Keys हमारे सर्वर पर एन्क्रिप्ट करके रखी जाती हैं और किसी को दिखाई नहीं जातीं। बिज़नेस कभी भी Disconnect दबाकर या अपनी Facebook सेटिंग में हमारी पहुँच हटा सकता है; देखें sehatsandhi.com/data-deletion।`,
           `हमारी वेबसाइट का इस्तेमाल: हमारे अपने सिस्टम पर बिना नाम के इस्तेमाल के इवेंट — कौनसे पेज खुले, कौनसी स्पेशलिटी या इलाका खोजा गया, कौनसी लिस्टिंग दिखी, देखी या टैप हुई, और WhatsApp या कॉल बटन कब दबा — एक टेम्पररी पर-टैब आइडेंटिफायर के साथ जो टैब बंद होते ही खत्म हो जाता है, आपके डिवाइस का प्रकार और आप किस वेबसाइट से आए। पेज एड्रेस से खोज का टेक्स्ट हटा दिया जाता है। ये कभी आपके नाम या फ़ोन से नहीं जोड़े जाते, और अगर आपका ब्राउज़र "Do Not Track" भेजता है तो बिल्कुल रिकॉर्ड नहीं होते।`,
           `विज़िट की अनुमानित लोकेशन: आपके इंटरनेट एड्रेस से एक लुकअप सर्विस (ipwho.is) द्वारा निकाली जाती है, ज़्यादा से ज़्यादा कस्बे तक सही और मोबाइल नेटवर्क पर अक्सर गलत। हम हर विज़िट की एक ही लोकेशन रखते हैं, इतिहास नहीं, और यह कभी आपके नाम, फ़ोन या बुकिंग से नहीं जुड़ती। "Do Not Track" पर रिकॉर्ड नहीं होती।`,
           `Sehatsandhi के इस्तेमाल की गिनती: हम गिनते हैं कि Sehatsandhi कैसे इस्तेमाल होता है — जैसे एक महीने में कितने लोगों ने बुकिंग की, किस माध्यम से और किस इलाके में — ऐसे कुल आंकड़ों के रूप में जिनसे किसी की पहचान नहीं होती, सेवा चलाने और उसकी रिपोर्ट देने के लिए, जिसमें निवेशकों, अनुदान देने वाली संस्थाओं और बैंकों को दी जाने वाली रिपोर्ट भी शामिल है। इन रिपोर्टों में कभी नाम, फ़ोन नंबर या स्वास्थ्य की जानकारी नहीं होती।`,
@@ -209,6 +213,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `Supabase — हमारे डेटाबेस और फ़ाइलों की सुरक्षित होस्टिंग (सर्वर मुंबई, भारत में)।`,
           `Vercel — इस वेबसाइट की होस्टिंग।`,
           `AiSensy और Meta (WhatsApp Business) — WhatsApp मैसेज भेजना और पाना। WhatsApp पर Meta की अपनी शर्तें लागू होती हैं; उसका Cloud API मैसेज का कंटेंट 30 दिन तक रखता है।`,
+          `Meta (Facebook और Instagram) — बिज़नेस की मंज़ूर की हुई रोज़ की पोस्ट उसके अपने Facebook पेज और Instagram अकाउंट पर डालना, सिर्फ तब जब बिज़नेस उन्हें जोड़े। Facebook और Instagram पर Meta की अपनी शर्तें और प्राइवेसी पॉलिसी लागू होती हैं।`,
           `MSG91 — SMS और ईमेल; Zoho ZeptoMail — ईमेल।`,
           `Razorpay — पेमेंट।`,
           `Expo (expo.dev) — स्टाफ़ के फ़ोन पर Sehatsandhi ऐप में नोटिफ़िकेशन पहुँचाना; नोटिफ़िकेशन में सिर्फ छोटी लाइन होती है, जैसे ऑर्डर नंबर या मरीज़ का पहला नाम।`,
@@ -236,6 +241,7 @@ const content: Record<'en' | 'hi', { title: string; updated: string; intro: stri
           `वेबसाइट के बिना नाम वाले इवेंट: लगभग 13 महीने।`,
           `बिज़नेस वाले पेज पर इलाके की खोज: 12 महीने।`,
           `संपर्क फ़ॉर्म के मैसेज: 24 महीने।`,
+          `बिज़नेस का Facebook और Instagram कनेक्शन (पेज और अकाउंट के नाम और ID, और पोस्ट करने की keys): जब तक बिज़नेस Disconnect न दबाए या अपनी Facebook सेटिंग में Sehatsandhi को न हटाए — तब तुरंत डिलीट — या जब उसकी सोशल पोस्ट सेवा बंद हो। पहले से डाली गई पोस्ट उसके अपने पेज और अकाउंट पर रहती हैं, जिन पर उसका नियंत्रण है।`,
           `इस्तेमाल हो चुके या एक्सपायर लॉगिन कोड: रोज़ डिलीट। फ़ोन वेरिफ़िकेशन कोड: इस्तेमाल या एक्सपायर होने के 30 दिन बाद।`,
           `हमारे भेजे मैसेज का रिकॉर्ड (नंबर, टेम्पलेट और डिलीवरी स्टेटस): 12 महीने। कतार में रखे नोटिफ़िकेशन और ईमेल: भेजे जाने या फ़ेल होने के 90 दिन बाद।`,
           `WhatsApp बातचीत के रिकॉर्ड: बातचीत बंद होने के 12 महीने बाद; किसी नंबर ने हमें मैसेज किया, इसका रिकॉर्ड: उसके आखिरी मैसेज के 24 महीने बाद।`,
