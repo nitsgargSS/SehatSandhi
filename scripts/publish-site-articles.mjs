@@ -1,15 +1,16 @@
 // Publish approved articles to a clinic's website (site_articles, 0282/0303).
 //
-//   node scripts/publish-site-articles.mjs <site-slug> <folder> [sandbox|prod] [--dry]
-//   e.g. node scripts/publish-site-articles.mjs sneyehospital ~/Projects/sneye/docs/articles prod
+//   node scripts/publish-site-articles.mjs <site-slug> <folder> [sandbox|prod] [--dry] [--origin=https://www.clinic.in]
+//   e.g. node scripts/publish-site-articles.mjs sneyehospital ~/Projects/sneye/docs/articles prod --origin=https://www.sneyeshospital.com
 //
 // Each Markdown file has a front-matter block:
 //   group, slug, lang (en|hi), title, summary, image, read_minutes, status
 // The English and Hindi files of one article share `group` (site_articles.
 // group_key), so the site can link the two versions. Only files whose status
 // starts with "approved" are published; drafts are skipped and listed.
-// `image` may be a site path (/assets/…); it is stored as a full URL on the
-// clinic's own domain so it also shows on the Sehatsandhi copy of the site.
+// `image` may be a site path (/assets/…); it is stored as a full URL — on
+// --origin when given, else on the site's custom domain — so it shows on every
+// copy of the site (own domain, clinic template, Sehatsandhi page).
 //
 // Defaults to SANDBOX. Writes to production only when "prod" is passed.
 // Re-running updates the same articles in place (matched by slug).
@@ -19,6 +20,7 @@ dotenv.config({ path: '.env.supabase', quiet: true })
 
 const [slug, folder, target = 'sandbox'] = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const dry = process.argv.includes('--dry')
+const originArg = process.argv.find((a) => a.startsWith('--origin='))?.slice('--origin='.length).replace(/\/+$/, '')
 if (!slug || !folder || !['sandbox', 'prod'].includes(target)) {
   console.error('usage: publish-site-articles.mjs <site-slug> <folder> [sandbox|prod] [--dry]'); process.exit(1)
 }
@@ -38,7 +40,8 @@ const c = new pg.Client({ connectionString: process.env[`SUPABASE_DB_URL_${targe
 await c.connect()
 const site = (await c.query('select business_id, custom_domain from business_sites where slug = $1', [slug])).rows[0]
 if (!site) { console.error(`No website "${slug}" on ${target}.`); process.exit(1) }
-const origin = site.custom_domain ? `https://www.${site.custom_domain.replace(/^www\./, '')}` : ''
+const origin = originArg || (site.custom_domain ? `https://www.${site.custom_domain.replace(/^www\./, '')}` : '')
+if (!origin) console.log('note: no --origin and no custom domain — site paths in images stay relative.')
 
 let done = 0
 for (const { file, meta, body } of parsed) {
