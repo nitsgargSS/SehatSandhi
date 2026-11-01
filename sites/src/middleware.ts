@@ -6,6 +6,10 @@ import { isDevHost, siteKeyFromHost } from './lib/host';
 // from the hostname (lib/host.ts) and <lang> from a leading /hi/. Pages under
 // app/site/[key]/[lang] render that clinic. sitemap.xml and robots.txt go to
 // per-clinic route handlers.
+//
+// Demo and preview addresses (*.vercel.app, localhost) are kept out of search
+// engines — a demo shows a real clinic's content, and a second public copy
+// would compete with the clinic's own site.
 
 export const config = { matcher: ['/((?!_next/|favicon|.*\\.(?:png|jpg|jpeg|webp|svg|ico|txt|html|js|css|woff2?)$).*)', '/robots.txt'] };
 
@@ -20,6 +24,10 @@ export function middleware(req: NextRequest) {
     else key = req.cookies.get('dev-site')?.value || process.env.DEV_SITE_KEY || null;
   }
   if (!key) return new NextResponse('Not a clinic website.', { status: 404 });
+  const demo = isDevHost(host);
+  if (demo && url.pathname === '/robots.txt') {
+    return new NextResponse('User-agent: *\nDisallow: /\n', { headers: { 'Content-Type': 'text/plain' } });
+  }
 
   const path = url.pathname;
   const target = url.clone();
@@ -31,6 +39,7 @@ export function middleware(req: NextRequest) {
     target.pathname = `/site/${encodeURIComponent(key)}/${hi ? 'hi' : 'en'}${rest}`;
   }
   const res = NextResponse.rewrite(target);
+  if (demo) res.headers.set('X-Robots-Tag', 'noindex, nofollow');
   if (setCookie) res.cookies.set('dev-site', setCookie, { path: '/', sameSite: 'lax' });
   return res;
 }
