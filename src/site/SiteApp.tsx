@@ -32,6 +32,7 @@ const UI = {
   team: { en: 'The team around her', hi: 'उनकी टीम' }, notSure: { en: 'Not sure what you need?', hi: 'तय नहीं कर पा रहे?' },
   findCondition: { en: 'Find your condition', hi: 'अपनी समस्या खोजें' }, back: { en: 'Back', hi: 'वापस' },
   myRecords: { en: 'Patient login: your prescriptions and reports', hi: 'मरीज़ लॉगिन: पर्चे और रिपोर्ट' },
+  followUs: { en: 'Follow us', hi: 'हमें फ़ॉलो करें' },
   notFound: { en: 'This page is not here.', hi: 'यह पेज नहीं मिला।' }, powered: { en: 'Website and booking by', hi: 'वेबसाइट और बुकिंग' },
   listed: { en: 'Listed on', hi: 'सूचीबद्ध:' }, findMore: { en: 'find more doctors near you', hi: 'आसपास और डॉक्टर खोजें' },
   ratedHere: { en: 'from patients who booked through us', hi: 'हमारे ज़रिए बुक करने वाले मरीज़ों से' },
@@ -85,8 +86,36 @@ export default function SiteApp({ siteKey, base }: { siteKey: string; base: stri
         </> : <Route path="*" element={<Navigate to={`${base}/`} replace />} />}
         <Route path="*" element={<Wrap><p style={{ padding: '80px 0' }}>{t('notFound')}</p></Wrap>} />
       </Routes>
+      {data.site.tier !== 'free' && <FollowUs d={data} base={base} lang={lang} t={t} />}
       <Footer d={data} base={base} lang={lang} t={t} />
     </div>
+  )
+}
+
+/**
+ * The full site's Facebook Page feed, in Meta's own Page widget (an iframe from
+ * facebook.com: no app, no permission, nothing read by us), and an Instagram
+ * button — from the links in the Website tab (2 Nov 2026).
+ */
+function FollowUs({ d, t }: P) {
+  const s = d.site.content.social ?? {}
+  if (!s.facebook && !s.instagram) return null
+  const fb = s.facebook && `https://www.facebook.com/plugins/page.php?${new URLSearchParams({
+    href: s.facebook, tabs: 'timeline', width: '500', height: '560', small_header: 'false',
+    adapt_container_width: 'true', hide_cover: 'false', show_facepile: 'true',
+  })}`
+  return (
+    <section style={{ padding: '40px 0', borderTop: '1px solid var(--site-line)' }}>
+      <Wrap>
+        <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 16px' }}>{t('followUs')}</h2>
+        {fb && <iframe title="Facebook" src={fb} width="500" height="560" loading="lazy"
+          style={{ border: 0, maxWidth: '100%', borderRadius: 12, background: '#fff', display: 'block' }}
+          allow="encrypted-media; clipboard-write; picture-in-picture; web-share" />}
+        {s.instagram && <a href={s.instagram} target="_blank" rel="noreferrer"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 14, fontWeight: 700, color: 'var(--site-brand)' }}>
+          <Instagram size={18} /> Instagram →</a>}
+      </Wrap>
+    </section>
   )
 }
 
