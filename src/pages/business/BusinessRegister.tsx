@@ -271,7 +271,18 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   const tiered = !!catalogue?.settings.tiered_live
   const coreVertical = vertical === 'clinic' || vertical === 'hospital'
   const [planAddons, setPlanAddons] = useState<string[]>([])
-  const coreAddons = (catalogue?.addons ?? []).filter(a => ['ipd', 'pathology', 'diagnostics', 'pharmacy'].includes(a.code))
+  // 0309: a clinic or hospital may take only marketing — WhatsApp Pro and/or
+  // social media & website — with no OPD plan, and add the software later.
+  const [planKind, setPlanKind] = useState<'software' | 'marketing'>('software')
+  const marketing = tiered && coreVertical && planKind === 'marketing'
+  const coreAddons = (catalogue?.addons ?? []).filter(a => (marketing ? ['social'] : ['ipd', 'pathology', 'diagnostics', 'pharmacy', 'social']).includes(a.code))
+  const chooseKind = (k: 'software' | 'marketing') => {
+    setPlanKind(k)
+    if (k === 'marketing') {
+      setPlanAddons(prev => prev.filter(c => c === 'social'))
+      setWhatsapp(true); setWaPlan('pro')
+    }
+  }
 
   const coverage: CoverageArea[] = useMemo(() => {
     if (areas.length) {
@@ -367,6 +378,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         // them at checkout, where the real doctorId is finally passed.
         const res = await computePrice(zips, null, vertical, months, namedHospitalDoctors, tiered ? [] : modules, {
           whatsapp, whatsappPlan: waPlan, couponCode: couponCode || undefined, planAddons: tiered && coreVertical ? planAddons : undefined,
+          planKind: tiered && coreVertical ? planKind : undefined,
         })
         if (id === priceReq.current) setServerPrice(res)
       } catch {
@@ -376,7 +388,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [zips, vertical, months, namedHospitalDoctors, modules, whatsapp, waPlan, couponCode, tiered, coreVertical, planAddons])
+  }, [zips, vertical, months, namedHospitalDoctors, modules, whatsapp, waPlan, couponCode, tiered, coreVertical, planAddons, planKind])
 
   // What the summary shows: server total when we have one, else the local sum.
   const price = serverPrice ?? localPrice
@@ -683,6 +695,11 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         setSubmitting(false)
         return
       }
+      if (marketing && !whatsapp && !planAddons.includes('social')) {
+        setError('The marketing plan needs WhatsApp Pro, Social media & website, or both.')
+        setSubmitting(false)
+        return
+      }
       if (whatsapp && waPlan === 'pro' && !proNumberOk) {
         setError('Enter the 10-digit number you want to use for WhatsApp Pro, or choose WhatsApp Basic.')
         setSubmitting(false)
@@ -695,6 +712,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
       }
       const order = await createRazorpayOrder(zips, id, months, tiered ? [] : modules, {
         planAddons: tiered && coreVertical ? planAddons : undefined,
+        planKind: tiered && coreVertical ? planKind : undefined,
         whatsappPlan: waPlan,
         whatsappProNumber: whatsapp && waPlan === 'pro' ? proDigits : undefined,
         gstin: gstinState === 'ok' ? form.gstin : undefined,
@@ -1299,6 +1317,26 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                       <StepKicker n={RAIL_STEPS.findIndex(r => r.n === 3) + 1} of={RAIL_STEPS.length} />
                       <h3 style={h3Style}>{onCommission ? 'Review & activate' : 'Review & pay'}</h3>
                       <p style={pStyle}>Confirm your listing. Your team can adjust coverage later on WhatsApp.</p>
+                      {/* 0309: the OPD plan, or marketing only — software can be added later from Plan. */}
+                      {tiered && coreVertical && !onCommission && (
+                        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', marginBottom: 18 }}>
+                          {([
+                            ['software', 'Clinic software + listing', 'OPD queue, prescriptions, patient records and bills — with your listing on Sehatsandhi and WhatsApp booking. Add IPD, lab or pharmacy any time.'],
+                            ['marketing', 'Marketing only', 'Listed on Sehatsandhi and the WhatsApp bot, with WhatsApp Pro on your own number and/or your own website. Add the clinic software any time.'],
+                          ] as ['software' | 'marketing', string, string][]).map(([k, label, desc]) => {
+                            const on = planKind === k
+                            return (
+                              <button key={k} type="button" onClick={() => chooseKind(k)} style={{
+                                textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', padding: '14px 16px', borderRadius: 14, background: on ? '#f3faf6' : '#fff',
+                                border: `2px solid ${on ? BIZ.green : '#e9e2d5'}`,
+                              }}>
+                                <strong style={{ display: 'block', fontSize: 14.5, color: BIZ.ink }}>{label}</strong>
+                                <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 4, lineHeight: 1.55 }}>{desc}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
                       <div style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, overflow: 'hidden' }}>
                         <ReviewRow label="Service type" value={verticalObj.label} />
                         <ReviewRow label="Business name" value={form.business_name || form.owner_name || '—'} />
@@ -1474,7 +1512,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                             <input type="checkbox" checked={whatsapp} onChange={e => setWhatsapp(e.target.checked)}
                               style={{ width: 18, height: 18, marginTop: 2, accentColor: BIZ.green, cursor: 'pointer' }} />
                             <span style={{ flex: 1 }}>
-                              <strong style={{ fontSize: 14.5, color: BIZ.ink }}>Add WhatsApp messaging</strong>
+                              <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{marketing ? 'WhatsApp Pro — your own number' : 'Add WhatsApp messaging'}</strong>
                               <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 4, lineHeight: 1.6 }}>
                                 Charged every term while you keep it. Untick it if you do not want it.
                               </span>
@@ -1485,7 +1523,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                               {([
                                 ['basic', 'WhatsApp Basic', 'From the Sehatsandhi number. Send camp, notice and health-tip messages to patients who agreed to hear from you; each message is paid from a wallet you top up.'],
                                 ['pro', 'WhatsApp Pro', 'From your clinic\'s own number, in your clinic\'s name. Welcome messages, prescriptions and bills after each visit, rating requests and follow-up reminders go out automatically. Meta charges your own card for the messages.'],
-                              ] as ['basic' | 'pro', string, string][]).map(([code, label, desc]) => {
+                              ] as ['basic' | 'pro', string, string][]).filter(([code]) => !marketing || code === 'pro').map(([code, label, desc]) => {
                                 const on = waPlan === code
                                 return (
                                   <label key={code} style={{
@@ -1569,12 +1607,15 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                       {tiered && coreVertical && coreAddons.length > 0 && catalogue && (
                         <div style={{ marginTop: 20, background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 18, padding: '20px 22px' }}>
                           <div style={{ fontSize: 15, fontWeight: 800, color: BIZ.ink, marginBottom: 4 }}>
-                            Add to your plan
+                            {marketing ? 'Your website' : 'Add to your plan'}
                           </div>
                           <p style={{ fontSize: 13, color: BIZ.muted, margin: '0 0 14px', lineHeight: 1.6 }}>
-                            The OPD system comes with every plan. Tick what else you run — it is switched on as soon
-                            as this payment clears, and you can add or drop add-ons later from your dashboard.
-                            Two add-ons: {Number(catalogue.settings.bundle2_pct)}% off them; three or more: {Number(catalogue.settings.bundle3_pct)}% off.
+                            {marketing
+                              ? 'Your website, made and hosted for you — on your own domain if you have one, otherwise on Sehatsandhi — with your Facebook and Instagram pages on it.'
+                              : <>The OPD system comes with every plan. Tick what else you run — it is switched on as soon
+                                as this payment clears, and you can add or drop add-ons later from your dashboard.
+                                Two add-ons: {Number(catalogue.settings.bundle2_pct)}% off them; three or more: {Number(catalogue.settings.bundle3_pct)}% off
+                                (Social media & website is not part of the bundle).</>}
                           </p>
                           <div style={{ display: 'grid', gap: 10 }}>
                             {coreAddons.map(a => {

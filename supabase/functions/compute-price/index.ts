@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     pincodes?: unknown; businessId?: unknown; vertical?: unknown
     months?: unknown; doctorCount?: unknown; modules?: unknown
     whatsapp?: unknown; couponCode?: unknown; whatsappPlan?: unknown
-    planAddons?: unknown; staffCount?: unknown; bedCount?: unknown; labKind?: unknown
+    planAddons?: unknown; staffCount?: unknown; bedCount?: unknown; labKind?: unknown; planKind?: unknown
   }
   try {
     body = await req.json()
@@ -65,6 +65,7 @@ Deno.serve(async (req) => {
       staffHint: Number.isFinite(body.staffCount) ? Number(body.staffCount) : null,
       bedsHint: Number.isFinite(body.bedCount) ? Number(body.bedCount) : null,
       labKind: typeof body.labKind === 'string' ? body.labKind : null,
+      planKind: body.planKind === 'marketing' ? 'marketing' : body.planKind === 'software' ? 'software' : null,
       couponCode: typeof body.couponCode === 'string' ? body.couponCode.slice(0, 40) : null,
     })
     return json(result)

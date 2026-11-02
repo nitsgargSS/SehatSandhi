@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BedDouble, Check, FlaskConical, Pill, ScanLine, Stethoscope } from 'lucide-react'
+import { BedDouble, Check, FlaskConical, Globe, Pill, ScanLine, Stethoscope } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { LabAddonQuote, loadRazorpayCheckout, planAddon, verifyRazorpayPayment } from '../../lib/businessApi'
 import { shortDate } from '../../lib/format'
@@ -16,10 +16,13 @@ const ICON: Record<string, JSX.Element> = {
   diagnostics: <ScanLine className="w-5 h-5 text-sky-600" />,
   pharmacy: <Pill className="w-5 h-5 text-teal-600" />,
   opd: <Stethoscope className="w-5 h-5 text-emerald-600" />,
+  social: <Globe className="w-5 h-5 text-orange-600" />,
 }
 // 0278: which add-ons each kind of plan can take.
 const OFFERED: Record<string, string[]> = {
-  core: ['ipd', 'pathology', 'diagnostics', 'pharmacy'],
+  core: ['ipd', 'pathology', 'diagnostics', 'pharmacy', 'social'],
+  // 0309: the marketing plan — social now; the software via "Add the clinic software".
+  marketing: ['social'],
   lab_pathology: ['opd', 'pharmacy'],
   lab_diagnostic: ['pharmacy'],
   lab_both: ['pharmacy'],
@@ -138,6 +141,26 @@ export default function PlanAddons({ businessId, businessName, email, canChange,
           {months > 1 && <> · billed {months === 12 ? 'yearly' : 'half-yearly'}</>}
         </p>
       </div>
+
+      {quote.family === 'marketing' && !preview && (
+        <div className="border border-emerald-100 bg-emerald-50/40 rounded-xl p-3 flex flex-wrap items-center gap-3 justify-between">
+          <div className="flex items-start gap-3 min-w-0">
+            {ICON.opd}
+            <div className="min-w-0">
+              <div className="font-semibold text-navy-700">Clinic software</div>
+              <div className="text-xs text-gray-500">
+                OPD queue, prescriptions, patient records and bills — priced by number of doctors. Then IPD, lab and pharmacy can be added too.
+                Your listing, website and WhatsApp stay as they are.
+              </div>
+            </div>
+          </div>
+          {canChange && (
+            <button disabled={!!busy} className="btn-teal text-xs py-2 px-4" onClick={() => ask('software')}>
+              {busy === 'software' ? 'Working out…' : 'Add'}
+            </button>
+          )}
+        </div>
+      )}
 
       {addons.filter(a => (OFFERED[quote.family] ?? []).includes(a.code)).map(a => {
         const isOn = on.has(a.code)

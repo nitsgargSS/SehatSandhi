@@ -37,10 +37,12 @@ Deno.serve(async (req) => {
   let body: { businessId?: unknown; code?: unknown; action?: unknown }
   try { body = await req.json() } catch { return json({ error: 'invalid JSON' }, 400) }
   const businessId = typeof body.businessId === 'string' ? body.businessId : ''
-  const code = ['ipd', 'pathology', 'diagnostics', 'pharmacy', 'opd'].includes(String(body.code)) ? String(body.code) : ''
+  // 0309: 'social' (website and hosting) and 'software' — a clinic on the
+  // marketing plan moving to the OPD plan for the rest of its term.
+  const code = ['ipd', 'pathology', 'diagnostics', 'pharmacy', 'opd', 'social', 'software'].includes(String(body.code)) ? String(body.code) : ''
   const action = body.action === 'order' ? 'order' : 'quote'
   if (!businessId) return json({ error: 'businessId required' }, 400)
-  if (!code) return json({ error: "code must be 'ipd', 'pathology', 'diagnostics', 'pharmacy' or 'opd'" }, 400)
+  if (!code) return json({ error: "code must be 'ipd', 'pathology', 'diagnostics', 'pharmacy', 'opd', 'social' or 'software'" }, 400)
 
   const who = caller(req)
   if (!who) return json({ error: 'Please sign in.' }, 401)
@@ -54,7 +56,7 @@ Deno.serve(async (req) => {
   }
 
   const { data: b, error: bErr } = await db.from('businesses')
-    .select('id, name, vertical, status, months_paid, term_start, term_end, lab_categories')
+    .select('id, name, vertical, status, months_paid, term_start, term_end, lab_categories, plan_kind')
     .eq('id', businessId).maybeSingle()
   if (bErr) return json({ error: bErr.message }, 500)
   if (!b) return json({ error: 'no such business' }, 404)
@@ -64,6 +66,12 @@ Deno.serve(async (req) => {
   const diagnostic = ((b.lab_categories ?? []) as string[]).some(c => c === 'radiology' || c === 'cardiology')
   if (isLab ? !(code === 'pharmacy' || (code === 'opd' && !diagnostic)) : !['clinic', 'hospital'].includes(String(b.vertical)) || code === 'opd') {
     return json({ error: 'not_offered', message: code === 'opd' && diagnostic ? 'OPD is already part of a diagnostic centre’s plan.' : 'This add-on is not offered for your kind of business.' }, 409)
+  }
+  // 0309: on the marketing plan, the software add-ons come after the OPD plan.
+  const onMarketing = b.plan_kind === 'marketing'
+  if (code === 'software' && !onMarketing) return json({ error: 'already_active', message: 'The clinic software is already on your plan.' }, 409)
+  if (onMarketing && !['social', 'software'].includes(code)) {
+    return json({ error: 'needs_software', message: 'Add the clinic software first — IPD, lab and pharmacy go with it.' }, 409)
   }
 
   // ── Is there a paid term to add it to? ──
@@ -87,18 +95,24 @@ Deno.serve(async (req) => {
 
   // ── The difference it makes to this term's price ──
   const termMonths = [1, 6, 12].includes(Number(b.months_paid)) ? Number(b.months_paid) : 1
-  const quote1 = async (addons: string[]) => {
-    const { data, error } = await db.rpc('sehat_plan_quote', { p_business: businessId, p_months: termMonths, p_addons: addons })
+  const quote1 = async (addons: string[], kind?: 'software' | 'marketing') => {
+    const { data, error } = await db.rpc('sehat_plan_quote', { p_business: businessId, p_months: termMonths, p_addons: addons, p_kind: kind ?? null })
     if (error) throw new Error(error.message)
-    return data as { live: boolean; total: number; monthly: number } | null
+    return data as { live: boolean; total: number; monthly: number; tier: string; tier_label: string } | null
   }
   let before, after
-  try { [before, after] = await Promise.all([quote1(have), quote1([...have, code])]) }
+  try {
+    [before, after] = await Promise.all(code === 'software'
+      ? [quote1(have, 'marketing'), quote1(have, 'software')]
+      : [quote1(have), quote1([...have, code])])
+  }
   catch (e) { return json({ error: String((e as Error).message) }, 500) }
   if (!before || !after || !after.live) {
     return json({ error: 'not_live', message: 'Add-ons are not on sale yet.' }, 409)
   }
-  const { data: ap } = await db.from('plan_addons').select('label, is_enabled').eq('code', code).maybeSingle()
+  const { data: ap } = code === 'software'
+    ? { data: { label: `Clinic software (${after.tier_label})`, is_enabled: true } }
+    : await db.from('plan_addons').select('label, is_enabled').eq('code', code).maybeSingle()
   if (!ap || !ap.is_enabled) return json({ error: 'not_offered', message: 'This add-on is not offered at the moment.' }, 409)
   const monthly = Number(after.monthly) - Number(before.monthly)
   const fullFee = Number(after.total) - Number(before.total)
@@ -153,7 +167,9 @@ Deno.serve(async (req) => {
     place_of_supply: tax.placeOfSupply,
     subscription_amount: 0,
     whatsapp_addon: false,
-    plan_addons: [...have, code],
+    plan_addons: code === 'software' ? have : [...have, code],
+    // 0309: the OPD plan's tier, so fulfilment moves the business to it.
+    plan_tier: code === 'software' ? after.tier : null,
     coupon_discount: 0,
     line_items: lineItems,
   }).select('id').single()
