@@ -62,7 +62,16 @@
           "cameraPermission": "To take a photo of a prescription or report. / पर्ची या रिपोर्ट की फ़ोटो लेने के लिए।"
         }
       ],
-      "expo-document-picker"
+      "expo-document-picker",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ]
     ],
     "scheme": "sehatsandhi",
     "experiments": {
