@@ -17,7 +17,7 @@ const content = {
     subtitle: "Health's New Partnership",
     p1: 'Sehatsandhi (सेहतसंधि) connects patients with verified doctors and healthcare partners in their own area — you tell us your PIN code, we show you who is available nearby. Right on WhatsApp, with no app to download and no forms to fill.',
     p2: 'We built Sehatsandhi because finding a trustworthy doctor in a smaller town shouldn\'t mean relying on word of mouth alone, or navigating platforms built for metro cities that don\'t understand local needs.',
-    p3: 'For clinics and hospitals, Sehatsandhi is also the software they run their day on — appointments for doctors who work at more than one place, OPD and IPD records, the OT register, an in-house pharmacy, billing and reports — so the patient who finds a doctor on WhatsApp is looked after the same way inside the clinic. Pharmacies that deliver medicines, local insurance advisors and ambulance services join us too, and get patients and leads from their own area.',
+    p3: 'For clinics and hospitals, Sehatsandhi is also the software they run their day on — appointments for doctors who work at more than one place, OPD and IPD records, the OT register, an in-house pharmacy, billing and reports — so the patient who finds a doctor on WhatsApp is looked after the same way inside the clinic. Pharmacies that deliver medicines and ambulance services join us too, and get patients from their own area.',
     legalLine: 'Sehatsandhi is operated by NG Technologies, registered at 1743 Vishnu Garden, Jagadhri – 135003, Haryana, India.',
     valuesTitle: 'What We Stand For',
     values: [
@@ -34,7 +34,7 @@ const content = {
     subtitle: 'स्वास्थ्य की नई साझेदारी',
     p1: 'Sehatsandhi (सेहतसंधि) मरीज़ों को उनके अपने इलाके के वेरिफाइड डॉक्टरों और हेल्थकेयर पार्टनर्स से जोड़ता है — आप अपना PIN कोड बताइए, हम आपको पास में उपलब्ध डॉक्टर दिखाते हैं। सीधे WhatsApp पर, कोई ऐप डाउनलोड नहीं, कोई फॉर्म नहीं।',
     p2: 'हमने Sehatsandhi इसलिए बनाया क्योंकि एक छोटे शहर में भरोसेमंद डॉक्टर ढूंढने का मतलब सिर्फ वर्ड ऑफ माउथ पर निर्भर रहना, या मेट्रो शहरों के लिए बने प्लेटफॉर्म इस्तेमाल करना नहीं होना चाहिए जो लोकल ज़रूरतें नहीं समझते।',
-    p3: 'क्लिनिक और हॉस्पिटल के लिए Sehatsandhi वह सॉफ्टवेयर भी है जिस पर उनका पूरा दिन चलता है — एक से ज़्यादा जगह काम करने वाले डॉक्टरों की अपॉइंटमेंट, OPD और IPD रिकॉर्ड, OT रजिस्टर, इन-हाउस फार्मेसी, बिलिंग और रिपोर्ट्स — ताकि WhatsApp पर डॉक्टर ढूंढने वाले मरीज़ का क्लिनिक के अंदर भी उसी तरह ध्यान रखा जाए। होम डिलीवरी करने वाली फार्मेसी, लोकल इंश्योरेंस सलाहकार और एम्बुलेंस सर्विस भी हमसे जुड़ते हैं, और अपने ही इलाके से मरीज़ और लीड्स पाते हैं।',
+    p3: 'क्लिनिक और हॉस्पिटल के लिए Sehatsandhi वह सॉफ्टवेयर भी है जिस पर उनका पूरा दिन चलता है — एक से ज़्यादा जगह काम करने वाले डॉक्टरों की अपॉइंटमेंट, OPD और IPD रिकॉर्ड, OT रजिस्टर, इन-हाउस फार्मेसी, बिलिंग और रिपोर्ट्स — ताकि WhatsApp पर डॉक्टर ढूंढने वाले मरीज़ का क्लिनिक के अंदर भी उसी तरह ध्यान रखा जाए। होम डिलीवरी करने वाली फार्मेसी और एम्बुलेंस सर्विस भी हमसे जुड़ते हैं, और अपने ही इलाके से मरीज़ पाते हैं।',
     legalLine: 'Sehatsandhi NG Technologies द्वारा संचालित है, रजिस्टर्ड पता: 1743 Vishnu Garden, Jagadhri – 135003, Haryana, India।',
     valuesTitle: 'हम किस बात के लिए खड़े हैं',
     values: [

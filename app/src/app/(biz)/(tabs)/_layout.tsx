@@ -26,7 +26,8 @@ export default function TabsLayout() {
     }}>
       <Tabs.Screen name="leads" options={{
         title: s?.clinic?.name ?? 'Leads', tabBarLabel: 'Leads', headerTitleAlign: 'left',
-        href: insurance ? undefined : null,
+        // 0311: insurance switched off — the leads are kept, the tab is not shown.
+        href: null,
         tabBarIcon: ({ color, size }) => <Ionicons name="shield-checkmark" color={color} size={size} />,
       }} />
       <Tabs.Screen name="trips" options={{

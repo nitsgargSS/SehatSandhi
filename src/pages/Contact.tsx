@@ -53,7 +53,7 @@ const content: Record<'en' | 'hi', Copy> = {
     title: 'Contact Us',
     subtitle: "We're a small team, and a person reads every message.",
     waTitle: 'WhatsApp',
-    waDesc: 'Book an appointment, order medicines for home delivery, ask for an ambulance or for a health-insurance advisor — our WhatsApp assistant answers straight away, any time. In an emergency, call 108 first.',
+    waDesc: 'Book an appointment, order medicines for home delivery or ask for an ambulance — our WhatsApp assistant answers straight away, any time. In an emergency, call 108 first.',
     waCta: 'Message us on WhatsApp',
     waOnly: 'Just send "Hi" to start. To speak to someone, call us or use the form below.',
     callTitle: 'Call us',
@@ -74,8 +74,8 @@ const content: Record<'en' | 'hi', Copy> = {
       topics: [
         { v: 'booking', l: 'Booking an appointment' },
         { v: 'listing', l: 'Listing my clinic or business' },
-        { v: 'request', l: 'A medicine order, ambulance or insurance request' },
-        { v: 'partner', l: 'Joining as a pharmacy, ambulance service or insurance advisor' },
+        { v: 'request', l: 'A medicine order or ambulance request' },
+        { v: 'partner', l: 'Joining as a pharmacy or ambulance service' },
         { v: 'billing', l: 'Billing, refund or cancellation' },
         { v: 'listing_change', l: 'Correcting or removing a listing' },
         { v: 'privacy', l: 'My personal data — see, correct, delete or stop messages' },
@@ -95,12 +95,12 @@ const content: Record<'en' | 'hi', Copy> = {
         p: 'Message us on WhatsApp. Sehatsandhi is completely free for patients — we never ask a patient for payment.',
       },
       {
-        h: 'A medicine order, ambulance or insurance request',
-        p: 'Something wrong with a pharmacy, an ambulance or an insurance advisor you were connected to — no reply, a different price, or a problem with the service? Use the form below with your order or request number (it starts MO-, AM- or IN-), or call us. We take it up with them. In an emergency, call 108.',
+        h: 'A medicine order or ambulance request',
+        p: 'Something wrong with a pharmacy or an ambulance you were connected to — no reply, a different price, or a problem with the service? Use the form below with your order or request number (it starts MO- or AM-), or call us. We take it up with them. In an emergency, call 108.',
       },
       {
         h: 'Listing your clinic or business',
-        p: 'Message us on WhatsApp and we can register you over a call in Hindi, or register yourself from the business page. Pharmacies, ambulance services and insurance advisors register the same way.',
+        p: 'Message us on WhatsApp and we can register you over a call in Hindi, or register yourself from the business page. Pharmacies and ambulance services register the same way.',
       },
       {
         h: 'Billing, refunds and cancellations',
@@ -123,7 +123,7 @@ const content: Record<'en' | 'hi', Copy> = {
     title: 'संपर्क करें',
     subtitle: 'हम एक छोटी टीम हैं, और हर मैसेज एक इंसान पढ़ता है।',
     waTitle: 'WhatsApp',
-    waDesc: 'अपॉइंटमेंट बुक करें, घर पर दवाई मंगाएँ, एम्बुलेंस या स्वास्थ्य बीमा सलाहकार के लिए पूछें — हमारा WhatsApp असिस्टेंट तुरंत जवाब देता है, किसी भी समय। इमरजेंसी में पहले 108 पर कॉल करें।',
+    waDesc: 'अपॉइंटमेंट बुक करें, घर पर दवाई मंगाएँ या एम्बुलेंस के लिए पूछें — हमारा WhatsApp असिस्टेंट तुरंत जवाब देता है, किसी भी समय। इमरजेंसी में पहले 108 पर कॉल करें।',
     waCta: 'WhatsApp पर मैसेज करें',
     waOnly: 'शुरू करने के लिए बस "Hi" भेजें। किसी से बात करने के लिए कॉल करें या नीचे का फ़ॉर्म भरें।',
     callTitle: 'कॉल करें',
@@ -142,8 +142,8 @@ const content: Record<'en' | 'hi', Copy> = {
       topics: [
         { v: 'booking', l: 'अपॉइंटमेंट बुक करना' },
         { v: 'listing', l: 'अपनी क्लिनिक या बिज़नेस लिस्ट करना' },
-        { v: 'request', l: 'दवाई का ऑर्डर, एम्बुलेंस या बीमा का अनुरोध' },
-        { v: 'partner', l: 'फ़ार्मेसी, एम्बुलेंस सेवा या बीमा सलाहकार के रूप में जुड़ना' },
+        { v: 'request', l: 'दवाई का ऑर्डर या एम्बुलेंस का अनुरोध' },
+        { v: 'partner', l: 'फ़ार्मेसी या एम्बुलेंस सेवा के रूप में जुड़ना' },
         { v: 'billing', l: 'बिलिंग, रिफंड या कैंसिलेशन' },
         { v: 'listing_change', l: 'लिस्टिंग ठीक कराना या हटवाना' },
         { v: 'privacy', l: 'मेरा व्यक्तिगत डेटा — देखना, ठीक कराना, हटवाना या मैसेज बंद कराना' },
@@ -165,12 +165,12 @@ const content: Record<'en' | 'hi', Copy> = {
         p: 'हमें WhatsApp पर मैसेज करें। Sehatsandhi मरीज़ों के लिए बिल्कुल फ्री है — हम कभी किसी मरीज़ से पेमेंट नहीं मांगते।',
       },
       {
-        h: 'दवाई का ऑर्डर, एम्बुलेंस या बीमा का अनुरोध',
-        p: 'जिस फ़ार्मेसी, एम्बुलेंस या बीमा सलाहकार से आपको जोड़ा गया, उसमें कुछ गलत हुआ — जवाब नहीं आया, कीमत अलग निकली, या सेवा में दिक्कत? नीचे का फ़ॉर्म अपने ऑर्डर या अनुरोध नंबर (MO-, AM- या IN- से शुरू) के साथ भरें, या हमें कॉल करें। हम उनसे बात करेंगे। इमरजेंसी में 108 पर कॉल करें।',
+        h: 'दवाई का ऑर्डर या एम्बुलेंस का अनुरोध',
+        p: 'जिस फ़ार्मेसी या एम्बुलेंस से आपको जोड़ा गया, उसमें कुछ गलत हुआ — जवाब नहीं आया, कीमत अलग निकली, या सेवा में दिक्कत? नीचे का फ़ॉर्म अपने ऑर्डर या अनुरोध नंबर (MO- या AM- से शुरू) के साथ भरें, या हमें कॉल करें। हम उनसे बात करेंगे। इमरजेंसी में 108 पर कॉल करें।',
       },
       {
         h: 'अपनी क्लिनिक या बिज़नेस लिस्ट करना',
-        p: 'हमें WhatsApp पर मैसेज करें, हम आपको हिंदी में कॉल पर रजिस्टर कर सकते हैं — या बिज़नेस पेज से खुद रजिस्टर करें। फ़ार्मेसी, एम्बुलेंस सेवाएँ और बीमा सलाहकार भी ऐसे ही रजिस्टर करते हैं।',
+        p: 'हमें WhatsApp पर मैसेज करें, हम आपको हिंदी में कॉल पर रजिस्टर कर सकते हैं — या बिज़नेस पेज से खुद रजिस्टर करें। फ़ार्मेसी और एम्बुलेंस सेवाएँ भी ऐसे ही रजिस्टर करती हैं।',
       },
       {
         h: 'बिलिंग, रिफंड और कैंसिलेशन',

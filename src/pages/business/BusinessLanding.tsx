@@ -1,3 +1,4 @@
+import { useInsuranceEnabled } from '../../hooks/useInsurance'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import SiteHeader, { HeaderLink, HeaderCta, shopIcon, loginIcon, PAGE } from '../../components/SiteHeader'
@@ -47,6 +48,10 @@ const VERTICAL_BLURBS: Record<string, string> = {
 }
 
 export default function BusinessLanding() {
+  // 0311: insurance advisors are not offered while insurance is switched off —
+  // which also empties the partner programme (insurance was its only member).
+  const insuranceOn = useInsuranceEnabled()
+  const SHOWN = VERTICALS.filter(v => insuranceOn || v.key !== 'insurance')
   const { plan, tiers, verticals, terms } = usePricing()
   // 0192: what an insurance lead costs — said where the partner offer is.
   const [leadFee, setLeadFee] = useState(100)
@@ -69,9 +74,9 @@ export default function BusinessLanding() {
   // The partner programme: the categories that join free rather than buy
   // pincodes (pharmacy, insurance, ambulance) — unless a plan has put one on
   // the monthly fee, in which case the price card above already covers it.
-  const partners = VERTICALS
+  const partners = SHOWN
     .filter(v => v.partnerHeadline && !monthlyAppliesTo(plan, verticals.find(r => r.vertical === v.key)))
-  const monthlyVerticals = VERTICALS
+  const monthlyVerticals = SHOWN
     .filter(v => monthlyAppliesTo(plan, verticals.find(r => r.vertical === v.key)))
 
   const verticalNoun = (key: string) =>
@@ -175,7 +180,7 @@ export default function BusinessLanding() {
           Six kinds of business, and what each one gets out of being listed.
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {VERTICALS.map(v => (
+          {SHOWN.map(v => (
             <div key={v.key}
               style={{ background: '#fff', border: `1px solid ${BIZ.border}`, borderRadius: 16, padding: 20 }}>
               <span style={{ color: v.color, display: 'inline-flex' }}><VerticalIcon vertical={v.key} /></span>
@@ -258,7 +263,7 @@ export default function BusinessLanding() {
                 ? ` Pick ${terms.map(t => t.label ?? `${t.months} months`).join(' or ')} at checkout — you see the total before you pay.`
                 : ` Choose any term from ${plan.min_months} to ${plan.max_months} months at checkout — you see the total before you pay.`}
               {gstNote && !plan.price_includes_gst && ` GST at ${tax.rate}% is added on top and a tax invoice is issued with every payment.`}
-              {monthlyVerticals.length === VERTICALS.length && ' This applies to every category — doctors, hospitals, pharmacies, labs, insurance and ambulance services.'}
+              {monthlyVerticals.length === SHOWN.length && ' This applies to every category — doctors, hospitals, pharmacies, labs and ambulance services.'}
             </p>
           </>
         ) : (

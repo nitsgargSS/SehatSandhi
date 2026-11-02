@@ -28,7 +28,7 @@ const WHATSAPP = [
 const OWN = [
   'Your full website, made and hosted for you',
   'On your own domain — www.yourclinic.com — or on Sehatsandhi',
-  'Services, doctor profiles, equipment, insurance, articles, in Hindi and English',
+  'Services, doctor profiles, equipment, cashless (TPA) panel, articles, in Hindi and English',
   'Your Facebook page and Instagram on your website',
   'Booking on WhatsApp straight from your site',
 ]

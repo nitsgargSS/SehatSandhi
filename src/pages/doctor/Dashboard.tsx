@@ -1,3 +1,4 @@
+import { useInsuranceEnabled } from '../../hooks/useInsurance'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package, Ambulance, ShieldCheck, Globe, Megaphone } from 'lucide-react'
@@ -1033,6 +1034,7 @@ export default function DoctorDashboard() {
 
   const myVertical = (doctor?.vertical ?? 'clinic') as VerticalKey
   const booksAppointments = takesAppointments(myVertical)
+  const insuranceOn = useInsuranceEnabled()
   const verticalLabel = verticalFor(myVertical).label
 
   // Who sees what.
@@ -1092,7 +1094,8 @@ export default function DoctorDashboard() {
   const isAmbulance = myVertical === 'ambulance'
   const handlesTrips = isAmbulance && (!role.enforced || ['owner', 'manager', 'driver'].includes(role.role ?? ''))
   // 0192: an insurance advisor's leads.
-  const handlesLeads = myVertical === 'insurance' && (!role.enforced || ['owner', 'manager'].includes(role.role ?? ''))
+  // 0311: hidden while insurance is switched off; the leads are kept.
+  const handlesLeads = insuranceOn && myVertical === 'insurance' && (!role.enforced || ['owner', 'manager'].includes(role.role ?? ''))
   // 0197: patients' messages from the app — every role that sees patients.
   const handlesMessages = !!doctor && !['delivery', 'driver', 'lab_technician'].includes(role.role ?? '') && myVertical !== 'insurance' && myVertical !== 'ambulance'
 

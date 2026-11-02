@@ -51,7 +51,7 @@ export default function MyHome() {
     <ScrollView contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
       <Card>
         <Text style={st.h}>अपने नंबर से साइन इन करें / Sign in with your number</Text>
-        <Note>We send a 6-digit code to your WhatsApp. Then you can book doctors, order medicines, ask for an ambulance or an insurance advisor, see your health records, and rate them.</Note>
+        <Note>We send a 6-digit code to your WhatsApp. Then you can book doctors, order medicines, ask for an ambulance, see your health records, and rate them.</Note>
         <Field label="Mobile number" keyboardType="phone-pad" placeholder="98765 43210" value={phone} onChangeText={setPhone} editable={!sent} />
         {!sent ? <Btn label="Send code on WhatsApp" busy={busy} disabled={phone.replace(/\D/g, '').length < 10} onPress={send} /> : (
           <>
@@ -80,7 +80,6 @@ export default function MyHome() {
       <View style={st.grid}>
         <Pressable style={[st.tile, { borderColor: '#f3c2d6' }]} onPress={() => router.push('/me/order')}><Text style={st.tileIcon}>💊</Text><Text style={st.tileT}>दवाई घर पर{'\n'}Medicines</Text></Pressable>
         <Pressable style={[st.tile, { borderColor: '#f5b5ae' }]} onPress={() => router.push('/me/ambulance')}><Text style={st.tileIcon}>🚑</Text><Text style={st.tileT}>एम्बुलेंस{'\n'}Ambulance</Text></Pressable>
-        <Pressable style={[st.tile, { borderColor: '#b3dce6' }]} onPress={() => router.push('/me/insurance')}><Text style={st.tileIcon}>🛡️</Text><Text style={st.tileT}>बीमा{'\n'}Insurance</Text></Pressable>
         <Pressable style={[st.tile, { borderColor: '#b7e2cf' }]} onPress={() => router.push('/find')}><Text style={st.tileIcon}>🩺</Text><Text style={st.tileT}>अपॉइंटमेंट{'\n'}Appointment</Text></Pressable>
         <Pressable style={[st.tile, { borderColor: '#f3d9a4' }]} onPress={() => router.push('/camps')}><Text style={st.tileIcon}>🎁</Text><Text style={st.tileT}>कैंप और ऑफर{'\n'}Camps &amp; offers</Text></Pressable>
         <Pressable style={[st.tile, { borderColor: '#d6d0f0' }]} onPress={() => router.push('/me/records')}><Text style={st.tileIcon}>📋</Text><Text style={st.tileT}>रिकॉर्ड और मैसेज{'\n'}Records &amp; messages</Text></Pressable>

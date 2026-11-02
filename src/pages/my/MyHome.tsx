@@ -1,3 +1,4 @@
+import { useInsuranceEnabled } from '../../hooks/useInsurance'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { myActivity, type Activity } from '../../lib/patientApi'
@@ -17,6 +18,8 @@ const TILES = [
 
 function Home() {
   const { who } = useMe()
+  // 0311: no insurance tile while insurance is switched off.
+  const insuranceOn = useInsuranceEnabled()
   const [act, setAct] = useState<Activity | null>(null)
   const [err, setErr] = useState('')
   const load = useCallback(() => { myActivity().then(setAct).catch(e => setErr((e as Error).message)) }, [])
@@ -28,7 +31,7 @@ function Home() {
         <p className="text-sm text-gray-500">+{who.phone}</p>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {TILES.map(t => (
+        {TILES.filter(t => insuranceOn || t.to !== '/my/insurance').map(t => (
           <Link key={t.to} to={t.to} className={`bg-white border-2 ${t.ring} rounded-2xl py-4 px-2 text-center hover:shadow-md transition-shadow`}>
             <div className="text-3xl" aria-hidden>{t.icon}</div>
             <div className="font-bold text-gray-800 text-sm mt-1 leading-tight">{t.hi}<br />{t.en}</div>

@@ -13,12 +13,13 @@ import { C } from '../ui/theme'
 // हाँ / नहीं sheet), menu (the tiles), emergency (the red 108 screen). The six
 // tiles stay as the manual way. Businesses sign in at the bottom; a saved
 // session skips straight in.
+// 0311 (2 Nov 2026): insurance is switched off until the strategy is final —
+// no way into it from the app. The server refuses new requests regardless.
 const TILES: { label: string; hi: string; go: { pathname: string; params?: Record<string, string> } }[] = [
   { label: '🩺 Doctor', hi: 'डॉक्टर', go: { pathname: '/find' } },
   { label: '🧪 Lab test', hi: 'जांच', go: { pathname: '/find', params: { kind: 'lab' } } },
   { label: '💊 Medicines', hi: 'दवाई', go: { pathname: '/me/order' } },
   { label: '🚑 Ambulance', hi: 'एम्बुलेंस', go: { pathname: '/me/ambulance' } },
-  { label: '🛡️ Insurance', hi: 'बीमा', go: { pathname: '/me/insurance' } },
   { label: '🎁 Camps', hi: 'कैंप / ऑफ़र', go: { pathname: '/camps' } },
 ]
 

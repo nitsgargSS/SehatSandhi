@@ -164,6 +164,18 @@ const MAIN_MENU: Reply = {
   ],
 }
 
+// 0311: insurance switched off (site_settings 'insurance_enabled', read once per
+// message in step()). While off, the menu has no insurance row, the welcome
+// does not offer it, and any way into it answers that it is not available.
+let insuranceOn = false
+const MAIN_MENU_NO_INSURANCE: Reply = {
+  ...MAIN_MENU,
+  body: (MAIN_MENU as { body: string }).body.replace('लैब, एम्बुलेंस और इंश्योरेंस', 'लैब और एम्बुलेंस'),
+  rows: (MAIN_MENU as { rows: { id: string }[] }).rows.filter(r => r.id !== 'menu:insurance'),
+} as Reply
+const mainMenu = (): Reply => insuranceOn ? MAIN_MENU : MAIN_MENU_NO_INSURANCE
+const INSURANCE_OFF = 'इंश्योरेंस (बीमा) की सहायता अभी उपलब्ध नहीं है। 🙏\nHelp with health insurance is not available right now.\n\nआप नीचे से चुन सकते हैं:'
+
 const TEST_TYPE_MENU: Reply = {
   kind: 'list',
   header: 'टेस्ट टाइप/Test Type',
@@ -252,7 +264,7 @@ export function carry(v: Vars): Vars {
 
 const failed = (v: Vars): Step => ({ session: { state: 'idle', vars: carry(v) }, replies: [{ kind: 'buttons', body: FAILED, buttons: [MENU_BUTTON] }] })
 const menu = (v: Vars, body?: string): Step =>
-  ({ session: { state: 'idle', vars: carry(v) }, replies: [body ? { ...MAIN_MENU, body } as Reply : MAIN_MENU] })
+  ({ session: { state: 'idle', vars: carry(v) }, replies: [body ? { ...mainMenu(), body } as Reply : mainMenu()] })
 const show = (v: Vars, list: Reply): Step => ({ session: { state: 'idle', vars: carry(v) }, replies: [list] })
 
 /**
@@ -268,7 +280,7 @@ function pinQuestion(v: Vars, body = ASK_PIN): Reply {
 const labKept = (v: Vars): Vars => ({ ...(v.labKind !== undefined ? { labKind: v.labKind } : {}), ...(v.labWant ? { labWant: v.labWant } : {}) })
 const askPin = (code: string, v: Vars, body?: string): Step =>
   ({ session: { state: 'ask_pin', vars: { ...carry(v), code, ...(code === 'lab_booking' ? labKept(v) : {}) } }, replies: [pinQuestion(v, body)] })
-const askPinInsurance = (v: Vars, body?: string): Step =>
+const askPinInsurance = (v: Vars, body?: string): Step => !insuranceOn ? menu(v, INSURANCE_OFF) :
   ({ session: { state: 'ask_pin_insurance', vars: carry(v) }, replies: [pinQuestion(v, body)] })
 
 // ── Lists to tap ──
@@ -473,10 +485,11 @@ async function appOffer(phone: string, moment: 'welcome', rpc: Rpc): Promise<str
 /** The main menu to someone starting a conversation — with the app offered, the first time. */
 async function welcome(v: Vars, phone: string, rpc: Rpc): Promise<Step> {
   const app = await appOffer(phone, 'welcome', rpc)
-  return app ? menu(v, `${MAIN_MENU.body}\n\n${APP_WELCOME}\n${app}`) : menu(v)
+  return app ? menu(v, `${(mainMenu() as { body: string }).body}\n\n${APP_WELCOME}\n${app}`) : menu(v)
 }
 
 async function insuranceLead(vars: Vars, pin: string, phone: string, rpc: Rpc): Promise<Step> {
+  if (!insuranceOn) return menu(vars, INSURANCE_OFF)
   const r = await rpc('bot_submit_insurance_lead_json', { p_phone: phone, p_pincode: pin })
   const text = str(r?.text)
   if (!text) return failed(vars)
@@ -589,6 +602,7 @@ const DEMO_ASK = '🙏 सेहतसंधि का फ़्री डेम
 
 /** The first question of a request. `pin`: an area already known for it. */
 function requestStart(what: Req['what'], v: Vars, pin = ''): Step {
+  if (what === 'insurance' && !insuranceOn) return menu(v, INSURANCE_OFF)
   const f: Record<string, string> = pin ? { pin } : {}
   if (what === 'demo') return asking(v, { what, ask: 'who', f }, { kind: 'text', body: DEMO_ASK })
   if (what === 'ambulance') {
@@ -690,6 +704,7 @@ async function requestStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promis
   }
 
   if (req.what === 'insurance') {
+    if (!insuranceOn) return menu(v, INSURANCE_OFF)
     if (req.ask === 'cover') {
       const c = id.match(/^req:cover:(.+)$/)?.[1]
       if (!c) return again(INS_COVER)
@@ -984,6 +999,7 @@ function tapped(id: string, s: Session, m: Inbound): Step | null {
  * country code.
  */
 export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Promise<Step> {
+  insuranceOn = (await rpc('sehat_insurance_enabled', {})) as unknown === true
   const vars = { ...s.vars }
   // "All of Sehatsandhi" lasts the conversation it was asked in.
   if (m.fresh) delete vars.general
