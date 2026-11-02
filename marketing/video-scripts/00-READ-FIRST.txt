@@ -17,7 +17,7 @@ File                               Videos  For
 10-whatsapp.txt                      6     everyone
 11-grow-your-practice.txt            7     everyone
 12-marketing-plan.txt                6     doctors who want only marketing first
-13-pharmacy-ambulance-insurance.txt  4     chemists, ambulance services, advisors
+13-pharmacy-ambulance-labs.txt       3     chemists, ambulance services, labs
 14-for-patients.txt                  4     patients and families
                                     ----
                                     84 videos

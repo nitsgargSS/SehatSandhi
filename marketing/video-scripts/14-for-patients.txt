@@ -40,22 +40,20 @@ ON SCREEN
 5 Free camps nearby
 
 ------------------------------------------------------------------
-V14.3  Medicines, ambulance and insurance help                (~45 s · patients)
+V14.3  Medicines and ambulance help                          (~40 s · patients)
 ------------------------------------------------------------------
 FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
 SCRIPT
 दवाई चाहिए — पर्चे की फ़ोटो भेजिए, पास की फ़ार्मेसी दाम बताती है, आप हाँ कहें तो घर पर delivery।
 एम्बुलेंस चाहिए — emergency में पहले 108 पर कॉल करें। पहले से तय समय के लिए, सेहतसंधि पर बुक करें और ड्राइवर कहाँ है, link पर देखें।
-health insurance के बारे में पूछना है — licence वाला advisor आपको फ़ोन करेगा।
 सब WhatsApp पर — 70153 99355।
 SHOW
-- Order track page; ambulance track page with 108 button; insurance track page.
+- Order track page; ambulance track page with 108 button.
 ON SCREEN
 1 Medicines: send the prescription photo
 2 Emergency? Call 108 first
 3 Track the ambulance
-4 Licensed insurance advisor
-5 WhatsApp 70153 99355
+4 WhatsApp 70153 99355
 
 ------------------------------------------------------------------
 V14.4  Check in at reception from your phone                  (~30 s · patients)

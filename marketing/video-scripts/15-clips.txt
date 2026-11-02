@@ -36,7 +36,6 @@ C26 | V2.5 V11.1 | A young woman in bed at night searching on her phone, face li
 C27 | V11.1 | A busy city road lined with modern hospitals, clinics and shops (no readable text), cars and e-rickshaws
 C28 | V13.2 V14.3 | An ambulance with lights on moving through traffic on an Indian city road
 C29 | V13.1 V14.3 | A delivery rider on a scooter arriving at a house and handing a medicine packet to a woman at the door
-C30 | V13.3 | A family at a dining table discussing papers about health insurance
 C31 | V11.6 V12.2 | A doctor in his clinic at the end of the day looking at social media on his phone, tired
 
 THE FIX (with Sehatsandhi)

@@ -1,5 +1,6 @@
 SERIES 13 — OTHER BUSINESSES ON SEHATSANDHI
-(chemists who deliver, ambulance services, insurance advisors, labs)
+(chemists who deliver, ambulance services, labs)
+(Insurance advisors removed 2 Nov 2026 — insurance is switched off.)
 
 ------------------------------------------------------------------
 V13.1  Chemists: medicine orders from your own area          (~50 s · chemists)
@@ -40,26 +41,7 @@ ON SCREEN
 4 Family tracks driver and ETA
 
 ------------------------------------------------------------------
-V13.3  Insurance advisors: genuine leads, one advisor each     (~45 s · licensed advisors)
-------------------------------------------------------------------
-FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
-SCRIPT
-health insurance advisors — आपके इलाक़े में जो लोग insurance के बारे में पूछ रहे हैं, उनकी lead सीधे आपको।
-मरीज़ WhatsApp पर advisor से बात करने के लिए कहता है — lead उस इलाक़े के advisors को जाती है।
-जो पहले accept करे, lead सिर्फ़ उसकी — किसी और को नहीं बेची जाती।
-जुड़ने के लिए IRDAI licence या POSP code ज़रूरी — ग्राहक को आपका licence दिखता है।
-lead का नतीजा दर्ज कीजिए, और कोई lead असली न लगे तो रिपोर्ट कीजिए।
-SHOW
-- Leads panel; insurance track page showing licence.
-ON SCREEN
-1 People asking about insurance nearby
-2 Lead to advisors in that area
-3 First to accept · Exclusive
-4 IRDAI licence / POSP required
-5 Record outcome · Report fake leads
-
-------------------------------------------------------------------
-V13.4  Labs: tests booked on WhatsApp                          (~40 s · labs)
+V13.3  Labs: tests booked on WhatsApp                          (~40 s · labs)
 ------------------------------------------------------------------
 FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
 SCRIPT
