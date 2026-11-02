@@ -1452,6 +1452,14 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                           <div style={{ display: 'grid', gap: 10 }}>
                             {shownTerms.map(t => {
                               const on = t.months === months
+                              // 2 Nov 2026: one price per term — the plan (or website) and
+                              // WhatsApp together — with the split below and one saving for both.
+                              const wa = whatsapp ? waPrice(t) : 0
+                              const term1 = shownTerms.find(x => x.months === 1)
+                              const waSaving = whatsapp && term1 ? Math.max(0, waPrice(term1) * t.months - wa) : 0
+                              const planSaving = quote ? Math.round(quote.monthly * (t.months - factorFor(t.months))) : 0
+                              const saveNote = quote ? (planSaving + waSaving > 0 ? `Save ${money(planSaving + waSaving)}` : null) : t.savings_note
+                              const planPart = marketing ? 'Website' : 'Plan'
                               return (
                                 <label key={t.months} style={{
                                   display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer',
@@ -1470,7 +1478,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                     <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                                       <strong style={{ fontSize: 14.5, color: BIZ.ink }}>{t.label ?? termLabel(t.months)}</strong>
                                       <strong style={{ fontSize: 14.5, color: on ? BIZ.green : BIZ.ink, whiteSpace: 'nowrap' }}>
-                                        {money(t.price)}
+                                        {money(t.price + wa)}
                                       </strong>
                                     </span>
                                     {/* These prices are quoted EX-GST, so the figure
@@ -1488,14 +1496,14 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                                         </span>
                                       ) : null
                                     })()}
-                                    {whatsapp && waPrice(t) > 0 && (
+                                    {wa > 0 && (
                                       <span style={{ display: 'block', fontSize: 12.5, color: BIZ.muted, marginTop: 3 }}>
-                                        + WhatsApp {waPlan === 'pro' ? 'Pro ' : ''}{money(waPrice(t))}
+                                        {t.price > 0 ? `${planPart} ${money(t.price)} + ` : ''}WhatsApp {waPlan === 'pro' ? 'Pro ' : ''}{money(wa)}
                                       </span>
                                     )}
-                                    {t.savings_note && (
+                                    {saveNote && (
                                       <span style={{ display: 'block', fontSize: 12.5, color: BIZ.green, fontWeight: 700, marginTop: 3 }}>
-                                        {t.savings_note}
+                                        {saveNote}
                                       </span>
                                     )}
                                   </span>
