@@ -52,12 +52,13 @@ const LAB_KIND_WORD: Record<string, string> = { pathology: 'labs for blood and u
 const labKindSaid = (s?: string): string | undefined => !s ? undefined
   : /mri|\bct\b|x-?ray|ultra ?sound|sonograph|scan|mammo/i.test(s) ? 'radiology'
   : /blood|cbc|sugar|thyroid|urine|lipid|vitamin|hba1c|lft|kft|path/i.test(s) ? 'pathology' : undefined
+// 0311 (2 Nov 2026): insurance is switched off until the strategy is final —
+// no way into it from the app. The server refuses new requests regardless.
 const KINDS: { id: Kind; label: string; en: string; hi: string }[] = [
   { id: 'hospital', label: '🏥 Hospital', en: 'Hospital', hi: 'अस्पताल' },
   { id: 'lab', label: '🧪 Lab test', en: 'Lab test', hi: 'जांच लैब' },
   { id: 'pharmacy', label: '💊 Medicines', en: 'Medicines', hi: 'दवाई' },
   { id: 'ambulance', label: '🚑 Ambulance', en: 'Ambulance', hi: 'एम्बुलेंस' },
-  { id: 'insurance', label: '🛡️ Insurance', en: 'Insurance', hi: 'बीमा' },
 ]
 const KIND_WORD: Record<Kind, string> = { hospital: 'hospitals', lab: 'labs', pharmacy: 'pharmacies', ambulance: 'ambulance services', insurance: 'insurance advisors' }
 const kindChips = () => [...KINDS.map(k => ({ label: k.label, say: `__kind__${k.id}` })), { label: '🎁 Camps & offers', say: '__go__/camps' }]
@@ -83,9 +84,9 @@ function asPlace(raw: string): { pin?: string; place?: string } {
   const p = raw.trim()
   return p.length >= 3 && /^[A-Za-zऀ-ॿ ]+$/.test(p) ? { place: p } : {}
 }
-const KIND_OF: Record<string, Kind> = { lab: 'lab', medicine: 'pharmacy', ambulance: 'ambulance', insurance: 'insurance' }
+const KIND_OF: Record<string, Kind> = { lab: 'lab', medicine: 'pharmacy', ambulance: 'ambulance' }
 const SECONDARY_SAY: Record<string, string> = {
-  lab: '__kind__lab', doctor: '__doctors__', medicine: '__go__/me/order', insurance: '__go__/me/insurance', camps: '__go__/camps', ambulance: '__go__/me/ambulance',
+  lab: '__kind__lab', doctor: '__doctors__', medicine: '__go__/me/order', camps: '__go__/camps', ambulance: '__go__/me/ambulance',
 }
 
 export default function Find() {

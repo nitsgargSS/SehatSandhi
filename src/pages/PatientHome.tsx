@@ -1,3 +1,4 @@
+import { useInsuranceEnabled } from '../hooks/useInsurance'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
@@ -49,12 +50,12 @@ const DICT: Record<'en' | 'hi', Strings> = {
     login_cta: 'Login',
     my_cta: 'My Sehatsandhi',
     scan_title: 'Scan to find health services in your area',
-    scan_sub: 'Doctors, medicines, lab tests, ambulance and insurance near you — on WhatsApp, free.',
+    scan_sub: 'Doctors, medicines, lab tests and ambulance near you — on WhatsApp, free.',
     scan_steps: ['Point your phone camera at this code', 'WhatsApp opens with "Hi" already typed', 'Press send — our assistant replies straight away'],
     scan_tap: 'Open WhatsApp',
     scan_show: 'Or show this code to someone so they can scan it.',
     biz_title: 'Are you a healthcare provider?',
-    biz_sub: 'Doctors, hospitals, pharmacies, labs, insurance & ambulance — list your business, or log in to manage it.',
+    biz_sub: 'Doctors, hospitals, pharmacies, labs & ambulance — list your business, or log in to manage it.',
     faq_nav: 'Questions',
     faq_title: 'Common Questions',
     faq_sub: 'Everything families ask us before their first booking.',
@@ -94,12 +95,12 @@ const DICT: Record<'en' | 'hi', Strings> = {
     login_cta: 'लॉगिन',
     my_cta: 'मेरा Sehatsandhi',
     scan_title: 'अपने इलाके की स्वास्थ्य सेवाएँ खोजने के लिए स्कैन करें',
-    scan_sub: 'डॉक्टर, दवाई, लैब टेस्ट, एम्बुलेंस और बीमा — आपके पास, व्हाट्सएप पर, मुफ़्त।',
+    scan_sub: 'डॉक्टर, दवाई, लैब टेस्ट और एम्बुलेंस — आपके पास, व्हाट्सएप पर, मुफ़्त।',
     scan_steps: ['फ़ोन का कैमरा इस कोड पर रखें', 'व्हाट्सएप "Hi" लिखा हुआ खुल जाएगा', 'भेजें दबाएँ — हमारा असिस्टेंट तुरंत जवाब देगा'],
     scan_tap: 'व्हाट्सएप खोलें',
     scan_show: 'या यह कोड किसी और को दिखाएँ ताकि वे स्कैन कर सकें।',
     biz_title: 'आप हेल्थकेयर प्रोवाइडर हैं?',
-    biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब, बीमा और एम्बुलेंस — अपना बिज़नेस लिस्ट करें, या लॉग इन करके मैनेज करें।',
+    biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब और एम्बुलेंस — अपना बिज़नेस लिस्ट करें, या लॉग इन करके मैनेज करें।',
     faq_nav: 'सवाल',
     faq_title: 'अक्सर पूछे जाने वाले सवाल',
     faq_sub: 'पहली बुकिंग से पहले परिवार हमसे यही पूछते हैं।',
@@ -341,7 +342,9 @@ function TrustRow({ t, row }: { t: Strings; row?: boolean }) {
 
 export default function PatientHome() {
   const { lang, setLang } = useLanguage()
-  const t = DICT[lang]
+  // 0311: insurance is hidden while switched off — its tile and its FAQ.
+  const insuranceOn = useInsuranceEnabled()
+  const t = insuranceOn ? DICT[lang] : { ...DICT[lang], faqs: DICT[lang].faqs.filter(f => !/insurance|बीमा/i.test(f.q)) }
 
   const waLink = WA_LINK
   const langBtn = lang === 'en' ? 'हिंदी' : 'ENGLISH'
@@ -350,14 +353,14 @@ export default function PatientHome() {
   // Every tile opens the bot with its trigger word, so the patient lands on the
   // main menu. A tile-specific sentence ("I need a lab test") matched no AiSensy
   // trigger and got no reply. The ambulance tile calls 108, like the card.
-  const CATS: Cat[] = [
+  const CATS = ([
     { key: 'doctors', label: t.doctors, tint: 'rgba(14,159,110,.12)', color: '#0E9F6E', link: waLink },
     { key: 'hospitals', label: t.hospitals, tint: 'rgba(37,99,235,.12)', color: '#2563EB', link: waLink },
     { key: 'pharmacy', label: t.pharmacy, tint: 'rgba(219,39,119,.12)', color: '#DB2777', link: waLink },
     { key: 'labs', label: t.labs, tint: 'rgba(124,58,237,.12)', color: '#7C3AED', link: waLink },
     { key: 'insurance', label: t.insurance, tint: 'rgba(8,145,178,.12)', color: '#0891B2', link: waLink },
     { key: 'ambulance', label: t.ambulance, tint: 'rgba(220,38,38,.12)', color: '#DC2626', link: `tel:${AMBULANCE_NUMBER}` },
-  ]
+  ] as Cat[]).filter(c => insuranceOn || c.key !== 'insurance')
 
   return (
     <div style={{ fontFamily: font, background: '#FBF7F0', minHeight: '100vh' }}>

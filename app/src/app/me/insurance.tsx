@@ -10,7 +10,13 @@ import { withPatient } from '../../ui/PatientGate'
 const COVERS = ['Family floater', 'Just me', 'Parents / senior citizen', 'Top-up of existing policy']
 const TIMES = ['Morning', 'Afternoon', 'After 6 pm']
 
+// 0311: switched off — the screen says so instead of taking a request.
+const SWITCHED_OFF = true
 function InsuranceScreen() {
+  if (SWITCHED_OFF) return <ScrollView contentContainerStyle={st.wrap}><Card><Text style={st.body}>इंश्योरेंस (बीमा) की सहायता अभी उपलब्ध नहीं है। 🙏{'\n'}Help with health insurance is not available right now.</Text></Card></ScrollView>
+  return <InsuranceForm />
+}
+function InsuranceForm() {
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
   const [cover, setCover] = useState('')

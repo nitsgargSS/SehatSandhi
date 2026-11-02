@@ -93,7 +93,7 @@ export function routeFor(m: Match, text: string): Go | null {
       return { pathname: '/find', params: { q: text, m: JSON.stringify(m) } }
     case 'medicine': return { pathname: '/me/order' }
     case 'ambulance': return { pathname: '/me/ambulance' }
-    case 'insurance': return { pathname: '/me/insurance' }
+    // 0311: insurance switched off — no screen to send it to.
     case 'camps': return { pathname: '/camps' }
     default: return null
   }

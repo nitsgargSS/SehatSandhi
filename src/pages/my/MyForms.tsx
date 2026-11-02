@@ -1,3 +1,4 @@
+import { useInsuranceEnabled } from '../../hooks/useInsurance'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { askAmbulance, askInsurance, orderMedicines, rate, uploadPhoto, whereAmI, type Place, type RateKind, type Reply } from '../../lib/patientApi'
@@ -142,7 +143,14 @@ function Insurance() {
     </form>
   )
 }
-export function MyInsurance() { return <MyShell title="Health insurance"><Insurance /></MyShell> }
+// 0311: while insurance is switched off, the old link says so instead of taking a request.
+function InsuranceOff() {
+  return <p className="text-sm text-gray-600 bg-white border border-gray-100 rounded-xl p-4">इंश्योरेंस (बीमा) की सहायता अभी उपलब्ध नहीं है। 🙏<br />Help with health insurance is not available right now.</p>
+}
+export function MyInsurance() {
+  const on = useInsuranceEnabled()
+  return <MyShell title="Health insurance">{on ? <Insurance /> : <InsuranceOff />}</MyShell>
+}
 
 function Rate() {
   const [q] = useSearchParams()

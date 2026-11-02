@@ -1,3 +1,4 @@
+import { useInsuranceEnabled } from '../../hooks/useInsurance'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -268,6 +269,8 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // and IPD, pathology, diagnostics and pharmacy are paid add-ons — chosen here
   // instead of the free systems above, and priced by the server like them.
   const catalogue = usePlanCatalogue()
+  // 0311: no insurance advisors while insurance is switched off.
+  const insuranceOn = useInsuranceEnabled()
   const tiered = !!catalogue?.settings.tiered_live
   const coreVertical = vertical === 'clinic' || vertical === 'hospital'
   const [planAddons, setPlanAddons] = useState<string[]>([])
@@ -910,7 +913,7 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                       <h3 style={h3Style}>What kind of business are you listing?</h3>
                       <p style={pStyle}>Choose the category patients will find you under.</p>
                       <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                        {VERTICALS.map(v => {
+                        {VERTICALS.filter(v => insuranceOn || v.key !== 'insurance').map(v => {
                           const on = vertical === v.key
                           return (
                             <button key={v.key} onClick={() => setVertical(v.key)} style={{
