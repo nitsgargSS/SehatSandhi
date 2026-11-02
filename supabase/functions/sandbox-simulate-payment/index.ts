@@ -107,7 +107,13 @@ Deno.serve(async (req) => {
   // here exactly as it would in a real order.
   let priced
   try {
-    priced = await computePrice(supabase, pincodes, businessId, null, 1, null, modules)
+    // 2 Nov 2026 (0309): the checkout choices too, as razorpay-order takes them.
+    priced = await computePrice(supabase, pincodes, businessId, null, Number(body.months) || 1, null, modules, {
+      whatsapp: body.whatsapp === true,
+      whatsappPlan: body.whatsappPlan === 'pro' ? 'pro' : 'basic',
+      planAddons: Array.isArray(body.planAddons) ? (body.planAddons as unknown[]).map(String) : null,
+      planKind: body.planKind === 'marketing' ? 'marketing' : body.planKind === 'software' ? 'software' : null,
+    })
   } catch (e) {
     return json({ error: `pricing: ${String((e as Error).message ?? e)}` }, 500)
   }
@@ -150,6 +156,13 @@ Deno.serve(async (req) => {
       tax_total: priced.tax.taxTotal,
       place_of_supply: priced.tax.placeOfSupply,
       razorpay_order_id: fakeOrderId,
+      // The plan fields razorpay-order writes, so fulfilment sees the same row.
+      subscription_amount: priced.subscriptionTotal,
+      whatsapp_addon: priced.whatsappSelected,
+      whatsapp_amount: priced.whatsappTotal,
+      whatsapp_plan: priced.whatsappSelected ? priced.whatsappPlan : null,
+      plan_addons: priced.plan ? priced.plan.addons : null,
+      plan_tier: priced.plan ? priced.plan.tier : null,
     })
     .select('id')
     .single()

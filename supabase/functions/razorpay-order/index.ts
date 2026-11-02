@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     pincodes?: unknown; businessId?: unknown; periodMonths?: unknown; modules?: unknown
     gstin?: unknown; gstLegalName?: unknown; billingAddress?: unknown
     whatsapp?: unknown; couponCode?: unknown; autoRenew?: unknown; whatsappPlan?: unknown; planAddons?: unknown
-    whatsappProNumber?: unknown
+    whatsappProNumber?: unknown; planKind?: unknown
   }
   try {
     body = await req.json()
@@ -184,6 +184,7 @@ Deno.serve(async (req) => {
       whatsapp: body.whatsapp === true,
       whatsappPlan: body.whatsappPlan === 'pro' ? 'pro' : 'basic',
       planAddons: Array.isArray(body.planAddons) ? (body.planAddons as unknown[]).filter((x): x is string => typeof x === 'string') : null,
+      planKind: body.planKind === 'marketing' ? 'marketing' : body.planKind === 'software' ? 'software' : null,
       couponCode: typeof body.couponCode === 'string' ? body.couponCode.slice(0, 40) : null,
     })
   } catch (e) {

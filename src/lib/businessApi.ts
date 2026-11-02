@@ -145,7 +145,7 @@ export const computePrice = (
   /** care_modules codes ticked in the wizard. Priced server-side, never here. */
   modules?: string[] | null,
   /** 0117: the WhatsApp add-on and a coupon code, both checked server-side. */
-  choices: { whatsapp?: boolean; couponCode?: string; whatsappPlan?: 'basic' | 'pro'; planAddons?: string[] } = {},
+  choices: { whatsapp?: boolean; couponCode?: string; whatsappPlan?: 'basic' | 'pro'; planAddons?: string[]; planKind?: 'software' | 'marketing' } = {},
 ) => callFn<PriceResult>('compute-price', { pincodes, businessId, vertical, months, doctorCount, modules, ...choices })
 
 export interface RazorpayOrder {
@@ -228,6 +228,8 @@ export interface BuyerGstDetails {
   planAddons?: string[]
   /** 0262: the number the clinic will connect for WhatsApp Pro, ten digits. Kept for setting it up. */
   whatsappProNumber?: string
+  /** 0309: the marketing plan (no OPD plan) or the OPD plan, for a clinic or hospital. */
+  planKind?: 'software' | 'marketing'
 }
 
 // Signup calls this anonymously (no login exists yet); the dashboard passes the

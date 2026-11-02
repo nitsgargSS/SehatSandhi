@@ -49,13 +49,27 @@ export function SocialPage({ c, posts }: { c: Ctx; posts: SocialPost[] | null })
           {soc.facebook && <a className="btn btn-ghost" href={soc.facebook} rel="noopener">Facebook</a>}
         </div>
       </PageHero>
-      <section className="sec">
+      {soc.facebook && (
+        <section className="sec">
+          {/* Meta's own Page widget — the clinic's real Facebook feed, nothing read by us (2 Nov 2026). */}
+          <div className="wrap">
+            <iframe title="Facebook" loading="lazy" width={500} height={600}
+              src={`https://www.facebook.com/plugins/page.php?${new URLSearchParams({
+                href: soc.facebook, tabs: 'timeline', width: '500', height: '600', small_header: 'false',
+                adapt_container_width: 'true', hide_cover: 'false', show_facepile: 'true',
+              })}`}
+              style={{ border: 0, maxWidth: '100%', borderRadius: 12, background: '#fff', display: 'block' }}
+              allow="encrypted-media; clipboard-write; picture-in-picture; web-share" />
+          </div>
+        </section>
+      )}
+      {(posts?.length || !soc.facebook) && <section className="sec">
         <div className="wrap">
           {posts && posts.length > 0
             ? <div style={POST_GRID}>{posts.map((p) => <PostCard key={p.id} c={c} p={p} />)}</div>
             : <p className="muted">{c.lang === 'hi' ? 'नई पोस्ट जल्द आएँगी।' : 'New posts are on their way.'}</p>}
         </div>
-      </section>
+      </section>}
     </>
   );
 }

@@ -397,6 +397,8 @@ export interface PlanQuote {
 export async function resolvePlanQuote(supabase: SupabaseClient, q: {
   businessId: string | null; months: number; vertical: string; addons: string[] | null
   doctors: number | null; staff: number | null; beds: number | null; labKind: string | null
+  /** 0309: 'marketing' quotes a clinic without the OPD plan; null = the business's own. */
+  planKind?: 'software' | 'marketing' | null
 }): Promise<PlanQuote | null> {
   // A renewal with no choice sent prices what the owner chose to renew (null: what is on now).
   let addons = q.addons
@@ -406,7 +408,7 @@ export async function resolvePlanQuote(supabase: SupabaseClient, q: {
   }
   const { data, error } = await supabase.rpc('sehat_plan_quote', {
     p_business: q.businessId, p_months: q.months, p_addons: addons, p_vertical: q.vertical,
-    p_doctors: q.doctors, p_staff: q.staff, p_beds: q.beds, p_lab_kind: q.labKind,
+    p_doctors: q.doctors, p_staff: q.staff, p_beds: q.beds, p_lab_kind: q.labKind, p_kind: q.planKind ?? null,
   })
   // Missing function (0272 not applied) or not live: the old pricing.
   if (error || !data || !(data as PlanQuote).live) return null
@@ -535,6 +537,8 @@ export async function computePrice(
     planAddons?: string[] | null
     /** 0272: before there is a business — staff, beds and a lab's kind, for the quote only. */
     staffHint?: number | null; bedsHint?: number | null; labKind?: string | null
+    /** 0309: the marketing plan (no OPD plan) or the OPD plan; null = the business's own. */
+    planKind?: 'software' | 'marketing' | null
   } = {},
 ): Promise<PriceResult> {
   const [plan, vb, taxSettings, recipientState, resolvedCount, tickedModules] = await Promise.all([
@@ -801,7 +805,7 @@ export async function computePrice(
       addons: extra.planAddons ?? null,
       doctors: businessId ? null : Math.max(0, Math.floor(Number(doctorCountHint) || 0)) || null,
       staff: businessId ? null : (extra.staffHint ?? null), beds: businessId ? null : (extra.bedsHint ?? null),
-      labKind: extra.labKind ?? null,
+      labKind: extra.labKind ?? null, planKind: extra.planKind ?? null,
     })
   }
 

@@ -30,6 +30,7 @@ import AbdmSwitch from './AbdmSwitch'
 import PharmacySwitch from './PharmacySwitch'
 import LabSwitch from './LabSwitch'
 import SocialSwitch from './SocialSwitch'
+import PlanKindSwitch from './PlanKindSwitch'
 import { listBroadcastsForReview } from '../../lib/marketingApi'
 import { PhoneVerifyCard, SetPasswordByCode } from '../../components/MyPhoneAndPassword'
 import DisableBusinessModal from './DisableBusinessModal'
@@ -1060,6 +1061,7 @@ export default function AdminDashboard() {
                         {d.vertical !== 'lab' && <LabSwitch businessId={d.id} on={!!d.lab_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, lab_module: on } : x))} />}
                         <FreeAddons businessId={d.id} vertical={d.vertical} canChange={!isManager} />
+                        {(d.vertical === 'clinic' || d.vertical === 'hospital') && <PlanKindSwitch businessId={d.id} canChange={!isManager} />}
                         <WebsiteTierSwitch businessId={d.id} canChange={!isManager} />
                         <SocialSwitch businessId={d.id} canChange={!isManager} />
                         <AbdmSwitch businessId={d.id} canChange={!isManager} />
@@ -1139,6 +1141,7 @@ export default function AdminDashboard() {
                         {d.vertical !== 'lab' && <LabSwitch businessId={d.id} on={!!d.lab_module} canChange={!isManager}
                           onChanged={on => setDoctors(ds => ds.map(x => x.id === d.id ? { ...x, lab_module: on } : x))} />}
                         <FreeAddons businessId={d.id} vertical={d.vertical} canChange={!isManager} />
+                        {(d.vertical === 'clinic' || d.vertical === 'hospital') && <PlanKindSwitch businessId={d.id} canChange={!isManager} />}
                         <WebsiteTierSwitch businessId={d.id} canChange={!isManager} />
                         <SocialSwitch businessId={d.id} canChange={!isManager} />
                         <AbdmSwitch businessId={d.id} canChange={!isManager} />

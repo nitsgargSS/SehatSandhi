@@ -42,7 +42,7 @@ export async function fulfilPayment(
 
   const { data: existing } = await supabase
     .from('payments')
-    .select('id, type, status, amount, addon_codes, addon_practitioner_id, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon, whatsapp_plan')
+    .select('id, type, status, amount, addon_codes, addon_practitioner_id, business_id, pricing_plan_code, pricing_mode, monthly_price, period_months, term_start, term_end, modules, subscription_amount, whatsapp_addon, whatsapp_plan, plan_tier')
     .eq(paymentRowId ? 'id' : 'razorpay_order_id', paymentRowId ?? orderId)
     .maybeSingle()
 
@@ -62,6 +62,8 @@ export async function fulfilPayment(
     subscription_amount: number | string | null; whatsapp_addon: boolean | null
     /** 0262: 'basic' or 'pro'; null on payments from before Pro. */
     whatsapp_plan?: 'basic' | 'pro' | null
+    /** 0272: the plan tier; 'marketing' is the plan without OPD (0309). */
+    plan_tier?: string | null
     addon_practitioner_id?: string | null
   }
   const alreadyPaid = pay.status === 'paid'
@@ -96,7 +98,16 @@ export async function fulfilPayment(
   // A payment that bought only the WhatsApp add-on (0117: a commission-only
   // pharmacy, say) must not switch the listing on past admin review, nor
   // overwrite its plan. Legacy payments carry no subscription_amount: listing.
-  const boughtListing = pay.subscription_amount == null || Number(pay.subscription_amount) > 0
+  // 0309: the marketing plan is a ₹0 subscription — WhatsApp Pro and/or social
+  // are what it pays — and it is still a listing bought.
+  const boughtListing = pay.subscription_amount == null || Number(pay.subscription_amount) > 0 || pay.plan_tier === 'marketing'
+  // 0309: a mid-term move from the marketing plan to the OPD plan (Plan →
+  // Add the clinic software) buys no listing but changes the plan — set it
+  // before the add-ons are applied, which switch OPD by it.
+  if (pay.business_id && !boughtListing && pay.plan_tier && pay.plan_tier !== 'marketing') {
+    const { error: kErr } = await supabase.from('businesses').update({ plan_kind: 'software' }).eq('id', pay.business_id)
+    if (kErr) console.error(`fulfilment: plan of ${pay.business_id} not moved to software: ${kErr.message}`)
+  }
   if (pay.business_id && boughtListing) {
     const bought = pay.modules ?? []
 
@@ -113,6 +124,9 @@ export async function fulfilPayment(
       term_end: pay.term_end,
       locked_at: new Date().toISOString(),
     }
+    // 0309: which plan this term is — before the add-ons are applied below,
+    // which switch OPD by it.
+    if (pay.plan_tier) patch.plan_kind = pay.plan_tier === 'marketing' ? 'marketing' : 'software'
 
     // Raised, never lowered. A business that adds IPD mid-term pays for IPD
     // alone, and that payment must not read as "OPD was not bought" and switch
