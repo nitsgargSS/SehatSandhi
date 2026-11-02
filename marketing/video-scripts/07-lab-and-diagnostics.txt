@@ -1,0 +1,123 @@
+SERIES 7 — LAB AND DIAGNOSTICS (pathology labs, scan centres, hospitals)
+
+------------------------------------------------------------------
+V7.1  Your lab, set up in an hour                          (~40 s · labs)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+नई लैब का सॉफ़्टवेयर — सैकड़ों टेस्ट, parameters, normal ranges भरने में हफ़्ते लगते हैं।
+सेहतसंधि में standard टेस्ट लिस्ट एक क्लिक में लोड — normal ranges के साथ।
+अपने rate लगाइए, अपने packages बनाइए।
+पैथोलॉजी, डायग्नोस्टिक सेंटर, या दोनों — और क्लिनिक में सिर्फ़ ECG या X-ray होता है, तो बस वही टेस्ट चुनिए।
+SHOW
+- Lab kind picker; load standard list; set price; package.
+ON SCREEN
+1 Weeks of setup?
+2 Standard test list, one click
+3 Your prices · Your packages
+4 Pathology · Diagnostics · or a few tests
+
+------------------------------------------------------------------
+V7.2  Orders that reach the lab by themselves               (~40 s · hospitals with a lab)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+डॉक्टर ने टेस्ट लिखा — और मरीज़ पर्ची लेकर लैब ढूँढ रहा है।
+सेहतसंधि में डॉक्टर visit से ही टेस्ट order करता है, या रिसेप्शन।
+order सीधे लैब की स्क्रीन पर — urgent वाले अलग दिखते हैं।
+और charge अपने-आप मरीज़ के बिल में — कोई टेस्ट बिना बिल के नहीं।
+SHOW
+- Order tests from visit → Lab incoming queue (urgent flag) → charge on bill.
+ON SCREEN
+1 Searching for the lab
+2 Ordered from the visit
+3 Lands on the lab's screen · Urgent first
+4 Charge goes on the bill
+
+------------------------------------------------------------------
+V7.3  Reports on WhatsApp the moment they're signed         (~50 s · labs)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+"रिपोर्ट तैयार है क्या?" — दिन भर लैब का फ़ोन यही पूछता है।
+सेहतसंधि में technician रिज़ल्ट भरता है, pathologist या radiologist approve करता है।
+approve होते ही रिपोर्ट अपने-आप मरीज़ के WhatsApp पर — एक secure link।
+High और Low साफ़ शब्दों में लिखा — मरीज़ को समझ आए।
+आपकी मशीन PDF देती है? वही PDF या फ़ोटो अपलोड कीजिए — बिना बदले भेज दी जाती है।
+SHOW
+- Enter results → approve → WhatsApp on phone → report page with High/Low; upload PDF.
+ON SCREEN
+1 "Is my report ready?"
+2 Technician enters · Doctor approves
+3 Straight to WhatsApp
+4 High / Low in plain words
+5 Or upload the machine's PDF
+
+------------------------------------------------------------------
+V7.4  Home collection                                       (~40 s · labs)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+बुज़ुर्ग मरीज़ लैब तक नहीं आ सकते — तो आप उनके घर जाइए।
+मरीज़ WhatsApp पर ही "घर से सैंपल" चुनकर समय बुक करता है।
+आप collector चुनते हैं, उसे पता और नक्शा मिल जाता है, और home collection की फ़ीस बिल में।
+SHOW
+- Bot: lab test at home + time; Lab panel: assign collector, map.
+ON SCREEN
+1 Can't come to the lab?
+2 Booked on WhatsApp
+3 Collector · Map · Fee
+
+------------------------------------------------------------------
+V7.5  Repeat tests — patients come back on time              (~35 s · labs)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+शुगर का मरीज़ हर तीन महीने HbA1c कराए — लेकिन याद किसे रहता है?
+सेहतसंधि repeat टेस्ट की तारीख़ अपने-आप तय करता है — रिज़ल्ट ख़राब हो, तो जल्दी।
+एक टैप में WhatsApp reminder, और जिनके टेस्ट due हैं उनकी लिस्ट।
+SHOW
+- Follow-ups due list; reminder.
+ON SCREEN
+1 Every 3 months — who remembers?
+2 Repeat date set automatically
+3 Sooner if abnormal
+4 One-tap reminders
+
+------------------------------------------------------------------
+V7.6  Send a test to a partner lab                           (~50 s · hospitals and labs)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+हर टेस्ट हर लैब में नहीं होता — MRI, कोई special टेस्ट।
+सेहतसंधि में दूसरी लैब को, जो सेहतसंधि पर है, सीधे टेस्ट भेजिए — उसके rate पर।
+पैसे कौन देगा — मरीज़ सीधे लैब को, या हॉस्पिटल के बिल में — आप चुनिए।
+लैब accept करती है, रिपोर्ट बनाती है — और रिपोर्ट वापस आपके मरीज़ की फ़ाइल में, डॉक्टर की "Reports ready" लिस्ट में।
+मरीज़ को पर्ची लेकर भटकना नहीं, आपको रिपोर्ट के लिए फ़ोन नहीं करना।
+SHOW
+- Refer tests → choose lab + payer → partner accepts → report back in record + Reports ready.
+ON SCREEN
+1 Not every test in-house
+2 Send to a lab on Sehatsandhi
+3 Who pays — you choose
+4 Report comes back to your file
+5 No running around
+
+------------------------------------------------------------------
+V7.7  Hospital and lab settle up — clean and above board     (~45 s · hospitals and labs · owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+हॉस्पिटल और लैब के बीच महीने का हिसाब — कॉपी में लिखा, और हर बार बहस।
+सेहतसंधि में दोनों business आपस में शर्तें तय करते हैं — प्रस्ताव, और दूसरी तरफ़ से मंज़ूरी।
+हर रिपोर्ट sign होते ही दोनों के एक ही खाते में entry — दोनों को एक जैसा दिखता है।
+हफ़्ते या महीने का statement अपने-आप बनता है, पैसे मिलने पर "paid" मार्क।
+और ये हिसाब सिर्फ़ दो business के बीच है — किसी डॉक्टर को कोई कमीशन नहीं। NMC के नियम के अनुसार, साफ़-सुथरा।
+SHOW
+- Partner labs: propose terms → accept; shared ledger; statement; mark paid.
+ON SCREEN
+1 Monthly arguments over a notebook
+2 Terms proposed and accepted
+3 One ledger, both sides see it
+4 Statements · Mark paid
+5 Business to business only · No doctor commission

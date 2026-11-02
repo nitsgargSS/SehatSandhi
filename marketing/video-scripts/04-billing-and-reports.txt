@@ -1,0 +1,122 @@
+SERIES 4 — BILLING, ACCOUNTS AND REPORTS (owners, managers)
+
+------------------------------------------------------------------
+V4.1  Every rupee, and who took it                         (~50 s · owners)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+शाम को गल्ला गिना — और हिसाब ₹2,000 कम। किसने लिया, किस मरीज़ का था — कोई नहीं जानता।
+सेहतसंधि में हर पेमेंट के साथ लिखा होता है — कैश, UPI, क्रेडिट कार्ड या डेबिट कार्ड — और किसने लिया।
+"Collections" में हर स्टाफ़ का, हर तरीक़े का अलग-अलग टोटल — गल्ले, UPI और कार्ड की स्लिप से सीधा मिलान।
+कोई पेमेंट बदला या हटाया गया, तो वो भी दिखता है।
+स्टाफ़ को सिर्फ़ अपना लिया हुआ दिखता है — मालिक और मैनेजर को सबका।
+SHOW
+- Take payment with method; Collections by person and method; changed/removed entries.
+ON SCREEN
+1 Short by ₹2,000?
+2 Method + who took it
+3 Totals per person, per method
+4 Changes are visible
+5 Staff see only their own
+
+------------------------------------------------------------------
+V4.2  Discounts and free consultations — with a reason      (~35 s · owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+"सर, ये जान-पहचान वाले हैं, फ़ीस नहीं ली।" — महीने में ऐसे कितने?
+सेहतसंधि में फ़ीस कम करनी हो या फ़्री — कारण लिखना ज़रूरी है।
+हर discount और हर फ़्री consultation की लिस्ट — किसने दी, कब, और क्यों।
+फ़ीस लौटानी हो, तो एक step में refund, और मरीज़ के खाते से भी कम।
+SHOW
+- Fee chooser with reason; free/discounted list; refund.
+ON SCREEN
+1 "Known people, no fee"
+2 Discount needs a reason
+3 Who, when, why
+4 One-step refund
+
+------------------------------------------------------------------
+V4.3  GST bills at the counter                              (~45 s · clinics selling tests, spectacles, procedures)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+OCT, चश्मा, ड्रेसिंग, कोई procedure — काउंटर पर बिल बनाना है?
+अपनी price list से चुनिए, बिल तैयार — पेमेंट उसी step में।
+GST लगता है तो हर लाइन पर rate, और आपका GSTIN बिल पर छपा हुआ। नहीं लगता, तो सादा बिल।
+बिल मरीज़ के WhatsApp पर चला जाता है — insurance या reimbursement के लिए तैयार।
+बिल में ग़लती? नया बिल बनता है, पुराना रिकॉर्ड में रहता है। कैंसल करने के लिए कारण ज़रूरी।
+SHOW
+- Counter invoice: pick items, GST per line, take payment, send link; bill page on phone.
+ON SCREEN
+1 Tests · Spectacles · Procedures
+2 From your price list
+3 GST optional, GSTIN printed
+4 Bill on WhatsApp
+5 Corrections keep the trail
+
+------------------------------------------------------------------
+V4.4  Revenue: billed vs collected                          (~35 s · owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+महीने के आख़िर में असली सवाल — कितना बिल हुआ, और कितना सच में आया?
+सेहतसंधि का Revenue पेज — OPD, IPD, लैब, फ़ार्मेसी, हर हिस्से का अलग।
+दिन, हफ़्ता, महीना या साल चुनिए। CA को भेजना है? Excel में डाउनलोड।
+SHOW
+- Revenue panel by stream and period; CSV download.
+ON SCREEN
+1 Billed vs collected
+2 By OPD · IPD · Lab · Pharmacy
+3 Any period · Download for your CA
+
+------------------------------------------------------------------
+V4.5  Know your patients                                    (~45 s · owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+इस महीने कितने नए मरीज़ आए, और कितने पुराने लौटकर आए?
+सेहतसंधि बताता है — दिन, हफ़्ते, महीने या साल के हिसाब से।
+मरीज़ कहाँ से आया — WhatsApp बुकिंग, रिसेप्शन QR, या पुराना रजिस्टर।
+उम्र, gender, कौन-सा डॉक्टर, और कौन-सा गाँव या PIN code।
+और सबसे काम की लिस्ट — जिनका फ़ॉलो-अप बाक़ी है, और जिन्हें वापस बुलाना है।
+SHOW
+- Patient report: new vs returning chart, source, age/gender, follow-ups list.
+ON SCREEN
+1 New vs returning
+2 Any period
+3 Where they came from
+4 Age · Gender · Doctor · PIN
+5 Follow-ups to invite back
+
+------------------------------------------------------------------
+V4.6  Where to hold your next camp                          (~40 s · owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+अगला फ़्री कैंप कहाँ लगाएँ? अंदाज़े से नहीं, आँकड़ों से तय कीजिए।
+सेहतसंधि दिखाता है — हर PIN code से आपके कितने मरीज़ आते हैं।
+और उसी के साथ — उस इलाक़े में कितने लोग आपकी speciality का डॉक्टर ढूँढ रहे हैं।
+जहाँ ढूँढने वाले ज़्यादा हैं और आपके मरीज़ कम — वहीं अगला कैंप।
+SHOW
+- Patient areas panel: your patients per PIN vs searches.
+ON SCREEN
+1 Where should the camp be?
+2 Your patients per PIN
+3 Searches for your speciality there
+4 Many searches, few patients = camp here
+
+------------------------------------------------------------------
+V4.7  Your letterhead on everything                         (~30 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+OPD पर्ची, पर्चा, बिल, डिस्चार्ज समरी — सब पर आपके हॉस्पिटल का letterhead।
+एक बार अपना banner अपलोड कीजिए, हर कागज़ पर अपने-आप।
+और जो WhatsApp पर जाता है, वो भी आपके नाम से।
+SHOW
+- Letterhead settings; slip, bill, discharge summary with the banner.
+ON SCREEN
+1 Your letterhead everywhere
+2 Upload once
+3 Same on WhatsApp links

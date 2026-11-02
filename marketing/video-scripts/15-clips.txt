@@ -1,0 +1,61 @@
+SERIES CLIPS — AI video clips (Google Veo) cut into the videos
+Made from the Google Cloud credit before it expires on 8 Nov 2026.
+Files: Downloads/SehatsandhiDocuments/Marketing/AIVideos/clips/<ID>-<n>.mp4 (vertical 9:16, 8 s, no sound).
+Every clip: modern private clinics and hospitals in Indian cities (not villages, not government dispensaries), real-looking people, nobody looks into the camera,
+no readable text, no logos, no blood or procedures. Two takes of each, so there is a choice.
+
+Format: ID | used in | scene
+------------------------------------------------------------------
+THE PROBLEM (before Sehatsandhi)
+C01 | V1.1 V2.1 V8.1 | A crowded reception area of a busy private city clinic in the morning, patients of all ages waiting on chairs, a receptionist writing in a paper register, a ceiling fan turning
+C02 | V2.2 V1.5 | Close view of a receptionist's hand writing patient names line by line in a thick paper register, a short queue of patients standing at the desk
+C03 | V2.1 | A middle-aged man in a waiting room repeatedly checks his wristwatch and leans to look towards the doctor's door, others waiting around him
+C04 | V3.1 V14.1 | An elderly man at home emptying a plastic bag full of old crumpled prescriptions and report papers onto a table, searching through them
+C05 | V3.2 | A chemist behind a pharmacy counter squinting at a handwritten prescription slip, turning it to read it, shelves of medicine boxes behind
+C06 | V2.5 V7.3 | A landline phone ringing on a busy clinic reception desk while the receptionist is attending to a patient, papers everywhere
+C07 | V4.1 | Late evening, a clinic owner alone at a desk under a lamp counting cash notes and checking a notebook, looking worried
+C08 | V5.8 V8.5 | A tired family sitting on a bench in a hospital corridor, waiting, an elderly man in a wheelchair beside them
+C09 | V5.4 | A nurse walking quickly down a hospital ward corridor carrying a small paper slip
+C10 | V6.1 | A pharmacist taking medicine strips off a shelf, checking the dates and dropping some into a bin
+C11 | V6.2 | A pharmacist at the counter cutting a few tablets off a medicine strip with scissors
+C12 | V7.1 V7.2 | A lab technician placing blood sample tubes into a rack in a small pathology lab, a microscope on the bench
+C13 | V7.3 | A lab receptionist answering a phone, a stack of sealed report envelopes on the desk
+C14 | V7.4 | An elderly woman at the door of her home greeting a lab collector carrying a sample collection kit
+C15 | V4.4 V6.4 | A desk covered with a heap of paper bills, a calculator and a ledger, hands sorting through the bills
+C16 | V5.1 | A clean general ward of a private hospital with rows of beds, a nurse walking between beds checking a clipboard
+C17 | V5.2 | A hospital admission desk, an anxious relative filling a long paper form while a staff member waits
+C18 | V5.3 | A man at a hospital billing counter looking at a long printed bill with surprise
+C19 | V5.5 V5.6 | A surgeon in scrubs, cap and mask standing at a stainless-steel scrub sink outside a modern operation theatre, rinsing both hands under running water with natural movement, seen from the side at waist height, OT doors behind
+C20 | V5.7 | An elderly man at home with a protective eye shield after eye surgery, his daughter helping him with eye drops
+C21 | V3.1 V3.5 | A doctor flipping through thick paper patient files in a crowded cabinet
+C22 | V2.7 | A doctor walking out of one hospital to his car with a bag, then driving away on a town road
+C23 | V2.7 | A doctor at his desk talking on the phone, a paper diary full of crossed-out appointments in front of him
+C24 | V11.7 | A clinic waiting room with many empty chairs in the afternoon, a receptionist sitting idle
+C25 | V11.4 V4.6 | A free health check-up camp under a branded canopy in a city housing-society park, residents queuing at a table
+C26 | V2.5 V11.1 | A young woman in bed at night searching on her phone, face lit by the screen
+C27 | V11.1 | A busy city road lined with modern hospitals, clinics and shops (no readable text), cars and e-rickshaws
+C28 | V13.2 V14.3 | An ambulance with lights on moving through traffic on an Indian city road
+C29 | V13.1 V14.3 | A delivery rider on a scooter arriving at a house and handing a medicine packet to a woman at the door
+C30 | V13.3 | A family at a dining table discussing papers about health insurance
+C31 | V11.6 V12.2 | A doctor in his clinic at the end of the day looking at social media on his phone, tired
+
+THE FIX (with Sehatsandhi)
+C32 | V2.1 V1.3 | A calm, tidy clinic reception, the receptionist working on a computer, patients seated and relaxed
+C33 | V3.2 V10.2 V7.3 | An elderly woman at home smiling as she reads a message on her phone (screen not visible)
+C34 | V3.1 V1.3 | A doctor at his desk with a laptop explaining something to a patient sitting across
+C35 | V2.2 V11.2 V14.4 | A young man scanning a poster on a clinic wall with his phone camera
+C36 | V2.3 | A nurse measuring the blood pressure of a seated patient at a triage desk
+C37 | V2.4 V4.7 | A small printer at a clinic reception printing a slip, the receptionist handing it to a patient
+C38 | V4.1 V4.4 | A clinic owner in the evening calmly looking at a tablet, a closed cash drawer beside him, relaxed
+C39 | V6.3 | A pharmacist smiling and handing a medicine bag to a customer at the counter
+C40 | V5.1 V5.2 | A doctor on a hospital ward round holding a tablet, a nurse beside him
+C41 | V5.8 V8.5 | A family happily leaving a hospital with their elderly father in a wheelchair
+C42 | V7.3 | A pathologist in a lab coat reviewing results on a computer screen (screen blurred)
+C43 | V14.1 V10.3 | An elderly couple at home looking at a phone together and smiling
+C44 | V9.1 | A short staff meeting in the office of a private hospital, the owner talking to the team
+C45 | V1.1 V1.4 | A doctor arriving at his clinic in the morning and greeting the receptionist
+C46 | V9.4 | A doctor closing a heavy paper file cabinet, then opening a laptop
+C47 | V10.3 V11.7 | A phone lying on a table lighting up with a notification (screen not readable)
+C48 | V6.4 | A pharmacist opening a carton of medicines and entering stock on a laptop
+C49 | V8.0 V1.2 | The glass front of a modern multi-storey private hospital in an Indian city in the morning, people walking in
+C50 | V1.2 | A diagnostic centre with an X-ray room door and a technician guiding a patient inside

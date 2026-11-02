@@ -1,0 +1,130 @@
+SERIES 12 — THE MARKETING PLAN AND PRICES
+Before recording: check today's prices in admin (Plan pricing). The numbers
+below are the ones decided on 27–29 Oct 2026. If a price changes, change it
+here first, then record.
+
+POST TIMING: the Marketing-only plan (V12.1–V12.3, V12.5) is decided but not
+yet open for sign-up. Record now, post once it can be bought. Daily posts run
+today only for SN Eye and Sehatsandhi (pilot).
+
+------------------------------------------------------------------
+V12.1  Not ready for software? Start with marketing          (~55 s · doctors who don't want software yet)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+डॉक्टर साहब, अभी पूरा सॉफ़्टवेयर नहीं लगाना? कोई बात नहीं — मार्केटिंग से शुरू कीजिए।
+सेहतसंधि का Marketing plan — ₹2,000 महीना।
+इसमें आपकी पूरी website — आपके डॉक्टर, समय, फ़ीस, फ़ोटो और बुकिंग बटन के साथ।
+आपका Facebook और Instagram एक बार जोड़िए — फिर हर दिन post अपने-आप।
+आपका क्लिनिक सेहतसंधि ऐप और WhatsApp बॉट पर दिखता है — मरीज़ वहीं से appointment बुक करते हैं।
+और जब आप तैयार हों, पूरा सॉफ़्टवेयर जोड़ लीजिए — आपका सारा डेटा वहीं रहता है।
+SHOW
+- SN Eye site; Social posts tab; bot booking.
+ON SCREEN
+1 Not ready for software?
+2 Marketing plan · ₹2,000/month
+3 Your full website
+4 Facebook + Instagram, daily posts
+5 Listed in the app and WhatsApp bot
+6 Upgrade any time, data stays
+
+------------------------------------------------------------------
+V12.2  How daily posts work — you only say OK                 (~50 s · everyone)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+"रोज़ post कौन बनाएगा? मेरे पास designer नहीं है।" — आपको ज़रूरत ही नहीं।
+एक बार अपना Facebook Page और Instagram जोड़िए — दो मिनट का काम।
+हर दिन सेहतसंधि आपकी speciality और मौसम के हिसाब से post बनाता है — फ़ोटो, आपका logo, आपका नंबर, सही hashtags के साथ।
+शाम 7 बजे WhatsApp पर preview — OK दबाइए, या बताइए क्या बदलना है, या उस दिन छोड़ दीजिए।
+पहले हफ़्ते हर post आपके OK के बाद ही जाती है — फिर आप चाहें तो अपने-आप।
+अपना कैंप, नया डॉक्टर, समय बदला — बताइए, उस पर post बन जाएगी।
+SHOW
+- Connect Facebook button; post card; WhatsApp preview; published post.
+ON SCREEN
+1 No designer needed
+2 Connect Page + Instagram once
+3 Made daily · Logo · Number · Hashtags
+4 7 PM: OK · Change · Skip
+5 First week: only after your OK
+6 Your news becomes a post
+
+------------------------------------------------------------------
+V12.3  Add WhatsApp — the ₹3,000 marketing bundle             (~45 s · everyone)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+Marketing plan के साथ WhatsApp भी चाहिए? ₹1,000 और — कुल ₹3,000 महीना।
+आपका अपना WhatsApp नंबर, आपके क्लिनिक के नाम से।
+मरीज़ों को स्वागत, फ़ॉलो-अप reminder, धन्यवाद और रेटिंग — अपने-आप।
+कैंप और health tips — उन मरीज़ों को जिन्होंने हाँ कहा है।
+मैसेज का ख़र्च आप सीधे Meta को देते हैं — हम उस पर कुछ नहीं लेते।
+SHOW
+- WhatsApp panel; automatic messages; broadcast.
+ON SCREEN
+1 + WhatsApp · ₹1,000
+2 Marketing bundle · ₹3,000/month
+3 Your own number, your name
+4 Welcome · Reminders · Ratings
+5 Camps and tips to those who said yes
+6 Meta billed directly, no markup
+
+------------------------------------------------------------------
+V12.4  Already on Sehatsandhi? Add your website and posts      (~40 s · existing software customers)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+आप पहले से सेहतसंधि सॉफ़्टवेयर चला रहे हैं? तो मार्केटिंग सिर्फ़ ₹1,000 और।
+आपका अपना domain, पूरा सिस्टम आपके हॉस्पिटल के नाम से।
+Facebook और Instagram जुड़े हुए, और हर दिन post अपने-आप।
+मतलब — OPD plan ₹2,000, और मार्केटिंग मिलाकर ₹3,000 महीना।
+SHOW
+- Website panel with own domain; Social posts tab.
+ON SCREEN
+1 Already a customer?
+2 + ₹1,000 marketing add-on
+3 Own domain · Your name on the system
+4 Facebook + Instagram · Daily posts
+5 e.g. OPD ₹2,000 + ₹1,000 = ₹3,000
+
+------------------------------------------------------------------
+V12.5  Bring your patients in — three easy ways                (~40 s · marketing customers)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+WhatsApp पर मैसेज भेजने के लिए मरीज़ों की लिस्ट चाहिए — वो कहाँ से आएगी?
+तीन तरीक़े — रिसेप्शन पर नाम और नंबर लिखिए, या पुरानी Excel शीट अपलोड कीजिए।
+या रिसेप्शन पर QR पोस्टर लगाइए — मरीज़ ख़ुद स्कैन करके जुड़ जाता है।
+और जो भी मरीज़ बुकिंग करता है, वो अपने-आप लिस्ट में।
+कोई मरीज़ मैसेज नहीं चाहता — STOP लिखे, और उसे आगे कुछ नहीं जाता।
+SHOW
+- Add patient; Excel upload; QR poster; STOP reply.
+ON SCREEN
+1 Where does the list come from?
+2 Type it in · Upload Excel
+3 QR poster at reception
+4 Every booking adds the patient
+5 STOP is respected
+
+------------------------------------------------------------------
+V12.6  Our plans — pay for what you use                        (~60 s · everyone)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+सेहतसंधि में आप सिर्फ़ उतना देते हैं जितना इस्तेमाल करते हैं।
+OPD हर plan में — दो डॉक्टर तक का क्लिनिक ₹2,000 महीना। ज़्यादा डॉक्टर हों तो पॉलीक्लिनिक, मल्टी-स्पेशियलिटी या हॉस्पिटल plan।
+भर्ती करते हैं? IPD और फ़ार्मेसी जोड़िए — ₹2,000 में 20 बेड तक।
+अपनी लैब है? पैथोलॉजी या डायग्नोस्टिक्स जोड़िए। दो या ज़्यादा add-ons पर discount।
+6 महीने का एक साथ लीजिए — 5 महीने के पैसे। 12 महीने — 9 महीने के पैसे।
+और सिर्फ़ लैब या फ़ार्मेसी चलाते हैं, तो उनके अलग plans।
+sehatsandhi.com/business पर अपना plan देखिए, या हमें WhatsApp कीजिए।
+SHOW
+- sehatsandhi.com/business pricing section.
+ON SCREEN
+1 Pay for what you use
+2 OPD in every plan · Clinic ₹2,000/month
+3 IPD + Pharmacy · ₹2,000 incl. 20 beds
+4 Pathology · Diagnostics · bundle discount
+5 6 months = pay 5 · 12 months = pay 9
+6 Lab and pharmacy plans
+7 sehatsandhi.com/business

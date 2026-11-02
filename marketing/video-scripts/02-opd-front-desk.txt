@@ -1,0 +1,140 @@
+SERIES 2 — OPD AND THE FRONT DESK
+
+------------------------------------------------------------------
+V2.1  Token and queue — no more crowd at reception     (~50 s · clinics, hospitals)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+रिसेप्शन पर भीड़, और हर दो मिनट में "मेरा नंबर कब आएगा?" — रोज़ की कहानी है ना?
+सेहतसंधि में रिसेप्शन मरीज़ को टोकन देता है और डॉक्टर चुनता है — बस।
+स्क्रीन पर तीन लाइनें — इंतज़ार में, डॉक्टर के पास, और आज देखे गए।
+डॉक्टर "Call next" दबाते हैं, अगला मरीज़ अंदर — कोई आवाज़ लगाने की ज़रूरत नहीं।
+सिस्टम बता देता है कि लाइन में आख़िरी मरीज़ को लगभग कितनी देर लगेगी।
+कोई बिना नंबर के आगे जाए, तो कारण लिखना पड़ता है — सबके साथ बराबरी।
+जो मरीज़ बुलाने पर नहीं मिला, उसे बाद में वापस लाइन में ला सकते हैं।
+SHOW
+- Queue tab: give token → patient moves Waiting → With the doctor → Seen. Wait estimate.
+ON SCREEN
+1 "When is my turn?"
+2 Token + doctor, done
+3 Waiting · With doctor · Seen
+4 Doctor taps Call next
+5 Wait time shown
+6 Out of turn needs a reason
+7 Missed? Bring them back
+
+------------------------------------------------------------------
+V2.2  QR self-registration — patients fill their own details  (~45 s · busy OPDs)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+सुबह की भीड़ में रिसेप्शन पर हर मरीज़ का नाम, उम्र, पता लिखना — इसी में आधा घंटा निकल जाता है।
+अब रिसेप्शन पर एक QR पोस्टर लगाइए।
+मरीज़ अपने फ़ोन से स्कैन करता है, और हिंदी या English में ख़ुद अपना नाम, उम्र और फ़ोन नंबर भर देता है।
+रिसेप्शन की स्क्रीन पर दिख जाता है — "रिसेप्शन पर ख़ुद रजिस्टर किया।"
+रिसेप्शन बस टोकन देता है। लाइन तेज़, ग़लतियाँ कम।
+SHOW
+- QR poster on a wall; phone scanning; check-in form; the patient appearing in Queue.
+ON SCREEN
+1 Writing details takes forever
+2 A QR poster at reception
+3 Patients fill it on their phone
+4 Shows up at the desk
+5 Desk just gives the token
+
+------------------------------------------------------------------
+V2.3  Vitals before the consult                         (~35 s · clinics with a nurse)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+डॉक्टर के कमरे में जाने से पहले BP, वज़न, शुगर — नर्स या रिसेप्शन यहीं भर देता है।
+फ़ास्टिंग, खाने के बाद, या रैंडम — शुगर किस वक़्त की है, वो भी।
+टोकन पर निशान लग जाता है — "Vitals ✓", तो डॉक्टर को पता है कि सब तैयार है।
+और हर visit की vitals मरीज़ की हिस्ट्री में जुड़ती जाती है — पिछली बार से तुलना एक नज़र में।
+SHOW
+- Vitals form on a token; "Vitals ✓" badge; vitals history in the record.
+ON SCREEN
+1 BP · Weight · Sugar
+2 Fasting / after food / random
+3 Token shows Vitals ✓
+4 History over every visit
+
+------------------------------------------------------------------
+V2.4  The OPD slip — on your own letterhead               (~35 s · clinics)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+टोकन के साथ एक साफ़ OPD पर्ची प्रिंट होती है — आपके क्लिनिक के letterhead पर।
+उस पर टोकन, डॉक्टर, फ़ीस, vitals, एलर्जी और पुरानी बीमारियाँ पहले से छपी हुई।
+आपकी speciality के हिसाब से जगह — आँखों के लिए दायीं-बायीं आँख की टेबल, डेंटल के लिए दाँतों का चार्ट।
+और नीचे एक QR — "अगली visit बुक करें।" मरीज़ स्कैन करे, और अगली बार ख़ुद बुक कर ले।
+SHOW
+- Print an OPD slip; zoom on letterhead, vitals, eye table, the booking QR.
+ON SCREEN
+1 OPD slip on your letterhead
+2 Vitals · Allergies printed
+3 Made for your speciality
+4 QR: book your next visit
+
+------------------------------------------------------------------
+V2.5  Appointments that fill themselves                   (~50 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+रात 11 बजे मरीज़ को याद आया कि कल डॉक्टर को दिखाना है — और क्लिनिक का फ़ोन बंद है।
+सेहतसंधि के साथ मरीज़ WhatsApp पर, हिंदी या English में, किसी भी वक़्त बुक कर लेता है।
+वो "कल जगाधरी में dentist" जैसा भी लिख दे, तो बॉट समझ जाता है।
+सिर्फ़ ख़ाली slots दिखते हैं — डॉक्टर की छुट्टी और दूसरे क्लिनिक का समय अपने-आप हटा दिया जाता है।
+बुकिंग, कैंसल, या समय बदलने पर मरीज़ को WhatsApp पर मैसेज जाता है।
+और जो मरीज़ फ़ोन करके या ख़ुद आकर बुक करें, उन्हें रिसेप्शन उन्हीं slots में बुक कर देता है।
+सुबह क्लिनिक खुलते ही आज की लिस्ट तैयार।
+SHOW
+- WhatsApp chat on a phone: "kal dentist" → time buttons → confirmed. Desk booking screen. Appointments list.
+ON SCREEN
+1 11 PM, clinic phone off
+2 Book on WhatsApp, any time
+3 Understands plain Hindi
+4 Only free slots shown
+5 Confirm · Cancel · Reschedule messages
+6 Desk books the same slots
+7 Today's list, ready
+
+------------------------------------------------------------------
+V2.6  Today screen — the whole clinic at a glance          (~40 s · owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+सुबह क्लिनिक पहुँचकर सबसे पहले क्या देखना है? सेहतसंधि का "Today" पेज।
+हर डॉक्टर की आज की appointments — आया, नहीं आया, अगला ख़ाली समय।
+अगले 7 दिन के ऑपरेशन, और कौन-सी रिपोर्ट्स डॉक्टर के देखने के लिए तैयार हैं।
+और ज़रूरी अलर्ट — कोई मैसेज नहीं गया, कोई रिपोर्ट sign होनी बाक़ी है।
+एक स्क्रीन, पूरे दिन की तस्वीर।
+SHOW
+- Today tab top to bottom.
+ON SCREEN
+1 Start the day here
+2 Each doctor's appointments
+3 Surgeries · Reports ready
+4 Alerts that need you
+5 Your day on one screen
+
+------------------------------------------------------------------
+V2.7  Doctors who work at more than one place              (~45 s · visiting doctors, polyclinics)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+बहुत से डॉक्टर सुबह एक क्लिनिक में बैठते हैं, शाम को दूसरे हॉस्पिटल में।
+सेहतसंधि में एक ही login से आप कई क्लिनिकों में काम कर सकते हैं — invitation से जुड़िए।
+पूरे हफ़्ते का schedule, हर जगह का, एक स्क्रीन पर।
+एक ही समय पर दो जगह बुकिंग कभी नहीं होगी।
+छुट्टी लेनी है? सिर्फ़ एक क्लिनिक के लिए, या सब के लिए — और उस दिन कोई बुकिंग नहीं आएगी।
+जो बुकिंग पहले से थीं, उनकी लिस्ट सामने आ जाती है, ताकि रिसेप्शन उन्हें दूसरे दिन कर सके।
+SHOW
+- Invitations; My week; leave form; clashing bookings list.
+ON SCREEN
+1 Morning here, evening there
+2 One login, many clinics
+3 Your whole week
+4 Never double-booked
+5 Leave: one clinic or all
+6 Clashing bookings listed

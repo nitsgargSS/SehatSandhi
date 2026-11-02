@@ -1,0 +1,84 @@
+SERIES 6 — PHARMACY (hospital pharmacies and chemists)
+
+------------------------------------------------------------------
+V6.1  Stock without registers                              (~45 s · pharmacies)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+अलमारी में दवाई पड़ी-पड़ी expire हो गई, और पता तब चला जब फेंकनी पड़ी।
+सेहतसंधि में हर दवाई batch और expiry के साथ — जो पहले expire होगी, वो पहले बिकेगी।
+expire हो चुकी दवाई बिल में आ ही नहीं सकती।
+स्टॉक कम हुआ, तो चेतावनी पहले ही।
+और हर गोली का हिसाब — आई, बिकी, लौटी, ठीक की, expire होकर फेंकी।
+SHOW
+- Stock list with batch/expiry; low-stock warning; stock history.
+ON SCREEN
+1 Found it only when it expired
+2 Batch + expiry, oldest sold first
+3 Expired can't be billed
+4 Low-stock warning
+5 Full history of every strip
+
+------------------------------------------------------------------
+V6.2  Buy in strips, sell per tablet                        (~30 s · pharmacies)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+मरीज़ को पूरी strip नहीं, सिर्फ़ चार गोलियाँ चाहिए।
+सेहतसंधि में स्टॉक strip में चढ़ाइए, बेचिए गोली के हिसाब से — बाक़ी स्टॉक अपने-आप सही।
+SHOW
+- Purchase entry by strip; sale of 4 tablets; stock updates.
+ON SCREEN
+1 Only four tablets, please
+2 Stock in strips, sell loose
+3 Stock stays right
+
+------------------------------------------------------------------
+V6.3  GST bills, part payments and returns                  (~45 s · pharmacies)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+फ़ार्मेसी GST में रजिस्टर्ड है? तो बिल HSN और CGST-SGST के साथ, GST invoice।
+नहीं है? तो MRP पर सादा बिल।
+डॉक्टर के पर्चे से सीधे बिल, या बाहर से आए ग्राहक को।
+आधा पैसा अभी, बाक़ी बाद में — बक़ाया की लिस्ट अलग।
+दवाई वापस आई, या बिल कैंसल — स्टॉक वापस अपनी जगह।
+SHOW
+- GST invoice; plain bill; part payment; dues list; return.
+ON SCREEN
+1 GST invoice with HSN
+2 Or plain bill at MRP
+3 From prescription or walk-in
+4 Part payments · Dues list
+5 Returns put stock back
+
+------------------------------------------------------------------
+V6.4  Purchases and the stock report                        (~35 s · pharmacy owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+हर ख़रीद — supplier और उसके बिल नंबर के साथ दर्ज।
+महीने के आख़िर में — GST के आँकड़ों के साथ summary, और दवाई व कंपनी के हिसाब से स्टॉक रिपोर्ट।
+CA को चाहिए? Excel में डाउनलोड।
+SHOW
+- Purchase entry; summary with GST; stock report by company; CSV.
+ON SCREEN
+1 Purchases with supplier invoice
+2 GST summary
+3 Stock by medicine & company
+4 Download for your CA
+
+------------------------------------------------------------------
+V6.5  Who can do what at the counter                        (~30 s · pharmacy owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+काउंटर पर हेल्पर बिल बना सकता है, पैसा ले सकता है, वापसी ले सकता है।
+लेकिन स्टॉक बदलना, ख़रीद चढ़ाना, बिल कैंसल करना — सिर्फ़ मालिक, मैनेजर या डॉक्टर।
+और discount? कारण लिखना ज़रूरी।
+SHOW
+- Helper login vs owner login.
+ON SCREEN
+1 Helpers: sell · collect · returns
+2 Owner: stock · purchases · cancel
+3 Discount needs a reason

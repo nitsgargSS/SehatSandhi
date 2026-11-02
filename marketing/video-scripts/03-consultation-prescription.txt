@@ -1,0 +1,111 @@
+SERIES 3 — CONSULTATION AND PRESCRIPTION (doctors)
+
+------------------------------------------------------------------
+V3.1  The whole patient on one page                      (~50 s · doctors)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+मरीज़ सामने बैठा है, और पुरानी फ़ाइल ढूँढी जा रही है — "पिछली बार कौन-सी दवाई दी थी?"
+सेहतसंधि में मरीज़ खोलते ही सबसे ऊपर लाल रंग में — एलर्जी।
+उसके नीचे पुरानी बीमारियाँ — BP, शुगर, स्टेंट — और अभी चल रही दवाइयाँ।
+हर visit की शिकायत, diagnosis और फ़ॉलो-अप, तारीख़ के साथ।
+पुराना पर्चा, लैब रिपोर्ट, X-ray — फ़ोटो खींचकर उसी मरीज़ में अपलोड।
+सब कुछ एक पेज पर, दस सेकंड में।
+SHOW
+- Patient record: allergy banner, problem list, current meds, visits, documents.
+ON SCREEN
+1 "What did we give last time?"
+2 Allergies first, in red
+3 History · Current medicines
+4 Every visit, dated
+5 Old papers uploaded
+6 One page, ten seconds
+
+------------------------------------------------------------------
+V3.2  A prescription in a minute, on WhatsApp             (~50 s · doctors)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+हाथ से लिखा पर्चा — मरीज़ पढ़ नहीं पाता, केमिस्ट ग़लत पढ़ लेता है, और दो दिन में पर्ची खो जाती है।
+सेहतसंधि में दवाई का नाम टाइप कीजिए, लिस्ट से चुनिए — OD, BD, TDS, एक टैप में।
+मरीज़ को किसी दवाई से एलर्जी है, तो सिस्टम वहीं रोककर बताता है।
+diagnosis, सलाह और अगली visit की तारीख़ — सब उसी पर्चे में।
+"Send" दबाइए — साफ़, छपा हुआ पर्चा मरीज़ के WhatsApp पर।
+चाहें तो प्रिंट भी, आपके letterhead पर।
+SHOW
+- Write prescription: medicine search, dose buttons, allergy warning, Send → WhatsApp on a phone.
+ON SCREEN
+1 Handwriting nobody can read
+2 Pick medicine · OD / BD / TDS
+3 Allergy warning
+4 Diagnosis · Advice · Follow-up
+5 On the patient's WhatsApp
+6 Or print on your letterhead
+
+------------------------------------------------------------------
+V3.3  Examination forms for your speciality                (~35 s · specialists)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+हर speciality की जाँच अलग होती है — आँख के डॉक्टर को vision और pressure चाहिए, दाँत वाले को दाँतों का चार्ट।
+सेहतसंधि में आपकी speciality का जाँच फ़ॉर्म पहले से बना है।
+भरिए, और वो मरीज़ की हिस्ट्री में जुड़ जाता है — अगली बार तुलना आसान।
+SHOW
+- Eye exam table (R/L), dental chart.
+ON SCREEN
+1 Every speciality is different
+2 Your exam form, ready
+3 Compare visit to visit
+
+------------------------------------------------------------------
+V3.4  Prescription straight to the pharmacy                (~40 s · hospitals with a pharmacy)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+आपके हॉस्पिटल में अपनी फ़ार्मेसी है? तो मरीज़ को पर्ची लेकर भागना नहीं पड़ेगा।
+डॉक्टर ने पर्चा बनाया, और वो सीधे फ़ार्मेसी की स्क्रीन पर पहुँच गया।
+फ़ार्मासिस्ट उसी पर्चे से दवाई देता है — नाम दोबारा टाइप नहीं करना।
+और अगर मरीज़ बाहर से दवाई लेना चाहे, तो पर्ची प्रिंट कर दीजिए।
+SHOW
+- Prescription → "Send to our pharmacy" → Pharmacy panel "waiting" list → dispense.
+ON SCREEN
+1 Own pharmacy?
+2 Prescription reaches the counter
+3 Dispense from it directly
+4 Or print for outside
+
+------------------------------------------------------------------
+V3.5  Search every patient you've ever seen                (~35 s · doctors)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+"पिछले साल जितने मोतियाबिंद के ऑपरेशन किए, उन सबको कैंप के लिए बुलाना है।"
+सेहतसंधि में ऑपरेशन, diagnosis या कोई भी शब्द लिखकर ढूँढिए — सारे मरीज़ सामने।
+फ़ॉलो-अप जिनकी बाक़ी है, जो नहीं आए — उनकी लिस्ट भी, डाउनलोड करने लायक़।
+SHOW
+- Search by diagnosis; Visit register: follow-ups due / missed.
+ON SCREEN
+1 Find every cataract patient
+2 Search by diagnosis or surgery
+3 Follow-ups due · missed
+
+------------------------------------------------------------------
+V3.6  Your own practice page                               (~45 s · doctors in multi-doctor places)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+अगर आप किसी हॉस्पिटल में बैठते हैं, तो अपने काम का हिसाब कौन रखता है?
+सेहतसंधि में हर डॉक्टर का अपना पेज — आज के मरीज़, मेरे मरीज़, मेरी OPD फ़ीस।
+मैंने कितना कमाया — consultation, और मेरे नाम पर भर्ती मरीज़ों के charges।
+कौन-सी consultation फ़्री या discount पर हुई — किसने दी और क्यों।
+मेरी नर्सें, मेरा हफ़्ता, मेरी छुट्टी।
+और मालिक को सब डॉक्टर एक साथ दिखते हैं।
+SHOW
+- Doctor workspace: My practice, My earnings, free/discounted list.
+ON SCREEN
+1 Who tracks your work?
+2 My patients · My fee
+3 What I earned
+4 Free and discounted, with reasons
+5 My nurses · My week · My leave
+6 Owner sees every doctor

@@ -1,0 +1,109 @@
+SERIES 10 — WHATSAPP (everyone)
+
+------------------------------------------------------------------
+V10.1  Your clinic on WhatsApp, 24 hours                    (~45 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+आपके मरीज़ दिन भर WhatsApp पर रहते हैं — तो आपका क्लिनिक भी वहीं होना चाहिए।
+सेहतसंधि का WhatsApp बॉट हिंदी में बात करता है — मरीज़ अपने शब्दों में लिख दे, "कल आँखों का डॉक्टर", बस।
+वो अपना PIN code, शहर या location भेजे — पास के डॉक्टर, ख़ाली समय, एक टैप में बुकिंग।
+अगली बार बॉट को याद रहता है — कौन-सा इलाक़ा, कौन-सा मरीज़।
+और आपके क्लिनिक का QR स्कैन करके आया मरीज़ — सीधे आपके क्लिनिक से जुड़ता है, किसी और से नहीं।
+SHOW
+- Phone: bot conversation in Hindi; location; time buttons; QR-pinned chat.
+ON SCREEN
+1 Your patients live on WhatsApp
+2 Speaks Hindi · understands plain words
+3 PIN, town or location
+4 Remembers them next time
+5 Your QR = your clinic only
+
+------------------------------------------------------------------
+V10.2  Every paper, sent as a link                          (~35 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+पर्चा, बिल, लैब रिपोर्ट, डिस्चार्ज समरी — हर काग़ज़ पर एक ही बटन — "Send to patient"।
+WhatsApp पर, या email पर — मरीज़ के फ़ोन में हमेशा के लिए।
+काग़ज़ खो जाए तो भी कोई बात नहीं — link हमेशा खुलता है, प्रिंट भी होता है।
+SHOW
+- Send menu on a prescription, bill, report, summary.
+ON SCREEN
+1 One button on every paper
+2 WhatsApp or email
+3 Never lost, always printable
+
+------------------------------------------------------------------
+V10.3  Messages that go by themselves (WhatsApp Pro)        (~50 s · everyone)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+हर मरीज़ को हाथ से मैसेज भेजना — कोई स्टाफ़ इतना नहीं कर सकता।
+WhatsApp Pro में सब अपने-आप —
+नया मरीज़ रजिस्टर हुआ — स्वागत का मैसेज।
+consultation ख़त्म — पर्चा और बिल साथ में।
+visit के बाद — धन्यवाद, और रेटिंग की request, महीने में एक बार से ज़्यादा नहीं।
+फ़ॉलो-अप से एक दिन पहले — याद दिलाने वाला मैसेज।
+आप तय करते हैं कौन-सा मैसेज चालू रहे। और जिनके पास सेहतसंधि ऐप है, उन्हें ये ऐप में फ़्री।
+SHOW
+- Automatic messages card with toggles; phone receiving each message.
+ON SCREEN
+1 Nobody can message every patient by hand
+2 Pro: automatic
+3 Welcome
+4 Prescription + bill
+5 Thank you + rating
+6 Follow-up reminder
+7 You choose · Free in the app
+
+------------------------------------------------------------------
+V10.4  Your own WhatsApp number (WhatsApp Pro)              (~40 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+मरीज़ को मैसेज "सेहतसंधि" के नाम से नहीं, आपके क्लिनिक के नाम से जाने चाहिए।
+WhatsApp Pro में आप अपना ही नंबर जोड़ते हैं — Meta के साथ, कुछ मिनटों में।
+आपका WhatsApp Business ऐप भी साथ में चलता रहता है।
+मैसेज का ख़र्च आप सीधे Meta को देते हैं — बीच में कोई markup नहीं।
+SHOW
+- WhatsApp panel → Connect your own number → Meta window → connected.
+ON SCREEN
+1 In your clinic's name
+2 Connect your own number
+3 Business app keeps working
+4 Pay Meta directly, no markup
+
+------------------------------------------------------------------
+V10.5  Health tips and camp news to your patients            (~45 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+अगले रविवार फ़्री आँखों का कैंप है — अपने मरीज़ों तक बात कैसे पहुँचाएँ?
+सेहतसंधि में WhatsApp broadcast — सब मरीज़, चुने हुए PIN code, या हाल में आए मरीज़।
+लिस्ट सामने आती है — किसी को हटाना हो तो tick हटाइए।
+फ़ोटो लगाइए, मैसेज लिखिए — भेजने से पहले ख़र्च दिख जाता है।
+हर broadcast पहले हमारी टीम देखती है, ताकि नियमों के अंदर रहे — और जो मरीज़ STOP लिखे, उसे आगे नहीं जाता।
+SHOW
+- Broadcast: audience by PIN → checklist → picture → cost → sent for approval.
+ON SCREEN
+1 Free eye camp on Sunday
+2 All · By PIN · Recent visitors
+3 Untick anyone
+4 Picture · Cost shown first
+5 Checked by us · STOP respected
+
+------------------------------------------------------------------
+V10.6  Patients message you in the app                       (~30 s · clinics)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+मरीज़ को कुछ पूछना है — फ़ोन बार-बार बजता है।
+सेहतसंधि ऐप से मरीज़ सीधे क्लिनिक को मैसेज करता है।
+आपका स्टाफ़ जवाब देता है — और मरीज़ को दिखता है कि किसने जवाब दिया।
+SHOW
+- Messages panel; reply with staff name.
+ON SCREEN
+1 Phone ringing all day
+2 Patients message from the app
+3 Reply shows who answered

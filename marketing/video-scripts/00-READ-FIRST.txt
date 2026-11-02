@@ -1,0 +1,86 @@
+SEHATSANDHI — VIDEO SCRIPTS FOR EVERY FEATURE (you on camera, phone recording)
+Written 30 Oct 2026 from what the software actually does today.
+
+==================================================================
+THE SERIES
+==================================================================
+File                               Videos  For
+01-introduction.txt                  5     everyone — start here
+02-opd-front-desk.txt                7     clinics, hospitals
+03-consultation-prescription.txt     6     doctors
+04-billing-and-reports.txt           7     owners, managers
+05-ipd-and-surgery.txt               8     nursing homes, hospitals
+06-pharmacy.txt                      5     hospitals with a pharmacy, chemists
+07-lab-and-diagnostics.txt           7     labs, scan centres, hospitals
+08-full-hospital-flow.txt            1+6   hospitals (the flow doctors asked for)
+09-team-and-security.txt             5     owners
+10-whatsapp.txt                      6     everyone
+11-grow-your-practice.txt            7     everyone
+12-marketing-plan.txt                6     doctors who want only marketing first
+13-pharmacy-ambulance-insurance.txt  4     chemists, ambulance services, advisors
+14-for-patients.txt                  4     patients and families
+                                    ----
+                                    84 videos
+
+==================================================================
+WHO RECORDS WHAT (each video has a FORMAT line)
+==================================================================
+YOU  (19) — you on camera; I add AI clips, software screens, titles, subtitles, music:
+     V1.1 V1.2 V1.3 V1.4 V1.5 · V2.1 · V3.2 · V4.1 · V5.6 · V6.1 · V7.3 · V8.0 (main flow film)
+     V9.4 · V10.3 · V11.6 · V12.1 V12.2 V12.3 V12.6
+CUT  (6)  — V8.1–V8.6, cut from V8.0; you record only each one's HOOK line.
+AUTO (59) — nothing to record: AI clip for the problem, then the real software or
+     WhatsApp screens, Hindi stock voice reading the script, subtitles, music.
+AI clips: 15-clips.txt (made on Google Veo; files in Downloads/SehatsandhiDocuments/Marketing/AIVideos/clips).
+
+Post order: start with 01 (in order), then the 08 main film, then mix
+one video from a different file each day so the feed doesn't feel repetitive.
+
+==================================================================
+HOW EACH SCRIPT IS LAID OUT
+==================================================================
+V2.1  Title                                          (~45 s · who it's for)
+SCRIPT       — what you say. One line = one take. Pause, then say the next.
+               The first line is the hook: say it straight to camera, with energy.
+SHOW         — screen recordings I cut to while you keep talking (record these
+               on the staging site with the test clinic, never with real patients).
+ON SCREEN    — the short English title shown during each line.
+
+Lines are written the way people speak in our area: Hindi, with the English
+words doctors actually use (token, OPD, bill, GST, WhatsApp, report).
+Change any word that doesn't feel natural in your mouth — just keep the meaning.
+
+==================================================================
+RECORDING (phone)
+==================================================================
+- Vertical (9:16), 1080p or 4K, back camera, phone at eye level on a stand.
+- Sit or stand in front of a plain wall; light from a window IN FRONT of you.
+  I replace or blur the background, add titles, subtitles, music and the end card.
+- Same shirt for a whole series, so the videos look like one set.
+- Record each line as its own take. If you stumble, pause 2 seconds and say
+  the whole line again — I keep the best take.
+- Clip-on mic (₹500–1,000) makes the biggest difference. Otherwise stay within
+  an arm's length of the phone, fans and AC off.
+- 20–30 videos in one sitting is realistic: do one file at a time, a short break between files.
+- Name the files after the video, e.g. "V2-1 take3.mov", or just say
+  "V2.1" to the camera before each video.
+
+==================================================================
+RULES WE KEEP IN EVERY VIDEO
+==================================================================
+- No "best", "No. 1", "guaranteed", "100%". Say what it does, not how great it is.
+- Never say ABDM / ABHA certified or connected — it isn't yet. Not mentioned in any script.
+- Never promise doctors referral money or commission. Lab–hospital
+  settlement is between the two businesses only (NMC). Scripts say exactly that.
+- Consultation recording / voice-to-prescription is built but switched off —
+  not in any script until we switch it on.
+- Prices appear only in 12-marketing-plan.txt and the "plans" video. Check
+  the current price in admin before recording those, and say "from" where marked.
+- "Sehatsandhi app" lines: post those videos only once the app is on Google Play.
+- WhatsApp Pro features (automatic messages, own number, surgery messages)
+  are labelled "(WhatsApp Pro)" in the title — keep "with WhatsApp Pro" in the caption.
+- No real patient names, numbers or records in screen recordings.
+- Mark videos as AI-edited only if I replaced the background.
+- End every video the same way (I add the end card):
+  "सेहतसंधि — 87087 18705 पर कॉल करें, या WhatsApp 70153 99355 पर फ़्री डेमो लें।"
+  (you can record this line once and I reuse it)

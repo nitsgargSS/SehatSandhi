@@ -1,0 +1,76 @@
+SERIES 13 — OTHER BUSINESSES ON SEHATSANDHI
+(chemists who deliver, ambulance services, insurance advisors, labs)
+
+------------------------------------------------------------------
+V13.1  Chemists: medicine orders from your own area          (~50 s · chemists)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+केमिस्ट भाई, आपके इलाक़े के लोग दवाई WhatsApp पर मँगवाना चाहते हैं — आप तक कैसे पहुँचें?
+सेहतसंधि पर मरीज़ WhatsApp या ऐप से पर्चे की फ़ोटो भेजकर दवाई मँगवाता है।
+order सिर्फ़ उन फ़ार्मेसियों को जाता है जो उस PIN code में delivery करती हैं — जो पहले accept करे, order उसका।
+आप दाम बताइए, मरीज़ approve करे, पैक कीजिए, भेजिए — हर step मरीज़ को दिखता है।
+delivery पर पैसे, और मरीज़ से रेटिंग।
+आपका delivery वाला सिर्फ़ अपने orders देखता है।
+SHOW
+- Orders panel: new order with Rx photo → price → patient approves on track page → out for delivery → delivered.
+ON SCREEN
+1 Orders on WhatsApp, from your area
+2 Prescription photo
+3 Only your PIN codes · First to accept
+4 Price → Approve → Pack → Deliver
+5 Pay on delivery · Rating
+6 Delivery staff see only theirs
+
+------------------------------------------------------------------
+V13.2  Ambulance services: requests from your area            (~45 s · ambulance owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+एम्बुलेंस वाले भाइयों के लिए — आपके इलाक़े से आने वाली requests, सीधे आप तक।
+मरीज़ WhatsApp पर एम्बुलेंस माँगता है — emergency या पहले से तय समय के लिए। emergency में उसे पहले 108 दिखाया जाता है।
+request उस PIN code की एम्बुलेंस सेवाओं को जाती है — जो पहले accept करे, उसे मरीज़ का फ़ोन और पता।
+रास्ते में, मरीज़ को लिया, ट्रिप पूरी — परिवार एक link पर ड्राइवर, गाड़ी और पहुँचने का समय देखता है।
+SHOW
+- Trips panel; ambulance track page on a phone.
+ON SCREEN
+1 Requests from your area
+2 Emergency or scheduled · 108 shown first
+3 First to accept gets the details
+4 Family tracks driver and ETA
+
+------------------------------------------------------------------
+V13.3  Insurance advisors: genuine leads, one advisor each     (~45 s · licensed advisors)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+health insurance advisors — आपके इलाक़े में जो लोग insurance के बारे में पूछ रहे हैं, उनकी lead सीधे आपको।
+मरीज़ WhatsApp पर advisor से बात करने के लिए कहता है — lead उस इलाक़े के advisors को जाती है।
+जो पहले accept करे, lead सिर्फ़ उसकी — किसी और को नहीं बेची जाती।
+जुड़ने के लिए IRDAI licence या POSP code ज़रूरी — ग्राहक को आपका licence दिखता है।
+lead का नतीजा दर्ज कीजिए, और कोई lead असली न लगे तो रिपोर्ट कीजिए।
+SHOW
+- Leads panel; insurance track page showing licence.
+ON SCREEN
+1 People asking about insurance nearby
+2 Lead to advisors in that area
+3 First to accept · Exclusive
+4 IRDAI licence / POSP required
+5 Record outcome · Report fake leads
+
+------------------------------------------------------------------
+V13.4  Labs: tests booked on WhatsApp                          (~40 s · labs)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+लैब वालों के लिए — मरीज़ WhatsApp पर ही टेस्ट या package चुनकर बुक करता है।
+लैब पर आकर, या घर से सैंपल — और समय भी वहीं चुनता है।
+आपके पास बुकिंग, रिपोर्ट WhatsApp पर, और repeat टेस्ट के reminders — सब एक जगह।
+और हॉस्पिटल आपको सीधे टेस्ट भेज सकते हैं — हिसाब दोनों business के बीच, साफ़-सुथरा।
+SHOW
+- Bot: lab test booking; Lab panel; partner order.
+ON SCREEN
+1 Tests booked on WhatsApp
+2 At the lab or at home · Pick a time
+3 Bookings · Reports · Reminders
+4 Hospitals send you tests directly

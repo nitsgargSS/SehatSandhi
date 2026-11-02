@@ -1,0 +1,126 @@
+SERIES 11 — GROW YOUR PRACTICE (everyone)
+
+------------------------------------------------------------------
+V11.1  Be found by families nearby                          (~40 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+आपके इलाक़े में कोई "पास में आँखों का डॉक्टर" ढूँढ रहा है — क्या आप दिखते हैं?
+सेहतसंधि पर आपका क्लिनिक आपके आस-पास के PIN codes में दिखता है — WhatsApp पर भी, website पर भी।
+आपकी प्रोफ़ाइल — फ़ोटो, qualification, अनुभव, भाषाएँ। रजिस्ट्रेशन हमारी टीम verify करती है।
+और आपको दिखता है — कितनी बार आप search में आए, कितनों ने प्रोफ़ाइल खोली, कितनों ने बुक किया।
+SHOW
+- Public profile; listing report funnel.
+ON SCREEN
+1 Do you show up nearby?
+2 Listed for your PIN codes
+3 Verified profile
+4 Seen · Opened · Booked
+
+------------------------------------------------------------------
+V11.2  Three QR codes for your clinic                        (~40 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+आपके क्लिनिक के लिए तीन QR codes — हर एक का अलग काम।
+पहला — बुकिंग: मरीज़ स्कैन करे और आपसे appointment ले।
+दूसरा — रिसेप्शन पर ख़ुद रजिस्ट्रेशन, भीड़ के समय।
+तीसरा — review, ख़ुश मरीज़ जाते-जाते रेटिंग दे दे।
+हिंदी-English का A4 पोस्टर तैयार — प्रिंट कीजिए और दीवार पर लगाइए।
+SHOW
+- QR card with three codes; A4 poster print.
+ON SCREEN
+1 Three QR codes
+2 Booking
+3 Self-registration
+4 Review
+5 A4 poster, Hindi + English
+
+------------------------------------------------------------------
+V11.3  Ratings that build trust                              (~40 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+ख़ुश मरीज़ चुपचाप चले जाते हैं — नाराज़ मरीज़ हर जगह बोलते हैं।
+सेहतसंधि में visit के बाद मरीज़ से एक बार रेटिंग माँगी जाती है — WhatsApp पर, 1 से 5 तक।
+QR से भी, या रजिस्टर से "Ask for review" दबाकर।
+reviews असली मरीज़ों के होते हैं, और क्लिनिक उन्हें बदल नहीं सकता — इसीलिए नए मरीज़ उन पर भरोसा करते हैं।
+SHOW
+- Rating on WhatsApp; Reviews card.
+ON SCREEN
+1 Happy patients stay quiet
+2 Asked once, after the visit
+3 QR · Ask for review
+4 Real reviews, nobody can edit
+
+------------------------------------------------------------------
+V11.4  Free camps and offers                                 (~35 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+फ़्री कैंप लगाया — लेकिन आया कौन? सिर्फ़ जिन्हें पोस्टर दिखा।
+सेहतसंधि में कैंप या offer डालिए, अपने PIN codes चुनिए।
+उस इलाक़े में WhatsApp पर डॉक्टर ढूँढने वाले मरीज़ों को आपका कैंप दिखता है, और वहीं बुकिंग।
+SHOW
+- Camps tab; bot showing "camps and offers".
+ON SCREEN
+1 Who came to the camp?
+2 Add a camp · Pick PIN codes
+3 Shown on WhatsApp nearby
+
+------------------------------------------------------------------
+V11.5  A website for your clinic — made from what you entered  (~45 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+आपके क्लिनिक की website बनवाने में हज़ारों रुपये और महीनों का इंतज़ार?
+सेहतसंधि में website पहले से तैयार — आपने जो डॉक्टर, समय और फ़ीस भरी, वही उस पर।
+रेटिंग, कैंप और बुकिंग बटन — सब live, अपने-आप अपडेट।
+अपना logo, रंग, फ़ोटो, हिंदी और English में लिखा, articles।
+और चाहें तो अपने नाम का domain — जैसे आपकाक्लिनिक.com।
+एक पेज की website हर plan के साथ फ़्री — पूरी website और अपना domain, own name plan में।
+SHOW
+- SN Eye Hospital site (www.sehatsandhi.com/s/sneyehospital) scrolling on a phone; Website editor.
+ON SCREEN
+1 Thousands of rupees, months of waiting?
+2 Made from what you entered
+3 Ratings · Camps · Booking, live
+4 Your logo, colours, photos, Hindi
+5 Your own domain
+6 One-page site free · Full site on the own name plan
+
+------------------------------------------------------------------
+V11.6  A post every day, made for you                        (~50 s · everyone)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+Facebook और Instagram पर रोज़ post डालना है — लेकिन समय किसके पास है?
+सेहतसंधि हर दिन आपके लिए post बनाता है — आपके logo, नंबर और speciality के हिसाब से। हिंदी और English में।
+त्योहार पर शुभकामनाएँ, मौसम की बीमारियों पर सलाह, आपके क्लिनिक की सुविधाएँ।
+शाम 7 बजे आपके WhatsApp पर preview — OK, बदलें, या छोड़ें।
+आप कुछ न कहें, तो सुबह 10 बजे Facebook पर post, शाम को Instagram पर।
+हर post की भाषा की जाँच होती है, ताकि medical advertising के नियमों के अंदर रहे।
+SHOW
+- Social posts tab; WhatsApp preview with OK/Change/Skip; post on SN Eye Hospital Facebook.
+ON SCREEN
+1 Who has time to post daily?
+2 Made for you, every day
+3 Festivals · Health tips · Your services
+4 7 PM preview: OK · Change · Skip
+5 10 AM Facebook · Evening Instagram
+6 Checked against advertising rules
+
+------------------------------------------------------------------
+V11.7  Patients come back on time                            (~35 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+जो मरीज़ फ़ॉलो-अप पर नहीं लौटा, वो या तो ठीक हो गया — या किसी और डॉक्टर के पास चला गया।
+सेहतसंधि हर दिन बताता है — किसका फ़ॉलो-अप है, और कौन नहीं आया।
+WhatsApp Pro में reminder अपने-आप, एक दिन पहले — और लिस्ट डाउनलोड करके आप ख़ुद भी बुला सकते हैं।
+SHOW
+- Visit register: follow-ups due / missed; reminder on phone.
+ON SCREEN
+1 Didn't come back?
+2 Due and missed, every day
+3 Automatic reminder (Pro)

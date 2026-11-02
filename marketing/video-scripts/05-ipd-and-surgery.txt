@@ -1,0 +1,145 @@
+SERIES 5 — IPD, WARDS AND SURGERY (nursing homes, hospitals)
+
+------------------------------------------------------------------
+V5.1  Every bed on one screen                              (~40 s · hospitals)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+"सर, general ward में बेड ख़ाली है?" — जवाब के लिए नर्स को वार्ड तक जाना पड़ता है।
+सेहतसंधि में हर वार्ड, हर बेड — भरा या ख़ाली — एक स्क्रीन पर।
+हर बेड का रोज़ का charge पहले से तय, बिल में अपने-आप।
+नया वार्ड या बेड जोड़ना हो — मैनेजर जोड़े, तो मालिक की मंज़ूरी के बाद ही बदलाव।
+SHOW
+- Bed board; daily charge; manager change awaiting owner approval.
+ON SCREEN
+1 "Is a bed free?"
+2 Every ward, every bed
+3 Daily bed charge built in
+4 Changes need the owner's OK
+
+------------------------------------------------------------------
+V5.2  Admission in two minutes                              (~45 s · hospitals)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+मरीज़ को भर्ती करना है — फ़ाइल, रजिस्टर, बेड नंबर, deposit की रसीद...
+सेहतसंधि में — attending डॉक्टर चुनिए, कारण, अंदाज़न डिस्चार्ज की तारीख़, और बेड। हो गया।
+मरीज़ को दूसरे बेड में shift किया? बेड की पूरी हिस्ट्री रहती है, ग़लती हो तो undo।
+वार्ड नोट्स, और ड्रग चार्ट — डॉक्टर दवाई लिखते हैं, नर्स दर्ज करती है कि असल में कब दी।
+SHOW
+- Admit form; move bed; ward notes; drug chart (ordered vs given).
+ON SCREEN
+1 Files, registers, receipts...
+2 Doctor · Reason · Bed — done
+3 Bed moves, with history
+4 Ward notes · Drug chart
+
+------------------------------------------------------------------
+V5.3  Deposits and the running bill                         (~45 s · hospitals)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+डिस्चार्ज के दिन परिवार को बिल दिखा — और झगड़ा शुरू। "इतना कैसे हो गया?"
+सेहतसंधि में बेड, दवाई, लैब, procedure — हर charge उसी दिन बिल में जुड़ता है।
+deposit लीजिए, रसीद प्रिंट कीजिए — बाक़ी balance हर वक़्त सामने।
+deposit कम होने लगे, तो सिस्टम पहले ही चेतावनी देता है — आप तय कीजिए कितने पर।
+परिवार को रोज़ पता रहे, तो आख़िरी दिन कोई surprise नहीं।
+SHOW
+- Stay money: deposit + receipt; running balance; low-deposit warning setting.
+ON SCREEN
+1 Discharge-day arguments
+2 Every charge, the same day
+3 Deposit · Receipt · Balance
+4 Low-deposit warning
+5 No surprises at discharge
+
+------------------------------------------------------------------
+V5.4  Ward medicines from your own pharmacy                 (~45 s · hospitals with a pharmacy)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+वार्ड से दवाई चाहिए — नर्स पर्ची लिखती है, कोई फ़ार्मेसी भागता है, और बिल में जुड़ना भूल जाता है।
+सेहतसंधि में नर्स वार्ड से ही फ़ार्मेसी को request भेजती है।
+फ़ार्मासिस्ट स्टॉक से देता है, और दवाई सीधे मरीज़ के हॉस्पिटल बिल में।
+दवाई वापस आई? पूरी या थोड़ी — वापसी भी दर्ज, बिल भी ठीक।
+डिस्चार्ज पर पूरी स्टे की दवाइयों का तारीख़-वार statement, एक पेज में।
+SHOW
+- Ward request → Ward pharmacy accept → issue → appears on stay bill; return; date-wise statement.
+ON SCREEN
+1 Slips, running, forgotten charges
+2 Request from the ward
+3 Issued onto the hospital bill
+4 Returns, full or part
+5 Date-wise medicine statement
+
+------------------------------------------------------------------
+V5.5  OT register                                           (~35 s · surgical hospitals)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+हर ऑपरेशन का पूरा रिकॉर्ड — major या minor, planned या emergency।
+सर्जन — visiting सर्जन भी — anaesthesia, findings, implant, specimen, complications।
+और ऑपरेशन के बाद की हिदायतें।
+रजिस्टर का पन्ना नहीं खोएगा — सब मरीज़ की फ़ाइल में, ढूँढने लायक़।
+SHOW
+- OT register form.
+ON SCREEN
+1 Every operation recorded
+2 Surgeon · Anaesthesia · Implants
+3 Post-op instructions
+4 Searchable, never lost
+
+------------------------------------------------------------------
+V5.6  Surgery day, well prepared                             (~55 s · surgical hospitals · needs WhatsApp Pro)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+ऑपरेशन के दिन मरीज़ खाना खाकर आ गया — और ऑपरेशन टल गया। आपके साथ भी हुआ है?
+सेहतसंधि में ऑपरेशन की तारीख़ तय कीजिए, और एक "message plan" चुनिए।
+ऑपरेशन से इतने दिन पहले, उसी दिन, और बाद में — मरीज़ को WhatsApp पर आपके अपने शब्दों में मैसेज।
+"रात 12 बजे के बाद कुछ न खाएँ", "सुबह 7 बजे पहुँचें", "दवाई ऐसे डालें" — जो आप लिखें।
+किसी मरीज़ के लिए मैसेज बदलना या छोड़ना हो — कर सकते हैं।
+ऑपरेशन की तारीख़ बदली? सारे मैसेज अपने-आप नई तारीख़ पर।
+SHOW
+- Planned surgeries: pick date + plan; message plan editor (before/on day/after); move date.
+ON SCREEN
+1 Came after eating — surgery postponed
+2 Plan the date + a message plan
+3 Before · On the day · After
+4 In your own words
+5 Edit or skip per patient
+6 Date moves, messages move
+
+------------------------------------------------------------------
+V5.7  Aftercare that patients actually follow                (~40 s · surgical hospitals · needs WhatsApp Pro)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+ऑपरेशन अच्छा हुआ, लेकिन घर जाकर मरीज़ ड्रॉप डालना भूल गया — और परेशानी।
+सेहतसंधि ऑपरेशन के बाद भी तय दिनों पर मरीज़ को याद दिलाता है — दवाई, ड्रेसिंग, टाँके, चेक-अप।
+मरीज़ को लगता है कि हॉस्पिटल उसका ध्यान रख रहा है — और वो दोबारा आप ही के पास आता है।
+SHOW
+- Aftercare messages on a phone (day 1, day 7).
+ON SCREEN
+1 Forgot the drops at home
+2 Reminders after surgery
+3 Patients feel cared for
+
+------------------------------------------------------------------
+V5.8  Discharge papers in minutes                            (~45 s · hospitals)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+डिस्चार्ज के दिन मरीज़ का परिवार तीन घंटे इंतज़ार करता है — समरी अभी टाइप हो रही है।
+सेहतसंधि में डिस्चार्ज समरी ज़्यादातर पहले से भरी हुई — भर्ती से लेकर आज तक का सब।
+diagnosis, हॉस्पिटल में क्या हुआ, आगे चलने वाली दवाइयाँ, "इन हालात में तुरंत लौटें", और फ़ॉलो-अप।
+डॉक्टर देखें, ठीक करें, issue करें — और समरी व आख़िरी बिल एक साथ परिवार के WhatsApp पर।
+बाद में सुधार करना हो, तो नया version — पुराना भी रिकॉर्ड में।
+SHOW
+- Discharge summary auto-filled → issue → WhatsApp; final bill.
+ON SCREEN
+1 Families wait 3 hours
+2 Mostly filled in already
+3 Medicines · Warning signs · Follow-up
+4 Summary + final bill on WhatsApp
+5 Corrections = new version

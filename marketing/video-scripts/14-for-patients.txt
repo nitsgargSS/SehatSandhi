@@ -1,0 +1,73 @@
+SERIES 14 — FOR PATIENTS AND FAMILIES
+(Doctors share these with their patients, so they're short and simple.
+Mentions of "the app": post only once the app is live on Google Play;
+until then say "sehatsandhi.com" instead.)
+
+------------------------------------------------------------------
+V14.1  All your health records in one place                  (~40 s · patients)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+पिछले साल की रिपोर्ट कहाँ रखी थी? वो पर्चा कहाँ गया?
+सेहतसंधि पर आपके सारे रिकॉर्ड एक जगह — हर उस क्लिनिक के, जो सेहतसंधि पर है।
+visits, पर्चे, बिल, लैब रिपोर्ट, डिस्चार्ज समरी।
+login के लिए बस अपना WhatsApp नंबर — एक code आता है, कोई password नहीं।
+SHOW
+- sehatsandhi.com/my on a phone: records list.
+ON SCREEN
+1 Where did that report go?
+2 All your records, one place
+3 Visits · Prescriptions · Bills · Reports
+4 Log in with a WhatsApp code
+
+------------------------------------------------------------------
+V14.2  Book a doctor or a test on WhatsApp                   (~40 s · patients)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+डॉक्टर को दिखाना है — लाइन में लगने की ज़रूरत नहीं।
+WhatsApp पर 70153 99355 पर "नमस्ते" लिखिए — अपना इलाक़ा बताइए।
+पास के डॉक्टर और उनका ख़ाली समय — एक टैप में बुकिंग।
+लैब टेस्ट भी — लैब पर जाकर, या घर से सैंपल।
+और पास के फ़्री कैंप और offers भी वहीं।
+SHOW
+- Bot on a phone: hello → area → doctor → time → booked.
+ON SCREEN
+1 No standing in line
+2 WhatsApp 70153 99355
+3 Doctors nearby · Free times
+4 Lab tests at home
+5 Free camps nearby
+
+------------------------------------------------------------------
+V14.3  Medicines, ambulance and insurance help                (~45 s · patients)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+दवाई चाहिए — पर्चे की फ़ोटो भेजिए, पास की फ़ार्मेसी दाम बताती है, आप हाँ कहें तो घर पर delivery।
+एम्बुलेंस चाहिए — emergency में पहले 108 पर कॉल करें। पहले से तय समय के लिए, सेहतसंधि पर बुक करें और ड्राइवर कहाँ है, link पर देखें।
+health insurance के बारे में पूछना है — licence वाला advisor आपको फ़ोन करेगा।
+सब WhatsApp पर — 70153 99355।
+SHOW
+- Order track page; ambulance track page with 108 button; insurance track page.
+ON SCREEN
+1 Medicines: send the prescription photo
+2 Emergency? Call 108 first
+3 Track the ambulance
+4 Licensed insurance advisor
+5 WhatsApp 70153 99355
+
+------------------------------------------------------------------
+V14.4  Check in at reception from your phone                  (~30 s · patients)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+क्लिनिक पहुँचे, और रिसेप्शन पर लंबी लाइन?
+दीवार पर लगा QR स्कैन कीजिए — अपना नाम और नंबर भरिए, हिंदी या English में।
+रिसेप्शन को पता चल जाता है कि आप आ गए — बस टोकन लीजिए।
+SHOW
+- Scan QR → check-in form → done.
+ON SCREEN
+1 Long line at reception?
+2 Scan the QR on the wall
+3 Just collect your token
