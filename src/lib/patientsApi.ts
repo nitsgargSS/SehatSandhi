@@ -733,6 +733,21 @@ export async function registerPatient(businessId: string, p: NewPatient): Promis
   return data as string
 }
 
+/**
+ * 2 Nov 2026: a patient put on the clinic's list for WhatsApp messages — typed in
+ * or from an Excel sheet — with no visit. Source 'import', so no automatic
+ * welcome message goes out (wa_auto triggers skip imports). Works without the
+ * OPD software: sehat_register_patient asks only that the caller runs the clinic.
+ */
+export async function addListPatient(businessId: string, p: { fullName: string; phone: string; pinCode?: string }): Promise<string> {
+  const { data, error } = await supabase.rpc('sehat_register_patient', {
+    p_business: businessId, p_phone: p.phone, p_full_name: p.fullName,
+    p_relation: 'self', p_source: 'import', p_pin_code: p.pinCode || null,
+  })
+  if (error) throw new Error(error.message)
+  return data as string
+}
+
 /** 0267: set or clear the other name a patient goes by. Logged like any correction. */
 export async function setAlsoKnownAs(businessId: string, memberId: string, name: string) {
   const { error } = await supabase.rpc('sehat_set_also_known_as', { p_business: businessId, p_member: memberId, p_name: name.trim() || null })

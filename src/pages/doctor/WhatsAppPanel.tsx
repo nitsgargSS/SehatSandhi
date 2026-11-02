@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, Wallet, Send, CheckSquare, Square } from 'lucide-react'
+import WhatsAppPatients from './WhatsAppPatients'
 import { shortDate, dateTime } from '../../lib/format'
 import PayListingPanel from './PayListingPanel'
 import { supabase } from '../../lib/supabase'
@@ -263,7 +264,7 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   // One part of the tab at a time; Pro clinics open on their automatic messages.
-  const [section, setSection] = useState<'send' | 'pro' | 'wallet' | 'history' | 'terms'>('send')
+  const [section, setSection] = useState<'send' | 'patients' | 'pro' | 'wallet' | 'history' | 'terms'>('send')
   const [sectionSet, setSectionSet] = useState(false)
   useEffect(() => { if (!sectionSet && account) { setSectionSet(true); if (account.plan === 'pro') setSection('pro') } }, [account, sectionSet])
 
@@ -339,6 +340,8 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
         </>
       )}
 
+      {section === 'patients' && <WhatsAppPatients businessId={businessId} />}
+
       {section === 'pro' && (
         account?.plan === 'pro' ? (
           <>
@@ -398,8 +401,8 @@ function WhatsAppWorkspace({ businessId, businessName, prefill, banner, business
   )
 }
 
-const SECTIONS: ['send' | 'pro' | 'wallet' | 'history' | 'terms', string][] = [
-  ['send', 'Send a broadcast'], ['pro', 'Automatic & own number'], ['wallet', 'Wallet'], ['history', 'Sent'], ['terms', 'Terms'],
+const SECTIONS: ['send' | 'patients' | 'pro' | 'wallet' | 'history' | 'terms', string][] = [
+  ['send', 'Send a broadcast'], ['patients', 'Patient list'], ['pro', 'Automatic & own number'], ['wallet', 'Wallet'], ['history', 'Sent'], ['terms', 'Terms'],
 ]
 
 // 0259: the add-on's free messages this month — used first, before the wallet.

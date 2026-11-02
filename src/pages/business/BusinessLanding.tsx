@@ -158,7 +158,7 @@ export default function BusinessLanding() {
       <CareSystems catalogue={catalogue} />
 
       {/* 0282/0283: a website for every business; the own name plan makes it theirs. */}
-      <WebsitePlans />
+      <WebsitePlans catalogue={catalogue} />
 
       {/* The full feature list: multi-clinic doctors, the doctor's own practice,
           the pharmacy, billing, reports, the team. */}
