@@ -396,7 +396,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   // Priced by business type (0117)? Then the server's own list and lines are
   // what is shown, and "commission only" means this type's subscription is ₹0.
   const typePriced = serverPrice?.pricingSource === 'type'
-  const onCommission = typePriced ? (serverPrice?.subscriptionTotal ?? 0) === 0 : onCommissionPlan
+  // 0309: the marketing plan is a ₹0 subscription too, but it is not free —
+  // it pays for WhatsApp Pro and/or the website.
+  const onCommission = typePriced ? (serverPrice?.subscriptionTotal ?? 0) === 0 && !marketing : onCommissionPlan
   // Even a commission-only business pays today if it chose WhatsApp.
   const payableToday = typePriced ? (serverPrice?.tax.grandTotal ?? 0) : (onCommission ? 0 : price.tax?.grandTotal ?? price.total)
   // The plan quote, when the plans by doctors priced this. Its term totals are
