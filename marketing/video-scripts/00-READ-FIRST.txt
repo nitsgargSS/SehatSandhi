@@ -20,7 +20,7 @@ File                               Videos  For
 13-pharmacy-ambulance-labs.txt       3     chemists, ambulance services, labs
 14-for-patients.txt                  4     patients and families
                                     ----
-                                    84 videos
+                                    83 videos
 
 ==================================================================
 WHO RECORDS WHAT (each video has a FORMAT line)
