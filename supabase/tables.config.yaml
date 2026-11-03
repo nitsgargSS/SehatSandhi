@@ -321,6 +321,30 @@ tables:
   intl_packages:
     class: isolated
     purgeOrder: 104.2
+  # 0313: documents, their history, audit links and backup records.
+  intl_check_items:
+    class: sync
+    key: [key]
+    syncOrder: 97
+  intl_audit_log:
+    class: isolated
+    purgeOrder: 104.01
+  intl_audit_links:
+    class: isolated
+    purgeOrder: 104.02
+  intl_backup_files:
+    class: isolated
+    purgeOrder: 104.03
+    pk: path
+  intl_backup_runs:
+    class: isolated
+    purgeOrder: 104.04
+  intl_doc_events:
+    class: isolated
+    purgeOrder: 104.21
+  intl_documents:
+    class: isolated
+    purgeOrder: 104.22
   intl_hospitals:
     class: isolated
     purgeOrder: 104.3

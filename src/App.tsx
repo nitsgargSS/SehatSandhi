@@ -66,6 +66,7 @@ const IntlHospital = lazy(() => IntlData().then(m => ({ default: m.IntlHospital 
 const IntlCosts = lazy(() => IntlData().then(m => ({ default: m.IntlCosts })))
 const IntlQuote = lazy(() => IntlQuoteMod().then(m => ({ default: m.IntlQuote })))
 const IntlTrack = lazy(() => IntlQuoteMod().then(m => ({ default: m.IntlTrack })))
+const AuditPage = lazy(() => import('./pages/international/AuditPage'))
 const Contact = lazy(() => import('./pages/Contact'))
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'))
 const Terms = lazy(() => import('./pages/Terms'))
@@ -189,7 +190,7 @@ const WhatsAppFloat = () => {
   const { pathname } = useLocation()
   // A clinic's website (/s/…) books with that clinic, not Sehatsandhi's assistant.
   // /international has its own button, to the international coordinator's number.
-  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/') || pathname.startsWith('/business/print/') || pathname.startsWith('/international')) return null
+  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/') || pathname.startsWith('/business/print/') || pathname.startsWith('/international') || pathname.startsWith('/audit/')) return null
   return (
     <a href={waLink()}
        target="_blank" rel="noreferrer"
@@ -301,6 +302,7 @@ export default function App() {
           <Route path="/international/faq" element={<IntlFaq />} />
           <Route path="/international/quote" element={<IntlQuote />} />
           <Route path="/international/track/:token" element={<IntlTrack />} />
+          <Route path="/audit/:token" element={<AuditPage />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/my" element={<MyHome />} />

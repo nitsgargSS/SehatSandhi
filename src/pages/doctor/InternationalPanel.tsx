@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Globe2, Upload, FileCheck2, Trash2, Pencil, CheckCircle2, AlertTriangle, ExternalLink } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import {
-  canApply, loadMine, saveProfile, submitApplication, savePackage, deletePackage, uploadDoc, docUrl,
-  type MyHospital, type MyPackage, type Procedure, type CheckState,
+  canApply, loadMine, loadDocs, saveProfile, submitApplication, savePackage, deletePackage, uploadDoc, docUrl,
+  type MyHospital, type MyPackage, type Procedure, type CheckState, type IntlDoc, type Missing, type DocEvent,
 } from '../../lib/intlApi'
 import { CHECKLIST, AGREEMENT_POINTS, AGREEMENT_VERSION, inr } from '../../lib/intlContent'
 
@@ -40,11 +40,18 @@ export default function InternationalPanel({ businessId }: { businessId: string 
   const [check, setCheck] = useState<Record<string, CheckState>>({})
   const [signatory, setSignatory] = useState('')
   const [agree, setAgree] = useState(false)
+  // 0313: documents are their own records; readiness comes from the database.
+  const [docs, setDocs] = useState<IntlDoc[]>([])
+  const [forSubmit, setForSubmit] = useState<Missing[]>([])
+  const [forList, setForList] = useState<Missing[]>([])
+  const [events, setEvents] = useState<DocEvent[]>([])
+  const [expiry, setExpiry] = useState<Record<string, string>>({})
 
   const reload = async () => {
     try {
-      const r = await loadMine(businessId)
+      const [r, d] = await Promise.all([loadMine(businessId), loadDocs(businessId)])
       setH(r.hospital); setPkgs(r.packages); setProcs(r.procedures)
+      setDocs(d.docs); setForSubmit(d.forSubmit); setForList(d.forList); setEvents(d.events)
       const x = r.hospital
       if (x) {
         setForm({
@@ -77,25 +84,30 @@ export default function InternationalPanel({ businessId }: { businessId: string 
     setBusy(false)
   }
   const setItem = (k: string, v: Partial<CheckState>) => setCheck(c => ({ ...c, [k]: { ...c[k], ...v } }))
-  const upload = async (k: string, file: File) => {
+  const upload = async (k: string, needsExpiry: boolean, file: File) => {
     if (file.size > 10 * 1024 * 1024) { setErr('Files up to 10 MB, please.'); return }
-    setBusy(true); setErr('')
+    if (needsExpiry && !expiry[k]) { setErr('Enter the expiry date first, then upload.'); return }
+    setBusy(true); setErr(''); setMsg('')
     try {
-      const path = await uploadDoc(businessId, k, file)
-      const next = { ...check, [k]: { ...check[k], doc: path, ok: true } }
-      setCheck(next)
-      await saveProfile(businessId, payload(next))
-      setMsg('Document uploaded.')
+      // Save the rest of the form first, so ticks are not lost on reload.
+      await saveProfile(businessId, payload())
+      await uploadDoc(businessId, k, file, expiry[k] || null)
+      setExpiry(x => ({ ...x, [k]: '' }))
+      setMsg('Document uploaded. Sehatsandhi will check it.')
+      await reload()
     } catch (e) { setErr((e as Error).message) }
     setBusy(false)
   }
+  const current = (k: string) => docs.find(d => d.item_key === k && d.status !== 'replaced')
+  const older = (k: string) => docs.filter(d => d.item_key === k && d.status === 'replaced').length
   const open = async (path: string) => { const u = await docUrl(path); if (u) window.open(u, '_blank', 'noopener') }
 
+  // Live for ticks being edited; the database's own check decides on save.
   const progress = useMemo(() => CHECKLIST.map(g => {
     const req = g.items.filter(i => !i.optional)
-    const done = req.filter(i => check[i.key]?.ok && (!i.doc || check[i.key]?.doc)).length
+    const done = req.filter(i => i.doc ? !forSubmit.some(m => m.key === i.key) : !!check[i.key]?.ok).length
     return { key: g.key, done, total: req.length }
-  }), [check])
+  }), [check, forSubmit])
   const missingRequired = progress.reduce((n, p) => n + (p.total - p.done), 0)
 
   const submit = async () => {
@@ -130,6 +142,9 @@ export default function InternationalPanel({ businessId }: { businessId: string 
           <span className={`rounded-full px-3 py-1 text-sm font-semibold ${st.tone}`}>{st.label}{h?.star ? ` · ${h.star}-star` : ''}</span>
         </div>
         <p className="mt-3 text-sm text-gray-700">{st.text}</p>
+        {h && h.status !== 'draft' && forList.length > 0 && (
+          <p className="mt-2 text-sm text-gray-600">Before your listing can open: {forList.length} {forList.length === 1 ? 'item' : 'items'} still {forList.every(m => m.why.startsWith('Waiting')) ? 'waiting for Sehatsandhi to check' : 'need attention — see the checklist'}.</p>
+        )}
         {h?.admin_note && <p className="mt-2 text-sm bg-amber-50 text-amber-900 rounded-lg p-3"><b>Note from Sehatsandhi:</b> {h.admin_note}</p>}
         {h?.status === 'listed' && <a href="/international/hospitals" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-teal-700 font-semibold">See the portal <ExternalLink className="w-4 h-4" /></a>}
       </div>
@@ -170,7 +185,7 @@ export default function InternationalPanel({ businessId }: { businessId: string 
       <div className="card">
         <h3 className="font-bold text-navy-700 mb-1">2. Checklist and documents</h3>
         <p className="text-sm text-gray-500 mb-4">
-          {missingRequired === 0 ? 'Every required item is ticked.' : `${missingRequired} required ${missingRequired === 1 ? 'item' : 'items'} left.`} Tick what you have and upload the document where asked (PDF or photo, up to 10 MB).
+          {missingRequired === 0 ? 'Every required item is done.' : `${missingRequired} required ${missingRequired === 1 ? 'item' : 'items'} left.`} Tick what you have, and upload each document with its expiry date (PDF or photo, up to 10 MB). Every upload is kept; Sehatsandhi checks each one.
         </p>
         <div className="space-y-5">
           {CHECKLIST.map(g => {
@@ -186,23 +201,49 @@ export default function InternationalPanel({ businessId }: { businessId: string 
                   <ul className="divide-y">
                     {g.items.map(i => {
                       const s = check[i.key] ?? {}
+                      const d = i.doc ? current(i.key) : undefined
+                      const miss = forSubmit.find(m => m.key === i.key)
+                      const tone = !d ? '' : d.status === 'verified' ? 'bg-green-50 text-green-700' : d.status === 'rejected' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800'
+                      const word = !d ? '' : d.status === 'verified' ? 'Checked' : d.status === 'rejected' ? 'Rejected' : 'Waiting for check'
                       return (
-                        <li key={i.key} className="py-2.5 grid gap-2 md:grid-cols-[1fr_auto] items-center text-sm">
-                          <label className="flex gap-2 items-start">
-                            <input type="checkbox" className="mt-1" checked={!!s.ok} onChange={e => setItem(i.key, { ok: e.target.checked })} />
-                            <span>{i.label}{i.optional && <span className="text-gray-400"> (if it applies)</span>}</span>
-                          </label>
-                          <div className="flex items-center gap-2 flex-wrap md:justify-end">
-                            {i.expires && <input type="date" value={s.expires ?? ''} onChange={e => setItem(i.key, { expires: e.target.value })} className="border rounded-lg px-2 py-1 text-xs" title="Expiry date" />}
-                            {i.doc && (s.doc
-                              ? <button onClick={() => open(s.doc!)} className="inline-flex items-center gap-1 text-teal-700 text-xs font-semibold"><FileCheck2 className="w-4 h-4" /> View</button>
-                              : null)}
-                            {i.doc && (
-                              <label className="inline-flex items-center gap-1 text-xs font-semibold cursor-pointer text-navy-700 border rounded-lg px-2 py-1">
-                                <Upload className="w-3.5 h-3.5" /> {s.doc ? 'Replace' : 'Upload'}
-                                <input type="file" accept=".pdf,image/*" className="hidden" disabled={busy}
-                                  onChange={e => { const f = e.target.files?.[0]; if (f) upload(i.key, f); e.target.value = '' }} />
+                        <li key={i.key} className="py-3 text-sm">
+                          <div className="grid gap-2 md:grid-cols-[1fr_auto] items-start">
+                            {i.doc ? (
+                              <div>
+                                <p><b className="text-navy-700">{i.key}</b> {i.label}{i.optional && <span className="text-gray-400"> (if it applies)</span>}</p>
+                                {d && (
+                                  <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                                    <span className={`rounded-full px-2 py-0.5 font-semibold ${tone}`}>{word}</span>
+                                    <span className="text-gray-500">{d.file_name ?? 'file'}{d.expires ? ` · expires ${d.expires}` : ''} · uploaded {new Date(d.uploaded_at).toLocaleDateString('en-IN')}</span>
+                                    <button onClick={() => open(d.path)} className="inline-flex items-center gap-1 text-teal-700 font-semibold"><FileCheck2 className="w-3.5 h-3.5" /> View</button>
+                                    {older(i.key) > 0 && <span className="text-gray-400">{older(i.key)} earlier version(s) kept</span>}
+                                  </p>
+                                )}
+                                {d?.status === 'rejected' && d.reason && <p className="mt-1 text-xs text-red-700">Reason: {d.reason}. Please upload a corrected document.</p>}
+                                {!i.optional && miss && !d && <p className="mt-1 text-xs text-amber-700">{miss.why}</p>}
+                                {!i.optional && miss && d && d.status !== 'rejected' && <p className="mt-1 text-xs text-amber-700">{miss.why}</p>}
+                              </div>
+                            ) : (
+                              <label className="flex gap-2 items-start">
+                                <input type="checkbox" className="mt-1" checked={!!s.ok} onChange={e => setItem(i.key, { ok: e.target.checked })} />
+                                <span><b className="text-navy-700">{i.key}</b> {i.label}{i.optional && <span className="text-gray-400"> (if it applies)</span>}</span>
                               </label>
+                            )}
+                            {i.doc && (
+                              <div className="flex items-center gap-2 flex-wrap md:justify-end">
+                                {i.expires && (
+                                  <label className="text-xs text-gray-500 flex items-center gap-1">Expires
+                                    <input type="date" value={expiry[i.key] ?? ''} min={new Date().toISOString().slice(0, 10)}
+                                      onChange={e => setExpiry(x => ({ ...x, [i.key]: e.target.value }))} className="border rounded-lg px-2 py-1 text-xs" />
+                                  </label>
+                                )}
+                                <label className={`inline-flex items-center gap-1 text-xs font-semibold border rounded-lg px-2 py-1 ${busy || (i.expires && !expiry[i.key]) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer text-navy-700'}`}
+                                  title={i.expires && !expiry[i.key] ? 'Enter the expiry date first' : undefined}>
+                                  <Upload className="w-3.5 h-3.5" /> {d ? 'Upload new' : 'Upload'}
+                                  <input type="file" accept=".pdf,image/*" className="hidden" disabled={busy || (!!i.expires && !expiry[i.key])}
+                                    onChange={e => { const f = e.target.files?.[0]; if (f) upload(i.key, !!i.expires, f); e.target.value = '' }} />
+                                </label>
+                              </div>
                             )}
                           </div>
                         </li>
@@ -214,7 +255,18 @@ export default function InternationalPanel({ businessId }: { businessId: string 
             )
           })}
         </div>
-        <button onClick={() => save()} disabled={busy} className="btn-teal !px-5 !py-2 text-sm mt-4">Save checklist</button>
+        <button onClick={() => save()} disabled={busy} className="btn-teal !px-5 !py-2 text-sm mt-4">Save ticks</button>
+        {events.length > 0 && (
+          <details className="mt-4 text-sm">
+            <summary className="cursor-pointer text-navy-700 font-semibold">History ({events.length})</summary>
+            <ul className="mt-2 divide-y">
+              {events.slice(0, 50).map(e => (
+                <li key={e.id} className="py-1.5 flex gap-3"><span className="text-gray-400 whitespace-nowrap">{new Date(e.at).toLocaleString('en-IN')}</span>
+                  <span>{e.item_key ? <b>{e.item_key} </b> : null}{e.action.replace('_', ' ')}{e.note ? ` — ${e.note}` : ''}<span className="text-gray-400"> · {e.actor_name}</span></span></li>
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
 
       {/* 3. Prices */}
@@ -234,8 +286,14 @@ export default function InternationalPanel({ businessId }: { businessId: string 
             <span />
             <label className="flex gap-2 items-start sm:col-span-2"><input type="checkbox" className="mt-1" checked={agree} onChange={e => setAgree(e.target.checked)} />
               I accept these terms on behalf of the hospital and confirm the details and documents above are true.</label>
-            {missingRequired > 0 && <p className="sm:col-span-2 text-amber-800 bg-amber-50 rounded-lg p-2 flex gap-2"><AlertTriangle className="w-4 h-4 mt-0.5" /> {missingRequired} required checklist {missingRequired === 1 ? 'item is' : 'items are'} not ticked yet. You can still send; we will ask for them in the review.</p>}
-            <button onClick={submit} disabled={busy} className="btn-teal !px-5 !py-2 text-sm sm:col-span-2 justify-self-start">Accept and send for review</button>
+            {forSubmit.length > 0 && (
+              <div className="sm:col-span-2 text-amber-900 bg-amber-50 rounded-lg p-3">
+                <p className="flex gap-2 font-semibold"><AlertTriangle className="w-4 h-4 mt-0.5" /> {forSubmit.length} required {forSubmit.length === 1 ? 'item' : 'items'} to finish before you can send (after saving):</p>
+                <ul className="mt-1 ml-6 list-disc">{forSubmit.slice(0, 8).map(m => <li key={m.key}><b>{m.key}</b> — {m.why}</li>)}</ul>
+                {forSubmit.length > 8 && <p className="ml-6">and {forSubmit.length - 8} more</p>}
+              </div>
+            )}
+            <button onClick={submit} disabled={busy || forSubmit.length > 0} className="btn-teal !px-5 !py-2 text-sm sm:col-span-2 justify-self-start disabled:opacity-50">Accept and send for review</button>
           </div>
         )}
       </div>

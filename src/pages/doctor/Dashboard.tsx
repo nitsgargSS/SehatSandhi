@@ -147,7 +147,7 @@ export default function DoctorDashboard() {
   // six tabs has what they need.
   // 0280: a billing message links straight to ?tab=plan.
   const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages' | 'website' | 'social' | 'international'>(
-    () => (['plan', 'whatsapp', 'bills', 'website', 'social'].includes(new URLSearchParams(window.location.search).get('tab') ?? '')
+    () => (['plan', 'whatsapp', 'bills', 'website', 'social', 'international'].includes(new URLSearchParams(window.location.search).get('tab') ?? '')
       ? new URLSearchParams(window.location.search).get('tab') as 'plan' : 'today'))
 
   // What this login is at this business, and whether the database has a role

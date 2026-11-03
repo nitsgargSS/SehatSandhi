@@ -156,13 +156,82 @@ export async function savePackage(businessId: string, p: Record<string, unknown>
 export async function deletePackage(businessId: string, id: string) {
   const { error } = await supabase.rpc('sehat_intl_package_delete', { p_business: businessId, p_id: id }); fail(error)
 }
-export async function uploadDoc(businessId: string, itemKey: string, file: File): Promise<string> {
+/** Upload a document: the file goes to the private bucket, then the database
+ *  records it (0313) — which checks the path, the expiry and the item. */
+export async function uploadDoc(businessId: string, itemKey: string, file: File, expires: string | null): Promise<string> {
   const ext = (file.name.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'pdf'
   const path = `${businessId}/${itemKey}-${Date.now()}.${ext}`
   const { error } = await supabase.storage.from('intl-docs').upload(path, file, { upsert: false, contentType: file.type || undefined })
   fail(error)
-  return path
+  const { data, error: e2 } = await supabase.rpc('sehat_intl_doc_add', {
+    p_business: businessId, p_item: itemKey, p_path: path, p_expires: expires || null, p_name: file.name.slice(0, 200), p_size: file.size,
+  })
+  fail(e2)
+  return data as string
 }
+export interface IntlDoc {
+  id: string; business_id: string; item_key: string; path: string; file_name: string | null; size_bytes: number | null
+  expires: string | null; status: 'pending' | 'verified' | 'rejected' | 'replaced'; reason: string | null
+  uploaded_by_name: string | null; uploaded_at: string; reviewed_by_name: string | null; reviewed_at: string | null
+}
+export interface Missing { key: string; label: string; why: string }
+export interface DocEvent { id: number; business_id: string; document_id: string | null; item_key: string | null; action: string; note: string | null; actor_name: string | null; at: string }
+export async function loadDocs(businessId: string) {
+  const [d, sub, list, ev] = await Promise.all([
+    supabase.from('intl_documents').select('*').eq('business_id', businessId).order('uploaded_at', { ascending: false }),
+    supabase.rpc('sehat_intl_readiness', { p_business: businessId, p_level: 'submit' }),
+    supabase.rpc('sehat_intl_readiness', { p_business: businessId, p_level: 'list' }),
+    supabase.from('intl_doc_events').select('*').eq('business_id', businessId).order('at', { ascending: false }).limit(200),
+  ])
+  if (d.error) throw d.error
+  return {
+    docs: (d.data ?? []) as IntlDoc[], forSubmit: (sub.data ?? []) as Missing[], forList: (list.data ?? []) as Missing[],
+    events: (ev.data ?? []) as DocEvent[],
+  }
+}
+export async function reviewDoc(id: string, ok: boolean, reason?: string) {
+  const { error } = await supabase.rpc('sehat_intl_doc_review', { p_doc: id, p_ok: ok, p_reason: reason ?? null }); fail(error)
+}
+
+// ── Audit links (admin) ─────────────────────────────────────────────────────
+export interface AuditLink {
+  id: string; token: string; label: string; business_ids: string[]; expires_at: string; passcode_hash: string | null
+  created_by_name: string | null; created_at: string; revoked_at: string | null; last_used_at: string | null
+}
+export interface AuditLogRow { id: number; link_id: string; action: string; business_id: string | null; document_id: string | null; ip: string | null; user_agent: string | null; at: string }
+export async function loadAudit() {
+  const [l, g, b] = await Promise.all([
+    supabase.from('intl_audit_links').select('*').order('created_at', { ascending: false }),
+    supabase.from('intl_audit_log').select('*').order('at', { ascending: false }).limit(500),
+    supabase.from('intl_backup_runs').select('*').order('started_at', { ascending: false }).limit(10),
+  ])
+  if (l.error) throw l.error
+  return { links: (l.data ?? []) as AuditLink[], log: (g.data ?? []) as AuditLogRow[], backups: (b.data ?? []) as BackupRun[] }
+}
+export interface BackupRun { id: number; started_at: string; finished_at: string | null; target: string | null; copied: number; already: number; failed: number; error: string | null }
+export async function createAuditLink(label: string, businesses: string[], days: number, passcode: string) {
+  const { data, error } = await supabase.rpc('sehat_intl_audit_create', { p_label: label, p_businesses: businesses, p_days: days, p_passcode: passcode || null })
+  fail(error); return data as string
+}
+export async function revokeAuditLink(id: string) {
+  const { error } = await supabase.rpc('sehat_intl_audit_revoke', { p_id: id }); fail(error)
+}
+export async function backupNow(): Promise<{ target: string; copied: number; already: number; failed: number; errors?: string[] }> {
+  const { data, error } = await supabase.functions.invoke('intl-docs-backup', { body: {} })
+  fail(error); return data
+}
+
+// ── The public audit page ───────────────────────────────────────────────────
+export async function openAudit(token: string, passcode: string | null) {
+  const { data, error } = await supabase.rpc('sehat_intl_audit_open', { p_token: token, p_passcode: passcode })
+  fail(error); return data as Record<string, unknown>
+}
+export async function auditFiles(token: string, passcode: string | null, ids: string[], action: 'view' | 'zip') {
+  const { data, error } = await supabase.functions.invoke('intl-audit-file', { body: { token, passcode, ids, action } })
+  if (error) throw new Error('This link has expired or been withdrawn, or the passcode is wrong.')
+  return (data?.files ?? []) as { id: string; url: string; file_name: string; item_key: string; business_name: string; ext: string }[]
+}
+
 export async function docUrl(path: string): Promise<string | null> {
   const { data } = await supabase.storage.from('intl-docs').createSignedUrl(path, 600)
   return data?.signedUrl ?? null

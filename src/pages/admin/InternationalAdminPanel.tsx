@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Globe2, FileCheck2, MessageCircle, RefreshCw } from 'lucide-react'
-import { adminLoad, adminReview, adminEnquiry, adminSettings, docUrl, loadCatalogue, type AdminEnquiry, type MyHospital } from '../../lib/intlApi'
+import {
+  adminLoad, adminReview, adminEnquiry, adminSettings, docUrl, loadCatalogue, loadDocs, reviewDoc, loadAudit, createAuditLink,
+  revokeAuditLink, backupNow, type AdminEnquiry, type MyHospital, type IntlDoc, type Missing, type DocEvent, type AuditLink, type AuditLogRow, type BackupRun,
+} from '../../lib/intlApi'
 import { CHECKLIST, STEPS, CURRENCIES } from '../../lib/intlContent'
 import { supabase } from '../../lib/supabase'
 
@@ -12,7 +15,7 @@ const ENQ_STATUS = [...STEPS.map(s => s.key), 'closed', 'cancelled']
 
 export default function InternationalAdminPanel({ isManager }: { isManager: boolean }) {
   const [d, setD] = useState<Loaded | null>(null)
-  const [view, setView] = useState<'enquiries' | 'hospitals' | 'settings'>('enquiries')
+  const [view, setView] = useState<'enquiries' | 'hospitals' | 'audit' | 'settings'>('enquiries')
   const [err, setErr] = useState('')
   const load = () => adminLoad().then(setD, e => setErr(e.message))
   useEffect(() => { load() }, [])
@@ -24,7 +27,7 @@ export default function InternationalAdminPanel({ isManager }: { isManager: bool
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
         <h2 className="text-xl font-bold text-navy-700 flex items-center gap-2 mr-4"><Globe2 className="w-5 h-5" /> International</h2>
-        {([['enquiries', `Patient requests${newEnq ? ` (${newEnq} new)` : ''}`], ['hospitals', `Hospitals${toReview ? ` (${toReview} to review)` : ''}`], ...(!isManager ? [['settings', 'Fee & currency']] : [])] as [typeof view, string][]).map(([k, l]) => (
+        {([['enquiries', `Patient requests${newEnq ? ` (${newEnq} new)` : ''}`], ['hospitals', `Hospitals${toReview ? ` (${toReview} to review)` : ''}`], ...(!isManager ? [['audit', 'Audit & backup'], ['settings', 'Fee & currency']] : [])] as [typeof view, string][]).map(([k, l]) => (
           <button key={k} onClick={() => setView(k)} className={`px-3 py-1.5 rounded-full text-sm ${view === k ? 'bg-navy-700 text-white' : 'bg-white border'}`}>{l}</button>
         ))}
         <button onClick={load} className="ml-auto p-2" title="Refresh"><RefreshCw className="w-4 h-4" /></button>
@@ -32,6 +35,7 @@ export default function InternationalAdminPanel({ isManager }: { isManager: bool
       </div>
       {view === 'enquiries' && <Enquiries d={d} onChange={load} />}
       {view === 'hospitals' && <Hospitals d={d} onChange={load} isManager={isManager} />}
+      {view === 'audit' && !isManager && <Audit hospitals={d.hospitals.map(h => ({ id: h.business_id, name: h.businesses?.name ?? h.business_id }))} />}
       {view === 'settings' && !isManager && <Settings />}
     </div>
   )
@@ -98,69 +102,195 @@ function HospitalRow({ h, pk, onChange, isManager }: { h: Loaded['hospitals'][nu
   const [star, setStar] = useState(h.star ?? '')
   const [level, setLevel] = useState(h.city_level ?? '')
   const [note, setNote] = useState('')
-  const [docs, setDocs] = useState(!!h.docs_checked_at)
   const [video, setVideo] = useState(!!h.video_checked_at)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [docs, setDocs] = useState<IntlDoc[] | null>(null)
+  const [missing, setMissing] = useState<Missing[]>([])
+  const [events, setEvents] = useState<DocEvent[]>([])
   const b = h.businesses
+  const loadD = () => loadDocs(h.business_id).then(r => { setDocs(r.docs); setMissing(r.forList); setEvents(r.events) }, e => setErr(e.message))
+  useEffect(() => { loadD() // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [h.business_id, h.updated_at])
   const save = async () => {
     setBusy(true); setErr('')
-    try { await adminReview(h.business_id, { status, star: star || null, city_level: level || null, note: note || null, docs, video }); setNote(''); onChange() }
+    try { await adminReview(h.business_id, { status, star: star || null, city_level: level || null, note: note || null, video }); setNote(''); onChange() }
     catch (x) { setErr((x as Error).message) }
     setBusy(false)
   }
+  const review = async (d: IntlDoc, ok: boolean) => {
+    let reason: string | undefined
+    if (!ok) { reason = window.prompt(`Why is ${d.item_key} not acceptable? The hospital sees this.`) ?? undefined; if (!reason) return }
+    setErr('')
+    try { await reviewDoc(d.id, ok, reason); await loadD(); onChange() } catch (x) { setErr((x as Error).message) }
+  }
+  const view = async (path: string) => { const u = await docUrl(path); if (u) window.open(u, '_blank', 'noopener') }
   const cl = (h as MyHospital).checklist ?? {}
-  const req = CHECKLIST.flatMap(g => g.items.filter(i => !i.optional))
-  const done = req.filter(i => cl[i.key]?.ok).length
   const today = new Date().toISOString().slice(0, 10)
-  const expired = CHECKLIST.flatMap(g => g.items).filter(i => cl[i.key]?.expires && cl[i.key]!.expires! < today)
+  const cur = (k: string) => docs?.find(d => d.item_key === k && d.status !== 'replaced')
+  const toCheck = (docs ?? []).filter(d => d.status === 'pending').length
   return (
     <div className="card !p-4 text-sm">
       <div className="flex flex-wrap gap-3 items-start justify-between">
         <div>
           <p className="font-semibold text-navy-700 text-base">{b?.name ?? h.business_id}</p>
           <p className="text-gray-600">{[b?.own_city || b?.own_district, b?.own_state].filter(Boolean).join(', ')} · {h.beds ?? '?'} beds, {h.icu_beds ?? '?'} ICU · NABH {h.nabh} · {pk} price(s)</p>
-          <p className="text-gray-600">Checklist {done}/{req.length} required · agreement {h.agreement_accepted_at ? `accepted by ${h.agreement_signatory}` : 'not accepted'}{expired.length ? ` · ${expired.length} expired` : ''}</p>
+          <p className="text-gray-600">Agreement {h.agreement_accepted_at ? `accepted by ${h.agreement_signatory}` : 'not accepted'} · video {h.video_checked_at ? 'done' : 'not done'}</p>
+          <p className={missing.length ? 'text-amber-700' : 'text-green-700'}>
+            {docs === null ? 'Checking…' : missing.length === 0 ? 'Every required item is ready to list.' : `${missing.length} item(s) not ready to list`}{toCheck ? ` · ${toCheck} document(s) waiting for your check` : ''}
+          </p>
           <p className="text-gray-500">Coordinator: {h.coordinator_name ?? '—'} {h.coordinator_phone ?? ''} {h.coordinator_email ?? ''}</p>
         </div>
-        <span className="rounded-full px-3 py-1 bg-gray-100 font-semibold">{h.status}{h.star ? ` · ${h.star}★` : ''}</span>
+        <span className="rounded-full px-3 py-1 bg-gray-100 font-semibold">{h.status}{(h as { auto_paused?: boolean }).auto_paused ? ' (expiry)' : ''}{h.star ? ` · ${h.star}★` : ''}</span>
       </div>
-      <button onClick={() => setOpen(o => !o)} className="mt-2 text-teal-700 font-semibold">{open ? 'Hide' : 'Show'} checklist and documents</button>
-      {open && (
+      <button onClick={() => setOpen(o => !o)} className="mt-2 text-teal-700 font-semibold">{open ? 'Hide' : 'Check'} documents{toCheck ? ` (${toCheck} to check)` : ''}</button>
+      {open && docs && (
         <div className="mt-2 space-y-3">
+          {missing.length > 0 && (
+            <div className="bg-amber-50 rounded-lg p-3"><p className="font-semibold text-amber-900">Not ready to list</p>
+              <ul className="list-disc ml-5">{missing.map(m => <li key={m.key}><b>{m.key}</b> — {m.why}</li>)}</ul></div>
+          )}
           {CHECKLIST.map(g => (
             <div key={g.key}>
               <p className="font-semibold text-navy-700">{g.title}</p>
               <ul className="divide-y">{g.items.map(i => {
-                const s = cl[i.key] ?? {}
+                const d = i.doc ? cur(i.key) : undefined
+                const ok = i.doc ? !!d : !!cl[i.key]?.ok
+                const old = (docs ?? []).filter(x => x.item_key === i.key && x.status === 'replaced')
                 return (
-                  <li key={i.key} className="py-1 flex gap-2 items-center justify-between">
-                    <span className={s.ok ? '' : 'text-gray-400'}>{s.ok ? '✓' : '○'} {i.label}{i.optional ? ' (optional)' : ''}</span>
-                    <span className="flex gap-2 items-center shrink-0">
-                      {s.expires && <span className={s.expires < today ? 'text-red-600' : 'text-gray-500'}>exp {s.expires}</span>}
-                      {s.doc && <button onClick={async () => { const u = await docUrl(s.doc!); if (u) window.open(u, '_blank', 'noopener') }} className="text-teal-700 inline-flex items-center gap-1"><FileCheck2 className="w-4 h-4" /> doc</button>}
-                    </span>
+                  <li key={i.key} className="py-1.5">
+                    <div className="flex gap-2 items-center justify-between flex-wrap">
+                      <span className={ok ? '' : 'text-gray-400'}>{ok ? '✓' : '○'} <b>{i.key}</b> {i.label}{i.optional ? ' (optional)' : ''}</span>
+                      {d && (
+                        <span className="flex gap-2 items-center flex-wrap">
+                          {d.expires && <span className={d.expires < today ? 'text-red-600' : 'text-gray-500'}>exp {d.expires}</span>}
+                          <button onClick={() => view(d.path)} className="text-teal-700 inline-flex items-center gap-1"><FileCheck2 className="w-4 h-4" /> open</button>
+                          {d.status === 'verified' && <span className="text-green-700">checked by {d.reviewed_by_name}</span>}
+                          {d.status === 'rejected' && <span className="text-red-700">rejected: {d.reason}</span>}
+                          {!isManager && d.status !== 'verified' && <button onClick={() => review(d, true)} className="rounded-lg bg-green-600 text-white px-2 py-0.5">Verify</button>}
+                          {!isManager && d.status !== 'rejected' && <button onClick={() => review(d, false)} className="rounded-lg border border-red-300 text-red-700 px-2 py-0.5">Reject</button>}
+                        </span>
+                      )}
+                    </div>
+                    {old.length > 0 && <p className="text-xs text-gray-400 ml-5">Earlier: {old.map(o => <button key={o.id} onClick={() => view(o.path)} className="underline mr-2">{new Date(o.uploaded_at).toLocaleDateString('en-IN')}</button>)}</p>}
                   </li>
                 )
               })}</ul>
             </div>
           ))}
+          {events.length > 0 && (
+            <details><summary className="cursor-pointer font-semibold text-navy-700">History ({events.length})</summary>
+              <ul className="divide-y mt-1">{events.slice(0, 100).map(e => <li key={e.id} className="py-1"><span className="text-gray-400">{new Date(e.at).toLocaleString('en-IN')}</span> {e.item_key ? <b>{e.item_key} </b> : null}{e.action}{e.note ? ` — ${e.note}` : ''} <span className="text-gray-400">· {e.actor_name}</span></li>)}</ul>
+            </details>
+          )}
         </div>
       )}
       {!isManager && h.status !== 'draft' && (
-        <div className="mt-3 grid gap-2 sm:grid-cols-6 items-end">
-          <label className="flex items-center gap-2"><input type="checkbox" checked={docs} onChange={e => setDocs(e.target.checked)} /> Documents checked</label>
+        <div className="mt-3 grid gap-2 sm:grid-cols-5 items-end">
           <label className="flex items-center gap-2"><input type="checkbox" checked={video} onChange={e => setVideo(e.target.checked)} /> Video walkthrough done</label>
           <label>Star<select value={star} onChange={e => setStar(e.target.value)} className="w-full border rounded-lg px-2 py-1.5"><option value="">—</option><option value="4">4-star</option><option value="5">5-star</option></select></label>
           <label>City level<select value={level} onChange={e => setLevel(e.target.value)} className="w-full border rounded-lg px-2 py-1.5"><option value="">From city</option><option value="metro">Big metro</option><option value="regional">Regional</option><option value="smaller">Smaller city</option></select></label>
           <label>Status<select value={status} onChange={e => setStatus(e.target.value)} className="w-full border rounded-lg px-2 py-1.5">
-            {['submitted', 'reviewing', 'listed', 'paused', 'rejected'].map(s => <option key={s}>{s}</option>)}</select></label>
+            {['submitted', 'reviewing', 'listed', 'paused', 'rejected'].map(s => <option key={s} disabled={s === 'listed' && missing.length > 0}>{s}</option>)}</select></label>
           <button onClick={save} disabled={busy} className="btn-teal !px-4 !py-1.5 text-sm justify-center">Save</button>
-          <label className="sm:col-span-6">Note to the hospital (shown in their dashboard)<input value={note} onChange={e => setNote(e.target.value)} placeholder={h.admin_note ?? ''} className="w-full border rounded-lg px-2 py-1.5" /></label>
+          <label className="sm:col-span-5">Note to the hospital (shown in their dashboard and emailed)<input value={note} onChange={e => setNote(e.target.value)} placeholder={h.admin_note ?? ''} className="w-full border rounded-lg px-2 py-1.5" /></label>
         </div>
       )}
       {h.status === 'draft' && <p className="mt-2 text-gray-500">Still filling in — not sent yet.</p>}
       {err && <p className="text-red-700 mt-1">{err}</p>}
+    </div>
+  )
+}
+
+function Audit({ hospitals }: { hospitals: { id: string; name: string }[] }) {
+  const [links, setLinks] = useState<AuditLink[]>([])
+  const [log, setLog] = useState<AuditLogRow[]>([])
+  const [runs, setRuns] = useState<BackupRun[]>([])
+  const [label, setLabel] = useState('')
+  const [pick, setPick] = useState<string[]>([])
+  const [days, setDays] = useState('7')
+  const [pass, setPass] = useState('')
+  const [made, setMade] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [showLog, setShowLog] = useState<string | null>(null)
+  const load = () => loadAudit().then(r => { setLinks(r.links); setLog(r.log); setRuns(r.backups) }, e => setErr(e.message))
+  useEffect(() => { load() }, [])
+  const create = async () => {
+    setErr(''); setBusy(true)
+    try {
+      const t = await createAuditLink(label, pick, Number(days) || 7, pass)
+      setMade(`${window.location.origin}/audit/${t}`); setLabel(''); setPick([]); setPass(''); load()
+    } catch (e) { setErr((e as Error).message) }
+    setBusy(false)
+  }
+  const nameOf = (id: string | null) => hospitals.find(h => h.id === id)?.name ?? ''
+  const runBackup = async () => {
+    setBusy(true); setErr('')
+    try { const r = await backupNow(); setErr(r.failed ? `Backup: ${r.failed} failed — ${(r.errors ?? []).join('; ')}` : '') ; load() } catch (e) { setErr((e as Error).message) }
+    setBusy(false)
+  }
+  const last = runs[0]
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="card space-y-3">
+        <p className="font-bold text-navy-700">Give an auditor read-only access</p>
+        <p className="text-gray-600">For a government body, NABH or another agency. They open a link — no login — and see the chosen hospitals’ checklists, every document version, who checked each one, and the history. Every open and download is logged. You can withdraw the link at any time.</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="sm:col-span-3">Who is it for<input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. District CMO Yamunanagar — annual inspection" className="w-full border rounded-lg px-2 py-1.5" /></label>
+          <label>Valid for (days)<input inputMode="numeric" value={days} onChange={e => setDays(e.target.value.replace(/\D/g, ''))} className="w-full border rounded-lg px-2 py-1.5" /></label>
+          <label className="sm:col-span-2">Passcode (optional, 6+ characters — share it separately)<input value={pass} onChange={e => setPass(e.target.value)} className="w-full border rounded-lg px-2 py-1.5" /></label>
+        </div>
+        <div>
+          <p className="mb-1">Hospitals {pick.length === 0 && <span className="text-gray-500">(none ticked = every hospital that has applied)</span>}</p>
+          <div className="flex flex-wrap gap-2">{hospitals.map(h => (
+            <label key={h.id} className={`rounded-full border px-3 py-1 cursor-pointer ${pick.includes(h.id) ? 'bg-navy-700 text-white' : ''}`}>
+              <input type="checkbox" className="hidden" checked={pick.includes(h.id)} onChange={e => setPick(p => e.target.checked ? [...p, h.id] : p.filter(x => x !== h.id))} />{h.name}</label>
+          ))}</div>
+        </div>
+        <button onClick={create} disabled={busy} className="btn-teal !px-4 !py-1.5 text-sm">Create link</button>
+        {made && (
+          <div className="bg-green-50 rounded-lg p-3">
+            <p className="font-semibold text-green-900">Link ready — copy it now:</p>
+            <p className="break-all font-mono mt-1">{made}</p>
+            <button onClick={() => navigator.clipboard?.writeText(made)} className="mt-2 underline text-green-900">Copy</button>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <p className="font-bold text-navy-700 mb-2">Links</p>
+        {links.length === 0 && <p className="text-gray-500">No links yet.</p>}
+        <ul className="divide-y">{links.map(l => {
+          const live = !l.revoked_at && new Date(l.expires_at) > new Date()
+          const mine = log.filter(x => x.link_id === l.id)
+          return (
+            <li key={l.id} className="py-2">
+              <div className="flex flex-wrap gap-2 justify-between items-center">
+                <span><b>{l.label}</b> · {l.business_ids.length ? l.business_ids.map(nameOf).join(', ') : 'all applied hospitals'}{l.passcode_hash ? ' · passcode' : ''}</span>
+                <span className="flex gap-3 items-center">
+                  <span className={live ? 'text-green-700' : 'text-gray-400'}>{l.revoked_at ? 'withdrawn' : live ? `until ${new Date(l.expires_at).toLocaleDateString('en-IN')}` : 'expired'}</span>
+                  <button onClick={() => setShowLog(showLog === l.id ? null : l.id)} className="underline">{mine.filter(m => m.action !== 'bad_passcode').length} views/downloads</button>
+                  {live && <button onClick={async () => { if (window.confirm('Withdraw this link now?')) { await revokeAuditLink(l.id); load() } }} className="text-red-700 underline">Withdraw</button>}
+                </span>
+              </div>
+              <p className="text-gray-400">Made by {l.created_by_name} on {new Date(l.created_at).toLocaleString('en-IN')}{live ? ` · ${window.location.origin}/audit/${l.token}` : ''}</p>
+              {showLog === l.id && (
+                <ul className="mt-1 ml-3 text-xs">{mine.map(m => <li key={m.id}>{new Date(m.at).toLocaleString('en-IN')} · {m.action}{m.business_id ? ` · ${nameOf(m.business_id)}` : ''}{m.ip ? ` · ${m.ip}` : ''}</li>)}{!mine.length && <li className="text-gray-400">Not opened yet.</li>}</ul>
+              )}
+            </li>
+          )
+        })}</ul>
+      </div>
+
+      <div className="card space-y-2">
+        <p className="font-bold text-navy-700">Document backup</p>
+        <p className="text-gray-600">Every Monday 03:00 a copy of all hospital documents is made. Supabase’s own backups do not include files.</p>
+        {last ? <p>Last run {new Date(last.started_at).toLocaleString('en-IN')} → {last.target}: {last.copied} copied, {last.already} already backed up{last.failed ? `, ${last.failed} failed` : ''}{last.error ? ` — ${last.error}` : ''}</p> : <p className="text-gray-500">No backup has run yet.</p>}
+        {last?.target?.startsWith('supabase:') && <p className="text-amber-800 bg-amber-50 rounded-lg p-2">Copies go to a second private bucket in the same Supabase project. For a copy outside Supabase, add an S3-compatible bucket (Cloudflare R2, AWS S3 or Backblaze) — see the note from Claude.</p>}
+        <button onClick={runBackup} disabled={busy} className="btn-outline text-sm">Back up now</button>
+      </div>
+      {err && <p className="text-red-700">{err}</p>}
     </div>
   )
 }
