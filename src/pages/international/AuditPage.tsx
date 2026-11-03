@@ -20,7 +20,7 @@ interface Pack { ok: boolean; label: string; expires_at: string; issued_by: stri
 
 const d8 = (s: string | null) => s ? new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 const STATUS_WORD: Record<string, string> = { verified: 'Checked', pending: 'Waiting for check', rejected: 'Rejected', replaced: 'Earlier version' }
-const GROUPS: Record<string, string> = { A: 'A. Government licences', B: 'B. Accreditation and panels', C: 'C. Clinical facilities', D: 'D. Comfort', E: 'E. International desk', F: 'F. Speciality extras' }
+const GROUPS: Record<string, string> = { A: 'A. Government licences', B: 'B. Accreditation and panels', C: 'C. Clinical facilities', D: 'D. Comfort', E: 'E. International desk', F: 'F. Speciality extras', G: 'G. Photos and videos' }
 
 export default function AuditPage() {
   const { token = '' } = useParams()
@@ -134,7 +134,7 @@ export default function AuditPage() {
                             {items.map(i => {
                               const d = cur(i.key)
                               const old = h.documents.filter(x => x.item_key === i.key && x.status === 'replaced')
-                              const ok = i.needs_doc ? !!d : !!h.checklist?.[i.key]?.ok
+                              const ok = i.key === 'G1' ? !h.missing.some(m => m.key === 'G1') : i.needs_doc ? !!d : !!h.checklist?.[i.key]?.ok
                               return (
                                 <tr key={i.key} className="align-top">
                                   <td className="py-1.5 pr-2 w-12 font-semibold">{i.key}</td>
@@ -143,6 +143,7 @@ export default function AuditPage() {
                                   </td>
                                   <td className="py-1.5 pr-2 whitespace-nowrap">{i.needs_doc
                                     ? (d ? <span className={d.status === 'verified' ? 'text-green-700' : d.status === 'rejected' ? 'text-red-700' : 'text-amber-700'}>{STATUS_WORD[d.status]}</span> : <span className="text-gray-400">No document</span>)
+                                    : i.key === 'G1' ? <span className={ok ? 'text-green-700' : 'text-amber-700'}>{ok ? 'Approved' : h.missing.find(m => m.key === 'G1')?.why}</span>
                                     : <span className={ok ? 'text-green-700' : 'text-gray-400'}>{ok ? 'Declared' : 'Not declared'}</span>}</td>
                                   <td className="py-1.5 pr-2 text-xs text-gray-500">{d ? <>expires {d8(d.expires)}<br />checked {d.reviewed_by_name ? `by ${d.reviewed_by_name}, ${d8(d.reviewed_at)}` : '—'}</> : null}</td>
                                   <td className="py-1.5 text-right">{d && <button onClick={() => view(d.id)} disabled={busy === d.id} className="inline-flex items-center gap-1 text-teal-700 font-semibold print:hidden"><FileText className="w-4 h-4" /> Open</button>}</td>

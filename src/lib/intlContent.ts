@@ -75,7 +75,7 @@ export const ESTIMATE_CLAUSES = [
 ]
 
 // ── The hospital checklist (plan doc, Checklists A–F) ─────────────────────
-export interface CheckItem { key: string; label: string; doc?: boolean; expires?: boolean; optional?: boolean }
+export interface CheckItem { key: string; label: string; doc?: boolean; expires?: boolean; optional?: boolean; media?: boolean }
 export interface CheckGroup { key: string; title: string; note: string; items: CheckItem[] }
 
 export const CHECKLIST: CheckGroup[] = [
@@ -171,6 +171,12 @@ export const CHECKLIST: CheckGroup[] = [
       { key: 'F_cancer', label: 'Cancer: AERB for radiotherapy; medical, surgical and radiation oncologists', doc: true, optional: true },
       { key: 'F_eye', label: 'Eye: phaco machine, OCT and visual field tests', optional: true },
       { key: 'F_dental', label: 'Dental: Dental Council registration of dentists, sterilisation', doc: true, optional: true },
+    ],
+  },
+  {
+    key: 'G', title: 'G. Photos and videos', note: 'Required. Real, recent photos of this hospital — no patients who can be recognised, no before/after pictures. Each is checked by Sehatsandhi, then shown on your page.',
+    items: [
+      { key: 'G1', label: 'Photos: at least 5, including the building, a patient room, the ICU and the operation theatre', media: true },
     ],
   },
 ]

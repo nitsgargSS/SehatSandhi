@@ -359,6 +359,14 @@ tables:
   intl_documents:
     class: isolated
     purgeOrder: 104.22
+  # 0318: partner enquiries (travel, visa, hotels…); no foreign keys.
+  intl_partner_enquiries:
+    class: isolated
+    purgeOrder: 94.6
+  # 0317: hospital photos and videos.
+  intl_media:
+    class: isolated
+    purgeOrder: 104.25
   intl_hospitals:
     class: isolated
     purgeOrder: 104.3

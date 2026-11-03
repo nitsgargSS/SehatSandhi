@@ -135,6 +135,7 @@ export default function IntlLayout({ children }: { children: React.ReactNode }) 
             {NAV.map(n => <Link key={n.to} to={n.to} className="hover:underline">{n.label}</Link>)}
             <Link to="/international/costs" className="hover:underline">Stay costs</Link>
             <Link to="/international/checklists" className="hover:underline">Patient checklists</Link>
+            <Link to="/international/partners" className="hover:underline font-semibold text-white">Partner with us — travel, visas, hotels</Link>
           </div>
           <div className="flex flex-col gap-2">
             <p className="font-semibold text-white flex items-center gap-2"><ShieldCheck className="w-5 h-5" /> Help and complaints</p>
