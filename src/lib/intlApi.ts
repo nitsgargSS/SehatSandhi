@@ -9,6 +9,8 @@ import { GROUPS } from './intlContent'
 export interface Procedure {
   code: string; name: string; speciality: string; grp: Grp
   hospital_days: number | null; india_days: number | null; summary: string | null; reports: string | null
+  /** 0319: conditions under Indian law, shown before the patient goes on. */
+  legal_title?: string | null; legal_points?: string[] | null; legal_sources?: { label: string; url: string }[] | null; legal_version?: string | null
 }
 export interface Package {
   procedure_code: string; price_min: number; price_max: number
@@ -24,6 +26,8 @@ export interface Hospital {
   packages: Package[]
   /** 0317: approved photos and videos; the first photo is the cover. */
   cover_path?: string | null
+  /** 0319: the hospital's own website on Sehatsandhi (or its own domain). */
+  site_url?: string | null
   media?: { kind: 'photo' | 'video' | 'youtube'; path: string | null; youtube_id: string | null; category: string; caption: string | null }[]
 }
 export interface Catalogue { fee_pct: number; fx: Record<string, number>; procedures: Procedure[]; hospitals: Hospital[] }

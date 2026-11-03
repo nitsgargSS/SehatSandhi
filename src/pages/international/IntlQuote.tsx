@@ -5,6 +5,7 @@ import IntlLayout, { C, Wrap, PageHead, Card, useTitle } from './IntlLayout'
 import { useCatalogue, useShortlist } from './intlHooks'
 import { sendEnquiry, trackEnquiry, type Tracked } from '../../lib/intlApi'
 import { ESTIMATE_CLAUSES, STEPS, intlWaLink } from '../../lib/intlContent'
+import { LegalNotes, Declaration, DECLARATION, hasLegal, acceptLegal } from './IntlLegal'
 
 const field = 'mt-1 w-full rounded-xl border px-4 py-3 bg-white'
 
@@ -19,6 +20,7 @@ export function IntlQuote() {
   })
   const [consent, setConsent] = useState(false)
   const [ack, setAck] = useState(false)
+  const [legal, setLegal] = useState<boolean[]>(DECLARATION.map(() => false))
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState<string | null | undefined>(undefined)
@@ -26,20 +28,25 @@ export function IntlQuote() {
 
   const fromUrl = (sp.get('h') ?? '').split(',').filter(Boolean)
   const shortIds = fromUrl.length ? fromUrl : short.list.filter(i => i.t === f.procedure_code).map(i => i.h)
+  const proc = cat?.procedures.find(p => p.code === f.procedure_code) ?? null
+  const needsLegal = hasLegal(proc)
   const shortNames = cat ? shortIds.map(id => cat.hospitals.find(h => h.id === id)?.name).filter(Boolean) as string[] : []
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setErr('')
     if (!consent || !ack) { setErr('Please tick both boxes at the end of the form.'); return }
+    if (needsLegal && !legal.every(Boolean)) { setErr('Please read the legal notes for this treatment and tick every line of the declaration.'); return }
     setBusy(true)
     const r = await sendEnquiry({
       name: f.name, country: f.country, phone: f.phone, email: f.email, procedure_code: f.procedure_code || null,
       problem: f.problem, urgency: f.urgency, travel_when: f.travel_when, companions: f.companions, budget: f.budget,
       prefs: { language: f.language, food: f.food, room: f.room }, shortlist: shortIds,
-      consent_share: consent, ack_estimate: ack, website: f.website, page: typeof window !== 'undefined' ? window.location.pathname + window.location.search : null,
+      consent_share: consent, ack_estimate: ack,
+      legal_ack: needsLegal ? legal.every(Boolean) : false, legal_version: proc?.legal_version ?? null, website: f.website, page: typeof window !== 'undefined' ? window.location.pathname + window.location.search : null,
     })
     setBusy(false)
     if (!r.ok) { setErr(r.error || 'Something went wrong. Please try again or message us on WhatsApp.'); return }
+    if (needsLegal && proc) acceptLegal(proc)
     if (f.procedure_code) shortIds.forEach(h => short.has(h, f.procedure_code) && short.toggle(h, f.procedure_code))
     setDone(r.token ?? null)
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 })
@@ -128,6 +135,15 @@ export function IntlQuote() {
                 </select></label>
             </div>
           </Card>
+
+          {needsLegal && proc && (
+            <Card>
+              <p className="font-semibold text-lg mb-3">Legal requirements for this treatment</p>
+              <LegalNotes p={proc} compact />
+              <p className="font-semibold mt-5 mb-2">Your declaration</p>
+              <Declaration value={legal} onChange={setLegal} />
+            </Card>
+          )}
 
           <input tabIndex={-1} autoComplete="off" value={f.website} onChange={set('website')} name="website" aria-hidden className="hidden" />
 

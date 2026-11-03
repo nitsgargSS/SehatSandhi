@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import IntlLayout, { C, Wrap, PageHead, Card, CtaButton, EstimateNote, useTitle } from './IntlLayout'
 import { BottomCta } from './IntlStatic'
+import { LegalGate, LegalNotes, hasLegal, legalAccepted } from './IntlLegal'
 import { useCatalogue, useCurrency, useShortlist, priceText, money, rateOf } from './intlHooks'
 import {
   LEVELS, GROUPS, FEE_LINE, ESTIMATE_LINE, CURRENCIES, type CityLevel,
@@ -75,6 +76,7 @@ export function IntlCompare() {
   const [perNight, setPerNight] = useState('')
   const [companions, setCompanions] = useState(1)
   const [msg, setMsg] = useState('')
+  const [, setLegalTick] = useState(0)
   const nav = useNavigate()
 
   if (!cat) return <IntlLayout><PageHead kicker="Compare & choose" title="Find the right hospital for you" /><Loading err={err} /></IntlLayout>
@@ -88,6 +90,8 @@ export function IntlCompare() {
   const picked = short.list.filter(i => i.t === code)
 
   const toggle = (h: string) => { const e = short.toggle(h, code); setMsg(e ?? '') }
+  // 0319: a treatment with legal conditions opens with them; nothing below shows until accepted.
+  const gate = proc && hasLegal(proc) && !legalAccepted(proc)
 
   return (
     <IntlLayout>
@@ -124,7 +128,9 @@ export function IntlCompare() {
           </div>
         )}
 
-        {proc && (
+        {gate && <LegalGate p={proc!} onAccept={() => setLegalTick(t => t + 1)} onCancel={() => setCode('')} />}
+        {proc && hasLegal(proc) && !gate && <div className="mb-6"><LegalNotes p={proc} compact /></div>}
+        {proc && !gate && (
           <>
             <div className="rounded-2xl p-5 mb-6 flex gap-4" style={{ background: C.soft }}>
               <Lightbulb className="w-6 h-6 shrink-0 mt-0.5" style={{ color: C.green }} />
@@ -180,7 +186,7 @@ export function IntlCompare() {
         )}
       </Wrap>
 
-      {proc && picked.length > 0 && (
+      {proc && !gate && picked.length > 0 && (
         <div className="sticky bottom-0 z-30 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.08)]" style={{ borderTop: `1px solid ${C.border}` }}>
           <Wrap className="py-3 flex items-center gap-3 flex-wrap pr-20 sm:pr-40">
             <p className="font-semibold">{picked.length} of 3 shortlisted</p>
@@ -226,6 +232,7 @@ function OptionCard({ o, proc, cat, cur, labels, picked, onPick, perNight, compa
             {h.beds != null && <li className="flex gap-2"><BedDouble className="w-4 h-4 mt-1" style={{ color: C.green }} />{h.beds} beds{h.icu_beds ? `, ${h.icu_beds} ICU` : ''}</li>}
             {h.nearest_airport && <li className="flex gap-2"><Plane className="w-4 h-4 mt-1" style={{ color: C.green }} />{h.nearest_airport}{h.airport_hours != null ? ` · ${h.airport_hours} h by road` : ''}</li>}
             {h.languages.length > 0 && <li className="flex gap-2"><Languages className="w-4 h-4 mt-1" style={{ color: C.green }} />{h.languages.join(', ')}</li>}
+            {h.site_url && <li className="flex gap-2"><Building2 className="w-4 h-4 mt-1" style={{ color: C.green }} /><a href={h.site_url} target="_blank" rel="noreferrer" className="underline">Hospital website</a></li>}
             {p.doctor_name && <li className="flex gap-2"><Activity className="w-4 h-4 mt-1" style={{ color: C.green }} />{p.doctor_name}</li>}
           </ul>
         </div>
@@ -344,6 +351,7 @@ export function IntlTreatment() {
             <p className="text-sm mt-3" style={{ color: C.muted }}>{FEE_LINE} {ESTIMATE_LINE}</p>
             <EstimateNote className="mt-3" />
           </Card>
+          {hasLegal(proc) && <LegalNotes p={proc} />}
           <Card>
             <h2 className="text-xl font-bold mb-2">Which city usually suits this</h2>
             <p className="leading-relaxed">{g.why}</p>
@@ -454,6 +462,10 @@ export function IntlHospital() {
             {h.nearest_airport && <><dt style={{ color: C.muted }}>Airport</dt><dd>{h.nearest_airport}{h.airport_hours != null ? `, ${h.airport_hours} h by road` : ''}</dd></>}
           </dl>
           <p className="text-sm mt-4" style={{ color: C.muted }}>Checked by Sehatsandhi: documents, video walkthrough and signed agreement.</p>
+          {h.site_url && (
+            <a href={h.site_url} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 font-semibold" style={{ border: `1.5px solid ${C.green}`, color: C.green }}>
+              Visit the hospital’s website ↗</a>
+          )}
         </Card>
         <Card>
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">

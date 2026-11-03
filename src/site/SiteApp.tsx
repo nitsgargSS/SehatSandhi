@@ -50,6 +50,8 @@ export function SiteFromPath() {
   return <SiteApp siteKey={slug} base={`/s/${slug}`} />
 }
 
+import SiteGallery from './SiteGallery'
+
 export default function SiteApp({ siteKey, base }: { siteKey: string; base: string }) {
   const [data, setData] = useState<PublicSite | null | undefined>(undefined)
   const [lang, setLang] = useState<Lang>(readLang)
@@ -76,7 +78,7 @@ export default function SiteApp({ siteKey, base }: { siteKey: string; base: stri
       <style>{SITE_CSS}</style>
       <Header d={data} base={base} lang={lang} t={t} onLang={switchLang} />
       <Routes>
-        <Route index element={<Home d={data} base={base} lang={lang} t={t} />} />
+        <Route index element={<Home d={data} base={base} lang={lang} t={t} gallery={<SiteGallery siteKey={siteKey} lang={lang} />} />} />
         {/* 0283: the free page is the home page alone. */}
         {data.site.tier !== 'free' ? <>
           <Route path="services" element={<Services d={data} lang={lang} t={t} />} />
@@ -183,7 +185,7 @@ function Header({ d, base, lang, t, onLang }: P & { onLang: () => void }) {
   )
 }
 
-function Home({ d, base, lang, t }: P) {
+function Home({ d, base, lang, t, gallery }: P & { gallery?: React.ReactNode }) {
   const c = d.site.content
   const doc = c.doctor
   const featured = (c.treatments ?? []).filter(x => x.featured)
@@ -385,6 +387,8 @@ function Home({ d, base, lang, t }: P) {
           </Wrap>
         </section>
       )}
+
+      {gallery}
 
       <Visit d={d} lang={lang} t={t} />
     </main>
