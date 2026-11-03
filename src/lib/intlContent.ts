@@ -195,6 +195,17 @@ export const AGREEMENT_POINTS = [
   'Sehatsandhi may pause or remove a listing that breaks these terms.',
 ]
 
+/** 0320: what Sehatsandhi never arranges — illegal in India, or not for foreigners. */
+export const NEVER_ARRANGED: { t: string; d: string }[] = [
+  { t: 'Buying or selling organs', d: 'Paid donors, brokers or false relationship papers. Organ trade is a crime under the Transplantation of Human Organs and Tissues Act (5–10 years in prison).' },
+  { t: 'Transplants from unrelated Indian donors', d: 'A living donor for a foreign patient must be a near relative, and every case needs the Authorisation Committee’s approval.' },
+  { t: 'Surrogacy for foreign nationals', d: 'Surrogacy in India is only for Indian couples, on medical grounds and without payment (Surrogacy (Regulation) Act, 2021).' },
+  { t: 'Choosing or finding out a baby’s sex', d: 'Sex selection is a crime under the PC-PNDT Act and the ART Act.' },
+  { t: 'Importing or buying eggs, sperm or embryos', d: 'Donor material comes only from registered ART banks in India.' },
+  { t: 'Unproven stem cell “cures”', d: 'For autism, spinal injury, Parkinson’s and similar conditions, stem cell therapy is allowed only in free, approved clinical trials.' },
+  { t: 'Euthanasia or anything outside the law', d: 'Active euthanasia is illegal in India. So is any treatment without proper consent or with false documents.' },
+]
+
 export const FAQ: { q: string; a: string }[] = [
   { q: 'What does Sehatsandhi do?', a: 'We help you compare checked hospitals in every city in India, get written quotes, and arrange your travel: airport pickup, stay and local transport. Your coordinator stays with you from the first message until your follow-ups at home.' },
   { q: 'Who chooses the hospital?', a: 'You do. We show every checked hospital that offers your treatment and suggest which size of city usually suits it, but the final decision is always yours. No hospital pays to appear higher.' },
@@ -206,6 +217,7 @@ export const FAQ: { q: string; a: string }[] = [
   { q: 'How do I pay?', a: 'By international card or bank transfer, as written in your quote, with a receipt for every payment. Never pay cash to anyone claiming to represent us.' },
   { q: 'What if something goes wrong?', a: 'Your coordinator is your first contact, any time. Every listed hospital has a senior person who must answer complaints within 48 hours. If you are not satisfied, write to our Grievance Officer at contact@sehatsandhi.com; we acknowledge within 24 hours and resolve within 15 days.' },
   { q: 'Do I need to send reports before travelling?', a: 'Yes. Recent reports let the doctor give a real quote and tell you if treatment in India is right for you. A clear phone photo of each page is enough.' },
+  { q: 'Are some treatments not allowed for foreign patients?', a: 'Some treatments are allowed only on conditions — for example, an organ transplant needs a near-relative donor and a government committee’s approval. When you choose such a treatment we show the legal requirements first and ask you to accept them. We never arrange organ trade, surrogacy for foreign nationals, sex selection or unproven stem cell treatment. See “How we check” for the full list.' },
   { q: 'Is my medical information safe?', a: 'We share your reports only with the hospitals you choose, and only after you agree. We follow India\'s Digital Personal Data Protection Act, 2023.' },
 ]
 

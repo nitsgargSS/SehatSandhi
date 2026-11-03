@@ -251,6 +251,7 @@ export interface AdminEnquiry {
   companions: number | null; budget: string | null; prefs: Record<string, unknown>; shortlist: string[]
   chosen_hospital: string | null; status: string; coordinator: string | null; admin_note: string | null
   created_at: string; updated_at: string
+  legal_ack?: boolean; legal_version?: string | null; legal_ack_at?: string | null; legal_text?: string | null
 }
 export async function adminLoad() {
   const [h, e, k] = await Promise.all([
