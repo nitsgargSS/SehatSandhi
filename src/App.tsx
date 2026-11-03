@@ -49,6 +49,27 @@ const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
 // Legal/company pages. Linked from SiteFooter on every public page, and
 // submitted directly to Meta and Razorpay, so each needs a stable public URL.
 const About = lazy(() => import('./pages/About'))
+// 0312: Sehatsandhi International — patients from abroad.
+const IntlStatic = () => import('./pages/international/IntlStatic')
+const IntlData = () => import('./pages/international/IntlData')
+const IntlQuoteMod = () => import('./pages/international/IntlQuote')
+const IntlHome = lazy(() => IntlStatic().then(m => ({ default: m.IntlHome })))
+const IntlFaq = lazy(() => IntlStatic().then(m => ({ default: m.IntlFaq })))
+const IntlPlanTrip = lazy(() => IntlStatic().then(m => ({ default: m.IntlPlanTrip })))
+const IntlChecklists = lazy(() => IntlStatic().then(m => ({ default: m.IntlChecklists })))
+const IntlHowWeCheck = lazy(() => IntlStatic().then(m => ({ default: m.IntlHowWeCheck })))
+const IntlCompare = lazy(() => IntlData().then(m => ({ default: m.IntlCompare })))
+const IntlTreatments = lazy(() => IntlData().then(m => ({ default: m.IntlTreatments })))
+const IntlTreatment = lazy(() => IntlData().then(m => ({ default: m.IntlTreatment })))
+const IntlHospitals = lazy(() => IntlData().then(m => ({ default: m.IntlHospitals })))
+const IntlHospital = lazy(() => IntlData().then(m => ({ default: m.IntlHospital })))
+const IntlCosts = lazy(() => IntlData().then(m => ({ default: m.IntlCosts })))
+const IntlQuote = lazy(() => IntlQuoteMod().then(m => ({ default: m.IntlQuote })))
+const IntlTrack = lazy(() => IntlQuoteMod().then(m => ({ default: m.IntlTrack })))
+const AuditPage = lazy(() => import('./pages/international/AuditPage'))
+const IntlSavings = lazy(() => import('./pages/international/IntlSavings'))
+const IntlArticles = lazy(() => import('./pages/international/IntlArticles').then(m => ({ default: m.IntlArticles })))
+const IntlArticle = lazy(() => import('./pages/international/IntlArticles').then(m => ({ default: m.IntlArticle })))
 const Contact = lazy(() => import('./pages/Contact'))
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'))
 const Terms = lazy(() => import('./pages/Terms'))
@@ -171,7 +192,8 @@ const PageViewTracker = () => {
 const WhatsAppFloat = () => {
   const { pathname } = useLocation()
   // A clinic's website (/s/…) books with that clinic, not Sehatsandhi's assistant.
-  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/') || pathname.startsWith('/business/print/')) return null
+  // /international has its own button, to the international coordinator's number.
+  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/') || pathname.startsWith('/business/print/') || pathname.startsWith('/international') || pathname.startsWith('/audit/')) return null
   return (
     <a href={waLink()}
        target="_blank" rel="noreferrer"
@@ -270,6 +292,23 @@ export default function App() {
               Reachable from SiteFooter on every public page. Meta's business
               verification and Razorpay's merchant checks both open these
               directly, so the paths are stable and each page stands alone. */}
+          <Route path="/international" element={<IntlHome />} />
+          <Route path="/international/compare" element={<IntlCompare />} />
+          <Route path="/international/treatments" element={<IntlTreatments />} />
+          <Route path="/international/treatments/:code" element={<IntlTreatment />} />
+          <Route path="/international/hospitals" element={<IntlHospitals />} />
+          <Route path="/international/hospitals/:id" element={<IntlHospital />} />
+          <Route path="/international/costs" element={<IntlCosts />} />
+          <Route path="/international/savings" element={<IntlSavings />} />
+          <Route path="/international/articles" element={<IntlArticles />} />
+          <Route path="/international/articles/:slug" element={<IntlArticle />} />
+          <Route path="/international/plan-your-trip" element={<IntlPlanTrip />} />
+          <Route path="/international/how-we-check" element={<IntlHowWeCheck />} />
+          <Route path="/international/checklists" element={<IntlChecklists />} />
+          <Route path="/international/faq" element={<IntlFaq />} />
+          <Route path="/international/quote" element={<IntlQuote />} />
+          <Route path="/international/track/:token" element={<IntlTrack />} />
+          <Route path="/audit/:token" element={<AuditPage />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/my" element={<MyHome />} />

@@ -304,6 +304,66 @@ tables:
     purgeOrder: 103
     pk: business_id
 
+  # ── International patients portal (0312) ───────────────────────────────
+  # Procedures and city levels are seeded by the migration itself; synced so
+  # an admin edit on prod reaches sandbox. The rest is user data.
+  intl_procedures:
+    class: sync
+    key: [code]
+    syncOrder: 95
+  intl_city_levels:
+    class: sync
+    key: [city]
+    syncOrder: 96
+  intl_enquiries:
+    class: isolated
+    purgeOrder: 104.1
+  intl_packages:
+    class: isolated
+    purgeOrder: 104.2
+  # 0314–0315: savings reference prices and portal articles — content we
+  # author on prod, so sandbox gets the same.
+  intl_countries:
+    class: sync
+    key: [code]
+    syncOrder: 98
+  intl_price_refs:
+    class: sync
+    key: [id]
+    syncOrder: 99
+  intl_articles:
+    class: sync
+    key: [slug]
+    syncOrder: 99.5
+  # 0313: documents, their history, audit links and backup records.
+  intl_check_items:
+    class: sync
+    key: [key]
+    syncOrder: 97
+  intl_audit_log:
+    class: isolated
+    purgeOrder: 104.01
+  intl_audit_links:
+    class: isolated
+    purgeOrder: 104.02
+  intl_backup_files:
+    class: isolated
+    purgeOrder: 104.03
+    pk: path
+  intl_backup_runs:
+    class: isolated
+    purgeOrder: 104.04
+  intl_doc_events:
+    class: isolated
+    purgeOrder: 104.21
+  intl_documents:
+    class: isolated
+    purgeOrder: 104.22
+  intl_hospitals:
+    class: isolated
+    purgeOrder: 104.3
+    pk: business_id
+
   # ── Contact Us form (0165) ─────────────────────────────────────────────
   # Written only by the contact-submit edge function; no foreign keys.
   privacy_request_events:

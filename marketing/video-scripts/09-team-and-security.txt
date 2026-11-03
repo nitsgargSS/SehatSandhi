@@ -1,0 +1,82 @@
+SERIES 9 — YOUR TEAM AND YOUR DATA (owners)
+
+------------------------------------------------------------------
+V9.1  Each person sees only their part                      (~45 s · owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+रिसेप्शन वाले को आपकी पूरी कमाई क्यों दिखे?
+सेहतसंधि में हर किसी की अपनी screens — मालिक, मैनेजर, डॉक्टर, नर्स, रिसेप्शन, लैब technician, फ़ार्मेसी, delivery और driver।
+रिसेप्शन — बुकिंग, टोकन, बिल। डॉक्टर — अपने मरीज़। नर्स — अपने डॉक्टर या अपना वार्ड।
+और मालिक — सब कुछ।
+SHOW
+- Same clinic logged in as receptionist vs owner (tabs differ).
+ON SCREEN
+1 Why should the desk see your income?
+2 A role for everyone
+3 Each sees their own work
+4 Owner sees everything
+
+------------------------------------------------------------------
+V9.2  Adding and removing staff — with a code to your email  (~40 s · owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+कोई भी चुपचाप नया login न बना ले, या किसी को हटा न दे।
+सेहतसंधि में स्टाफ़ जोड़ने या हटाने पर, जो ये बदलाव कर रहा है उसके email पर 6 अंकों का code आता है — code डाले बिना कुछ नहीं बदलता।
+हटाने का कारण लिखना ज़रूरी, और ज़रूरत हो तो वापस भी ला सकते हैं।
+नए व्यक्ति को email और WhatsApp पर invite जाता है — वो अपना पासवर्ड ख़ुद बनाता है।
+SHOW
+- Add staff → code modal; remove with reason; invite on phone; join page.
+ON SCREEN
+1 No silent new logins
+2 6-digit code by email
+3 Remove with a reason · Bring back
+4 Invite by email + WhatsApp
+
+------------------------------------------------------------------
+V9.3  One number, one person                                (~30 s · owners)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+"सर का password सबको पता है" — ये सबसे बड़ा ख़तरा है।
+सेहतसंधि में एक मोबाइल नंबर, एक व्यक्ति — कोई साझा या उधार का login नहीं।
+और 30 मिनट कोई काम न हो, तो screen अपने-आप logout।
+SHOW
+- Login; idle logout.
+ON SCREEN
+1 "Everyone knows sir's password"
+2 One number = one person
+3 Auto logout after 30 idle minutes
+
+------------------------------------------------------------------
+V9.4  Your data stays yours                                 (~40 s · everyone)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+मरीज़ों का डेटा आपकी सबसे क़ीमती चीज़ है — और सबसे बड़ी ज़िम्मेदारी।
+सेहतसंधि में डेटा भारत में रखा जाता है, सुरक्षित तरीक़े से।
+कौन क्या देख सकता है — रोल के हिसाब से तय।
+मरीज़ों के रिकॉर्ड की हर खोज का log रहता है — किसने, कब।
+और मरीज़ WhatsApp पर STOP लिखे, तो उसे आगे से मैसेज नहीं जाते।
+ON SCREEN
+1 Your most valuable asset
+2 Data kept in India
+3 Access by role
+4 Every search is logged
+5 STOP is respected
+
+------------------------------------------------------------------
+V9.5  Works on phone and computer — in Hindi too             (~30 s · everyone)
+------------------------------------------------------------------
+FORMAT    AUTO — nothing to record (clip + screens + Hindi stock voice + subtitles)
+SCRIPT
+रिसेप्शन के कंप्यूटर पर, डॉक्टर के फ़ोन पर, घर से टैबलेट पर — वही सेहतसंधि।
+कुछ install नहीं करना, बस browser खोलिए।
+स्टाफ़ को English में दिक़्क़त है? एक क्लिक में पूरा dashboard हिंदी में।
+SHOW
+- Same screen on laptop, phone; language switcher to Hindi.
+ON SCREEN
+1 Computer · Phone · Tablet
+2 Nothing to install
+3 Whole dashboard in Hindi

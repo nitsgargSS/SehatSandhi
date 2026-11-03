@@ -1,0 +1,110 @@
+SERIES 1 — INTRODUCTION (post these first, in this order)
+
+------------------------------------------------------------------
+V1.1  Meet Sehatsandhi                               (~40 s · everyone)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+नमस्ते, मैं नितिन गर्ग, सेहतसंधि का फ़ाउंडर।
+डॉक्टर साहब, आपका दिन मरीज़ों के लिए होना चाहिए — रजिस्टर, पर्चियों और फ़ोन कॉल्स के लिए नहीं।
+इसीलिए हमने सेहतसंधि बनाया — क्लिनिक, हॉस्पिटल, लैब और फ़ार्मेसी, सब एक ही सिस्टम में।
+भारत के शहरों और क़स्बों के लिए बना है — हिंदी और English दोनों में, और WhatsApp के साथ।
+कुछ install नहीं करना — रिसेप्शन का कंप्यूटर हो या आपका फ़ोन, बस खोलिए और काम शुरू।
+आने वाले दिनों में मैं आपको एक-एक feature दिखाऊँगा — follow कीजिए।
+SHOW
+- Dashboard on a laptop, then the same screen on a phone.
+ON SCREEN
+1 Nitin Garg · Founder, Sehatsandhi
+2 Patients, not paperwork
+3 Clinic · Hospital · Lab · Pharmacy
+4 Hindi + English · WhatsApp
+5 Nothing to install
+6 Follow for one feature a day
+
+------------------------------------------------------------------
+V1.2  Who Sehatsandhi is for                          (~45 s · everyone)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+सेहतसंधि किसके लिए है? आइए देखते हैं।
+एक डॉक्टर का छोटा क्लिनिक — टोकन, पर्चा, बिल और फ़ॉलो-अप।
+दो-चार डॉक्टरों वाला पॉलीक्लिनिक — हर डॉक्टर का अपना schedule, अपने मरीज़।
+नर्सिंग होम और हॉस्पिटल — वार्ड, बेड, एडमिशन, ऑपरेशन और डिस्चार्ज।
+पैथोलॉजी लैब और डायग्नोस्टिक सेंटर — टेस्ट, रिपोर्ट, और रिपोर्ट सीधे मरीज़ के WhatsApp पर।
+फ़ार्मेसी — स्टॉक, एक्सपायरी, GST बिल।
+जो हिस्सा आपको चाहिए, वही लीजिए — बाक़ी जब ज़रूरत हो तब जोड़िए।
+SHOW
+- Quick flashes: Queue tab, Wards tab, Lab tab, Pharmacy tab.
+ON SCREEN
+1 Who is it for?
+2 Clinics
+3 Polyclinics
+4 Nursing homes · Hospitals
+5 Labs · Diagnostic centres
+6 Pharmacies
+7 Take only what you need
+
+------------------------------------------------------------------
+V1.3  A day at a clinic with Sehatsandhi              (~60 s · clinics)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+सुबह 9 बजे — क्लिनिक खुलने से पहले ही आज की appointments आ चुकी हैं, मरीज़ों ने रात को WhatsApp पर बुक कर ली थीं।
+10 बजे — रिसेप्शन पर टोकन, फ़ीस और BP-शुगर, सब एक स्क्रीन पर।
+डॉक्टर के सामने मरीज़ की पूरी हिस्ट्री — पिछली visit, दवाइयाँ, एलर्जी लाल रंग में सबसे ऊपर।
+पर्चा बना, और सीधे मरीज़ के WhatsApp पर — पर्ची खोने का झंझट ख़त्म।
+बिल एक क्लिक में — कैश, UPI या कार्ड, और किसने लिया, सब दर्ज।
+शाम 7 बजे — दिन का पूरा हिसाब, हर स्टाफ़ और हर तरीक़े के हिसाब से।
+और अगले हफ़्ते, फ़ॉलो-अप वाले मरीज़ को अपने-आप याद दिलाया जाता है।
+यही है सेहतसंधि — पूरा क्लिनिक, एक जगह।
+SHOW
+- Today tab → Queue → patient record → Send prescription on WhatsApp → bill → Collections.
+ON SCREEN
+1 9 AM · Bookings already in
+2 Token · Fee · Vitals
+3 Full history · Allergies first
+4 Prescription on WhatsApp
+5 Bill · Cash / UPI / Card
+6 7 PM · Day's accounts
+7 Follow-up reminders
+8 Your whole clinic, one place
+
+------------------------------------------------------------------
+V1.4  Why I built Sehatsandhi                          (~45 s · everyone)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+हमारा अपना आँखों का हॉस्पिटल है — SN Eye Hospital — और वहाँ, और बाक़ी क्लिनिकों में भी, मैंने एक ही चीज़ देखी।
+डॉक्टर साहब मरीज़ देख रहे हैं, और बाहर रिसेप्शन पर भीड़, रजिस्टर, फ़ोन, और शाम को हिसाब का सिरदर्द।
+बड़े सॉफ़्टवेयर महंगे भी थे, और मुश्किल भी — स्टाफ़ सीख ही नहीं पाता था।
+तो हमने ऐसा सिस्टम बनाया जो हमारे क्लिनिकों के तरीक़े से चले — हिंदी में, WhatsApp पर, फ़ोन पर भी।
+स्टाफ़ एक घंटे में सीख जाता है, और उसी दिन से काम शुरू।
+हमारा मक़सद सीधा है — डॉक्टर का समय मरीज़ के लिए।
+ON SCREEN
+1 What I saw in every clinic
+2 Crowd · Registers · Phone calls
+3 Software: costly, complicated
+4 Built for how our clinics work
+5 Staff learn it in an hour
+6 Doctor's time for patients
+
+------------------------------------------------------------------
+V1.5  Start in one day — bring your old patient list   (~40 s · everyone)
+------------------------------------------------------------------
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+"नया सॉफ़्टवेयर लगाने में तो महीने लग जाएँगे" — ऐसा नहीं है।
+sehatsandhi.com पर तीन steps में रजिस्ट्रेशन — फ़ोन और email verify, डॉक्टर का रजिस्ट्रेशन नंबर, और क्लिनिक का पता।
+आपके पुराने मरीज़ों की Excel शीट है? अपलोड कीजिए, सारे मरीज़ एक बार में सिस्टम में।
+स्टाफ़ को जोड़िए — हर किसी को invite जाता है, वो अपना पासवर्ड ख़ुद बनाता है।
+और उसी दिन से टोकन, पर्चा और बिल शुरू।
+फ़्री डेमो के लिए हमें WhatsApp कीजिए — हम आपके स्टाफ़ के साथ बैठकर शुरू करवाते हैं।
+SHOW
+- /business/register steps; staff invite screen.
+ON SCREEN
+1 Months to set up? No.
+2 Register in 3 steps
+3 Upload your Excel patient list
+4 Invite your staff
+5 Start the same day
+6 Free demo on WhatsApp

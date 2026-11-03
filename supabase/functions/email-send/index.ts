@@ -129,6 +129,18 @@ Deno.serve(async (req) => {
       continue
     }
 
+    // 0313: International — document checks, reminders, listing changes.
+    if (r.kind === 'intl_notice') {
+      const res = await sendIntlNotice(db, r.business_id, r.payload, site)
+      if (res === 'skip') { await finish({ status: 'skipped', last_error: 'no address' }); continue }
+      if (res.ok) { await finish({ status: 'sent', sent_at: new Date().toISOString(), last_error: null }); sent++ }
+      else {
+        const giveUp = !res.retry || r.attempts + 1 >= MAX_ATTEMPTS
+        await finish({ status: giveUp ? 'failed' : 'pending', last_error: res.error }); failed++
+      }
+      continue
+    }
+
     // 0300: a doctor asked the bot for a demo — tell Sehatsandhi, to call them today.
     if (r.kind === 'demo_request') {
       const res = await sendDemoRequest(r.payload, site)
@@ -586,4 +598,29 @@ async function sendBroadcastRejected(db: any, businessId: string | null, payload
 <p style="margin:0"><a href="${login}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold">Open dashboard</a></p>`)
   const text = `A WhatsApp broadcast from ${b.name} was not approved, so it was not sent.\nWhy: ${reason}\n${refund} is back in your WhatsApp wallet.\n${login}`
   return sendEmail({ to, toName: b.name, subject: `Your WhatsApp message was not sent — ${b.name}`, html, text })
+}
+
+// 0313: International notices. payload { to: 'hospital' | 'admin', subject, lines[] }.
+// The hospital's copy goes to its international coordinator, else the business email.
+// deno-lint-ignore no-explicit-any
+async function sendIntlNotice(db: any, businessId: string | null, payload: any, site: string): Promise<SendResult | 'skip'> {
+  const lines = (Array.isArray(payload?.lines) ? payload.lines : []).map(String).filter((l: string) => l.trim())
+  const subject = String(payload?.subject ?? 'Sehatsandhi International')
+  let to = ADMIN_EMAIL, toName = 'Sehatsandhi Admin'
+  let link = `${site}/${Deno.env.get('ADMIN_PATH') ?? 'ng-ctrl-2026'}`, button = 'Open Admin → International'
+  if (payload?.to === 'hospital') {
+    if (!businessId) return 'skip'
+    const [{ data: b }, { data: h }] = await Promise.all([
+      db.from('businesses').select('name, email').eq('id', businessId).maybeSingle(),
+      db.from('intl_hospitals').select('coordinator_email').eq('business_id', businessId).maybeSingle(),
+    ])
+    to = String(h?.coordinator_email || b?.email || '').trim().toLowerCase()
+    if (!to.includes('@') || to.endsWith('@wa.sehatsandhi.in')) return 'skip'
+    toName = b?.name ?? ''
+    link = `${site}/business/dashboard?tab=international`; button = 'Open your dashboard → International'
+  }
+  const html = layout(subject, `
+${lines.map((l: string) => `<p style="margin:0 0 10px">${esc(l)}</p>`).join('')}
+<p style="margin:16px 0 0"><a href="${link}" style="display:inline-block;background:#0f6b4a;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:bold">${esc(button)}</a></p>`)
+  return sendEmail({ to, toName, subject, html, text: [...lines, '', link].join('\n') })
 }

@@ -1,0 +1,91 @@
+SERIES 8 — THE FULL HOSPITAL FLOW (what doctors asked for on 29 Oct)
+One main film (about 2½ minutes, for YouTube, Facebook and the website)
+plus six short parts (for Reels), all following ONE patient: "Ramesh ji".
+Record the main film; the six parts are mostly cut from it, with their own hook
+line, which you record separately (marked HOOK).
+
+==================================================================
+V8.0  MAIN FILM — One patient, one hospital, one system      (~2½ min)
+==================================================================
+FORMAT    YOU — record it (your face and voice; I add clips, screens, titles)
+SCRIPT
+डॉक्टर साहब, आपने कहा था — "OPD से IPD तक, फ़ार्मेसी, लैब, बाहर की लैब, और ऑपरेशन से पहले-बाद के मैसेज — सब जुड़ा हुआ चाहिए।" तो देखिए।
+ये हैं रमेश जी, 62 साल, आँखों में धुंधलापन।
+रात को उन्होंने WhatsApp पर, हिंदी में, कल सुबह की appointment बुक की।
+सुबह रिसेप्शन पर टोकन मिला, नर्स ने BP और शुगर भरी — टोकन पर "Vitals ✓"।
+डॉक्टर ने "Call next" दबाया — रमेश जी की पूरी हिस्ट्री सामने, शुगर की बीमारी, और एक दवाई से एलर्जी, लाल रंग में।
+जाँच हुई — मोतियाबिंद। डॉक्टर ने visit से ही लैब टेस्ट order किए — सीधे हॉस्पिटल की लैब की स्क्रीन पर, charge बिल में।
+एक special टेस्ट हमारे यहाँ नहीं होता — वो partner लैब को भेजा, जो सेहतसंधि पर है। रिपोर्ट वापस रमेश जी की फ़ाइल में आ गई।
+रिपोर्ट sign होते ही — रमेश जी के WhatsApp पर, और डॉक्टर की "Reports ready" लिस्ट में।
+ऑपरेशन की तारीख़ तय हुई — और message plan से, ऑपरेशन से पहले के मैसेज अपने-आप: "इस दिन से दवाई शुरू करें", "उस दिन रात को कुछ न खाएँ", "सुबह 7 बजे पहुँचें"।
+ऑपरेशन के दिन — भर्ती, बेड, deposit और रसीद। हर charge उसी दिन बिल में।
+वार्ड से नर्स ने दवाई की request भेजी — फ़ार्मेसी ने स्टॉक से दी, सीधे रमेश जी के हॉस्पिटल बिल में।
+ऑपरेशन हुआ — OT register में सर्जन, लेंस, सब दर्ज।
+अगले दिन डिस्चार्ज — समरी पहले से भरी हुई, डॉक्टर ने देखी, और समरी व आख़िरी बिल परिवार के WhatsApp पर।
+घर जाकर — ऑपरेशन के बाद के मैसेज: ड्रॉप कैसे डालें, कब दिखाने आएँ।
+और फ़ॉलो-अप से एक दिन पहले — याद दिलाने वाला मैसेज। रमेश जी समय पर वापस।
+महीने के आख़िर में — हॉस्पिटल और partner लैब का statement अपने-आप, दोनों के एक ही खाते से।
+एक मरीज़, एक हॉस्पिटल, एक सिस्टम — कहीं पर्ची नहीं, कहीं फ़ोन नहीं, कहीं हिसाब में गड़बड़ नहीं।
+यही है सेहतसंधि। अपने हॉस्पिटल का फ़्री डेमो लीजिए।
+SHOW (in this order — record on staging with a test patient called "Ramesh Kumar")
+- WhatsApp booking on a phone → Queue token → vitals → Call next → record with allergy
+- Order tests from visit → Lab queue → Refer a test to partner lab → report back → Reports ready
+- Planned surgery + message plan → phone receiving pre-op message
+- Admit → bed → deposit receipt → ward medicine request → ward pharmacy issue → stay bill
+- OT register → discharge summary → WhatsApp with summary + bill
+- Aftercare message on phone → follow-up reminder → Partner ledger statement
+ON SCREEN
+1 "OPD to IPD, all joined up"
+2 Ramesh ji, 62
+3 Booked on WhatsApp, at night
+4 Token · Vitals ✓
+5 Full history · Allergy first
+6 Tests ordered → hospital lab
+7 Special test → partner lab
+8 Report → WhatsApp + doctor
+9 Pre-surgery messages, automatic
+10 Admission · Bed · Deposit
+11 Ward → pharmacy → bill
+12 OT register
+13 Discharge summary + bill on WhatsApp
+14 Aftercare messages
+15 Follow-up reminder
+16 Hospital–lab statement
+17 One patient · One hospital · One system
+18 Free demo
+
+NOTE: pre/post-surgery and follow-up WhatsApp messages need WhatsApp Pro.
+In captions, write: "Surgery messages with WhatsApp Pro".
+
+==================================================================
+SIX SHORT PARTS (each ~30–40 s; the HOOK is a fresh line you record)
+==================================================================
+V8.1  Part 1 — From WhatsApp booking to the doctor's desk
+FORMAT    CUT from V8.0 — record only the HOOK line below
+HOOK  रमेश जी ने रात 11 बजे appointment बुक की — सुबह डॉक्टर के सामने उनकी पूरी हिस्ट्री थी। कैसे?
+Uses main-film lines 3–5. ON SCREEN: Booking → Token → Vitals → History
+
+V8.2  Part 2 — Tests: in-house lab and partner lab
+FORMAT    CUT from V8.0 — record only the HOOK line below
+HOOK  डॉक्टर ने तीन टेस्ट लिखे — दो हॉस्पिटल में, एक बाहर की लैब में — और रिपोर्ट तीनों एक ही फ़ाइल में।
+Uses lines 6–8. ON SCREEN: Ordered → Lab → Partner lab → Reports ready
+
+V8.3  Part 3 — Surgery date fixed, messages start by themselves
+FORMAT    CUT from V8.0 — record only the HOOK line below
+HOOK  ऑपरेशन की तारीख़ तय की — और उसके बाद मरीज़ को याद दिलाने के लिए एक भी फ़ोन नहीं करना पड़ा।
+Uses line 9. ON SCREEN: Date → Message plan → Before · On the day
+
+V8.4  Part 4 — Admission, deposit and ward medicines
+FORMAT    CUT from V8.0 — record only the HOOK line below
+HOOK  भर्ती से डिस्चार्ज तक — बेड, दवाई, लैब, हर charge उसी दिन बिल में। आख़िरी दिन कोई झगड़ा नहीं।
+Uses lines 10–12. ON SCREEN: Bed → Deposit → Ward → Pharmacy → Bill
+
+V8.5  Part 5 — Discharge and aftercare
+FORMAT    CUT from V8.0 — record only the HOOK line below
+HOOK  डिस्चार्ज के लिए तीन घंटे इंतज़ार? रमेश जी के परिवार को दस मिनट लगे।
+Uses lines 13–15. ON SCREEN: Summary ready → WhatsApp → Aftercare → Follow-up
+
+V8.6  Part 6 — The month-end statement
+FORMAT    CUT from V8.0 — record only the HOOK line below
+HOOK  हॉस्पिटल और लैब के बीच महीने का हिसाब — इस बार बिना कॉपी, बिना बहस।
+Uses line 16 + V7.7 lines 3–5. ON SCREEN: One ledger → Statement → Paid
