@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Globe2, Upload, FileCheck2, Trash2, Pencil, CheckCircle2, AlertTriangle, ExternalLink } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import {
-  canApply, loadMine, loadDocs, saveProfile, submitApplication, savePackage, deletePackage, uploadDoc, docUrl,
-  type MyHospital, type MyPackage, type Procedure, type CheckState, type IntlDoc, type Missing, type DocEvent,
+  canApply, loadMine, loadDocs, loadMedia, uploadMedia, addYoutube, editMedia, deleteMedia, mediaUrl, MEDIA_CATEGORIES, saveProfile, submitApplication, savePackage, deletePackage, uploadDoc, docUrl,
+  type MyHospital, type MyPackage, type Procedure, type CheckState, type IntlDoc, type Missing, type DocEvent, type MediaItem,
 } from '../../lib/intlApi'
 import { CHECKLIST, AGREEMENT_POINTS, AGREEMENT_VERSION, inr } from '../../lib/intlContent'
 
@@ -105,7 +105,7 @@ export default function InternationalPanel({ businessId }: { businessId: string 
   // Live for ticks being edited; the database's own check decides on save.
   const progress = useMemo(() => CHECKLIST.map(g => {
     const req = g.items.filter(i => !i.optional)
-    const done = req.filter(i => i.doc ? !forSubmit.some(m => m.key === i.key) : !!check[i.key]?.ok).length
+    const done = req.filter(i => (i.doc || i.media) ? !forSubmit.some(m => m.key === i.key) : !!check[i.key]?.ok).length
     return { key: g.key, done, total: req.length }
   }), [check, forSubmit])
   const missingRequired = progress.reduce((n, p) => n + (p.total - p.done), 0)
@@ -208,7 +208,14 @@ export default function InternationalPanel({ businessId }: { businessId: string 
                       return (
                         <li key={i.key} className="py-3 text-sm">
                           <div className="grid gap-2 md:grid-cols-[1fr_auto] items-start">
-                            {i.doc ? (
+                            {i.media ? (
+                              <div>
+                                <p><b className="text-navy-700">{i.key}</b> {i.label}</p>
+                                {miss ? <p className="mt-1 text-xs text-amber-700">{miss.why}. Add them in “Photos and videos” below.</p>
+                                  : forList.some(m => m.key === i.key) ? <p className="mt-1 text-xs text-amber-700">{forList.find(m => m.key === i.key)!.why}</p>
+                                  : <p className="mt-1 text-xs text-green-700">Done — photos approved.</p>}
+                              </div>
+                            ) : i.doc ? (
                               <div>
                                 <p><b className="text-navy-700">{i.key}</b> {i.label}{i.optional && <span className="text-gray-400"> (if it applies)</span>}</p>
                                 {d && (
@@ -269,12 +276,15 @@ export default function InternationalPanel({ businessId }: { businessId: string 
         )}
       </div>
 
-      {/* 3. Prices */}
+      {/* 3. Photos and videos */}
+      <MediaSection businessId={businessId} hasProfile={!!h} onChange={reload} />
+
+      {/* 4. Prices */}
       <PackagesSection businessId={businessId} procs={procs} pkgs={pkgs} fee={fee} hasProfile={!!h} onChange={reload} />
 
       {/* 4. Agreement */}
       <div className="card">
-        <h3 className="font-bold text-navy-700 mb-1">4. Agreement</h3>
+        <h3 className="font-bold text-navy-700 mb-1">5. Agreement</h3>
         {h?.agreement_accepted_at ? (
           <p className="text-sm text-green-800 bg-green-50 rounded-lg p-3 flex gap-2"><CheckCircle2 className="w-4 h-4 mt-0.5" /> Accepted by {h.agreement_signatory} on {new Date(h.agreement_accepted_at).toLocaleDateString('en-IN')} ({h.agreement_version}).</p>
         ) : <p className="text-sm text-gray-500 mb-3">Read and accept to send your application. Your listing opens only after Sehatsandhi checks your documents and video walkthrough.</p>}
@@ -338,7 +348,7 @@ function PackagesSection({ businessId, procs, pkgs, fee, hasProfile, onChange }:
 
   return (
     <div className="card">
-      <h3 className="font-bold text-navy-700 mb-1">3. Prices per procedure</h3>
+      <h3 className="font-bold text-navy-700 mb-1">4. Prices per procedure</h3>
       <p className="text-sm text-gray-500 mb-4">Your rough package price in rupees — the same as your own international rate. Patients see it plus Sehatsandhi’s {fee}% fee, marked as an estimate. A price older than its valid-until date is hidden until you update it.</p>
       {!hasProfile && <p className="text-sm text-amber-800 bg-amber-50 rounded-lg p-2 mb-3">Save your hospital details (step 1) first.</p>}
       {pkgs.length > 0 && (
@@ -395,6 +405,112 @@ function PackagesSection({ businessId, procs, pkgs, fee, hasProfile, onChange }:
         </div>
       )}
       {err && !editing && <p className="text-red-700 text-sm mt-2">{err}</p>}
+    </div>
+  )
+}
+
+// 0317: the hospital's photos and videos. Each waits for Sehatsandhi's check;
+// once approved it shows on the hospital's page on the portal straight away.
+function MediaSection({ businessId, hasProfile, onChange }: { businessId: string; hasProfile: boolean; onChange: () => Promise<void> }) {
+  const [items, setItems] = useState<MediaItem[]>([])
+  const [cat, setCat] = useState('rooms')
+  const [caption, setCaption] = useState('')
+  const [yt, setYt] = useState('')
+  const [busy, setBusy] = useState('')
+  const [err, setErr] = useState('')
+  const [msg, setMsg] = useState('')
+  const load = () => loadMedia(businessId).then(setItems, e => setErr(e.message))
+  useEffect(() => { load() // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId])
+  const after = async (m: string) => { setMsg(m); setCaption(''); await load(); await onChange() }
+  const upload = async (files: FileList) => {
+    setErr(''); setMsg('')
+    let n = 0
+    for (const f of Array.from(files)) {
+      setBusy(`Uploading ${f.name}…`)
+      try { await uploadMedia(businessId, f, cat, caption); n++ } catch (e) { setErr(`${f.name}: ${(e as Error).message}`); break }
+    }
+    setBusy('')
+    if (n) await after(`${n} uploaded. Sehatsandhi will check ${n === 1 ? 'it' : 'them'}; approved ones show on your page straight away.`)
+  }
+  const addYt = async () => {
+    setErr(''); setBusy('Adding…')
+    try { await addYoutube(businessId, yt, cat === 'rooms' ? 'tour' : cat, caption); setYt(''); await after('Video added. Sehatsandhi will check it.') } catch (e) { setErr((e as Error).message) }
+    setBusy('')
+  }
+  const remove = async (m: MediaItem) => {
+    if (!window.confirm('Remove this from your page?')) return
+    try { await deleteMedia(businessId, m.id); await load(); await onChange() } catch (e) { setErr((e as Error).message) }
+  }
+  const move = async (m: MediaItem, d: number) => {
+    const i = items.findIndex(x => x.id === m.id), j = i + d
+    if (j < 0 || j >= items.length) return
+    const other = items[j]
+    try {
+      await editMedia(businessId, m.id, m.category, m.caption ?? '', other.sort)
+      await editMedia(businessId, other.id, other.category, other.caption ?? '', m.sort === other.sort ? m.sort + d : m.sort)
+      await load()
+    } catch (e) { setErr((e as Error).message) }
+  }
+  const photos = items.filter(i => i.kind === 'photo')
+  const tone = { pending: 'bg-amber-50 text-amber-800', approved: 'bg-green-50 text-green-700', rejected: 'bg-red-50 text-red-700' }
+  const word = { pending: 'Waiting for check', approved: 'On your page', rejected: 'Not accepted' }
+  return (
+    <div className="card">
+      <h3 className="font-bold text-navy-700 mb-1">3. Photos and videos</h3>
+      <p className="text-sm text-gray-500 mb-3">Patients decide with their eyes. Show real, recent photos of <b>this</b> hospital: the building, a patient room, the ICU, the operation theatre, equipment, food and the family lounge. At least 5 photos are needed (item G1). The first approved photo is your cover picture.</p>
+      <ul className="text-xs text-gray-600 mb-4 list-disc ml-5 space-y-0.5">
+        <li>Photos: JPG or PNG, up to 15 MB, at least 800 pixels wide — we resize them for fast loading.</li>
+        <li>Videos: MP4, up to 50 MB. For a longer tour, upload it to YouTube and paste the link.</li>
+        <li>No patients who can be recognised, no before/after pictures, no testimonials or “best” claims (NMC rules).</li>
+      </ul>
+      {!hasProfile && <p className="text-sm text-amber-800 bg-amber-50 rounded-lg p-2 mb-3">Save your hospital details (step 1) first.</p>}
+      <div className="grid gap-3 sm:grid-cols-[auto_1fr] items-end text-sm border rounded-xl p-3">
+        <label>What it shows
+          <select value={cat} onChange={e => setCat(e.target.value)} className={input}>
+            {Object.entries(MEDIA_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select></label>
+        <label>Caption (optional)<input value={caption} onChange={e => setCaption(e.target.value)} maxLength={160} placeholder="e.g. Deluxe room with companion sofa-bed" className={input} /></label>
+        <div className="sm:col-span-2 flex flex-wrap gap-2 items-center">
+          <label className={`inline-flex items-center gap-1 font-semibold border rounded-lg px-3 py-1.5 ${!hasProfile || busy ? 'opacity-50' : 'cursor-pointer text-navy-700'}`}>
+            <Upload className="w-4 h-4" /> Upload photos or a video
+            <input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" className="hidden" disabled={!hasProfile || !!busy}
+              onChange={e => { if (e.target.files?.length) upload(e.target.files); e.target.value = '' }} />
+          </label>
+          <span className="text-gray-400">or</span>
+          <input value={yt} onChange={e => setYt(e.target.value)} placeholder="YouTube link" className="border rounded-lg px-3 py-1.5 flex-1 min-w-[180px]" />
+          <button onClick={addYt} disabled={!hasProfile || !yt || !!busy} className="btn-outline text-sm !py-1.5">Add video link</button>
+        </div>
+        {busy && <p className="sm:col-span-2 text-gray-600">{busy}</p>}
+        {err && <p className="sm:col-span-2 text-red-700">{err}</p>}
+        {msg && <p className="sm:col-span-2 text-green-700">{msg}</p>}
+      </div>
+      <p className="text-sm text-gray-600 mt-3">{photos.filter(p => p.status === 'approved').length} photo(s) on your page · {items.filter(i => i.status === 'pending').length} waiting for check</p>
+      {items.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
+          {items.map((m, n) => (
+            <div key={m.id} className="border rounded-xl overflow-hidden text-xs">
+              <div className="aspect-[4/3] bg-gray-100 relative">
+                {m.kind === 'photo' && m.path && <img src={mediaUrl(m.path)} alt="" className="w-full h-full object-cover" loading="lazy" />}
+                {m.kind === 'video' && m.path && <video src={mediaUrl(m.path)} className="w-full h-full object-cover" muted preload="metadata" />}
+                {m.kind === 'youtube' && <img src={`https://img.youtube.com/vi/${m.youtube_id}/hqdefault.jpg`} alt="" className="w-full h-full object-cover" />}
+                {m.kind !== 'photo' && <span className="absolute left-2 top-2 rounded bg-black/70 text-white px-1.5 py-0.5">{m.kind === 'youtube' ? 'YouTube' : 'Video'}</span>}
+                {n === 0 && m.kind === 'photo' && <span className="absolute right-2 top-2 rounded bg-white/90 text-navy-700 px-1.5 py-0.5 font-semibold">Cover</span>}
+              </div>
+              <div className="p-2 space-y-1">
+                <p className="font-semibold">{MEDIA_CATEGORIES[m.category] ?? m.category}{m.caption ? ` · ${m.caption}` : ''}</p>
+                <span className={`inline-block rounded-full px-2 py-0.5 font-semibold ${tone[m.status]}`}>{word[m.status]}</span>
+                {m.status === 'rejected' && m.reason && <p className="text-red-700">{m.reason}</p>}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => move(m, -1)} disabled={n === 0} className="underline disabled:opacity-30">← Earlier</button>
+                  <button onClick={() => move(m, 1)} disabled={n === items.length - 1} className="underline disabled:opacity-30">Later →</button>
+                  <button onClick={() => remove(m)} className="ml-auto text-red-700 underline">Remove</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

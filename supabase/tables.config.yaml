@@ -359,6 +359,10 @@ tables:
   intl_documents:
     class: isolated
     purgeOrder: 104.22
+  # 0317: hospital photos and videos.
+  intl_media:
+    class: isolated
+    purgeOrder: 104.25
   intl_hospitals:
     class: isolated
     purgeOrder: 104.3

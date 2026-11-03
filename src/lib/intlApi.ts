@@ -22,6 +22,9 @@ export interface Hospital {
   beds: number | null; icu_beds: number | null; panels: string[]; languages: string[]; specialities: string[]
   about: string | null; photo_url: string | null; nearest_airport: string | null; airport_hours: number | null
   packages: Package[]
+  /** 0317: approved photos and videos; the first photo is the cover. */
+  cover_path?: string | null
+  media?: { kind: 'photo' | 'video' | 'youtube'; path: string | null; youtube_id: string | null; category: string; caption: string | null }[]
 }
 export interface Catalogue { fee_pct: number; fx: Record<string, number>; procedures: Procedure[]; hospitals: Hospital[] }
 
@@ -313,4 +316,63 @@ export async function loadArticle(slug: string): Promise<Article | null> {
   const { data, error } = await supabase.rpc('sehat_intl_article', { p_slug: slug })
   if (error) throw error
   return (data as Article) ?? null
+}
+
+// ── Hospital photos and videos (0317) ───────────────────────────────────────
+export const MEDIA_CATEGORIES: Record<string, string> = {
+  building: 'Building', rooms: 'Rooms', icu: 'ICU', ot: 'Operation theatre', equipment: 'Equipment',
+  food: 'Food', lounge: 'Family lounge', tour: 'Video tour', other: 'Other',
+}
+export const mediaUrl = (path: string) => supabase.storage.from('intl-media').getPublicUrl(path).data.publicUrl
+export interface MediaItem {
+  id: string; business_id: string; kind: 'photo' | 'video' | 'youtube'; path: string | null; youtube_id: string | null
+  category: string; caption: string | null; sort: number; status: 'pending' | 'approved' | 'rejected'; reason: string | null
+  uploaded_at: string; reviewed_by_name: string | null
+}
+export async function loadMedia(businessId: string): Promise<MediaItem[]> {
+  const { data, error } = await supabase.from('intl_media').select('*').eq('business_id', businessId).order('sort').order('uploaded_at')
+  if (error) throw error
+  return (data ?? []) as MediaItem[]
+}
+/** Photos are shrunk to at most 1920 px and saved as JPEG, so pages stay
+ *  quick on a phone abroad. */
+async function shrink(file: File): Promise<Blob> {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return file
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error('That photo could not be opened. Try a JPG or PNG.')); i.src = url })
+    if (Math.max(img.width, img.height) < 800) throw new Error(`This photo is too small (${img.width}×${img.height}). Use one at least 800 pixels wide, so it looks sharp.`)
+    const k = Math.min(1, 1920 / Math.max(img.width, img.height))
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k)
+    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+    const out = await new Promise<Blob | null>(r => c.toBlob(r, 'image/jpeg', 0.82))
+    return out && out.size < file.size ? out : file
+  } finally { URL.revokeObjectURL(url) }
+}
+export async function uploadMedia(businessId: string, file: File, category: string, caption: string) {
+  const video = file.type.startsWith('video/')
+  if (!video && !file.type.startsWith('image/')) throw new Error('Choose a photo (JPG, PNG) or a video (MP4).')
+  const mb = (file.size / 1024 / 1024).toFixed(1)
+  if (video && file.size > 50 * 1024 * 1024) throw new Error(`This video is ${mb} MB; the limit is 50 MB. For a longer tour, put it on YouTube and paste the link.`)
+  if (!video && file.size > 15 * 1024 * 1024) throw new Error(`This photo is ${mb} MB; the limit is 15 MB.`)
+  const body = video ? file : await shrink(file)
+  const ext = video ? (file.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) : (body.type === 'image/jpeg' ? 'jpg' : (file.name.split('.').pop() || 'jpg').toLowerCase())
+  const path = `${businessId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+  const { error } = await supabase.storage.from('intl-media').upload(path, body, { upsert: false, contentType: body.type || file.type })
+  fail(error)
+  const { error: e2 } = await supabase.rpc('sehat_intl_media_add', { p_business: businessId, p_kind: video ? 'video' : 'photo', p_path: path, p_youtube: null, p_category: category, p_caption: caption })
+  if (e2) { await supabase.storage.from('intl-media').remove([path]); fail(e2) }
+}
+export async function addYoutube(businessId: string, link: string, category: string, caption: string) {
+  const { error } = await supabase.rpc('sehat_intl_media_add', { p_business: businessId, p_kind: 'youtube', p_path: null, p_youtube: link, p_category: category, p_caption: caption }); fail(error)
+}
+export async function editMedia(businessId: string, id: string, category: string, caption: string, sort: number | null) {
+  const { error } = await supabase.rpc('sehat_intl_media_edit', { p_business: businessId, p_id: id, p_category: category, p_caption: caption, p_sort: sort }); fail(error)
+}
+export async function deleteMedia(businessId: string, id: string) {
+  const { data, error } = await supabase.rpc('sehat_intl_media_delete', { p_business: businessId, p_id: id }); fail(error)
+  if (data) await supabase.storage.from('intl-media').remove([data as string])
+}
+export async function reviewMedia(id: string, ok: boolean, reason?: string) {
+  const { error } = await supabase.rpc('sehat_intl_media_review', { p_id: id, p_ok: ok, p_reason: reason ?? null }); fail(error)
 }

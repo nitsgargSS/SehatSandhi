@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import {
-  MapPin, BedDouble, Activity, Plane, Languages, Star, Check, Plus, Info, ChevronDown, Building2, Search, Lightbulb,
+  MapPin, BedDouble, Activity, Plane, Languages, Star, Check, Plus, Info, ChevronDown, Building2, Search, Lightbulb, X, ChevronLeft, ChevronRight, Play,
 } from 'lucide-react'
 import IntlLayout, { C, Wrap, PageHead, Card, CtaButton, EstimateNote, useTitle } from './IntlLayout'
 import { BottomCta } from './IntlStatic'
@@ -10,13 +10,16 @@ import {
   LEVELS, GROUPS, FEE_LINE, ESTIMATE_LINE, CURRENCIES, type CityLevel,
 } from '../../lib/intlContent'
 import {
-  NABH_LABEL, optionsFor, isSuggested, sortOptions, factLabels, tripTotal,
+  NABH_LABEL, mediaUrl, MEDIA_CATEGORIES, optionsFor, isSuggested, sortOptions, factLabels, tripTotal,
   type Catalogue, type Hospital, type Option, type Procedure, type SortKey,
 } from '../../lib/intlApi'
 
 function Loading({ err }: { err: string }) {
   return <Wrap className="py-16 text-center" >{err ? <p className="text-red-700">{err}</p> : <p style={{ color: C.muted }}>Loading…</p>}</Wrap>
 }
+
+/** The hospital's cover picture: its first approved photo, else its profile photo. */
+const coverOf = (h: Hospital) => (h.cover_path ? mediaUrl(h.cover_path) : h.photo_url) || null
 
 function LevelBadge({ level }: { level: CityLevel }) {
   return <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-sm font-medium" style={{ background: C.soft, color: C.greenDark }}>{LEVELS[level].name}</span>
@@ -205,6 +208,11 @@ function OptionCard({ o, proc, cat, cur, labels, picked, onPick, perNight, compa
     <Card className={picked ? 'ring-2' : ''}>
       <div className="grid gap-5 md:grid-cols-[1.4fr_1fr]">
         <div>
+          {coverOf(h) && (
+            <Link to={`/international/hospitals/${h.id}`} className="block mb-3 rounded-xl overflow-hidden aspect-[16/7]">
+              <img src={coverOf(h)!} alt={`${h.name}`} className="w-full h-full object-cover" loading="lazy" />
+            </Link>
+          )}
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <Link to={`/international/hospitals/${h.id}`} className="text-xl font-bold hover:underline">{h.name}</Link>
             {h.star && <span className="inline-flex items-center gap-1 text-sm rounded-full px-2 py-0.5" style={{ background: C.sand }}><Star className="w-3.5 h-3.5" /> {h.star}-star</span>}
@@ -406,7 +414,7 @@ function HospitalCard({ h }: { h: Hospital }) {
   return (
     <Link to={`/international/hospitals/${h.id}`} className="block rounded-2xl bg-white p-5 hover:shadow-sm transition" style={{ border: `1px solid ${C.border}` }}>
       <div className="flex gap-4">
-        {h.photo_url ? <img src={h.photo_url} alt="" className="w-20 h-20 rounded-xl object-cover shrink-0" /> :
+        {coverOf(h) ? <img src={coverOf(h)!} alt="" className="w-24 h-20 rounded-xl object-cover shrink-0" loading="lazy" /> :
           <div className="w-20 h-20 rounded-xl flex items-center justify-center shrink-0" style={{ background: C.soft }}><Building2 className="w-8 h-8" style={{ color: C.green }} /></div>}
         <div className="min-w-0">
           <p className="font-bold text-lg">{h.name}</p>
@@ -431,6 +439,7 @@ export function IntlHospital() {
   return (
     <IntlLayout>
       <PageHead kicker={`${[h.city, h.state].filter(Boolean).join(', ')} · ${LEVELS[h.city_level].name}`} title={h.name} lead={h.about ?? undefined} />
+      {(h.media?.length ?? 0) > 0 && <Gallery h={h} />}
       <Wrap className="py-10 grid gap-6 lg:grid-cols-[1fr_1.6fr]">
         <Card>
           <h2 className="font-bold text-lg mb-3">Facts</h2>
@@ -554,5 +563,67 @@ export function IntlCosts() {
       </Wrap>
       <BottomCta />
     </IntlLayout>
+  )
+}
+
+// 0317: the hospital's approved photos and videos, with a full-screen viewer.
+function Gallery({ h }: { h: Hospital }) {
+  const all = h.media ?? []
+  const [cat, setCat] = useState('')
+  const [open, setOpen] = useState<number | null>(null)
+  const list = all.filter(m => !cat || m.category === cat)
+  const cats = [...new Set(all.map(m => m.category))]
+  const go = (d: number) => setOpen(i => i === null ? null : (i + d + list.length) % list.length)
+  useEffect(() => {
+    if (open === null) return
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); if (e.key === 'ArrowRight') go(1); if (e.key === 'ArrowLeft') go(-1) }
+    window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, list.length])
+  const thumb = (m: NonNullable<Hospital['media']>[number]) => m.kind === 'youtube' ? `https://img.youtube.com/vi/${m.youtube_id}/hqdefault.jpg` : m.path ? mediaUrl(m.path) : ''
+  const cur = open !== null ? list[open] : null
+  return (
+    <Wrap className="pt-8">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <h2 className="text-xl font-bold">Inside the hospital</h2>
+        {cats.length > 1 && (
+          <div className="flex flex-wrap gap-2">
+            {['', ...cats].map(c => (
+              <button key={c} onClick={() => setCat(c)} className="rounded-full px-3 py-1 text-sm"
+                style={cat === c ? { background: C.green, color: '#fff' } : { background: '#fff', border: `1px solid ${C.border}` }}>{c ? MEDIA_CATEGORIES[c] ?? c : 'All'}</button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {list.map((m, i) => (
+          <button key={i} onClick={() => setOpen(i)} className={`relative rounded-2xl overflow-hidden bg-gray-100 group ${i === 0 && !cat ? 'col-span-2 row-span-2' : ''}`} style={{ aspectRatio: i === 0 && !cat ? '4/3' : '4/3' }}>
+            {m.kind === 'video' && m.path
+              ? <video src={mediaUrl(m.path)} className="w-full h-full object-cover" muted preload="metadata" />
+              : <img src={thumb(m)} alt={m.caption ?? MEDIA_CATEGORIES[m.category] ?? ''} className="w-full h-full object-cover group-hover:scale-105 transition" loading="lazy" />}
+            {m.kind !== 'photo' && <span className="absolute inset-0 flex items-center justify-center"><span className="w-14 h-14 rounded-full bg-black/55 flex items-center justify-center"><Play className="w-7 h-7 text-white" /></span></span>}
+            <span className="absolute left-0 right-0 bottom-0 p-2 text-left text-white text-sm" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,.6))' }}>{m.caption || MEDIA_CATEGORIES[m.category]}</span>
+          </button>
+        ))}
+      </div>
+      <p className="text-xs mt-2" style={{ color: C.muted }}>Photos and videos from the hospital, checked by Sehatsandhi.</p>
+      {cur && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" role="dialog" aria-modal="true" onClick={() => setOpen(null)}>
+          <div className="flex items-center justify-between p-3 text-white">
+            <span className="text-sm">{(open ?? 0) + 1} / {list.length} · {cur.caption || MEDIA_CATEGORIES[cur.category]}</span>
+            <button aria-label="Close" className="p-2"><X className="w-6 h-6" /></button>
+          </div>
+          <div className="flex-1 flex items-center justify-center px-2 pb-6 relative" onClick={e => e.stopPropagation()}>
+            {cur.kind === 'photo' && cur.path && <img src={mediaUrl(cur.path)} alt={cur.caption ?? ''} className="max-h-full max-w-full object-contain rounded-lg" />}
+            {cur.kind === 'video' && cur.path && <video src={mediaUrl(cur.path)} controls autoPlay playsInline className="max-h-full max-w-full rounded-lg" />}
+            {cur.kind === 'youtube' && <iframe title={cur.caption ?? 'Video'} src={`https://www.youtube-nocookie.com/embed/${cur.youtube_id}?autoplay=1&rel=0`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen className="w-full max-w-4xl aspect-video rounded-lg" />}
+            {list.length > 1 && <>
+              <button onClick={() => go(-1)} aria-label="Previous" className="absolute left-3 w-11 h-11 rounded-full bg-white/90 flex items-center justify-center"><ChevronLeft className="w-6 h-6" /></button>
+              <button onClick={() => go(1)} aria-label="Next" className="absolute right-3 w-11 h-11 rounded-full bg-white/90 flex items-center justify-center"><ChevronRight className="w-6 h-6" /></button>
+            </>}
+          </div>
+        </div>
+      )}
+    </Wrap>
   )
 }

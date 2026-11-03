@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Globe2, FileCheck2, MessageCircle, RefreshCw } from 'lucide-react'
 import {
   adminLoad, adminReview, adminEnquiry, adminSettings, docUrl, loadCatalogue, loadDocs, reviewDoc, loadAudit, createAuditLink,
-  revokeAuditLink, backupNow, type AdminEnquiry, type MyHospital, type IntlDoc, type Missing, type DocEvent, type AuditLink, type AuditLogRow, type BackupRun,
+  revokeAuditLink, backupNow, loadMedia, reviewMedia, mediaUrl, MEDIA_CATEGORIES, type MediaItem, type AdminEnquiry, type MyHospital, type IntlDoc, type Missing, type DocEvent, type AuditLink, type AuditLogRow, type BackupRun,
 } from '../../lib/intlApi'
 import { CHECKLIST, STEPS, CURRENCIES } from '../../lib/intlContent'
 import { supabase } from '../../lib/supabase'
@@ -109,8 +109,16 @@ function HospitalRow({ h, pk, onChange, isManager }: { h: Loaded['hospitals'][nu
   const [docs, setDocs] = useState<IntlDoc[] | null>(null)
   const [missing, setMissing] = useState<Missing[]>([])
   const [events, setEvents] = useState<DocEvent[]>([])
+  const [media, setMedia] = useState<MediaItem[]>([])
   const b = h.businesses
-  const loadD = () => loadDocs(h.business_id).then(r => { setDocs(r.docs); setMissing(r.forList); setEvents(r.events) }, e => setErr(e.message))
+  const loadD = () => Promise.all([loadDocs(h.business_id), loadMedia(h.business_id)])
+    .then(([r, m]) => { setDocs(r.docs); setMissing(r.forList); setEvents(r.events); setMedia(m) }, e => setErr(e.message))
+  const judge = async (m: MediaItem, ok: boolean) => {
+    let reason: string | undefined
+    if (!ok) { reason = window.prompt('Why can this not be shown? The hospital sees this.') ?? undefined; if (!reason) return }
+    try { await reviewMedia(m.id, ok, reason); await loadD(); onChange() } catch (x) { setErr((x as Error).message) }
+  }
+  const mediaToCheck = media.filter(m => m.status === 'pending').length
   useEffect(() => { loadD() // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [h.business_id, h.updated_at])
   const save = async () => {
@@ -138,13 +146,13 @@ function HospitalRow({ h, pk, onChange, isManager }: { h: Loaded['hospitals'][nu
           <p className="text-gray-600">{[b?.own_city || b?.own_district, b?.own_state].filter(Boolean).join(', ')} · {h.beds ?? '?'} beds, {h.icu_beds ?? '?'} ICU · NABH {h.nabh} · {pk} price(s)</p>
           <p className="text-gray-600">Agreement {h.agreement_accepted_at ? `accepted by ${h.agreement_signatory}` : 'not accepted'} · video {h.video_checked_at ? 'done' : 'not done'}</p>
           <p className={missing.length ? 'text-amber-700' : 'text-green-700'}>
-            {docs === null ? 'Checking…' : missing.length === 0 ? 'Every required item is ready to list.' : `${missing.length} item(s) not ready to list`}{toCheck ? ` · ${toCheck} document(s) waiting for your check` : ''}
+            {docs === null ? 'Checking…' : missing.length === 0 ? 'Every required item is ready to list.' : `${missing.length} item(s) not ready to list`}{toCheck ? ` · ${toCheck} document(s) waiting for your check` : ''}{mediaToCheck ? ` · ${mediaToCheck} photo/video(s) to check` : ''}
           </p>
           <p className="text-gray-500">Coordinator: {h.coordinator_name ?? '—'} {h.coordinator_phone ?? ''} {h.coordinator_email ?? ''}</p>
         </div>
         <span className="rounded-full px-3 py-1 bg-gray-100 font-semibold">{h.status}{(h as { auto_paused?: boolean }).auto_paused ? ' (expiry)' : ''}{h.star ? ` · ${h.star}★` : ''}</span>
       </div>
-      <button onClick={() => setOpen(o => !o)} className="mt-2 text-teal-700 font-semibold">{open ? 'Hide' : 'Check'} documents{toCheck ? ` (${toCheck} to check)` : ''}</button>
+      <button onClick={() => setOpen(o => !o)} className="mt-2 text-teal-700 font-semibold">{open ? 'Hide' : 'Check'} documents and photos{toCheck + mediaToCheck ? ` (${toCheck + mediaToCheck} to check)` : ''}</button>
       {open && docs && (
         <div className="mt-2 space-y-3">
           {missing.length > 0 && (
@@ -156,7 +164,7 @@ function HospitalRow({ h, pk, onChange, isManager }: { h: Loaded['hospitals'][nu
               <p className="font-semibold text-navy-700">{g.title}</p>
               <ul className="divide-y">{g.items.map(i => {
                 const d = i.doc ? cur(i.key) : undefined
-                const ok = i.doc ? !!d : !!cl[i.key]?.ok
+                const ok = i.media ? !missing.some(m => m.key === i.key) : i.doc ? !!d : !!cl[i.key]?.ok
                 const old = (docs ?? []).filter(x => x.item_key === i.key && x.status === 'replaced')
                 return (
                   <li key={i.key} className="py-1.5">
@@ -179,6 +187,30 @@ function HospitalRow({ h, pk, onChange, isManager }: { h: Loaded['hospitals'][nu
               })}</ul>
             </div>
           ))}
+          <div>
+            <p className="font-semibold text-navy-700">Photos and videos ({media.length})</p>
+            <p className="text-gray-500 text-xs mb-2">Approve only real photos of this hospital: no recognisable patients, no before/after, no testimonials or “best” claims. Approved items show on the portal straight away.</p>
+            {media.length === 0 && <p className="text-gray-400">None uploaded yet.</p>}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {media.map(m => (
+                <div key={m.id} className="border rounded-lg overflow-hidden text-xs">
+                  <a href={m.path ? mediaUrl(m.path) : `https://www.youtube.com/watch?v=${m.youtube_id}`} target="_blank" rel="noreferrer" className="block aspect-[4/3] bg-gray-100">
+                    {m.kind === 'photo' && m.path && <img src={mediaUrl(m.path)} alt="" className="w-full h-full object-cover" loading="lazy" />}
+                    {m.kind === 'video' && m.path && <video src={mediaUrl(m.path)} className="w-full h-full object-cover" muted preload="metadata" />}
+                    {m.kind === 'youtube' && <img src={`https://img.youtube.com/vi/${m.youtube_id}/hqdefault.jpg`} alt="" className="w-full h-full object-cover" />}
+                  </a>
+                  <div className="p-1.5">
+                    <p>{MEDIA_CATEGORIES[m.category] ?? m.category}{m.caption ? ` · ${m.caption}` : ''}</p>
+                    <p className={m.status === 'approved' ? 'text-green-700' : m.status === 'rejected' ? 'text-red-700' : 'text-amber-700'}>{m.status}{m.reason ? `: ${m.reason}` : ''}</p>
+                    {!isManager && <div className="flex gap-2 mt-1">
+                      {m.status !== 'approved' && <button onClick={() => judge(m, true)} className="rounded bg-green-600 text-white px-2 py-0.5">Approve</button>}
+                      {m.status !== 'rejected' && <button onClick={() => judge(m, false)} className="rounded border border-red-300 text-red-700 px-2 py-0.5">Reject</button>}
+                    </div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
           {events.length > 0 && (
             <details><summary className="cursor-pointer font-semibold text-navy-700">History ({events.length})</summary>
               <ul className="divide-y mt-1">{events.slice(0, 100).map(e => <li key={e.id} className="py-1"><span className="text-gray-400">{new Date(e.at).toLocaleString('en-IN')}</span> {e.item_key ? <b>{e.item_key} </b> : null}{e.action}{e.note ? ` — ${e.note}` : ''} <span className="text-gray-400">· {e.actor_name}</span></li>)}</ul>
