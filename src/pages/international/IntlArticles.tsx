@@ -144,7 +144,7 @@ export function IntlArticles() {
         <Wrap className="py-10">
           <p className="text-sm font-semibold uppercase tracking-wide mb-2" style={{ color: C.green }}>Articles</p>
           <h1 className="text-3xl sm:text-4xl font-bold">Health guides for your journey</h1>
-          <p className="mt-3 text-lg max-w-2xl" style={{ color: C.muted }}>Clear, practical reading on treatments, health and planning your trip. Health articles are reviewed by a doctor.</p>
+          <p className="mt-3 text-lg max-w-2xl" style={{ color: C.muted }}>Clear, practical reading on treatments, health and planning your trip. General information — your own doctor’s advice comes first.</p>
           {list && list.length > 0 && <div className="mt-8"><ArticleBanner articles={list} title="Featured" /></div>}
         </Wrap>
       </div>
@@ -197,7 +197,9 @@ export function IntlArticle() {
         <p className="text-xl leading-relaxed" style={{ color: C.muted }}>{a.summary}</p>
         <p className="mt-3 text-sm flex flex-wrap gap-x-4 gap-y-1" style={{ color: C.muted }}>
           <span className="inline-flex items-center gap-1"><Clock className="w-4 h-4" /> {minutes(a.read_minutes)}</span>
-          {a.reviewed_by && <span className="inline-flex items-center gap-1"><BadgeCheck className="w-4 h-4" style={{ color: C.green }} /> Medically reviewed by {a.reviewed_by}{a.reviewed_at ? `, ${new Date(a.reviewed_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}` : ''}</span>}
+          {a.reviewed_by
+            ? <span className="inline-flex items-center gap-1"><BadgeCheck className="w-4 h-4" style={{ color: C.green }} /> Medically reviewed by {a.reviewed_by}{a.reviewed_at ? `, ${new Date(a.reviewed_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}` : ''}</span>
+            : <span>Prepared by the Sehatsandhi team · General information, not medical advice</span>}
           <span>Updated {new Date(a.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
         </p>
         <article className="intl-prose mt-8" style={{ ['--site-brand' as string]: C.green }}>
