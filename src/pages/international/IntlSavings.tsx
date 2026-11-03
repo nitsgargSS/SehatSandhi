@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Info, Table2, BarChart3 } from 'lucide-react'
-import IntlLayout, { C, Wrap, PageHead, Card, CtaButton, useTitle } from './IntlLayout'
+import IntlLayout, { C, Wrap, PageHead, Card, CtaButton, EstimateNote, useTitle } from './IntlLayout'
 import { BottomCta } from './IntlStatic'
 import { loadSavings, type Savings, type PriceRef } from '../../lib/intlApi'
 import { readStore, writeStore } from '../../lib/intlContent'
@@ -82,6 +82,7 @@ export default function IntlSavings() {
         {!d && !err && <p style={{ color: C.muted }}>Loading…</p>}
         {d && ctry && (
           <>
+            <EstimateNote kind="savings" className="mb-5" />
             <Card className="mb-6">
               <div className="flex flex-wrap items-end gap-4">
                 <label className="font-semibold">I live in
@@ -127,7 +128,7 @@ export default function IntlSavings() {
                       </div>
                       <div className="md:text-right">
                         <p className="text-lg font-bold" style={{ color: C.greenDark }}>{r.save > 0 ? `≈ ${r.save}% less` : 'Similar'}</p>
-                        <p className="text-xs" style={{ color: C.muted }}>typical, middle of ranges</p>
+                        <p className="text-xs" style={{ color: C.muted }}>estimated saving</p>
                       </div>
                     </li>
                   ))}
@@ -138,7 +139,7 @@ export default function IntlSavings() {
             {rows.length > 0 && asTable && (
               <Card className="overflow-x-auto">
                 <table className="w-full text-[15px] min-w-[620px]">
-                  <thead><tr className="text-left" style={{ color: C.muted }}><th className="py-2">Treatment</th><th>{ctry.name}</th><th>India</th><th>Typical saving</th></tr></thead>
+                  <thead><tr className="text-left" style={{ color: C.muted }}><th className="py-2">Treatment</th><th>{ctry.name}</th><th>India</th><th>Estimated saving</th></tr></thead>
                   <tbody>
                     {rows.map(r => (
                       <tr key={r.code} style={{ borderTop: `1px solid ${C.border}` }}>
@@ -156,7 +157,7 @@ export default function IntlSavings() {
             <div className="mt-6 rounded-2xl p-5 flex gap-3" style={{ background: C.soft }}>
               <Info className="w-5 h-5 shrink-0 mt-0.5" style={{ color: C.green }} />
               <div className="text-[15px] leading-relaxed">
-                <p><b>These are ballpark figures, not quotes.</b> They come from hospital price lists, government data and published reports, each with its year (sources below). Real prices depend on the hospital, the implant or lens, your health and how long you stay.</p>
+                <p><b>Disclaimer: these are ballpark estimates, not quotes — exact prices may vary.</b> They come from hospital price lists, government data and published reports, each with its year (sources below). Real prices depend on the hospital, the implant or lens, your health and how long you stay.</p>
                 <p className="mt-2">Saving money is only one part of the choice. Check the hospital’s accreditation, the doctor’s experience and your follow-up plan at home. Your own doctor’s advice comes first.</p>
                 <p className="mt-2">For estimates from checked hospitals, with what is included, use <Link to="/international/compare" className="underline font-semibold" style={{ color: C.green }}>Compare & choose</Link>.</p>
               </div>

@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import {
   MapPin, BedDouble, Activity, Plane, Languages, Star, Check, Plus, Info, ChevronDown, Building2, Search, Lightbulb,
 } from 'lucide-react'
-import IntlLayout, { C, Wrap, PageHead, Card, CtaButton, useTitle } from './IntlLayout'
+import IntlLayout, { C, Wrap, PageHead, Card, CtaButton, EstimateNote, useTitle } from './IntlLayout'
 import { BottomCta } from './IntlStatic'
 import { useCatalogue, useCurrency, useShortlist, priceText, money, rateOf } from './intlHooks'
 import {
@@ -152,6 +152,7 @@ export function IntlCompare() {
               <CurrencyPicker cur={cur} setCur={setCur} fx={cat.fx} />
             </div>
             {msg && <p className="mb-4 text-amber-800 bg-amber-50 rounded-lg px-3 py-2">{msg}</p>}
+            {all.length > 0 && <EstimateNote className="mb-5" />}
 
             {all.length === 0 && (
               <Card className="text-center">
@@ -276,7 +277,8 @@ export function IntlTreatments() {
           <Search className="w-5 h-5 absolute left-3 top-3.5" style={{ color: C.muted }} />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search, e.g. knee, eye, heart" className="w-full rounded-xl border pl-10 pr-4 py-3" style={{ borderColor: C.border }} />
         </div>
-        <div className="-mt-4 mb-8"><CurrencyPicker cur={cur} setCur={setCur} fx={cat.fx} /></div>
+        <div className="-mt-4 mb-4"><CurrencyPicker cur={cur} setCur={setCur} fx={cat.fx} /></div>
+        <EstimateNote className="mb-8" />
         {specs.map(s => (
           <section key={s} className="mb-8">
             <h2 className="text-xl font-bold mb-3">{s}</h2>
@@ -332,6 +334,7 @@ export function IntlTreatment() {
               })}
             </div>
             <p className="text-sm mt-3" style={{ color: C.muted }}>{FEE_LINE} {ESTIMATE_LINE}</p>
+            <EstimateNote className="mt-3" />
           </Card>
           <Card>
             <h2 className="text-xl font-bold mb-2">Which city usually suits this</h2>
@@ -463,6 +466,7 @@ export function IntlHospital() {
             })}
           </div>
           <p className="text-sm mt-3" style={{ color: C.muted }}>{FEE_LINE} {ESTIMATE_LINE}</p>
+          <EstimateNote className="mt-3" />
         </Card>
       </Wrap>
     </IntlLayout>
@@ -490,7 +494,8 @@ export function IntlCosts() {
   return (
     <IntlLayout>
       <PageHead kicker="Costs" title="What your trip will cost" lead="Treatment estimates by city size from checked hospitals, and a simple calculator for your stay." />
-      <Wrap className="py-8 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <Wrap className="pt-8"><EstimateNote /></Wrap>
+      <Wrap className="py-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <Card>
           <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
             <label className="font-semibold">Treatment</label>

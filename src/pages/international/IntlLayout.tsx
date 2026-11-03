@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { Menu, X, MessageCircle, ShieldCheck, HeartHandshake } from 'lucide-react'
+import { Menu, X, MessageCircle, ShieldCheck, HeartHandshake, AlertCircle } from 'lucide-react'
 import { intlWaLink, INTL_EMAIL } from '../../lib/intlContent'
 
 // The frame of every International page: calm, warm, one clear next step.
@@ -49,6 +49,23 @@ export function CtaButton({ to, children, light = false }: { to: string; childre
       style={light ? { background: '#fff', color: C.green, border: `1.5px solid ${C.green}` } : { background: C.green, color: '#fff' }}>
       {children}
     </Link>
+  )
+}
+
+/** The estimate disclaimer, shown wherever prices are (asked 3 Nov 2026). */
+export function EstimateNote({ kind = 'hospital', className = '' }: { kind?: 'hospital' | 'savings'; className?: string }) {
+  return (
+    <div role="note" className={`rounded-2xl px-4 py-3 flex gap-3 text-[15px] leading-relaxed ${className}`}
+      style={{ background: '#FFF7E6', border: '1px solid #F3D9A4', color: '#5c4310' }}>
+      <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: '#B7791F' }} />
+      <p>
+        <b>Estimates only — exact prices may vary.</b>{' '}
+        {kind === 'savings'
+          ? 'These are approximate ranges from published sources, for general guidance. They are not quotes or offers, and real prices in every country differ by hospital, doctor, implant, your health and length of stay, and change over time and with exchange rates.'
+          : 'Prices are approximate and for general guidance. The exact price depends on the hospital, the doctor, the implant or lens, your health and how long you stay, and can change over time and with exchange rates.'}
+        {' '}Your final price is in the hospital’s written quote, after a doctor has reviewed your reports.
+      </p>
+    </div>
   )
 }
 
@@ -132,7 +149,7 @@ export default function IntlLayout({ children }: { children: React.ReactNode }) 
           </div>
         </Wrap>
         <Wrap className="pb-8 text-sm opacity-70">
-          Sehatsandhi is operated by NG Technologies, 1743 Vishnu Garden, Jagadhri – 135003, Haryana, India. Medical care is given by the hospitals; prices are estimates until the hospital’s written quote.
+          Sehatsandhi is operated by NG Technologies, 1743 Vishnu Garden, Jagadhri – 135003, Haryana, India. Medical care is given by the hospitals. All prices on this site are estimates only and exact prices may vary; the final price is in the hospital’s written quote.
         </Wrap>
       </footer>
 
