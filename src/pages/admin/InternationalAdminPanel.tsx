@@ -71,6 +71,10 @@ function EnquiryRow({ e, name, onChange }: { e: AdminEnquiry; name: (id: string)
           <p className="text-gray-600">{e.procedure_code ?? 'Not sure'}{e.urgency ? ` · ${e.urgency}` : ''}{e.travel_when ? ` · travel ${e.travel_when}` : ''} · {e.companions ?? 0} companion(s){e.budget ? ` · budget ${e.budget}` : ''}</p>
           {e.problem && <p className="mt-1 text-gray-800 whitespace-pre-wrap">{e.problem}</p>}
           {e.shortlist.length > 0 && <p className="mt-1">Shortlist: {e.shortlist.map(name).join(', ')}</p>}
+          {e.legal_ack && (
+            <details className="mt-1"><summary className="cursor-pointer text-purple-800 font-semibold">⚖ Legal notes accepted ({e.legal_version}, {e.legal_ack_at ? new Date(e.legal_ack_at).toLocaleString('en-IN') : ''})</summary>
+              <pre className="whitespace-pre-wrap text-xs text-gray-600 mt-1 font-sans">{e.legal_text}</pre></details>
+          )}
           {prefs && (prefs.language || prefs.food) && <p className="text-gray-500">Prefers: {[prefs.language, prefs.food].filter(Boolean).join(', ')}</p>}
           <p className="text-gray-400 mt-1">{new Date(e.created_at).toLocaleString('en-IN')} · tracker /international/track/{e.token}</p>
         </div>

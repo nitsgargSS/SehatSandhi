@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import IntlLayout, { C, Wrap, PageHead, CtaButton, Card, useTitle } from './IntlLayout'
 import {
-  LEVELS, GROUPS, FAQ, TRAVEL, PATIENT_CHECKLISTS, CHECKLIST, ESTIMATE_CLAUSES, intlWaLink, INTL_EMAIL,
+  LEVELS, GROUPS, FAQ, TRAVEL, PATIENT_CHECKLISTS, CHECKLIST, ESTIMATE_CLAUSES, NEVER_ARRANGED, intlWaLink, INTL_EMAIL,
   type CityLevel, type Grp,
 } from '../../lib/intlContent'
 
@@ -332,7 +332,20 @@ export function IntlHowWeCheck() {
             <p className="leading-relaxed" style={{ color: C.muted }}>Tell your coordinator first, any time. Each hospital has a senior person who must answer within 48 hours. You can also write to our Grievance Officer at <a className="underline" href={`mailto:${INTL_EMAIL}`}>{INTL_EMAIL}</a>. Serious incidents pause a hospital’s listing while we review.</p>
           </Card>
         </div>
-        <Card className="mt-4">
+        <div className="mt-10">
+          <h2 className="text-2xl font-bold mb-2">What we never arrange</h2>
+          <p className="mb-4" style={{ color: C.muted }}>We work only within Indian law. Some treatments are allowed for patients from abroad only on conditions, which we show before you continue; these we never arrange at all.</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {NEVER_ARRANGED.map(n => (
+              <div key={n.t} className="rounded-2xl p-4 flex gap-3" style={{ background: '#FDF0EE', border: '1px solid #F4CFC8' }}>
+                <span aria-hidden className="text-lg" style={{ color: '#B42318' }}>✕</span>
+                <div><p className="font-semibold">{n.t}</p><p className="text-[15px]" style={{ color: C.muted }}>{n.d}</p></div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs mt-2" style={{ color: C.muted }}>General information about Indian law, not legal advice.</p>
+        </div>
+        <Card className="mt-8">
           <p className="font-semibold text-lg mb-2">About prices</p>
           <ol className="list-decimal pl-5 flex flex-col gap-1.5 leading-relaxed" style={{ color: C.muted }}>
             {ESTIMATE_CLAUSES.map(c => <li key={c}>{c}</li>)}
