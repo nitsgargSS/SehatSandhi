@@ -19,6 +19,7 @@ import { waLink } from '../lib/firstTouch'
 // language itself for the same reason.
 
 const LINKS = [
+  { to: '/international', en: 'International patients', hi: 'विदेशी मरीज़' },
   { to: '/about', en: 'About Us', hi: 'हमारे बारे में' },
   { to: '/contact', en: 'Contact Us', hi: 'संपर्क करें' },
   { to: '/privacy', en: 'Privacy Policy', hi: 'गोपनीयता नीति' },
