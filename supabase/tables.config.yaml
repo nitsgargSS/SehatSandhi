@@ -304,6 +304,28 @@ tables:
     purgeOrder: 103
     pk: business_id
 
+  # ── International patients portal (0312) ───────────────────────────────
+  # Procedures and city levels are seeded by the migration itself; synced so
+  # an admin edit on prod reaches sandbox. The rest is user data.
+  intl_procedures:
+    class: sync
+    key: [code]
+    syncOrder: 95
+  intl_city_levels:
+    class: sync
+    key: [city]
+    syncOrder: 96
+  intl_enquiries:
+    class: isolated
+    purgeOrder: 104.1
+  intl_packages:
+    class: isolated
+    purgeOrder: 104.2
+  intl_hospitals:
+    class: isolated
+    purgeOrder: 104.3
+    pk: business_id
+
   # ── Contact Us form (0165) ─────────────────────────────────────────────
   # Written only by the contact-submit edge function; no foreign keys.
   privacy_request_events:

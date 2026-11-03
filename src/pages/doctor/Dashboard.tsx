@@ -35,6 +35,7 @@ import ClinicQrCard from './ClinicQrCard'
 import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
 import PublicProfileEditor from './PublicProfileEditor'
 import WebsitePanel from './WebsitePanel'
+import InternationalPanel from './InternationalPanel'
 import SocialPostsPanel from './SocialPostsPanel'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
@@ -145,7 +146,7 @@ export default function DoctorDashboard() {
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
   // 0280: a billing message links straight to ?tab=plan.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages' | 'website' | 'social'>(
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages' | 'website' | 'social' | 'international'>(
     () => (['plan', 'whatsapp', 'bills', 'website', 'social'].includes(new URLSearchParams(window.location.search).get('tab') ?? '')
       ? new URLSearchParams(window.location.search).get('tab') as 'plan' : 'today'))
 
@@ -1189,6 +1190,11 @@ export default function DoctorDashboard() {
         // 0292: a post for Facebook and Instagram every day.
         ...(socialOn ? [{ id: 'social', label: 'Social posts', icon: <Megaphone className="w-4 h-4" /> }] : []),
       ] : []),
+      // 0312: international patients — hospitals with in-patient beds; owner
+      // and manager (the RPCs hold the same line).
+      ...(doctor && (doctor.vertical === 'hospital' || (doctor as { ipd_module?: boolean }).ipd_module) && (!role.enforced || ['owner', 'manager'].includes(role.role ?? '')) ? [
+        { id: 'international', label: 'International', icon: <Globe className="w-4 h-4" /> },
+      ] : []),
     ] : []),
     // Reports sits with the clinicians, not the business cluster. How the
     // practice is actually doing — reach, bookings, conversion — is for the
@@ -1983,6 +1989,10 @@ export default function DoctorDashboard() {
 
         {tab === 'website' && doctor && (
           <WebsitePanel businessId={doctor.id} businessName={doctor.name} />
+        )}
+
+        {tab === 'international' && doctor && (
+          <InternationalPanel businessId={doctor.id} />
         )}
 
         {tab === 'social' && doctor && socialOn && (

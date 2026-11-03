@@ -7,6 +7,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy'
 import Terms from './pages/Terms'
 import RefundPolicy from './pages/RefundPolicy'
 import DataDeletion from './pages/DataDeletion'
+import { IntlHome, IntlPlanTrip, IntlHowWeCheck, IntlChecklists, IntlFaq } from './pages/international/IntlStatic'
 
 // Renders the legal pages to static HTML at build time.
 //
@@ -63,6 +64,32 @@ export const PAGES: Page[] = [
     title: 'Data deletion — Sehatsandhi',
     description: 'How a business that connected its Facebook Page and Instagram to Sehatsandhi can delete that connection, and how to ask us to delete data.',
   },
+  // 0312: the International portal's information pages (no data calls).
+  {
+    path: '/international',
+    title: 'Treatment in India for international patients — Sehatsandhi International',
+    description: 'Compare checked hospitals and costs across India — big metros, regional cities and smaller towns. Free quotes, visa letter, airport pickup and stay arranged.',
+  },
+  {
+    path: '/international/plan-your-trip',
+    title: 'Plan your medical trip to India — Sehatsandhi International',
+    description: 'e-Medical visa steps, airports, travel by country, what to bring and when to come for treatment in India.',
+  },
+  {
+    path: '/international/how-we-check',
+    title: 'How we check hospitals — Sehatsandhi International',
+    description: 'Only hospitals with in-patient beds, an ICU, valid licences, NABH accreditation and an international desk are listed, after documents, a video walkthrough and a signed agreement.',
+  },
+  {
+    path: '/international/checklists',
+    title: 'Patient checklists for treatment in India — Sehatsandhi International',
+    description: 'What to do before you travel, on arrival, at discharge and back home.',
+  },
+  {
+    path: '/international/faq',
+    title: 'Questions about treatment in India — Sehatsandhi International',
+    description: 'Prices, choosing a hospital, visas, payments, companions and complaints, answered.',
+  },
 ]
 
 const COMPONENTS: Record<string, () => JSX.Element> = {
@@ -72,6 +99,11 @@ const COMPONENTS: Record<string, () => JSX.Element> = {
   '/terms': Terms,
   '/refund': RefundPolicy,
   '/data-deletion': DataDeletion,
+  '/international': IntlHome,
+  '/international/plan-your-trip': IntlPlanTrip,
+  '/international/how-we-check': IntlHowWeCheck,
+  '/international/checklists': IntlChecklists,
+  '/international/faq': IntlFaq,
 }
 
 /** Render one route's body markup. Throws rather than emitting an empty page. */
