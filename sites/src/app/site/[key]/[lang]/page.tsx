@@ -1,4 +1,5 @@
-import { getArticles, getReviews, getSocial } from '@/lib/sehat';
+import { SEHAT_URL, getArticles, getIntlMedia, getReviews, getSocial } from '@/lib/sehat';
+import Gallery from '@/site/gallery';
 import { Shell } from '@/site/chrome';
 import { leadDoctor } from '@/site/ctx';
 import Home from '@/site/home';
@@ -22,12 +23,14 @@ export async function generateMetadata({ params }: { params: Params }) {
 
 export default async function Page({ params }: { params: Params }) {
   const c = await ctxFor(params);
-  const [posts, reviews, all] = await Promise.all([getSocial(c.key, 3), getReviews(c.key), getArticles(c.key)]);
+  const [posts, reviews, all, intl] = await Promise.all([getSocial(c.key, 3), getReviews(c.key), getArticles(c.key), getIntlMedia(c.key)]);
   const articles = (all ?? []).filter((a) => a.lang === c.lang);
   return (
     <Shell c={c} path="/">
       <JsonLd data={clinicSchema(c)} />
       {c.hospital ? <HospitalHome c={c} posts={posts} reviews={reviews} articles={articles} /> : <Home c={c} posts={posts} reviews={reviews} articles={articles} />}
+      {/* 0319: the hospital's approved photos and videos, while it is listed on Sehatsandhi International. */}
+      {intl && intl.media?.length ? <Gallery data={intl} base={SEHAT_URL} lang={c.lang} /> : null}
     </Shell>
   );
 }

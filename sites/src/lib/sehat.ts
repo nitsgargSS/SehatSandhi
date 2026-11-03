@@ -82,3 +82,9 @@ export const getSocial = (key: string, limit = 12) => rpc<SocialPost[]>('sehat_p
 export const getArticles = (key: string) => rpc<Article[]>('sehat_public_articles', { p_key: key });
 export const getArticle = (key: string, group: string, lang: Lang) => rpc<Article | null>('sehat_public_article', { p_key: key, p_group: group, p_lang: lang });
 export const getReviews = (key: string) => rpc<Reviews | null>('sehat_public_reviews', { p_key: key, p_limit: 6 });
+
+/** 0319: a hospital listed on Sehatsandhi International — its approved photos
+ *  and videos (null when not listed, or paused). */
+export type IntlMedia = { hospital_id: string; media: { kind: 'photo' | 'video' | 'youtube'; path: string | null; youtube_id: string | null; category: string; caption: string | null }[] };
+export const getIntlMedia = (key: string) => rpc<IntlMedia | null>('sehat_intl_site_media', { p_key: key });
+export const intlMediaUrl = (path: string) => `${SEHAT_URL}/storage/v1/object/public/intl-media/${path}`;
