@@ -28,7 +28,7 @@ interface Strings {
   doc_teaser_title: string; doc_teaser_sub: string; how: string; step1: string; step2: string; step3: string
   trust_verified: string; trust_free: string; trust_wa: string
   biz_cta: string; login_cta: string; my_cta: string; biz_title: string; biz_sub: string
-  faq_nav: string; faq_title: string; faq_sub: string; faqs: { q: string; a: string }[]
+  faq_nav: string; intl_nav: string; intl_title: string; intl_text: string; intl_cta: string; faq_title: string; faq_sub: string; faqs: { q: string; a: string }[]
   scan_title: string; scan_sub: string; scan_steps: string[]; scan_tap: string; scan_show: string
 }
 
@@ -57,6 +57,10 @@ const DICT: Record<'en' | 'hi', Strings> = {
     biz_title: 'Are you a healthcare provider?',
     biz_sub: 'Doctors, hospitals, pharmacies, labs & ambulance — list your business, or log in to manage it.',
     faq_nav: 'Questions',
+    intl_nav: 'International',
+    intl_title: 'Coming to India for treatment?',
+    intl_text: 'For patients from abroad: compare checked hospitals across India, see estimated savings, and get help with the visa letter, pickup and stay.',
+    intl_cta: 'International patients',
     faq_title: 'Common Questions',
     faq_sub: 'Everything families ask us before their first booking.',
     faqs: [
@@ -102,6 +106,10 @@ const DICT: Record<'en' | 'hi', Strings> = {
     biz_title: 'आप हेल्थकेयर प्रोवाइडर हैं?',
     biz_sub: 'डॉक्टर, अस्पताल, दवाई की दुकान, लैब और एम्बुलेंस — अपना बिज़नेस लिस्ट करें, या लॉग इन करके मैनेज करें।',
     faq_nav: 'सवाल',
+    intl_nav: 'विदेशी मरीज़',
+    intl_title: 'इलाज के लिए भारत आ रहे हैं?',
+    intl_text: 'विदेश से आने वाले मरीज़ों के लिए: पूरे भारत के जांचे हुए हॉस्पिटल्स की तुलना करें, अनुमानित बचत देखें, और वीज़ा लेटर, पिकअप व ठहरने में मदद पाएं।',
+    intl_cta: 'विदेशी मरीज़',
     faq_title: 'अक्सर पूछे जाने वाले सवाल',
     faq_sub: 'पहली बुकिंग से पहले परिवार हमसे यही पूछते हैं।',
     faqs: [
@@ -340,6 +348,24 @@ function TrustRow({ t, row }: { t: Strings; row?: boolean }) {
   )
 }
 
+// 0312: the way in to Sehatsandhi International from the main home page.
+function IntlCard({ t, wide = false }: { t: Strings; wide?: boolean }) {
+  return (
+    <Link to="/international" style={{
+      display: 'flex', flexDirection: wide ? 'row' : 'column', alignItems: wide ? 'center' : 'flex-start', gap: wide ? 24 : 12,
+      padding: wide ? '22px 28px' : '18px 18px', borderRadius: 18, color: '#fff', textDecoration: 'none',
+      background: 'linear-gradient(120deg, #0E9F6E 0%, #0b6e8a 100%)', boxShadow: '0 14px 30px -18px rgba(11,110,138,.8)',
+    }}>
+      <span aria-hidden style={{ fontSize: wide ? 38 : 30, lineHeight: 1 }}>✈️</span>
+      <span style={{ flex: 1 }}>
+        <span style={{ display: 'block', fontSize: wide ? 20 : 17, fontWeight: 800 }}>{t.intl_title}</span>
+        <span style={{ display: 'block', fontSize: wide ? 15 : 14, opacity: .92, marginTop: 4, lineHeight: 1.45 }}>{t.intl_text}</span>
+      </span>
+      <span style={{ background: '#fff', color: '#0b7f58', fontWeight: 800, fontSize: 14, padding: '10px 18px', borderRadius: 999, whiteSpace: 'nowrap' }}>{t.intl_cta} →</span>
+    </Link>
+  )
+}
+
 export default function PatientHome() {
   const { lang, setLang } = useLanguage()
   // 0311: insurance is hidden while switched off — its tile and its FAQ.
@@ -368,6 +394,7 @@ export default function PatientHome() {
       <div className="flex lg:hidden" style={{ background: '#e7eaef', minHeight: '100vh', justifyContent: 'center' }}>
         <div style={{ width: '100%', maxWidth: 520, minHeight: '100vh', background: '#FBF7F0', display: 'flex', flexDirection: 'column' }}>
           <SiteHeader>
+            <HeaderLink to="/international">{t.intl_nav}</HeaderLink>
             <HeaderLink href="#faq-m">{t.faq_nav}</HeaderLink>
             <HeaderLink to="/my">{t.my_cta}</HeaderLink>
             <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
@@ -389,6 +416,7 @@ export default function PatientHome() {
           </div>
           <div style={{ padding: '16px 20px 4px' }}><ScanCard t={t} link={waLink} /></div>
           <div style={{ padding: '16px 20px 4px' }}><DoctorTeaser t={t} /></div>
+          <div style={{ padding: '16px 20px 4px' }}><IntlCard t={t} /></div>
           <div style={{ padding: '18px 22px 8px' }}><HowItWorksCard t={t} /></div>
           {/* Distinct id per layout. Both are in the DOM and CSS hides one, so a
               shared id would resolve to the mobile copy — invisible on desktop,
@@ -408,6 +436,7 @@ export default function PatientHome() {
           window while /business ran edge to edge. */}
       <div className="hidden lg:block">
         <SiteHeader>
+          <HeaderLink to="/international">{t.intl_nav}</HeaderLink>
           <HeaderLink href="#faq-d">{t.faq_nav}</HeaderLink>
           <HeaderLink to="/my">{t.my_cta}</HeaderLink>
           <HeaderCta to="/business" icon={shopIcon}>{t.biz_cta}</HeaderCta>
@@ -444,6 +473,7 @@ export default function PatientHome() {
 
         {/* full-width doctor teaser band */}
         <div style={{ padding: '20px 0 0' }}><DoctorTeaser t={t} /></div>
+        <div style={{ padding: '20px 0 0' }}><IntlCard t={t} wide /></div>
 
         {/* questions, answered before the provider pitch below them */}
         <div id="faq-d" style={{ padding: '40px 0 0', scrollMarginTop: 20 }}><Faqs t={t} row /></div>
