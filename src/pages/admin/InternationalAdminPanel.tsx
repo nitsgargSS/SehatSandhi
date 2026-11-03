@@ -386,22 +386,17 @@ function Articles() {
       reviewed_at: a.reviewed_by?.trim() ? (a.reviewed_at || new Date().toISOString().slice(0, 10)) : null,
       featured: a.featured, image_url: a.image_url?.trim() || null }
     const { error } = a.id ? await supabase.from('intl_articles').update(row).eq('id', a.id) : await supabase.from('intl_articles').insert(row)
-    if (error) { setErr(error.message.includes('check') && a.status === 'published' ? 'A treatment or health article needs the reviewing doctor’s name before it is published.' : error.message); return false }
+    if (error) { setErr(error.message); return false }
     load(); return true
   }
   const quick = async (a: AdminArticle, patch: Partial<AdminArticle>) => {
-    if (patch.status === 'published' && a.category !== 'planning' && !a.reviewed_by) {
-      const who = window.prompt('Name of the doctor who reviewed this article (shown on the page):')
-      if (!who) return
-      patch.reviewed_by = who
-    }
     await save({ ...a, ...patch })
   }
   const tone = { draft: 'bg-gray-100', review: 'bg-amber-50 text-amber-800', published: 'bg-green-50 text-green-800' }
   return (
     <div className="space-y-3 text-sm">
       <div className="card !p-4 flex flex-wrap gap-3 items-center">
-        <p className="text-gray-600 flex-1">Articles rotate on the International home page and the Articles page; featured ones appear in the banner. A treatment or health article needs a reviewing doctor before it is published.</p>
+        <p className="text-gray-600 flex-1">Articles rotate on the International home page and the Articles page; featured ones appear in the banner. Without a reviewer an article shows “Prepared by the Sehatsandhi team”; add a doctor’s name in Edit once one has read it, and it shows “Medically reviewed by …”.</p>
         <button onClick={() => setEdit(blank)} className="btn-teal !px-4 !py-1.5 text-sm">New article</button>
       </div>
       {err && <p className="text-red-700">{err}</p>}
@@ -415,7 +410,7 @@ function Articles() {
           <label className="sm:col-span-2">Article — ## for headings, - for lists, **bold**, [link](https://…)<textarea rows={14} value={edit.body} onChange={e => setEdit({ ...edit, body: e.target.value })} className="w-full border rounded-lg px-2 py-1.5 font-mono text-xs" /></label>
           <label>Related treatment code (optional)<input value={edit.procedure_code ?? ''} onChange={e => setEdit({ ...edit, procedure_code: e.target.value || null })} placeholder="knee_replacement" className="w-full border rounded-lg px-2 py-1.5" /></label>
           <label>Banner photo URL (optional, https)<input value={edit.image_url ?? ''} onChange={e => setEdit({ ...edit, image_url: e.target.value })} className="w-full border rounded-lg px-2 py-1.5" /></label>
-          <label>Reviewed by (doctor’s name)<input value={edit.reviewed_by ?? ''} onChange={e => setEdit({ ...edit, reviewed_by: e.target.value })} className="w-full border rounded-lg px-2 py-1.5" /></label>
+          <label>Reviewed by (doctor’s name, only if a doctor has read it)<input value={edit.reviewed_by ?? ''} onChange={e => setEdit({ ...edit, reviewed_by: e.target.value })} className="w-full border rounded-lg px-2 py-1.5" /></label>
           <label>Status<select value={edit.status} onChange={e => setEdit({ ...edit, status: e.target.value as AdminArticle['status'] })} className="w-full border rounded-lg px-2 py-1.5">
             <option value="draft">Draft</option><option value="review">Waiting for review</option><option value="published">Published</option></select></label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={edit.featured} onChange={e => setEdit({ ...edit, featured: e.target.checked })} /> Show in the banner</label>
