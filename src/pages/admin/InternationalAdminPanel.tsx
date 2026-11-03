@@ -15,7 +15,7 @@ const ENQ_STATUS = [...STEPS.map(s => s.key), 'closed', 'cancelled']
 
 export default function InternationalAdminPanel({ isManager }: { isManager: boolean }) {
   const [d, setD] = useState<Loaded | null>(null)
-  const [view, setView] = useState<'enquiries' | 'hospitals' | 'articles' | 'audit' | 'settings'>('enquiries')
+  const [view, setView] = useState<'enquiries' | 'hospitals' | 'partners' | 'articles' | 'audit' | 'settings'>('enquiries')
   const [err, setErr] = useState('')
   const load = () => adminLoad().then(setD, e => setErr(e.message))
   useEffect(() => { load() }, [])
@@ -27,7 +27,7 @@ export default function InternationalAdminPanel({ isManager }: { isManager: bool
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
         <h2 className="text-xl font-bold text-navy-700 flex items-center gap-2 mr-4"><Globe2 className="w-5 h-5" /> International</h2>
-        {([['enquiries', `Patient requests${newEnq ? ` (${newEnq} new)` : ''}`], ['hospitals', `Hospitals${toReview ? ` (${toReview} to review)` : ''}`], ...(!isManager ? [['articles', 'Articles'], ['audit', 'Audit & backup'], ['settings', 'Fee & currency']] : [])] as [typeof view, string][]).map(([k, l]) => (
+        {([['enquiries', `Patient requests${newEnq ? ` (${newEnq} new)` : ''}`], ['hospitals', `Hospitals${toReview ? ` (${toReview} to review)` : ''}`], ['partners', 'Partner enquiries'], ...(!isManager ? [['articles', 'Articles'], ['audit', 'Audit & backup'], ['settings', 'Fee & currency']] : [])] as [typeof view, string][]).map(([k, l]) => (
           <button key={k} onClick={() => setView(k)} className={`px-3 py-1.5 rounded-full text-sm ${view === k ? 'bg-navy-700 text-white' : 'bg-white border'}`}>{l}</button>
         ))}
         <button onClick={load} className="ml-auto p-2" title="Refresh"><RefreshCw className="w-4 h-4" /></button>
@@ -35,6 +35,7 @@ export default function InternationalAdminPanel({ isManager }: { isManager: bool
       </div>
       {view === 'enquiries' && <Enquiries d={d} onChange={load} />}
       {view === 'hospitals' && <Hospitals d={d} onChange={load} isManager={isManager} />}
+      {view === 'partners' && <PartnerEnquiries />}
       {view === 'articles' && !isManager && <Articles />}
       {view === 'audit' && !isManager && <Audit hospitals={d.hospitals.map(h => ({ id: h.business_id, name: h.businesses?.name ?? h.business_id }))} />}
       {view === 'settings' && !isManager && <Settings />}
@@ -431,6 +432,85 @@ function Articles() {
           <button onClick={() => setEdit(a)} className="underline">Edit</button>
         </li>
       ))}</ul>
+    </div>
+  )
+}
+
+// 0318: businesses that want to partner — travel, visa, hotels, transport…
+interface PartnerEnquiry {
+  id: string; business_name: string; types: string[]; city: string | null; state: string | null; serves: string | null
+  contact_name: string; phone: string | null; email: string | null; website: string | null; registration: string | null
+  languages: string | null; offer: string | null; prices: string | null; status: string; notes: string | null
+  handled_by: string | null; created_at: string
+}
+const PARTNER_TYPE_NAME: Record<string, string> = {
+  travel_agent: 'Travel agent', visa: 'Visa help', hotel: 'Hotel / guest house', transport: 'Transfers / cabs',
+  interpreter: 'Interpreter', ambulance: 'Ambulance', forex_sim: 'Forex / SIM', other: 'Other',
+}
+const PARTNER_STATUS: Record<string, string> = { new: 'New', contacted: 'Contacted', shortlisted: 'Shortlisted', signed_up: 'Signed up', not_now: 'Not now' }
+
+function PartnerEnquiries() {
+  const [list, setList] = useState<PartnerEnquiry[]>([])
+  const [type, setType] = useState('')
+  const [st, setSt] = useState('')
+  const [err, setErr] = useState('')
+  const load = () => supabase.from('intl_partner_enquiries').select('*').order('created_at', { ascending: false }).limit(500)
+    .then(({ data, error }) => { if (error) setErr(error.message); else setList((data ?? []) as PartnerEnquiry[]) })
+  useEffect(() => { load() }, [])
+  const shown = list.filter(p => (!type || p.types.includes(type)) && (!st || p.status === st))
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="card !p-3 flex flex-wrap gap-2 items-center">
+        <select value={type} onChange={e => setType(e.target.value)} className="border rounded-lg px-2 py-1.5">
+          <option value="">All types</option>{Object.entries(PARTNER_TYPE_NAME).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <select value={st} onChange={e => setSt(e.target.value)} className="border rounded-lg px-2 py-1.5">
+          <option value="">All statuses</option>{Object.entries(PARTNER_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <span className="text-gray-500">{shown.length} of {list.length}</span>
+        <a href="/international/partners" target="_blank" rel="noreferrer" className="ml-auto text-teal-700 font-semibold">Open the form ↗</a>
+      </div>
+      {err && <p className="text-red-700">{err}</p>}
+      {shown.length === 0 && <div className="card text-gray-500">No partner enquiries yet.</div>}
+      {shown.map(p => <PartnerRow key={p.id} p={p} onChange={load} />)}
+    </div>
+  )
+}
+
+function PartnerRow({ p, onChange }: { p: PartnerEnquiry; onChange: () => void }) {
+  const [status, setStatus] = useState(p.status)
+  const [notes, setNotes] = useState(p.notes ?? '')
+  const [err, setErr] = useState('')
+  const save = async () => {
+    setErr('')
+    const { error } = await supabase.rpc('sehat_intl_partner_update', { p_id: p.id, p_status: status, p_notes: notes })
+    if (error) setErr(error.message); else onChange()
+  }
+  return (
+    <div className="card !p-4">
+      <div className="flex flex-wrap gap-3 justify-between items-start">
+        <div>
+          <p className="font-semibold text-navy-700 text-base">{p.business_name} <span className="font-normal text-gray-500">· {[p.city, p.state].filter(Boolean).join(', ')}</span></p>
+          <p className="flex flex-wrap gap-1 mt-1">{p.types.map(t => <span key={t} className="rounded-full bg-teal-50 text-teal-700 px-2 py-0.5 text-xs">{PARTNER_TYPE_NAME[t] ?? t}</span>)}</p>
+          {p.offer && <p className="mt-2 whitespace-pre-wrap">{p.offer}</p>}
+          {p.prices && <p className="mt-1 text-gray-600 whitespace-pre-wrap"><b>Prices:</b> {p.prices}</p>}
+          <p className="mt-1 text-gray-600">{p.serves ? `Serves: ${p.serves}. ` : ''}{p.languages ? `Languages: ${p.languages}. ` : ''}{p.registration ? `Registration: ${p.registration}.` : ''}</p>
+          {p.website && <p className="text-gray-600">Web: {p.website}</p>}
+          <p className="text-gray-400 mt-1">{new Date(p.created_at).toLocaleString('en-IN')}{p.handled_by ? ` · last updated by ${p.handled_by}` : ''}</p>
+        </div>
+        <div className="flex flex-col gap-1 items-end">
+          <span className="font-semibold">{p.contact_name}</span>
+          {p.phone && <a href={`https://wa.me/${p.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer" className="text-green-700 font-semibold">WhatsApp {p.phone}</a>}
+          {p.email && <a href={`mailto:${p.email}`} className="text-navy-700 underline">{p.email}</a>}
+        </div>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr_auto] items-end">
+        <label>Status<select value={status} onChange={e => setStatus(e.target.value)} className="w-full border rounded-lg px-2 py-1.5">
+          {Object.entries(PARTNER_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+        <label>Notes (team only)<input value={notes} onChange={e => setNotes(e.target.value)} className="w-full border rounded-lg px-2 py-1.5" /></label>
+        <button onClick={save} className="btn-teal !px-4 !py-1.5 text-sm justify-center">Save</button>
+      </div>
+      {err && <p className="text-red-700 mt-1">{err}</p>}
     </div>
   )
 }

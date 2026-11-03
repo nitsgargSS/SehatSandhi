@@ -115,6 +115,17 @@ export function IntlHome() {
         <Link to="/international/faq" className="inline-block mt-4 font-semibold" style={{ color: C.green }}>All questions →</Link>
       </Wrap>
 
+      <Wrap className="pb-2">
+        <Link to="/international/partners" className="flex flex-wrap items-center gap-4 rounded-2xl bg-white p-5 hover:shadow-sm transition" style={{ border: `1px solid ${C.border}` }}>
+          <span className="text-3xl" aria-hidden>🤝</span>
+          <span className="flex-1 min-w-[220px]">
+            <span className="block font-semibold text-lg">Travel agent, visa helper, hotel or cab service?</span>
+            <span className="block" style={{ color: C.muted }}>Partner with Sehatsandhi International and help patients from abroad, in your city.</span>
+          </span>
+          <span className="font-semibold" style={{ color: C.green }}>Partner with us →</span>
+        </Link>
+      </Wrap>
+
       <BottomCta />
     </IntlLayout>
   )

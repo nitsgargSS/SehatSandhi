@@ -68,6 +68,7 @@ const IntlQuote = lazy(() => IntlQuoteMod().then(m => ({ default: m.IntlQuote })
 const IntlTrack = lazy(() => IntlQuoteMod().then(m => ({ default: m.IntlTrack })))
 const AuditPage = lazy(() => import('./pages/international/AuditPage'))
 const IntlSavings = lazy(() => import('./pages/international/IntlSavings'))
+const IntlPartners = lazy(() => import('./pages/international/IntlPartners'))
 const IntlArticles = lazy(() => import('./pages/international/IntlArticles').then(m => ({ default: m.IntlArticles })))
 const IntlArticle = lazy(() => import('./pages/international/IntlArticles').then(m => ({ default: m.IntlArticle })))
 const Contact = lazy(() => import('./pages/Contact'))
@@ -300,6 +301,7 @@ export default function App() {
           <Route path="/international/hospitals/:id" element={<IntlHospital />} />
           <Route path="/international/costs" element={<IntlCosts />} />
           <Route path="/international/savings" element={<IntlSavings />} />
+          <Route path="/international/partners" element={<IntlPartners />} />
           <Route path="/international/articles" element={<IntlArticles />} />
           <Route path="/international/articles/:slug" element={<IntlArticle />} />
           <Route path="/international/plan-your-trip" element={<IntlPlanTrip />} />
