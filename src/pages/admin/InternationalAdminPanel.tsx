@@ -15,7 +15,7 @@ const ENQ_STATUS = [...STEPS.map(s => s.key), 'closed', 'cancelled']
 
 export default function InternationalAdminPanel({ isManager }: { isManager: boolean }) {
   const [d, setD] = useState<Loaded | null>(null)
-  const [view, setView] = useState<'enquiries' | 'hospitals' | 'audit' | 'settings'>('enquiries')
+  const [view, setView] = useState<'enquiries' | 'hospitals' | 'articles' | 'audit' | 'settings'>('enquiries')
   const [err, setErr] = useState('')
   const load = () => adminLoad().then(setD, e => setErr(e.message))
   useEffect(() => { load() }, [])
@@ -27,7 +27,7 @@ export default function InternationalAdminPanel({ isManager }: { isManager: bool
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
         <h2 className="text-xl font-bold text-navy-700 flex items-center gap-2 mr-4"><Globe2 className="w-5 h-5" /> International</h2>
-        {([['enquiries', `Patient requests${newEnq ? ` (${newEnq} new)` : ''}`], ['hospitals', `Hospitals${toReview ? ` (${toReview} to review)` : ''}`], ...(!isManager ? [['audit', 'Audit & backup'], ['settings', 'Fee & currency']] : [])] as [typeof view, string][]).map(([k, l]) => (
+        {([['enquiries', `Patient requests${newEnq ? ` (${newEnq} new)` : ''}`], ['hospitals', `Hospitals${toReview ? ` (${toReview} to review)` : ''}`], ...(!isManager ? [['articles', 'Articles'], ['audit', 'Audit & backup'], ['settings', 'Fee & currency']] : [])] as [typeof view, string][]).map(([k, l]) => (
           <button key={k} onClick={() => setView(k)} className={`px-3 py-1.5 rounded-full text-sm ${view === k ? 'bg-navy-700 text-white' : 'bg-white border'}`}>{l}</button>
         ))}
         <button onClick={load} className="ml-auto p-2" title="Refresh"><RefreshCw className="w-4 h-4" /></button>
@@ -35,6 +35,7 @@ export default function InternationalAdminPanel({ isManager }: { isManager: bool
       </div>
       {view === 'enquiries' && <Enquiries d={d} onChange={load} />}
       {view === 'hospitals' && <Hospitals d={d} onChange={load} isManager={isManager} />}
+      {view === 'articles' && !isManager && <Articles />}
       {view === 'audit' && !isManager && <Audit hospitals={d.hospitals.map(h => ({ id: h.business_id, name: h.businesses?.name ?? h.business_id }))} />}
       {view === 'settings' && !isManager && <Settings />}
     </div>
@@ -321,6 +322,83 @@ function Settings() {
       <p className="text-gray-500">Converted prices show as “≈” next to rupees. Update rates now and then.</p>
       <button onClick={save} className="btn-teal !px-4 !py-1.5 text-sm">Save</button>
       {msg && <p>{msg}</p>}
+    </div>
+  )
+}
+
+interface AdminArticle {
+  id: string; slug: string; title: string; summary: string; body: string; category: 'planning' | 'treatment' | 'health'
+  procedure_code: string | null; status: 'draft' | 'review' | 'published'; reviewed_by: string | null; reviewed_at: string | null
+  featured: boolean; image_url: string | null; views: number; updated_at: string
+}
+
+// 0315: the portal's articles. A treatment or health article is published only
+// with the name of the doctor who reviewed it — the database refuses otherwise.
+function Articles() {
+  const [list, setList] = useState<AdminArticle[]>([])
+  const [edit, setEdit] = useState<AdminArticle | null>(null)
+  const [err, setErr] = useState('')
+  const load = () => supabase.from('intl_articles').select('*').order('status').order('updated_at', { ascending: false })
+    .then(({ data, error }) => { if (error) setErr(error.message); else setList((data ?? []) as AdminArticle[]) })
+  useEffect(() => { load() }, [])
+  const blank: AdminArticle = { id: '', slug: '', title: '', summary: '', body: '', category: 'health', procedure_code: null, status: 'draft', reviewed_by: null, reviewed_at: null, featured: false, image_url: null, views: 0, updated_at: '' }
+  const save = async (a: AdminArticle) => {
+    setErr('')
+    const row = { slug: a.slug.trim(), title: a.title.trim(), summary: a.summary.trim(), body: a.body, category: a.category,
+      procedure_code: a.procedure_code || null, status: a.status, reviewed_by: a.reviewed_by?.trim() || null,
+      reviewed_at: a.reviewed_by?.trim() ? (a.reviewed_at || new Date().toISOString().slice(0, 10)) : null,
+      featured: a.featured, image_url: a.image_url?.trim() || null }
+    const { error } = a.id ? await supabase.from('intl_articles').update(row).eq('id', a.id) : await supabase.from('intl_articles').insert(row)
+    if (error) { setErr(error.message.includes('check') && a.status === 'published' ? 'A treatment or health article needs the reviewing doctor’s name before it is published.' : error.message); return false }
+    load(); return true
+  }
+  const quick = async (a: AdminArticle, patch: Partial<AdminArticle>) => {
+    if (patch.status === 'published' && a.category !== 'planning' && !a.reviewed_by) {
+      const who = window.prompt('Name of the doctor who reviewed this article (shown on the page):')
+      if (!who) return
+      patch.reviewed_by = who
+    }
+    await save({ ...a, ...patch })
+  }
+  const tone = { draft: 'bg-gray-100', review: 'bg-amber-50 text-amber-800', published: 'bg-green-50 text-green-800' }
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="card !p-4 flex flex-wrap gap-3 items-center">
+        <p className="text-gray-600 flex-1">Articles rotate on the International home page and the Articles page; featured ones appear in the banner. A treatment or health article needs a reviewing doctor before it is published.</p>
+        <button onClick={() => setEdit(blank)} className="btn-teal !px-4 !py-1.5 text-sm">New article</button>
+      </div>
+      {err && <p className="text-red-700">{err}</p>}
+      {edit && (
+        <div className="card !p-4 grid gap-2 sm:grid-cols-2">
+          <label className="sm:col-span-2">Title<input value={edit.title} onChange={e => setEdit({ ...edit, title: e.target.value, slug: edit.id ? edit.slug : e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') })} className="w-full border rounded-lg px-2 py-1.5" /></label>
+          <label>Web address (slug)<input value={edit.slug} onChange={e => setEdit({ ...edit, slug: e.target.value })} className="w-full border rounded-lg px-2 py-1.5 font-mono" /></label>
+          <label>Category<select value={edit.category} onChange={e => setEdit({ ...edit, category: e.target.value as AdminArticle['category'] })} className="w-full border rounded-lg px-2 py-1.5">
+            <option value="planning">Planning your trip</option><option value="treatment">Treatments</option><option value="health">Health</option></select></label>
+          <label className="sm:col-span-2">Summary (one or two sentences)<textarea rows={2} value={edit.summary} onChange={e => setEdit({ ...edit, summary: e.target.value })} className="w-full border rounded-lg px-2 py-1.5" /></label>
+          <label className="sm:col-span-2">Article — ## for headings, - for lists, **bold**, [link](https://…)<textarea rows={14} value={edit.body} onChange={e => setEdit({ ...edit, body: e.target.value })} className="w-full border rounded-lg px-2 py-1.5 font-mono text-xs" /></label>
+          <label>Related treatment code (optional)<input value={edit.procedure_code ?? ''} onChange={e => setEdit({ ...edit, procedure_code: e.target.value || null })} placeholder="knee_replacement" className="w-full border rounded-lg px-2 py-1.5" /></label>
+          <label>Banner photo URL (optional, https)<input value={edit.image_url ?? ''} onChange={e => setEdit({ ...edit, image_url: e.target.value })} className="w-full border rounded-lg px-2 py-1.5" /></label>
+          <label>Reviewed by (doctor’s name)<input value={edit.reviewed_by ?? ''} onChange={e => setEdit({ ...edit, reviewed_by: e.target.value })} className="w-full border rounded-lg px-2 py-1.5" /></label>
+          <label>Status<select value={edit.status} onChange={e => setEdit({ ...edit, status: e.target.value as AdminArticle['status'] })} className="w-full border rounded-lg px-2 py-1.5">
+            <option value="draft">Draft</option><option value="review">Waiting for review</option><option value="published">Published</option></select></label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={edit.featured} onChange={e => setEdit({ ...edit, featured: e.target.checked })} /> Show in the banner</label>
+          <div className="sm:col-span-2 flex gap-2">
+            <button onClick={async () => { if (await save(edit)) setEdit(null) }} className="btn-teal !px-4 !py-1.5 text-sm">Save</button>
+            <button onClick={() => setEdit(null)} className="btn-outline text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
+      <ul className="space-y-2">{list.map(a => (
+        <li key={a.id} className="card !p-3 flex flex-wrap gap-3 items-center">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone[a.status]}`}>{a.status === 'review' ? 'waiting for review' : a.status}</span>
+          <span className="flex-1 min-w-[200px]"><b>{a.title}</b> <span className="text-gray-400">· {a.category}{a.featured ? ' · banner' : ''} · {a.views} views{a.reviewed_by ? ` · reviewed by ${a.reviewed_by}` : ''}</span></span>
+          {a.status === 'published' && <a href={`/international/articles/${a.slug}`} target="_blank" rel="noreferrer" className="text-teal-700">open ↗</a>}
+          <button onClick={() => quick(a, { featured: !a.featured })} className="underline">{a.featured ? 'Remove from banner' : 'Add to banner'}</button>
+          {a.status !== 'published' ? <button onClick={() => quick(a, { status: 'published' })} className="rounded-lg bg-green-600 text-white px-2 py-0.5">Publish</button>
+            : <button onClick={() => quick(a, { status: 'draft' })} className="underline text-red-700">Unpublish</button>}
+          <button onClick={() => setEdit(a)} className="underline">Edit</button>
+        </li>
+      ))}</ul>
     </div>
   )
 }

@@ -274,3 +274,43 @@ export async function adminEnquiry(id: string, status: string, coordinator?: str
 export async function adminSettings(fee: number, fx: Record<string, number>) {
   const { error } = await supabase.rpc('sehat_intl_admin_settings', { p_fee: fee, p_fx: fx }); fail(error)
 }
+
+// ── Savings: prices abroad vs India (0314) ──────────────────────────────────
+export interface PriceRef {
+  country: string; level: string | null; procedure_code: string; low: number; high: number
+  currency: string; year: number; source: string; note: string | null
+}
+export interface Savings {
+  fx: Record<string, number>; fx_date: string | null
+  countries: { code: string; name: string; currency: string }[]
+  procedures: { code: string; name: string }[]
+  refs: PriceRef[]
+}
+export async function loadSavings(): Promise<Savings> {
+  const { data, error } = await supabase.rpc('sehat_intl_savings')
+  if (error) throw error
+  return data as Savings
+}
+
+// ── Articles (0315) ─────────────────────────────────────────────────────────
+export interface ArticleCard {
+  slug: string; title: string; summary: string; category: 'planning' | 'treatment' | 'health'
+  procedure_code: string | null; read_minutes: number; reviewed_by: string | null; reviewed_at: string | null
+  published_at: string | null; featured: boolean; image_url: string | null; updated_at: string
+}
+export interface Article extends ArticleCard { body: string }
+let articlesCache: Promise<ArticleCard[]> | null = null
+export function loadArticles(): Promise<ArticleCard[]> {
+  if (!articlesCache) {
+    articlesCache = Promise.resolve(supabase.rpc('sehat_intl_articles')).then(({ data, error }) => {
+      if (error) { articlesCache = null; throw error }
+      return (data ?? []) as ArticleCard[]
+    })
+  }
+  return articlesCache
+}
+export async function loadArticle(slug: string): Promise<Article | null> {
+  const { data, error } = await supabase.rpc('sehat_intl_article', { p_slug: slug })
+  if (error) throw error
+  return (data as Article) ?? null
+}

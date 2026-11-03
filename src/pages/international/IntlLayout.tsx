@@ -15,7 +15,8 @@ const NAV = [
   { to: '/international/compare', label: 'Compare & choose' },
   { to: '/international/treatments', label: 'Treatments' },
   { to: '/international/hospitals', label: 'Hospitals' },
-  { to: '/international/costs', label: 'Costs' },
+  { to: '/international/savings', label: 'Savings' },
+  { to: '/international/articles', label: 'Articles' },
   { to: '/international/plan-your-trip', label: 'Plan your trip' },
   { to: '/international/how-we-check', label: 'How we check' },
   { to: '/international/faq', label: 'FAQ' },
@@ -63,14 +64,14 @@ export default function IntlLayout({ children }: { children: React.ReactNode }) 
     <div className="min-h-screen flex flex-col" style={{ background: C.cream, color: C.ink }}>
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur" style={{ borderBottom: `1px solid ${C.border}` }}>
         <Wrap className="flex items-center justify-between gap-3 h-16">
-          <Link to="/international" className="flex items-center gap-2 min-w-0" onClick={() => setOpen(false)}>
+          <Link to="/international" className="flex items-center gap-2 shrink-0" onClick={() => setOpen(false)}>
             <img src="/logo-only-symbol.png" alt="" aria-hidden className="h-9 w-auto" />
             <span className="leading-tight min-w-0">
               <img src="/logo-title.png" alt="Sehatsandhi" className="h-6 w-auto block" />
               <span className="block text-xs font-semibold tracking-wide" style={{ color: C.green }}>INTERNATIONAL</span>
             </span>
           </Link>
-          <nav className="hidden xl:flex items-center gap-0.5 text-[15px] whitespace-nowrap">
+          <nav className="hidden min-[1360px]:flex items-center gap-0.5 text-[15px] whitespace-nowrap">
             {NAV.map(n => (
               <NavLink key={n.to} to={n.to}
                 className={({ isActive }) => `px-2.5 py-2 rounded-full ${isActive ? 'font-semibold' : ''}`}
@@ -83,13 +84,13 @@ export default function IntlLayout({ children }: { children: React.ReactNode }) 
             <Link to="/international/quote" className="hidden sm:inline-flex whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ background: C.green }}>
               Get a free quote
             </Link>
-            <button className="xl:hidden p-2 rounded-lg" aria-label={open ? 'Close menu' : 'Open menu'} onClick={() => setOpen(o => !o)}>
+            <button className="min-[1360px]:hidden p-2 rounded-lg" aria-label={open ? 'Close menu' : 'Open menu'} onClick={() => setOpen(o => !o)}>
               {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
         </Wrap>
         {open && (
-          <div className="xl:hidden bg-white" style={{ borderTop: `1px solid ${C.border}` }}>
+          <div className="min-[1360px]:hidden bg-white" style={{ borderTop: `1px solid ${C.border}` }}>
             <Wrap className="py-3 flex flex-col">
               {NAV.map(n => (
                 <NavLink key={n.to} to={n.to} onClick={() => setOpen(false)} className="py-3 text-lg" style={{ borderBottom: `1px solid ${C.border}` }}>
@@ -115,6 +116,7 @@ export default function IntlLayout({ children }: { children: React.ReactNode }) 
           <div className="flex flex-col gap-2">
             <p className="font-semibold text-white">Explore</p>
             {NAV.map(n => <Link key={n.to} to={n.to} className="hover:underline">{n.label}</Link>)}
+            <Link to="/international/costs" className="hover:underline">Stay costs</Link>
             <Link to="/international/checklists" className="hover:underline">Patient checklists</Link>
           </div>
           <div className="flex flex-col gap-2">

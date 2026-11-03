@@ -11,17 +11,26 @@ export function useCatalogue() {
 
 /** The visitor's currency, remembered on this device. */
 export function useCurrency() {
-  const [cur, setCurState] = useState<string>(() => readStore('intl-cur', 'INR'))
+  // US dollars unless the visitor picks another currency (asked 3 Nov 2026:
+  // patients work out costs in their own money, not rupees).
+  const [cur, setCurState] = useState<string>(() => readStore('intl-cur', 'USD'))
   const setCur = (c: string) => { setCurState(c); writeStore('intl-cur', c) }
   return { cur, setCur }
 }
 
-/** "₹1,60,000 – ₹2,20,000" plus "≈ $1,900 – $2,600" when a rate is set. */
+/** One amount in the visitor's currency; rupees when no rate is set. */
+export function money(n: number, cur: string, fx: Record<string, number>) {
+  return inCurrency(n, cur, fx) ?? inr(n)
+}
+/** A range in the visitor's currency (main), with rupees beneath (sub). */
 export function priceText(min: number, max: number, cur: string, fx: Record<string, number>) {
   const r = min === max ? inr(min) : `${inr(min)} – ${inr(max)}`
   const a = inCurrency(min, cur, fx); const b = inCurrency(max, cur, fx)
-  return { inr: r, local: a && b ? (min === max ? `≈ ${a}` : `≈ ${a} – ${b}`) : null }
+  if (!a || !b) return { main: r, sub: null as string | null }
+  return { main: min === max ? a : `${a} – ${b}`, sub: r }
 }
+/** Rupees for one unit of the visitor's currency (1 for rupees or no rate). */
+export const rateOf = (cur: string, fx: Record<string, number>) => (cur !== 'INR' && Number(fx?.[cur]) > 0 ? Number(fx[cur]) : 1)
 
 export interface ShortItem { h: string; t: string }
 /** Up to three hospitals for one treatment, remembered on this device. */

@@ -5,9 +5,9 @@ import {
 } from 'lucide-react'
 import IntlLayout, { C, Wrap, PageHead, Card, CtaButton, useTitle } from './IntlLayout'
 import { BottomCta } from './IntlStatic'
-import { useCatalogue, useCurrency, useShortlist, priceText } from './intlHooks'
+import { useCatalogue, useCurrency, useShortlist, priceText, money, rateOf } from './intlHooks'
 import {
-  LEVELS, GROUPS, FEE_LINE, ESTIMATE_LINE, CURRENCIES, inr, type CityLevel,
+  LEVELS, GROUPS, FEE_LINE, ESTIMATE_LINE, CURRENCIES, type CityLevel,
 } from '../../lib/intlContent'
 import {
   NABH_LABEL, optionsFor, isSuggested, sortOptions, factLabels, tripTotal,
@@ -27,12 +27,17 @@ function CurrencyPicker({ cur, setCur, fx }: { cur: string; setCur: (c: string) 
   if (avail.length < 2) return null
   return (
     <label className="inline-flex items-center gap-2 text-sm">
-      <span style={{ color: C.muted }}>Show prices also in</span>
-      <select value={cur} onChange={e => setCur(e.target.value)} className="rounded-lg border px-2 py-1 bg-white">
-        {avail.map(c => <option key={c} value={c}>{c === 'INR' ? 'Rupees only' : c}</option>)}
+      <span style={{ color: C.muted }}>Prices in</span>
+      <select value={avail.includes(cur as typeof avail[number]) ? cur : 'INR'} onChange={e => setCur(e.target.value)} className="rounded-lg border px-2 py-1 bg-white font-semibold">
+        {avail.map(c => <option key={c} value={c}>{CUR_NAME[c] ?? c}</option>)}
       </select>
     </label>
   )
+}
+
+const CUR_NAME: Record<string, string> = {
+  USD: 'US dollars ($)', GBP: 'British pounds (£)', EUR: 'Euros (€)', CAD: 'Canadian dollars', AUD: 'Australian dollars',
+  AED: 'UAE dirhams', SAR: 'Saudi riyals', NPR: 'Nepali rupees', BDT: 'Bangladeshi taka', INR: 'Indian rupees (₹)',
 }
 
 function ProcedureSelect({ procs, value, onChange }: { procs: Procedure[]; value: string; onChange: (v: string) => void }) {
@@ -100,9 +105,9 @@ export function IntlCompare() {
               </select>
             </div>
             <div>
-              <label className="block font-semibold mb-2">3. Hotel budget a night (₹)</label>
+              <label className="block font-semibold mb-2">3. Hotel budget a night ({cur === 'INR' || !rateOf(cur, cat.fx) ? '₹' : cur})</label>
               <input inputMode="numeric" value={perNight} onChange={e => setPerNight(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="Optional, e.g. 2500" className="w-full rounded-xl border px-4 py-3" style={{ borderColor: C.border }} />
+                placeholder={cur === 'USD' ? 'Optional, e.g. 40' : 'Optional'} className="w-full rounded-xl border px-4 py-3" style={{ borderColor: C.border }} />
             </div>
           </div>
         </Card>
@@ -160,12 +165,12 @@ export function IntlCompare() {
             {suggested.length > 0 && <h2 className="text-xl font-bold mb-3">In the suggested cities ({suggested.length})</h2>}
             <div className="grid gap-4 mb-8">
               {suggested.map(o => <OptionCard key={o.hospital.id} o={o} proc={proc} cat={cat} cur={cur} labels={labels.get(o.hospital.id) ?? []}
-                picked={short.has(o.hospital.id, code)} onPick={() => toggle(o.hospital.id)} perNight={Number(perNight) || 0} companions={companions} />)}
+                picked={short.has(o.hospital.id, code)} onPick={() => toggle(o.hospital.id)} perNight={(Number(perNight) || 0) * rateOf(cur, cat.fx)} companions={companions} />)}
             </div>
             {others.length > 0 && <h2 className="text-xl font-bold mb-3">In other cities ({others.length})</h2>}
             <div className="grid gap-4">
               {others.map(o => <OptionCard key={o.hospital.id} o={o} proc={proc} cat={cat} cur={cur} labels={labels.get(o.hospital.id) ?? []}
-                picked={short.has(o.hospital.id, code)} onPick={() => toggle(o.hospital.id)} perNight={Number(perNight) || 0} companions={companions} />)}
+                picked={short.has(o.hospital.id, code)} onPick={() => toggle(o.hospital.id)} perNight={(Number(perNight) || 0) * rateOf(cur, cat.fx)} companions={companions} />)}
             </div>
           </>
         )}
@@ -217,15 +222,15 @@ function OptionCard({ o, proc, cat, cur, labels, picked, onPick, perNight, compa
         </div>
         <div className="rounded-xl p-4" style={{ background: C.cream }}>
           <p className="text-sm" style={{ color: C.muted }}>Estimate for treatment</p>
-          <p className="text-2xl font-bold">{price.inr}</p>
-          {price.local && <p style={{ color: C.muted }}>{price.local}</p>}
+          <p className="text-2xl font-bold">{price.main}</p>
+          {price.sub && <p className="text-sm" style={{ color: C.muted }}>{price.sub}</p>}
           <p className="text-sm mt-1" style={{ color: C.muted }}>{FEE_LINE}</p>
           <p className="mt-2 text-[15px]">
             {p.hospital_days != null ? `${p.hospital_days} days in hospital · ` : ''}{trip.days ? `about ${trip.days} days in India` : ''}
             {p.fly_after_days != null ? ` · fly after ${p.fly_after_days} days` : ''}
           </p>
           {perNight > 0 && (
-            <p className="mt-2 text-[15px]">Trip with your stay ({trip.nights} nights): <b>{tripP.inr}</b>{tripP.local ? ` (${tripP.local})` : ''}</p>
+            <p className="mt-2 text-[15px]">Trip with your stay ({trip.nights} nights): <b>{tripP.main}</b></p>
           )}
           {p.room_type && <p className="text-sm mt-1" style={{ color: C.muted }}>Room: {p.room_type}</p>}
           <button onClick={onPick} className="mt-3 w-full rounded-full px-4 py-2.5 font-semibold inline-flex items-center justify-center gap-2"
@@ -258,6 +263,7 @@ function priceSpan(cat: Catalogue, code: string, level?: CityLevel) {
 export function IntlTreatments() {
   useTitle('Treatments')
   const { cat, err } = useCatalogue()
+  const { cur, setCur } = useCurrency()
   const [q, setQ] = useState('')
   if (!cat) return <IntlLayout><PageHead kicker="Treatments" title="Treatments we help with" /><Loading err={err} /></IntlLayout>
   const list = cat.procedures.filter(p => !q || `${p.name} ${p.speciality}`.toLowerCase().includes(q.toLowerCase()))
@@ -270,6 +276,7 @@ export function IntlTreatments() {
           <Search className="w-5 h-5 absolute left-3 top-3.5" style={{ color: C.muted }} />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search, e.g. knee, eye, heart" className="w-full rounded-xl border pl-10 pr-4 py-3" style={{ borderColor: C.border }} />
         </div>
+        <div className="-mt-4 mb-8"><CurrencyPicker cur={cur} setCur={setCur} fx={cat.fx} /></div>
         {specs.map(s => (
           <section key={s} className="mb-8">
             <h2 className="text-xl font-bold mb-3">{s}</h2>
@@ -280,7 +287,7 @@ export function IntlTreatments() {
                   <Link key={p.code} to={`/international/treatments/${p.code}`} className="block rounded-2xl bg-white p-5 hover:shadow-sm transition" style={{ border: `1px solid ${C.border}` }}>
                     <p className="font-semibold">{p.name}</p>
                     <p className="text-sm mt-1" style={{ color: C.muted }}>About {p.india_days} days in India · {GROUPS[p.grp].name.toLowerCase()}</p>
-                    <p className="text-sm mt-2">{sp ? <>From <b>{inr(sp.min)}</b> · {sp.n} {sp.n === 1 ? 'hospital' : 'hospitals'}</> : <span style={{ color: C.muted }}>Hospitals joining</span>}</p>
+                    <p className="text-sm mt-2">{sp ? <>From <b>{money(sp.min, cur, cat.fx)}</b> · {sp.n} {sp.n === 1 ? 'hospital' : 'hospitals'}</> : <span style={{ color: C.muted }}>Hospitals joining</span>}</p>
                   </Link>
                 )
               })}
@@ -297,6 +304,7 @@ export function IntlTreatment() {
   const { code = '' } = useParams()
   const { cat, err } = useCatalogue()
   const proc = cat?.procedures.find(p => p.code === code)
+  const { cur, setCur } = useCurrency()
   useTitle(proc?.name ?? 'Treatment')
   if (!cat) return <IntlLayout><Loading err={err} /></IntlLayout>
   if (!proc) return <IntlLayout><Wrap className="py-16"><p>We could not find this treatment. <Link to="/international/treatments" className="underline">See all treatments</Link></p></Wrap></IntlLayout>
@@ -307,7 +315,10 @@ export function IntlTreatment() {
       <Wrap className="py-10 grid gap-6 lg:grid-cols-[1.5fr_1fr]">
         <div className="flex flex-col gap-6">
           <Card>
-            <h2 className="text-xl font-bold mb-3">Estimates by city</h2>
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+              <h2 className="text-xl font-bold">Estimates by city</h2>
+              <CurrencyPicker cur={cur} setCur={setCur} fx={cat.fx} />
+            </div>
             <div className="flex flex-col">
               {(Object.keys(LEVELS) as CityLevel[]).map(l => {
                 const sp = priceSpan(cat, proc.code, l)
@@ -315,7 +326,7 @@ export function IntlTreatment() {
                   <div key={l} className="flex items-center justify-between gap-3 py-3" style={{ borderTop: `1px solid ${C.border}` }}>
                     <div><p className="font-semibold">{LEVELS[l].name}{g.levels.includes(l) && <span className="ml-2 text-sm rounded-full px-2 py-0.5" style={{ background: C.soft, color: C.greenDark }}>Suggested</span>}</p>
                       <p className="text-sm" style={{ color: C.muted }}>{LEVELS[l].examples}</p></div>
-                    <p className="text-right">{sp ? <><b>{inr(sp.min)} – {inr(sp.max)}</b><br /><span className="text-sm" style={{ color: C.muted }}>{sp.n} {sp.n === 1 ? 'hospital' : 'hospitals'}</span></> : <span className="text-sm" style={{ color: C.muted }}>No listed hospital yet</span>}</p>
+                    <p className="text-right">{sp ? <><b>{money(sp.min, cur, cat.fx)} – {money(sp.max, cur, cat.fx)}</b><br /><span className="text-sm" style={{ color: C.muted }}>{sp.n} {sp.n === 1 ? 'hospital' : 'hospitals'}</span></> : <span className="text-sm" style={{ color: C.muted }}>No listed hospital yet</span>}</p>
                   </div>
                 )
               })}
@@ -445,7 +456,7 @@ export function IntlHospital() {
                 <div key={p.procedure_code} className="py-3 flex items-center justify-between gap-3" style={{ borderTop: `1px solid ${C.border}` }}>
                   <div><p className="font-semibold">{procName(p.procedure_code)}</p>
                     <p className="text-sm" style={{ color: C.muted }}>{p.hospital_days != null ? `${p.hospital_days} days in hospital` : ''}{p.india_days ? ` · ${p.india_days} days in India` : ''}</p></div>
-                  <div className="text-right"><p className="font-semibold">{pr.inr}</p>{pr.local && <p className="text-sm" style={{ color: C.muted }}>{pr.local}</p>}
+                  <div className="text-right"><p className="font-semibold">{pr.main}</p>{pr.sub && <p className="text-sm" style={{ color: C.muted }}>{pr.sub}</p>}
                     <Link to={`/international/compare?t=${p.procedure_code}`} className="text-sm font-semibold" style={{ color: C.green }}>Compare →</Link></div>
                 </div>
               )
@@ -462,6 +473,7 @@ export function IntlHospital() {
 export function IntlCosts() {
   useTitle('Costs')
   const { cat, err } = useCatalogue()
+  const { cur, setCur } = useCurrency()
   const [code, setCode] = useState('')
   const [nights, setNights] = useState('')
   const [perNight, setPerNight] = useState('')
@@ -470,14 +482,20 @@ export function IntlCosts() {
   if (!cat) return <IntlLayout><PageHead kicker="Costs" title="What your trip will cost" /><Loading err={err} /></IntlLayout>
   const proc = cat.procedures.find(p => p.code === code)
   const n = Number(nights) || (proc ? Math.max((proc.india_days ?? 0) - (proc.hospital_days ?? 0), 0) : 0)
-  const stay = n * (Number(perNight) || 0)
-  const meals = (proc?.india_days ?? n) * (Number(food) || 0) * people
+  // The visitor types amounts in their own currency; sums are kept in rupees.
+  const r = rateOf(cur, cat.fx)
+  const sym = r === 1 ? '₹' : cur
+  const stay = n * (Number(perNight) || 0) * r
+  const meals = (proc?.india_days ?? n) * (Number(food) || 0) * people * r
   return (
     <IntlLayout>
       <PageHead kicker="Costs" title="What your trip will cost" lead="Treatment estimates by city size from checked hospitals, and a simple calculator for your stay." />
       <Wrap className="py-8 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <Card>
-          <label className="block font-semibold mb-2">Treatment</label>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+            <label className="font-semibold">Treatment</label>
+            <CurrencyPicker cur={cur} setCur={setCur} fx={cat.fx} />
+          </div>
           <ProcedureSelect procs={cat.procedures} value={code} onChange={setCode} />
           {proc && (
             <div className="mt-5 flex flex-col">
@@ -486,7 +504,7 @@ export function IntlCosts() {
                 return (
                   <div key={l} className="py-3 flex justify-between gap-3" style={{ borderTop: `1px solid ${C.border}` }}>
                     <p className="font-semibold">{LEVELS[l].name}{GROUPS[proc.grp].levels.includes(l) && <span className="ml-2 text-sm rounded-full px-2 py-0.5" style={{ background: C.soft, color: C.greenDark }}>Suggested</span>}</p>
-                    <p>{sp ? <b>{inr(sp.min)} – {inr(sp.max)}</b> : <span className="text-sm" style={{ color: C.muted }}>No listed hospital yet</span>}</p>
+                    <p>{sp ? <b>{money(sp.min, cur, cat.fx)} – {money(sp.max, cur, cat.fx)}</b> : <span className="text-sm" style={{ color: C.muted }}>No listed hospital yet</span>}</p>
                   </div>
                 )
               })}
@@ -500,18 +518,18 @@ export function IntlCosts() {
           <div className="grid gap-3">
             <label className="text-sm">Nights in a hotel
               <input inputMode="numeric" value={nights} onChange={e => setNights(e.target.value.replace(/\D/g, ''))} placeholder={proc ? String(n) : 'e.g. 10'} className="mt-1 w-full rounded-xl border px-3 py-2.5" style={{ borderColor: C.border }} /></label>
-            <label className="text-sm">Hotel a night (₹)
+            <label className="text-sm">Hotel a night ({sym})
               <input inputMode="numeric" value={perNight} onChange={e => setPerNight(e.target.value.replace(/\D/g, ''))} placeholder="your budget" className="mt-1 w-full rounded-xl border px-3 py-2.5" style={{ borderColor: C.border }} /></label>
-            <label className="text-sm">Food a day per person (₹)
+            <label className="text-sm">Food a day per person ({sym})
               <input inputMode="numeric" value={food} onChange={e => setFood(e.target.value.replace(/\D/g, ''))} placeholder="your budget" className="mt-1 w-full rounded-xl border px-3 py-2.5" style={{ borderColor: C.border }} /></label>
             <label className="text-sm">People travelling
               <select value={people} onChange={e => setPeople(Number(e.target.value))} className="mt-1 w-full rounded-xl border px-3 py-2.5 bg-white" style={{ borderColor: C.border }}>
                 <option value={1}>1</option><option value={2}>2</option><option value={3}>3</option></select></label>
           </div>
           <div className="mt-4 rounded-xl p-4" style={{ background: C.cream }}>
-            <p className="flex justify-between"><span>Hotel</span><b>{inr(stay)}</b></p>
-            <p className="flex justify-between"><span>Food</span><b>{inr(meals)}</b></p>
-            <p className="flex justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}` }}><span>Stay total</span><b>{inr(stay + meals)}</b></p>
+            <p className="flex justify-between"><span>Hotel</span><b>{money(stay, cur, cat.fx)}</b></p>
+            <p className="flex justify-between"><span>Food</span><b>{money(meals, cur, cat.fx)}</b></p>
+            <p className="flex justify-between mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}` }}><span>Stay total</span><b>{money(stay + meals, cur, cat.fx)}</b></p>
           </div>
           <p className="text-sm mt-3" style={{ color: C.muted }}>Add the treatment estimate and your flights. Hotels, food and local travel usually cost less in smaller cities.</p>
         </Card>

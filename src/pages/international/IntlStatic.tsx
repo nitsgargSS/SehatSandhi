@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Search, FileText, Scale, Plane, HeartPulse, ShieldCheck, Building2, Video, FileSignature, RefreshCw,
@@ -25,6 +26,14 @@ const HOW = [
   { icon: Plane, t: 'Travel', d: 'Your hospital sends the visa letter. We arrange airport pickup, stay and local travel.' },
   { icon: HeartPulse, t: 'Recover', d: 'Treatment, discharge papers in English, and online follow-ups once you are home.' },
 ]
+
+// Articles load in the browser only: this page is also prerendered, and the
+// prerender must not reach the database.
+function LiveArticles() {
+  const [C2, setC2] = useState<null | (() => JSX.Element | null)>(null)
+  useEffect(() => { import('./IntlArticles').then(m => setC2(() => m.HomeArticles)) }, [])
+  return C2 ? <C2 /> : null
+}
 
 export function IntlHome() {
   useTitle('Treatment in India, looked after')
@@ -81,6 +90,8 @@ export function IntlHome() {
           ))}
         </ol>
       </Wrap>
+
+      <LiveArticles />
 
       <RightCity />
 

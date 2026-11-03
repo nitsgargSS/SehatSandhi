@@ -321,6 +321,20 @@ tables:
   intl_packages:
     class: isolated
     purgeOrder: 104.2
+  # 0314–0315: savings reference prices and portal articles — content we
+  # author on prod, so sandbox gets the same.
+  intl_countries:
+    class: sync
+    key: [code]
+    syncOrder: 98
+  intl_price_refs:
+    class: sync
+    key: [id]
+    syncOrder: 99
+  intl_articles:
+    class: sync
+    key: [slug]
+    syncOrder: 99.5
   # 0313: documents, their history, audit links and backup records.
   intl_check_items:
     class: sync
