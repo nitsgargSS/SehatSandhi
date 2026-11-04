@@ -36,6 +36,7 @@ import { doctorAddon, DoctorAddonQuote, loadRazorpayCheckout, verifyRazorpayPaym
 import PublicProfileEditor from './PublicProfileEditor'
 import WebsitePanel from './WebsitePanel'
 import InternationalPanel from './InternationalPanel'
+import IntlInvite from './IntlInvite'
 import SocialPostsPanel from './SocialPostsPanel'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
@@ -1542,6 +1543,10 @@ export default function DoctorDashboard() {
         {/* ══════════ TODAY (default) — today's slot grid + recent appointments ══════════ */}
         {tab === 'today' && (
           <div className="space-y-4">
+            {/* 0324: Sehatsandhi International — invitation, progress or listing. */}
+            {(doctor.vertical === 'hospital' || (doctor as { ipd_module?: boolean }).ipd_module) && (!role.enforced || ['owner', 'manager'].includes(role.role ?? '')) && (
+              <IntlInvite businessId={doctor.id} onOpen={() => setTab('international')} />
+            )}
             {/* 0265: what needs attention right now — replaces the grid of every slot in the day. */}
             <TodayPanel businessId={doctor.id} booksAppointments={booksAppointments}
               onGoTo={tb => setTab(tb)} onOpenPatient={m => openPatient(m)} />
