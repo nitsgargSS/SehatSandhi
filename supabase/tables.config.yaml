@@ -315,6 +315,10 @@ tables:
     class: sync
     key: [city]
     syncOrder: 96
+  # 0323: the WhatsApp alert queue (children of intl_enquiries).
+  intl_alerts:
+    class: isolated
+    purgeOrder: 104.05
   intl_enquiries:
     class: isolated
     purgeOrder: 104.1

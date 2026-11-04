@@ -46,10 +46,10 @@ export default function InternationalAdminPanel({ isManager }: { isManager: bool
 function Enquiries({ d, onChange }: { d: Loaded; onChange: () => void }) {
   const name = (id: string) => d.hospitals.find(h => h.business_id === id)?.businesses?.name ?? id.slice(0, 8)
   if (!d.enquiries.length) return <div className="card text-gray-500">No patient requests yet.</div>
-  return <div className="space-y-3">{d.enquiries.map(e => <EnquiryRow key={e.id} e={e} name={name} onChange={onChange} />)}</div>
+  return <div className="space-y-3">{d.enquiries.map(e => <EnquiryRow key={e.id} e={e} name={name} onChange={onChange} alerts={d.alerts.filter(a => a.enquiry_id === e.id)} />)}</div>
 }
 
-function EnquiryRow({ e, name, onChange }: { e: AdminEnquiry; name: (id: string) => string; onChange: () => void }) {
+function EnquiryRow({ e, name, onChange, alerts }: { e: AdminEnquiry; name: (id: string) => string; onChange: () => void; alerts: Loaded['alerts'] }) {
   const [status, setStatus] = useState(e.status)
   const [coord, setCoord] = useState(e.coordinator ?? '')
   const [note, setNote] = useState(e.admin_note ?? '')
@@ -77,6 +77,15 @@ function EnquiryRow({ e, name, onChange }: { e: AdminEnquiry; name: (id: string)
           )}
           {prefs && (prefs.language || prefs.food) && <p className="text-gray-500">Prefers: {[prefs.language, prefs.food].filter(Boolean).join(', ')}</p>}
           <p className="text-gray-400 mt-1">{new Date(e.created_at).toLocaleString('en-IN')} · tracker /international/track/{e.token}</p>
+          {alerts.length > 0 && (
+            <p className="mt-1 text-xs flex flex-wrap gap-1.5">
+              {alerts.map((a, i) => (
+                <span key={i} title={a.error ?? ''} className={`rounded-full px-2 py-0.5 ${a.state === 'sent' ? 'bg-green-50 text-green-700' : a.state === 'failed' ? 'bg-red-50 text-red-700' : a.state === 'skipped' ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-800'}`}>
+                  WhatsApp {a.kind === 'team_new' ? 'to team' : `to patient (${a.status_at})`}: {a.state}{a.state === 'pending' && a.attempts ? `, retry ${a.attempts}` : ''}
+                </span>
+              ))}
+            </p>
+          )}
         </div>
         <div className="flex gap-2 items-center">
           {wa && <a href={wa} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-green-700 font-semibold"><MessageCircle className="w-4 h-4" /> {e.phone}</a>}
@@ -336,16 +345,23 @@ function Audit({ hospitals }: { hospitals: { id: string; name: string }[] }) {
 function Settings() {
   const [fee, setFee] = useState('10')
   const [fx, setFx] = useState<Record<string, string>>({})
+  const [nums, setNums] = useState('')
   const [msg, setMsg] = useState('')
   useEffect(() => {
     supabase.rpc('sehat_intl_fee_pct').then(({ data }) => data != null && setFee(String(data)))
+    supabase.rpc('sehat_intl_admin_alert_numbers', { p_numbers: null }).then(({ data }) => setNums(String(data ?? '')))
     loadCatalogue().then(c => setFx(Object.fromEntries(Object.entries(c.fx ?? {}).map(([k, v]) => [k, String(v)]))), () => {})
   }, [])
   const save = async () => {
     setMsg('')
     const clean: Record<string, number> = {}
     for (const [k, v] of Object.entries(fx)) if (Number(v) > 0) clean[k] = Number(v)
-    try { await adminSettings(Number(fee), clean); setMsg('Saved. Reload the portal to see it.') } catch (e) { setMsg((e as Error).message) }
+    try {
+      await adminSettings(Number(fee), clean)
+      const { error } = await supabase.rpc('sehat_intl_admin_alert_numbers', { p_numbers: nums })
+      if (error) throw error
+      setMsg('Saved. Reload the portal to see it.')
+    } catch (e) { setMsg((e as Error).message) }
   }
   return (
     <div className="card max-w-xl text-sm space-y-3">
@@ -357,6 +373,9 @@ function Settings() {
         ))}
       </div>
       <p className="text-gray-500">Converted prices show as “≈” next to rupees. Update rates now and then.</p>
+      <label className="block">WhatsApp numbers alerted about each new patient request (comma-separated, with country code)
+        <input value={nums} onChange={e => setNums(e.target.value)} placeholder="918708718705, 919812345678" className="w-full border rounded-lg px-2 py-1.5" /></label>
+      <p className="text-gray-500">Every new request is also emailed to the admin address. Patients get a WhatsApp (and email, if given) when you change their request’s status.</p>
       <button onClick={save} className="btn-teal !px-4 !py-1.5 text-sm">Save</button>
       {msg && <p>{msg}</p>}
     </div>

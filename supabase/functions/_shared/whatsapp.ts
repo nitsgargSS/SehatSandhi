@@ -99,6 +99,8 @@ const AUTO_TEMPLATE: Record<string, string> = {
   // 0280: billing notices to a business (_shared/billingTemplates.ts). Meta only.
   AISENSY_PLAN_RENEWAL_CAMPAIGN: 'plan_renewal_reminder', AISENSY_PLAN_AUTO_DEBIT_CAMPAIGN: 'plan_auto_debit_notice',
   AISENSY_PLAN_CHANGE_CAMPAIGN: 'plan_change_update',
+  // 0323: Sehatsandhi International (_shared/intlTemplates.ts). Meta only.
+  AISENSY_INTL_UPDATE_CAMPAIGN: 'intl_request_update', AISENSY_INTL_TEAM_CAMPAIGN: 'intl_team_new_request',
 }
 
 function metaTemplate(t: TemplateSend): { name: string; lang: string } | null {

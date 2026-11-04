@@ -33,6 +33,7 @@
 //      per-account callback.
 
 import { BILLING_TEMPLATES } from '../_shared/billingTemplates.ts'
+import { INTL_TEMPLATES } from '../_shared/intlTemplates.ts'
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { caller } from '../_shared/caller.ts'
 import { CLINIC_TEMPLATES, templateRequest } from '../_shared/clinicTemplates.ts'
@@ -281,7 +282,7 @@ async function houseTemplates(req: Request, body: Any) {
   const created: { name: string; ok: boolean; error?: string }[] = []
   if (!body.dryRun) {
     // 0280: and the billing notices Sehatsandhi sends businesses.
-    for (const t of [...CLINIC_TEMPLATES.filter(x => HOUSE_NAMES.has(x.name)), ...BILLING_TEMPLATES]) {
+    for (const t of [...CLINIC_TEMPLATES.filter(x => HOUSE_NAMES.has(x.name)), ...BILLING_TEMPLATES, ...INTL_TEMPLATES]) {
       if (existing.some(e => e.name === t.name && e.language === t.language)) continue
       const r = await graph(`${wabaId}/message_templates`, token, { method: 'POST', body: templateRequest(t) })
       created.push({ name: t.name, ok: r.ok, error: r.error })
