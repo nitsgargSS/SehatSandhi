@@ -392,6 +392,17 @@ function Articles() {
   const quick = async (a: AdminArticle, patch: Partial<AdminArticle>) => {
     await save({ ...a, ...patch })
   }
+  const [picBusy, setPicBusy] = useState('')
+  // An AI picture for the article (intl-article-image): photorealistic, no
+  // text, no needles or surgery. The scene can be described, or left blank.
+  const makePicture = async (a: AdminArticle) => {
+    const scene = window.prompt('Describe the picture (optional). Leave blank to draw it from the title.\nExample: an older man walking with a walker beside a physiotherapist in a bright hospital corridor', '')
+    if (scene === null) return
+    setPicBusy(a.id); setErr('')
+    const { data, error } = await supabase.functions.invoke('intl-article-image', { body: { slug: a.slug, scene } })
+    setPicBusy('')
+    if (error || !data?.ok) setErr(data?.error || error?.message || 'No picture could be made.'); else load()
+  }
   const tone = { draft: 'bg-gray-100', review: 'bg-amber-50 text-amber-800', published: 'bg-green-50 text-green-800' }
   return (
     <div className="space-y-3 text-sm">
@@ -428,7 +439,9 @@ function Articles() {
           <button onClick={() => quick(a, { featured: !a.featured })} className="underline">{a.featured ? 'Remove from banner' : 'Add to banner'}</button>
           {a.status !== 'published' ? <button onClick={() => quick(a, { status: 'published' })} className="rounded-lg bg-green-600 text-white px-2 py-0.5">Publish</button>
             : <button onClick={() => quick(a, { status: 'draft' })} className="underline text-red-700">Unpublish</button>}
+          <button onClick={() => makePicture(a)} disabled={picBusy === a.id} className="underline">{picBusy === a.id ? 'Making picture…' : a.image_url ? 'New picture' : 'Make picture'}</button>
           <button onClick={() => setEdit(a)} className="underline">Edit</button>
+          {a.image_url && <img src={a.image_url} alt="" className="w-full sm:w-40 h-24 object-cover rounded-lg order-first sm:order-none" />}
         </li>
       ))}</ul>
     </div>

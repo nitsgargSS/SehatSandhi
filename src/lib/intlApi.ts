@@ -11,7 +11,10 @@ export interface Procedure {
   hospital_days: number | null; india_days: number | null; summary: string | null; reports: string | null
   /** 0319: conditions under Indian law, shown before the patient goes on. */
   legal_title?: string | null; legal_points?: string[] | null; legal_sources?: { label: string; url: string }[] | null; legal_version?: string | null
+  /** 0322: what to read — how it is done, before, after, do's and don'ts, machines. */
+  guide?: { about?: string; before?: string[]; after?: string[]; dos?: string[]; donts?: string[]; machines?: string[] } | null
 }
+export interface Machine { key: string; name: string; what: string; image_url: string | null }
 export interface Package {
   procedure_code: string; price_min: number; price_max: number
   room_type: string | null; included: string | null; excluded: string | null
@@ -30,7 +33,7 @@ export interface Hospital {
   site_url?: string | null
   media?: { kind: 'photo' | 'video' | 'youtube'; path: string | null; youtube_id: string | null; category: string; caption: string | null }[]
 }
-export interface Catalogue { fee_pct: number; fx: Record<string, number>; procedures: Procedure[]; hospitals: Hospital[] }
+export interface Catalogue { fee_pct: number; fx: Record<string, number>; procedures: Procedure[]; hospitals: Hospital[]; machines?: Machine[] }
 
 let cache: Promise<Catalogue> | null = null
 export function loadCatalogue(): Promise<Catalogue> {

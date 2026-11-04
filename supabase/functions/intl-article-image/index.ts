@@ -8,6 +8,8 @@
 // Who: a Sehatsandhi admin (from Admin → International → Articles), or the
 // service role. Body: { slug, scene? } — scene describes the picture; without
 // one it is drawn from the article's title and summary.
+// 0322: or { machine: key } — a picture of one of the machines on treatment
+// pages (intl_machines), from its stored scene; stored under machines/.
 //
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY,
 //      CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_AI_TOKEN, GEMINI_API_KEY, POLLINATIONS_KEY
@@ -92,16 +94,26 @@ Deno.serve(async (req) => {
     const { data: isAdmin } = await asUser.rpc('sehat_is_admin')
     if (isAdmin !== true) return json({ error: 'Admins only.' }, 401)
   }
-  let body: { slug?: string; scene?: string }
+  let body: { slug?: string; scene?: string; machine?: string }
   try { body = await req.json() } catch { return json({ error: 'bad request' }, 400) }
-  const slug = String(body.slug ?? '')
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-  const { data: a } = await db.from('intl_articles').select('id, slug, title, summary').eq('slug', slug).maybeSingle()
-  if (!a) return json({ error: 'No such article.' }, 404)
 
-  const scene = String(body.scene ?? '').trim().slice(0, 600) || `A calm, reassuring scene that illustrates: ${a.title}. ${a.summary}`
+  // Which row the picture is for: an article, or a machine (0322).
+  let target: { table: 'intl_articles' | 'intl_machines'; col: 'id' | 'key'; val: string; folder: string; name: string; scene: string }
+  if (body.machine) {
+    const { data: m } = await db.from('intl_machines').select('key, name, scene').eq('key', String(body.machine)).maybeSingle()
+    if (!m) return json({ error: 'No such machine.' }, 404)
+    target = { table: 'intl_machines', col: 'key', val: m.key, folder: 'machines', name: m.key,
+      scene: String(body.scene ?? '').trim().slice(0, 600) || m.scene || `A modern ${m.name} in a clean hospital room, no people` }
+  } else {
+    const { data: a } = await db.from('intl_articles').select('id, slug, title, summary').eq('slug', String(body.slug ?? '')).maybeSingle()
+    if (!a) return json({ error: 'No such article.' }, 404)
+    target = { table: 'intl_articles', col: 'id', val: a.id, folder: 'articles', name: a.slug,
+      scene: String(body.scene ?? '').trim().slice(0, 600) || `A calm, reassuring scene that illustrates: ${a.title}. ${a.summary}` }
+  }
+  const scene = target.scene
   const prompt = `${scene}. Photorealistic editorial photograph filling the whole frame edge to edge, warm natural light, soft background, wide 16:9 landscape composition. ` +
-    'Real-looking people of mixed nationalities where people appear; a modern Indian setting. ' +
+    'Real-looking people of mixed nationalities where people appear; a modern Indian setting. No brand names or manufacturer logos on any equipment. ' +
     'No text, no letters, no numbers, no logos, no watermark. No surgery, no needles, no blood, no wounds, no close-up of an eye.'
 
   const failures: string[] = []
@@ -109,11 +121,11 @@ Deno.serve(async (req) => {
     let pic: Pic
     try { pic = await m.make(prompt) } catch (e) { failures.push(`${m.model}: ${e instanceof Error ? e.message : e}`); continue }
     const ext = pic.type === 'image/png' ? 'png' : pic.type === 'image/webp' ? 'webp' : 'jpg'
-    const path = `articles/${a.slug}-${Date.now()}.${ext}`
+    const path = `${target.folder}/${target.name}-${Date.now()}.${ext}`
     const { error } = await db.storage.from('intl-media').upload(path, pic.bytes, { contentType: pic.type })
     if (error) return json({ error: `storing the picture: ${error.message}` }, 500)
     const url = db.storage.from('intl-media').getPublicUrl(path).data.publicUrl
-    const { error: e2 } = await db.from('intl_articles').update({ image_url: url }).eq('id', a.id)
+    const { error: e2 } = await db.from(target.table).update({ image_url: url }).eq(target.col, target.val)
     if (e2) return json({ error: e2.message }, 500)
     return json({ ok: true, image_url: url, model: m.model })
   }

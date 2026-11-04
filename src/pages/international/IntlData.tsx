@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import {
-  MapPin, BedDouble, Activity, Plane, Languages, Star, Check, Plus, Info, ChevronDown, Building2, Search, Lightbulb, X, ChevronLeft, ChevronRight, Play,
+  MapPin, BedDouble, Activity, Plane, Languages, Star, Check, Plus, Info, ChevronDown, Building2, Search, Lightbulb, X, ChevronLeft, ChevronRight, Play, ThumbsUp, Ban, ClipboardList, HeartPulse, Stethoscope,
 } from 'lucide-react'
 import IntlLayout, { C, Wrap, PageHead, Card, CtaButton, EstimateNote, useTitle } from './IntlLayout'
 import { BottomCta } from './IntlStatic'
@@ -351,6 +351,7 @@ export function IntlTreatment() {
             <p className="text-sm mt-3" style={{ color: C.muted }}>{FEE_LINE} {ESTIMATE_LINE}</p>
             <EstimateNote className="mt-3" />
           </Card>
+          {proc.guide && <TreatmentGuide p={proc} cat={cat} />}
           {hasLegal(proc) && <LegalNotes p={proc} />}
           <Card>
             <h2 className="text-xl font-bold mb-2">Which city usually suits this</h2>
@@ -637,5 +638,52 @@ function Gallery({ h }: { h: Hospital }) {
         </div>
       )}
     </Wrap>
+  )
+}
+
+// 0322: what a patient can read about the treatment — how it is done,
+// preparation, life after, do's and don'ts — and the machines it uses.
+function TreatmentGuide({ p, cat }: { p: Procedure; cat: Catalogue }) {
+  const g = p.guide!
+  const machines = (g.machines ?? []).map(k => cat.machines?.find(m => m.key === k)).filter(Boolean) as NonNullable<Catalogue['machines']>
+  const List = ({ items, icon: I, color }: { items?: string[]; icon: typeof Check; color: string }) => (
+    <ul className="flex flex-col gap-2">{(items ?? []).map(x => <li key={x} className="flex gap-2 leading-relaxed"><I className="w-4 h-4 mt-1.5 shrink-0" style={{ color }} />{x}</li>)}</ul>
+  )
+  return (
+    <>
+      {g.about && (
+        <Card>
+          <h2 className="text-xl font-bold mb-2 flex items-center gap-2"><Stethoscope className="w-5 h-5" style={{ color: C.green }} /> How it is done</h2>
+          <p className="leading-relaxed">{g.about}</p>
+        </Card>
+      )}
+      {(g.before?.length || g.after?.length) ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {!!g.before?.length && <Card><h2 className="text-lg font-bold mb-3 flex items-center gap-2"><ClipboardList className="w-5 h-5" style={{ color: C.green }} /> Before: preparation and precautions</h2><List items={g.before} icon={Check} color={C.green} /></Card>}
+          {!!g.after?.length && <Card><h2 className="text-lg font-bold mb-3 flex items-center gap-2"><HeartPulse className="w-5 h-5" style={{ color: C.green }} /> Life after</h2><List items={g.after} icon={Check} color={C.green} /></Card>}
+        </div>
+      ) : null}
+      {(g.dos?.length || g.donts?.length) ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {!!g.dos?.length && <div className="rounded-2xl p-5" style={{ background: '#EAF6EF', border: '1px solid #CBE8D7' }}><h2 className="text-lg font-bold mb-3 flex items-center gap-2" style={{ color: C.greenDark }}><ThumbsUp className="w-5 h-5" /> Do</h2><List items={g.dos} icon={Check} color={C.green} /></div>}
+          {!!g.donts?.length && <div className="rounded-2xl p-5" style={{ background: '#FDF0EE', border: '1px solid #F4CFC8' }}><h2 className="text-lg font-bold mb-3 flex items-center gap-2" style={{ color: '#B42318' }}><Ban className="w-5 h-5" /> Don’t</h2><List items={g.donts} icon={X} color="#B42318" /></div>}
+        </div>
+      ) : null}
+      {machines.length > 0 && (
+        <Card>
+          <h2 className="text-xl font-bold mb-1">Machines used</h2>
+          <p className="text-sm mb-4" style={{ color: C.muted }}>What you may see at the hospital. Pictures are illustrations; each hospital’s equipment differs.</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {machines.map(m => (
+              <div key={m.key} className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+                {m.image_url && <img src={m.image_url} alt={m.name} className="w-full aspect-[16/9] object-cover" loading="lazy" />}
+                <div className="p-4"><p className="font-semibold">{m.name}</p><p className="text-[15px] mt-1" style={{ color: C.muted }}>{m.what}</p></div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+      <p className="text-sm" style={{ color: C.muted }}>General information prepared by the Sehatsandhi team, not medical advice. Your own doctor and your treating doctor decide what is right for you.</p>
+    </>
   )
 }

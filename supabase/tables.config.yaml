@@ -335,6 +335,11 @@ tables:
     class: sync
     key: [slug]
     syncOrder: 99.5
+  # 0322: machines shown on treatment pages (content we author).
+  intl_machines:
+    class: sync
+    key: [key]
+    syncOrder: 99.6
   # 0313: documents, their history, audit links and backup records.
   intl_check_items:
     class: sync
