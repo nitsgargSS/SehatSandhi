@@ -26,8 +26,16 @@ export function useTitle(title: string) {
   useEffect(() => { document.title = `${title} · Sehatsandhi International` }, [title])
 }
 
+/** The page column. Every page shares one left edge (the logo's): a narrow
+ *  column keeps a comfortable reading width but starts on that same line,
+ *  instead of being centred and stepping in from the headings above it. */
 export function Wrap({ children, narrow = false, className = '' }: { children: React.ReactNode; narrow?: boolean; className?: string }) {
-  return <div className={`mx-auto w-full ${narrow ? 'max-w-3xl' : 'max-w-6xl'} px-4 sm:px-6 ${className}`}>{children}</div>
+  if (!narrow) return <div className={`mx-auto w-full max-w-6xl px-4 sm:px-6 ${className}`}>{children}</div>
+  return (
+    <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+      <div className={`w-full max-w-3xl ${className}`}>{children}</div>
+    </div>
+  )
 }
 
 export function PageHead({ kicker, title, lead }: { kicker?: string; title: string; lead?: string }) {

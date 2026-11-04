@@ -188,10 +188,12 @@ export function IntlArticle() {
       <div className="relative">
         <Art a={a} className="h-56 sm:h-72 w-full" />
         <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,.45))' }} />
-        <Wrap narrow className="absolute inset-x-0 bottom-0 pb-6 text-white">
+        <div className="absolute inset-x-0 bottom-0 pb-6 text-white">
+          <Wrap narrow>
           <span className="rounded-full bg-white/95 px-3 py-1 text-sm font-semibold" style={{ color: c.from }}>{c.name}</span>
           <h1 className="mt-3 text-3xl sm:text-4xl font-bold leading-tight drop-shadow">{a.title}</h1>
-        </Wrap>
+          </Wrap>
+        </div>
       </div>
       <Wrap narrow className="py-8">
         <p className="text-xl leading-relaxed" style={{ color: C.muted }}>{a.summary}</p>
