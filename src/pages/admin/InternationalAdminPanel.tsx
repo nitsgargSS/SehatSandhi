@@ -5,6 +5,7 @@ import {
   revokeAuditLink, backupNow, loadMedia, reviewMedia, mediaUrl, MEDIA_CATEGORIES, type MediaItem, type AdminEnquiry, type MyHospital, type IntlDoc, type Missing, type DocEvent, type AuditLink, type AuditLogRow, type BackupRun,
 } from '../../lib/intlApi'
 import { CHECKLIST, STEPS, CURRENCIES } from '../../lib/intlContent'
+import EnquiryQuotes from './IntlEnquiryQuotes'
 import { supabase } from '../../lib/supabase'
 
 // 0312: review hospital applications (documents, video walkthrough, star and
@@ -46,10 +47,11 @@ export default function InternationalAdminPanel({ isManager }: { isManager: bool
 function Enquiries({ d, onChange }: { d: Loaded; onChange: () => void }) {
   const name = (id: string) => d.hospitals.find(h => h.business_id === id)?.businesses?.name ?? id.slice(0, 8)
   if (!d.enquiries.length) return <div className="card text-gray-500">No patient requests yet.</div>
-  return <div className="space-y-3">{d.enquiries.map(e => <EnquiryRow key={e.id} e={e} name={name} onChange={onChange} alerts={d.alerts.filter(a => a.enquiry_id === e.id)} />)}</div>
+  return <div className="space-y-3">{d.enquiries.map(e => <EnquiryRow key={e.id} e={e} name={name} onChange={onChange} alerts={d.alerts.filter(a => a.enquiry_id === e.id)}
+    quotes={d.quotes.filter(q => q.enquiry_id === e.id)} listed={d.hospitals.filter(h => h.status === 'listed').map(h => ({ id: h.business_id, name: h.businesses?.name ?? h.business_id }))} />)}</div>
 }
 
-function EnquiryRow({ e, name, onChange, alerts }: { e: AdminEnquiry; name: (id: string) => string; onChange: () => void; alerts: Loaded['alerts'] }) {
+function EnquiryRow({ e, name, onChange, alerts, quotes, listed }: { e: AdminEnquiry; name: (id: string) => string; onChange: () => void; alerts: Loaded['alerts']; quotes: Loaded['quotes']; listed: { id: string; name: string }[] }) {
   const [status, setStatus] = useState(e.status)
   const [coord, setCoord] = useState(e.coordinator ?? '')
   const [note, setNote] = useState(e.admin_note ?? '')
@@ -102,6 +104,7 @@ function EnquiryRow({ e, name, onChange, alerts }: { e: AdminEnquiry; name: (id:
         <label className="sm:col-span-4">Note (team only)<input value={note} onChange={x => setNote(x.target.value)} className="w-full border rounded-lg px-2 py-1.5" /></label>
       </div>
       {err && <p className="text-red-700 mt-1">{err}</p>}
+      <EnquiryQuotes e={e} quotes={quotes} listed={listed} name={name} onChange={onChange} />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import IntlRequests from './IntlRequests'
 import { Globe2, Upload, FileCheck2, Trash2, Pencil, CheckCircle2, AlertTriangle, ExternalLink } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import {
@@ -150,6 +151,9 @@ export default function InternationalPanel({ businessId }: { businessId: string 
       </div>
 
       {(err || msg) && <p className={`rounded-lg px-3 py-2 text-sm ${err ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'}`}>{err || msg}</p>}
+
+      {/* 0325: requests Sehatsandhi has sent, and the hospital's quotes. */}
+      {h && (h.status === 'listed' || h.status === 'paused') && <IntlRequests businessId={businessId} fee={fee} />}
 
       {/* 1. Facts */}
       <div className="card">

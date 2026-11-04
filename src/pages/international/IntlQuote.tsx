@@ -7,6 +7,7 @@ import { useCatalogue, useShortlist } from './intlHooks'
 import { sendEnquiry, trackEnquiry, type Tracked } from '../../lib/intlApi'
 import { ESTIMATE_CLAUSES, STEPS, intlWaLink } from '../../lib/intlContent'
 import { LegalNotes, Declaration, DECLARATION, hasLegal, acceptLegal } from './IntlLegal'
+import TrackQuotes from './IntlTrackQuotes'
 
 const field = 'mt-1 w-full rounded-xl border px-4 py-3 bg-white'
 
@@ -195,7 +196,9 @@ export function IntlTrack() {
   const { token = '' } = useParams()
   const [t, setT] = useState<Tracked | null | undefined>(undefined)
   const [err, setErr] = useState('')
-  useEffect(() => { trackEnquiry(token).then(setT, e => setErr(e?.message || 'Could not load.')) }, [token])
+  const load = () => trackEnquiry(token).then(setT, e => setErr(e?.message || 'Could not load.'))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [token])
   const closed = t && (t.status === 'closed' || t.status === 'cancelled')
   const at = t ? STEPS.findIndex(s => s.key === t.status) : -1
   return (
@@ -231,6 +234,7 @@ export function IntlTrack() {
                 })}
               </ol>
             )}
+            {!closed && t.quotes && t.quotes.length > 0 && <TrackQuotes token={token} quotes={t.quotes} fx={t.fx ?? {}} onChosen={load} />}
             <a href={intlWaLink(`Hello, I have a question about my request (${t.name}). Ref ${token.slice(0, 8)}`)} target="_blank" rel="noreferrer"
               className="mt-4 inline-flex items-center gap-2 rounded-full px-5 py-3 font-semibold text-white" style={{ background: '#25D366' }}>
               <MessageCircle className="w-5 h-5" /> Message your coordinator

@@ -113,6 +113,8 @@ export async function sendEnquiry(p: Record<string, unknown>): Promise<{ ok: boo
 export interface Tracked {
   name: string; status: string; procedure: string | null; problem: string | null; coordinator: string | null
   created_at: string; updated_at: string; hospitals: string[]; chosen: string | null
+  /** 0325: written quotes Sehatsandhi has shared, and the exchange rates. */
+  quotes?: SharedQuote[]; fx?: Record<string, number>
 }
 export async function trackEnquiry(token: string): Promise<Tracked | null> {
   const { data, error } = await supabase.rpc('sehat_intl_track', { p_token: token })
@@ -257,11 +259,12 @@ export interface AdminEnquiry {
   legal_ack?: boolean; legal_version?: string | null; legal_ack_at?: string | null; legal_text?: string | null
 }
 export async function adminLoad() {
-  const [h, e, k, al] = await Promise.all([
+  const [h, e, k, al, q] = await Promise.all([
     supabase.from('intl_hospitals').select('*, businesses(name, own_city, own_district, own_state, phone, vertical)').order('updated_at', { ascending: false }),
     supabase.from('intl_enquiries').select('*').order('created_at', { ascending: false }).limit(300),
     supabase.from('intl_packages').select('business_id, procedure_code, price_min, price_max, valid_until, active'),
     supabase.from('intl_alerts').select('enquiry_id, kind, state, error, attempts, sent_at, status_at, created_at').order('created_at', { ascending: false }).limit(1000),
+    supabase.from('intl_quotes').select('*').order('asked_at', { ascending: false }).limit(1000),
   ])
   if (h.error) throw h.error
   if (e.error) throw e.error
@@ -270,6 +273,7 @@ export async function adminLoad() {
     hospitals: (h.data ?? []) as (MyHospital & { businesses: { name: string; own_city: string | null; own_district: string | null; own_state: string | null; phone: string | null; vertical: string } | null })[],
     enquiries: (e.data ?? []) as AdminEnquiry[],
     alerts: (al.data ?? []) as { enquiry_id: string; kind: string; state: string; error: string | null; attempts: number; sent_at: string | null; status_at: string | null; created_at: string }[],
+    quotes: (q.data ?? []) as QuoteRow[],
     packages: (k.data ?? []) as (Pick<MyPackage, 'procedure_code' | 'price_min' | 'price_max' | 'valid_until' | 'active'> & { business_id: string })[],
   }
 }
@@ -286,6 +290,89 @@ export async function adminEnquiry(id: string, status: string, coordinator?: str
 }
 export async function adminSettings(fee: number, fx: Record<string, number>) {
   const { error } = await supabase.rpc('sehat_intl_admin_settings', { p_fee: fee, p_fx: fx }); fail(error)
+}
+
+// ── Quotes (0325): hospital inbox, Sehatsandhi's lines, the patient's view ──
+export interface TravelLine { label: string; amount: number; pay: 'sehatsandhi' | 'direct'; note?: string | null }
+export const TRAVEL_PRESETS = ['Airport pickup and drop', 'Hotel / guest house (nights × rate)', 'Local cab', 'Interpreter', 'Visa and FRRO help', 'Meals for companion', 'Local SIM and forex help']
+/** Sehatsandhi's fee on a hospital price: fee % rounded up to ₹100 (same as the database). */
+export const feeOn = (price: number, pct: number) => Math.ceil((price * pct) / 100 / 100) * 100
+
+export interface QuoteRow {
+  id: string; enquiry_id: string; business_id: string; state: 'asked' | 'quoted' | 'declined' | 'withdrawn'
+  case_note: string | null; asked_at: string; opinion: string | null; plan: string | null; doctor_name: string | null
+  price: number | null; room_type: string | null; hospital_days: number | null; india_days: number | null; fly_after_days: number | null
+  included: string | null; excluded: string | null; valid_until: string | null; decline_reason: string | null; quoted_at: string | null
+  travel: TravelLine[]; admin_note: string | null; fee_pct: number | null; shared_at: string | null; chosen_at: string | null
+}
+export async function adminQuotes(): Promise<QuoteRow[]> {
+  const { data, error } = await supabase.from('intl_quotes').select('*').order('asked_at', { ascending: false }).limit(1000)
+  fail(error); return (data ?? []) as QuoteRow[]
+}
+export async function askQuotes(enquiryId: string, hospitals: string[], note: string) {
+  const { data, error } = await supabase.rpc('sehat_intl_admin_ask_quotes', { p_enquiry: enquiryId, p_hospitals: hospitals, p_note: note || null })
+  fail(error); return data as number
+}
+export async function withdrawQuote(id: string) {
+  const { error } = await supabase.rpc('sehat_intl_admin_withdraw_quote', { p_quote: id }); fail(error)
+}
+export async function adminQuote(id: string, travel: TravelLine[], note: string | null, share: boolean) {
+  const { error } = await supabase.rpc('sehat_intl_admin_quote', { p_quote: id, p_travel: travel, p_note: note, p_share: share }); fail(error)
+}
+export async function unshareQuote(id: string) {
+  const { error } = await supabase.rpc('sehat_intl_admin_unshare', { p_quote: id }); fail(error)
+}
+
+// Reports: private bucket intl-reports, <enquiry id>/<file>.
+export interface ReportFile { name: string; path: string; size: number | null; at: string | null }
+export async function listReports(enquiryId: string): Promise<ReportFile[]> {
+  const { data, error } = await supabase.storage.from('intl-reports').list(enquiryId, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } })
+  fail(error)
+  return (data ?? []).filter(f => f.name && !f.name.startsWith('.')).map(f => ({
+    name: f.name.replace(/^\d+-/, ''), path: `${enquiryId}/${f.name}`,
+    size: (f.metadata as { size?: number } | null)?.size ?? null, at: f.created_at ?? null,
+  }))
+}
+export async function uploadReport(enquiryId: string, file: File) {
+  const safe = file.name.replace(/[^A-Za-z0-9._-]+/g, '_').slice(-80)
+  const { error } = await supabase.storage.from('intl-reports').upload(`${enquiryId}/${Date.now()}-${safe}`, file, { upsert: false, contentType: file.type || undefined })
+  fail(error)
+}
+export async function deleteReport(path: string) {
+  const { error } = await supabase.storage.from('intl-reports').remove([path]); fail(error)
+}
+export async function reportUrl(path: string): Promise<string | null> {
+  const { data } = await supabase.storage.from('intl-reports').createSignedUrl(path, 600)
+  return data?.signedUrl ?? null
+}
+
+/** A request as the hospital sees it: no phone, no email, first name only. */
+export interface HospitalRequest {
+  id: string; enquiry_id: string; state: QuoteRow['state']; asked_at: string; case_note: string | null
+  patient: string; country: string | null; procedure_code: string | null; procedure: string | null; problem: string | null
+  urgency: string | null; travel_when: string | null; companions: number | null; language: string | null; legal_ack: boolean
+  opinion: string | null; plan: string | null; doctor_name: string | null; price: number | null; room_type: string | null
+  hospital_days: number | null; india_days: number | null; fly_after_days: number | null; included: string | null; excluded: string | null
+  valid_until: string | null; decline_reason: string | null; quoted_at: string | null; shared: boolean; chosen: boolean; closed: boolean
+}
+export async function hospitalRequests(businessId: string): Promise<HospitalRequest[]> {
+  const { data, error } = await supabase.rpc('sehat_intl_hospital_requests', { p_business: businessId })
+  fail(error); return (data ?? []) as HospitalRequest[]
+}
+export async function hospitalQuote(businessId: string, quoteId: string, p: Record<string, unknown>) {
+  const { error } = await supabase.rpc('sehat_intl_hospital_quote', { p_business: businessId, p_quote: quoteId, p }); fail(error)
+}
+
+export interface SharedQuote {
+  id: string; hospital: string; city: string | null; opinion: string | null; plan: string | null; doctor_name: string | null
+  room_type: string | null; hospital_days: number | null; india_days: number | null; fly_after_days: number | null
+  included: string | null; excluded: string | null; valid_until: string; treatment: number; fee_pct: number; fee: number
+  travel: TravelLine[]; note: string | null; chosen: boolean
+}
+export async function chooseQuote(token: string, quoteId: string): Promise<{ ok: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc('sehat_intl_choose', { p_token: token, p_quote: quoteId })
+  if (error) return { ok: false, error: error.message }
+  return data as { ok: boolean; error?: string }
 }
 
 // ── Savings: prices abroad vs India (0314) ──────────────────────────────────
