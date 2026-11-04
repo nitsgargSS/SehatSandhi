@@ -9,7 +9,15 @@ dotenv.config({ path: '.env.supabase', quiet: true })
 const sb = new pg.Client({ connectionString: process.env.SUPABASE_DB_URL_SANDBOX, ssl: { rejectUnauthorized: false } })
 const pr = new pg.Client({ connectionString: process.env.SUPABASE_DB_URL_PROD, ssl: { rejectUnauthorized: false } })
 await sb.connect(); await pr.connect()
-const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY
+// Production: the project URL, and its service key fetched with the Supabase
+// management token (SUPABASE_ACCESS_TOKEN, as scripts/deploy-functions.sh uses).
+const PROD_REF = 'tbmlhawtnrvvnemcljma'
+const url = `https://${PROD_REF}.supabase.co`
+const keys = await fetch(`https://api.supabase.com/v1/projects/${PROD_REF}/api-keys?reveal=true`, {
+  headers: { Authorization: `Bearer ${process.env.SUPABASE_ACCESS_TOKEN}` },
+}).then((r) => r.json()).catch(() => [])
+const key = (Array.isArray(keys) ? keys : []).find((k) => k.name === 'service_role' || k.type === 'secret')?.api_key
+if (!key) { console.error('Could not get the production service key (is SUPABASE_ACCESS_TOKEN set in .env.supabase?)'); process.exit(1) }
 async function copy(table, keyCol, folder) {
   const { rows } = await sb.query(`select ${keyCol} as k, image_url from ${table} where image_url like '%/intl-media/${folder}/%'`)
   for (const { k, image_url } of rows) {
