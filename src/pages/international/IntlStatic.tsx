@@ -4,7 +4,7 @@ import {
   Search, FileText, Scale, Plane, HeartPulse, ShieldCheck, Building2, Video, FileSignature, RefreshCw,
   Eye, Smile, Bone, Baby, Heart, Stethoscope, CheckCircle2, MessageCircle, Clock, Users,
 } from 'lucide-react'
-import IntlLayout, { C, Wrap, PageHead, CtaButton, Card, useTitle } from './IntlLayout'
+import IntlLayout, { C, Wrap, PageHead, CtaButton, Card, HelpAside, useTitle } from './IntlLayout'
 import {
   LEVELS, GROUPS, FAQ, TRAVEL, PATIENT_CHECKLISTS, CHECKLIST, ESTIMATE_CLAUSES, NEVER_ARRANGED, intlWaLink, INTL_EMAIL,
   type CityLevel, type Grp,
@@ -109,9 +109,12 @@ export function IntlHome() {
         ))}
       </Wrap>
 
-      <Wrap narrow className="pb-6">
+      <Wrap className="pb-6">
         <h2 className="text-2xl font-bold mb-4">Common questions</h2>
-        <FaqList items={FAQ.slice(0, 5)} />
+        <div className="grid gap-3 lg:grid-cols-2 items-start">
+          <FaqList items={FAQ.slice(0, 3)} />
+          <FaqList items={FAQ.slice(3, 6)} />
+        </div>
         <Link to="/international/faq" className="inline-block mt-4 font-semibold" style={{ color: C.green }}>All questions →</Link>
       </Wrap>
 
@@ -206,7 +209,10 @@ export function IntlFaq() {
   return (
     <IntlLayout>
       <PageHead kicker="FAQ" title="Your questions, answered" lead="If your question is not here, message us on WhatsApp. A real person replies." />
-      <Wrap narrow className="py-10"><FaqList items={FAQ} /></Wrap>
+      <Wrap className="py-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 max-w-3xl"><FaqList items={FAQ} /></div>
+        <HelpAside />
+      </Wrap>
       <BottomCta />
     </IntlLayout>
   )
@@ -217,7 +223,8 @@ export function IntlPlanTrip() {
   return (
     <IntlLayout>
       <PageHead kicker="Plan your trip" title="Coming to India for treatment" lead="Visa, flights, getting to the hospital, where to stay and what to bring. Your coordinator helps with every step." />
-      <Wrap narrow className="py-10 flex flex-col gap-10">
+      <Wrap className="py-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="min-w-0 max-w-3xl flex flex-col gap-10">
         <section>
           <h2 className="text-2xl font-bold mb-3">Your e-Medical visa</h2>
           <ol className="flex flex-col gap-3 list-decimal pl-5 leading-relaxed">
@@ -255,6 +262,8 @@ export function IntlPlanTrip() {
           </ul>
         </section>
         <p><Link to="/international/checklists" className="font-semibold" style={{ color: C.green }}>Printable checklists for each stage →</Link></p>
+      </div>
+      <HelpAside />
       </Wrap>
       <BottomCta />
     </IntlLayout>
@@ -266,7 +275,7 @@ export function IntlChecklists() {
   return (
     <IntlLayout>
       <PageHead kicker="Checklists" title="What to do at each stage" lead="Print this page or keep it on your phone. Your coordinator also sends each list on WhatsApp at the right time." />
-      <Wrap narrow className="py-10 grid gap-5">
+      <Wrap className="py-10 grid gap-5 md:grid-cols-2 items-start">
         {PATIENT_CHECKLISTS.map(l => (
           <Card key={l.title}>
             <h2 className="text-xl font-bold mb-3">{l.title}</h2>
@@ -279,7 +288,7 @@ export function IntlChecklists() {
             </ul>
           </Card>
         ))}
-        <button onClick={() => window.print()} className="justify-self-start rounded-full px-5 py-2 font-semibold" style={{ border: `1.5px solid ${C.green}`, color: C.green }}>Print</button>
+        <button onClick={() => window.print()} className="md:col-span-2 justify-self-start rounded-full px-5 py-2 font-semibold" style={{ border: `1.5px solid ${C.green}`, color: C.green }}>Print</button>
       </Wrap>
     </IntlLayout>
   )

@@ -351,17 +351,6 @@ export function IntlTreatment() {
             <p className="text-sm mt-3" style={{ color: C.muted }}>{FEE_LINE} {ESTIMATE_LINE}</p>
             <EstimateNote className="mt-3" />
           </Card>
-          {proc.guide && <TreatmentGuide p={proc} cat={cat} />}
-          {hasLegal(proc) && <LegalNotes p={proc} />}
-          <Card>
-            <h2 className="text-xl font-bold mb-2">Which city usually suits this</h2>
-            <p className="leading-relaxed">{g.why}</p>
-          </Card>
-          <Card>
-            <h2 className="text-xl font-bold mb-2">Reports to send</h2>
-            <p className="leading-relaxed">{proc.reports}</p>
-            <p className="text-sm mt-2" style={{ color: C.muted }}>A clear phone photo of each page is enough.</p>
-          </Card>
         </div>
         <div className="flex flex-col gap-4">
           <Card>
@@ -372,8 +361,25 @@ export function IntlTreatment() {
           </Card>
           <CtaButton to={`/international/compare?t=${proc.code}`}>Compare hospitals</CtaButton>
           <CtaButton to={`/international/quote?t=${proc.code}`} light>Get a free quote</CtaButton>
+          <Card>
+            <h2 className="font-semibold mb-1">Which city usually suits this</h2>
+            <p className="text-[15px] leading-relaxed" style={{ color: C.muted }}>{g.why}</p>
+          </Card>
+          <Card>
+            <h2 className="font-semibold mb-1">Reports to send</h2>
+            <p className="text-[15px] leading-relaxed" style={{ color: C.muted }}>{proc.reports}</p>
+            <p className="text-sm mt-2" style={{ color: C.muted }}>A clear phone photo of each page is enough.</p>
+          </Card>
         </div>
       </Wrap>
+      {/* The guide uses the full width below the estimates. */}
+      {(proc.guide || hasLegal(proc)) && (
+        <Wrap className="pb-10 flex flex-col gap-6">
+          {hasLegal(proc) && <LegalNotes p={proc} />}
+          {proc.guide && <TreatmentGuide p={proc} cat={cat} />}
+        </Wrap>
+      )}
+      <BottomCta />
     </IntlLayout>
   )
 }
@@ -651,14 +657,14 @@ function TreatmentGuide({ p, cat }: { p: Procedure; cat: Catalogue }) {
   )
   return (
     <>
-      {g.about && (
-        <Card>
-          <h2 className="text-xl font-bold mb-2 flex items-center gap-2"><Stethoscope className="w-5 h-5" style={{ color: C.green }} /> How it is done</h2>
-          <p className="leading-relaxed">{g.about}</p>
-        </Card>
-      )}
-      {(g.before?.length || g.after?.length) ? (
-        <div className="grid gap-4 md:grid-cols-2">
+      {(g.about || g.before?.length || g.after?.length) ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {g.about && (
+            <Card className="md:col-span-2 lg:col-span-1">
+              <h2 className="text-lg font-bold mb-3 flex items-center gap-2"><Stethoscope className="w-5 h-5" style={{ color: C.green }} /> How it is done</h2>
+              <p className="leading-relaxed">{g.about}</p>
+            </Card>
+          )}
           {!!g.before?.length && <Card><h2 className="text-lg font-bold mb-3 flex items-center gap-2"><ClipboardList className="w-5 h-5" style={{ color: C.green }} /> Before: preparation and precautions</h2><List items={g.before} icon={Check} color={C.green} /></Card>}
           {!!g.after?.length && <Card><h2 className="text-lg font-bold mb-3 flex items-center gap-2"><HeartPulse className="w-5 h-5" style={{ color: C.green }} /> Life after</h2><List items={g.after} icon={Check} color={C.green} /></Card>}
         </div>
@@ -673,7 +679,8 @@ function TreatmentGuide({ p, cat }: { p: Procedure; cat: Catalogue }) {
         <Card>
           <h2 className="text-xl font-bold mb-1">Machines used</h2>
           <p className="text-sm mb-4" style={{ color: C.muted }}>What you may see at the hospital. Pictures are illustrations; each hospital’s equipment differs.</p>
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* However many machines, they share the row instead of leaving a gap. */}
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
             {machines.map(m => (
               <div key={m.key} className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
                 {m.image_url && <img src={m.image_url} alt={m.name} className="w-full aspect-[16/9] object-cover" loading="lazy" />}
