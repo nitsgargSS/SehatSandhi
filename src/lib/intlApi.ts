@@ -257,10 +257,11 @@ export interface AdminEnquiry {
   legal_ack?: boolean; legal_version?: string | null; legal_ack_at?: string | null; legal_text?: string | null
 }
 export async function adminLoad() {
-  const [h, e, k] = await Promise.all([
+  const [h, e, k, al] = await Promise.all([
     supabase.from('intl_hospitals').select('*, businesses(name, own_city, own_district, own_state, phone, vertical)').order('updated_at', { ascending: false }),
     supabase.from('intl_enquiries').select('*').order('created_at', { ascending: false }).limit(300),
     supabase.from('intl_packages').select('business_id, procedure_code, price_min, price_max, valid_until, active'),
+    supabase.from('intl_alerts').select('enquiry_id, kind, state, error, attempts, sent_at, status_at, created_at').order('created_at', { ascending: false }).limit(1000),
   ])
   if (h.error) throw h.error
   if (e.error) throw e.error
@@ -268,6 +269,7 @@ export async function adminLoad() {
   return {
     hospitals: (h.data ?? []) as (MyHospital & { businesses: { name: string; own_city: string | null; own_district: string | null; own_state: string | null; phone: string | null; vertical: string } | null })[],
     enquiries: (e.data ?? []) as AdminEnquiry[],
+    alerts: (al.data ?? []) as { enquiry_id: string; kind: string; state: string; error: string | null; attempts: number; sent_at: string | null; status_at: string | null; created_at: string }[],
     packages: (k.data ?? []) as (Pick<MyPackage, 'procedure_code' | 'price_min' | 'price_max' | 'valid_until' | 'active'> & { business_id: string })[],
   }
 }

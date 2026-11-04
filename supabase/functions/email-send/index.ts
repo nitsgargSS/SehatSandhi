@@ -608,7 +608,13 @@ async function sendIntlNotice(db: any, businessId: string | null, payload: any, 
   const subject = String(payload?.subject ?? 'Sehatsandhi International')
   let to = ADMIN_EMAIL, toName = 'Sehatsandhi Admin'
   let link = `${site}/${Deno.env.get('ADMIN_PATH') ?? 'ng-ctrl-2026'}`, button = 'Open Admin → International'
-  if (payload?.to === 'hospital') {
+  if (payload?.to === 'patient') {
+    // 0323: a status update to the patient who asked, with their tracking link.
+    to = String(payload?.email ?? '').trim().toLowerCase()
+    if (!to.includes('@')) return 'skip'
+    toName = String(payload?.name ?? '')
+    link = `${site}/international/track/${String(payload?.token ?? '')}`; button = 'See your request'
+  } else if (payload?.to === 'hospital') {
     if (!businessId) return 'skip'
     const [{ data: b }, { data: h }] = await Promise.all([
       db.from('businesses').select('name, email').eq('id', businessId).maybeSingle(),
