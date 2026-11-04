@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sehatsandhi International placards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Mukta:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* One placard per flow, 1080×1350 (4:5) — for WhatsApp and for print.
+     Rendered to PNG and PDF by render.mjs. No prices, no insurance,
+     no "best"/"No. 1" claims (NMC). Contact: Sehatsandhi's number. */
+  :root { --green: #0E9F6E; --green-d: #0b7d57; --ink: #14201c; --muted: #5f6b64; --cream: #FBF7F0; --line: #ece5d7; --chip: #e7f6ef; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #ddd; font-family: Poppins, sans-serif; color: var(--ink); }
+  .card { width: 1080px; height: 1350px; background: var(--cream); position: relative; overflow: hidden; display: flex; flex-direction: column; padding: 70px 76px 0; margin: 0 auto 40px; page-break-after: always; }
+  .card::before { content: ''; position: absolute; right: -180px; top: -180px; width: 520px; height: 520px; border-radius: 50%; background: var(--chip); }
+  .top { display: flex; justify-content: space-between; align-items: center; position: relative; }
+  .logo { height: 96px; }
+  .num { font-weight: 700; font-size: 22px; color: var(--green-d); background: #fff; border: 2px solid var(--line); border-radius: 999px; padding: 8px 20px; }
+  .kicker { margin-top: 54px; font-weight: 700; font-size: 24px; letter-spacing: .14em; text-transform: uppercase; color: var(--green); position: relative; }
+  h1 { font-size: 66px; line-height: 1.08; font-weight: 800; letter-spacing: -.02em; margin-top: 14px; position: relative; }
+  .hi { font-family: Mukta, sans-serif; font-weight: 700; font-size: 36px; color: var(--muted); margin-top: 12px; }
+  .steps { margin-top: 56px; display: flex; flex-direction: column; gap: 0; flex: 1; }
+  .step { display: flex; gap: 26px; align-items: center; position: relative; padding: 14px 0; }
+  .step:not(:last-child)::after { content: ''; position: absolute; left: 47px; top: 98px; height: calc(100% - 84px); border-left: 4px dashed #b9dccb; }
+  .ic { flex: 0 0 98px; height: 98px; border-radius: 28px; background: #fff; border: 3px solid var(--green); display: flex; align-items: center; justify-content: center; font-size: 50px; box-shadow: 0 10px 24px -14px rgba(14,159,110,.6); }
+  .txt b { display: block; font-size: 33px; font-weight: 700; line-height: 1.2; }
+  .txt span { display: block; font-size: 25px; color: var(--muted); margin-top: 4px; line-height: 1.35; }
+  .benefit { margin: 18px 0 36px; background: var(--green); color: #fff; border-radius: 26px; padding: 26px 32px; font-size: 31px; font-weight: 700; line-height: 1.3; display: flex; gap: 18px; align-items: center; }
+  .benefit em { font-style: normal; font-size: 40px; }
+  .foot { margin: 0 -76px; padding: 22px 76px; background: var(--ink); color: #e9f3ee; display: flex; justify-content: space-between; align-items: center; font-size: 24px; font-weight: 600; }
+  .foot b { color: #7fe0b6; }
+  /* the cover */
+  .grid { margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; flex: 1; align-content: start; }
+  .tile { background: #fff; border: 2px solid var(--line); border-radius: 26px; padding: 26px 26px; display: flex; gap: 18px; align-items: center; }
+  .tile .e { font-size: 46px; }
+  .tile b { font-size: 27px; line-height: 1.2; font-weight: 700; }
+  .tile span { display: block; font-size: 21px; color: var(--muted); font-weight: 500; margin-top: 2px; }
+  .grid3 { grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 36px; }
+  .grid3 .tile { padding: 16px 14px; gap: 12px; border-radius: 20px; align-items: center; }
+  .grid3 .tile .e { font-size: 34px; line-height: 1; flex: 0 0 auto; }
+  .grid3 .tile b { font-size: 21px; line-height: 1.15; }
+  .grid3 .tile span { font-size: 16px; line-height: 1.25; }
+  .example { font-size: 26px; color: var(--green-d); font-weight: 700; margin: 6px 0 0 124px; }
+
+  .foot small { font-size: 20px; color: #b9cfc4; font-weight: 500; }
+  .note { font-size: 19px; color: var(--muted); margin: -18px 0 22px; }
+  .ladder .step { padding: 9px 0; }
+  .ladder .ic { flex: 0 0 82px; height: 82px; font-size: 40px; border-radius: 24px; }
+  .ladder .step:not(:last-child)::after { left: 39px; top: 84px; }
+  .ladder .txt b { font-size: 29px; }
+  .ladder .txt span { font-size: 22px; }
+  .checks { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; align-content: start; }
+  .chk { background: #fff; border: 2px solid var(--line); border-radius: 22px; padding: 20px 22px; display: flex; gap: 14px; align-items: flex-start; }
+  .chk .e { font-size: 34px; line-height: 1; }
+  .chk b { font-size: 25px; line-height: 1.2; display: block; }
+  .chk span { font-size: 19px; color: var(--muted); display: block; margin-top: 3px; line-height: 1.3; }
+</style>
+</head>
+<body>
+<!-- Sehatsandhi International placards (3 Nov 2026). Same frame as placards.html.
+     No prices, no "best", no testimonials or before/after (NMC); savings are
+     described as estimates; nothing illegal is offered. -->
+
+<!-- 0 · patients: cover -->
+<section class="card" id="p0">
+  <div class="top"><img class="logo" src="logo.png" alt="Sehatsandhi"><span class="num">International patients</span></div>
+  <div class="kicker">Sehatsandhi International</div>
+  <h1>Treatment in India,<br>looked after all the way</h1>
+  <div class="grid">
+    <div class="tile"><span class="e">🏥</span><div><b>Checked hospitals</b><span>In every city — metro, regional and smaller towns</span></div></div>
+    <div class="tile"><span class="e">⚖️</span><div><b>Compare &amp; choose</b><span>We suggest; you decide</span></div></div>
+    <div class="tile"><span class="e">💱</span><div><b>See estimated savings</b><span>Your country vs India, in your currency</span></div></div>
+    <div class="tile"><span class="e">🛂</span><div><b>Visa letter</b><span>From your treating hospital</span></div></div>
+    <div class="tile"><span class="e">🚗</span><div><b>Pickup &amp; stay</b><span>Airport to hospital to hotel</span></div></div>
+    <div class="tile"><span class="e">🤝</span><div><b>One coordinator</b><span>On WhatsApp, start to follow-up</span></div></div>
+  </div>
+  <div class="benefit"><em>💬</em>Free quote. A real person replies within 24 hours.</div>
+  <div class="note">Prices shown are estimates; your final price is in the hospital’s written quote.</div>
+  <div class="foot"><span>WhatsApp: <b>+91 87087 18705</b></span><span>sehatsandhi.com/international</span></div>
+</section>
+
+<!-- 1 · patients: how it works -->
+<section class="card" id="p1">
+  <div class="top"><img class="logo" src="logo.png" alt="Sehatsandhi"><span class="num">How it works</span></div>
+  <div class="kicker">Five steps</div>
+  <h1>From your first message<br>to your follow-up at home</h1>
+  <div class="steps ladder">
+    <div class="step"><div class="ic">🔎</div><div class="txt"><b>Compare</b><span>Hospitals, facilities and estimates, side by side</span></div></div>
+    <div class="step"><div class="ic">📄</div><div class="txt"><b>Send your reports</b><span>A phone photo of each page is enough</span></div></div>
+    <div class="step"><div class="ic">✅</div><div class="txt"><b>Choose</b><span>Written quotes and doctors’ opinions in 48 hours</span></div></div>
+    <div class="step"><div class="ic">✈️</div><div class="txt"><b>Travel</b><span>Visa letter, airport pickup and stay arranged</span></div></div>
+    <div class="step"><div class="ic">🏠</div><div class="txt"><b>Recover</b><span>English papers and online follow-ups at home</span></div></div>
+  </div>
+  <div class="benefit"><em>🌍</em>You always choose. No hospital pays to appear higher.</div>
+  <div class="foot"><span>WhatsApp: <b>+91 87087 18705</b></span><span>sehatsandhi.com/international</span></div>
+</section>
+
+<!-- 2 · hospitals: how to appear -->
+<section class="card" id="p2">
+  <div class="top"><img class="logo" src="logo.png" alt="Sehatsandhi"><span class="num">For hospitals</span></div>
+  <div class="kicker">Patients from abroad</div>
+  <h1>List your hospital on<br>Sehatsandhi International</h1>
+  <div class="hi">विदेश से आने वाले मरीज़ — अपने हॉस्पिटल तक</div>
+  <div class="steps ladder">
+    <div class="step"><div class="ic">📝</div><div class="txt"><b>Register as a hospital</b><span>sehatsandhi.com/business/register — IPD switched on</span></div></div>
+    <div class="step"><div class="ic">📂</div><div class="txt"><b>Upload licences &amp; accreditation</b><span>Dashboard → International → checklist, with expiry dates</span></div></div>
+    <div class="step"><div class="ic">📸</div><div class="txt"><b>Add photos and prices</b><span>Rooms, ICU, OT — and your package rates</span></div></div>
+    <div class="step"><div class="ic">🎥</div><div class="txt"><b>We check &amp; video walkthrough</b><span>Every document verified; agreement signed</span></div></div>
+    <div class="step"><div class="ic">🌐</div><div class="txt"><b>Listed — enquiries reach you</b><span>Shown across countries, with your photos</span></div></div>
+  </div>
+  <div class="benefit"><em>🆓</em>Free to join. A service fee only when a patient comes.</div>
+  <div class="foot"><span>Join: <b>87087 18705</b></span><span>sehatsandhi.com/international</span></div>
+</section>
+
+<!-- 3 · hospitals: who can join -->
+<section class="card" id="p3">
+  <div class="top"><img class="logo" src="logo.png" alt="Sehatsandhi"><span class="num">For hospitals</span></div>
+  <div class="kicker">Who can join</div>
+  <h1>Built for hospitals<br>patients can trust</h1>
+  <div class="hi">सिर्फ़ जांचे हुए हॉस्पिटल — मरीज़ों का भरोसा</div>
+  <div class="checks">
+    <div class="chk"><span class="e">🛏️</span><div><b>In-patient beds</b><span>A proper IPD with daily consultant rounds</span></div></div>
+    <div class="chk"><span class="e">🫀</span><div><b>ICU &amp; 24×7 doctor</b><span>Ready for any complication, day or night</span></div></div>
+    <div class="chk"><span class="e">🏅</span><div><b>NABH accreditation</b><span>Full or entry-level; panels add stars</span></div></div>
+    <div class="chk"><span class="e">📜</span><div><b>Every licence valid</b><span>Fire, waste, AERB, drug, blood…</span></div></div>
+    <div class="chk"><span class="e">🧑‍💼</span><div><b>International desk</b><span>English coordinator on WhatsApp</span></div></div>
+    <div class="chk"><span class="e">🛂</span><div><b>Visa portal registered</b><span>Medical &amp; Ayush Visa Portal (e-FRRO)</span></div></div>
+    <div class="chk"><span class="e">🏨</span><div><b>Comfortable rooms</b><span>Private, attached bath, companion bed</span></div></div>
+    <div class="chk"><span class="e">📸</span><div><b>Real photos</b><span>Building, room, ICU and operation theatre</span></div></div>
+  </div>
+  <div class="benefit"><em>ℹ️</em>For hospitals with in-patient beds — clinics and OPD-only practices cannot join.</div>
+  <div class="foot"><span>Join: <b>87087 18705</b></span><span>sehatsandhi.com/international</span></div>
+</section>
+
+<!-- 4 · partners -->
+<section class="card" id="p4">
+  <div class="top"><img class="logo" src="logo.png" alt="Sehatsandhi"><span class="num">Partner with us</span></div>
+  <div class="kicker">Travel · Visa · Hotels · Cabs</div>
+  <h1>Help patients from abroad<br>feel at home</h1>
+  <div class="hi">विदेशी मरीज़ों की मदद करें — अपने शहर में</div>
+  <div class="grid">
+    <div class="tile"><span class="e">✈️</span><div><b>Travel agents</b><span>Flights and travel plans</span></div></div>
+    <div class="tile"><span class="e">🛂</span><div><b>Visa help</b><span>e-Medical visa papers</span></div></div>
+    <div class="tile"><span class="e">🏨</span><div><b>Hotels &amp; guest houses</b><span>Near hospitals</span></div></div>
+    <div class="tile"><span class="e">🚗</span><div><b>Airport transfers &amp; cabs</b><span>Trained, polite drivers</span></div></div>
+    <div class="tile"><span class="e">🗣️</span><div><b>Interpreters</b><span>Arabic, Nepali, Bengali…</span></div></div>
+    <div class="tile"><span class="e">🚑</span><div><b>Ambulance · Forex · SIM</b><span>And other services</span></div></div>
+  </div>
+  <div class="benefit"><em>🤝</em>Free to apply. Registered businesses, fair written prices.</div>
+  <div class="foot"><span>Call or WhatsApp: <b>87087 18705</b></span><span>sehatsandhi.com/international/partners</span></div>
+</section>
+</body>
+</html>
