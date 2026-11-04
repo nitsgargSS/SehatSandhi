@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, MessageCircle, Lock, Circle } from 'lucide-react'
 import IntlLayout, { C, Wrap, PageHead, Card, useTitle } from './IntlLayout'
+import { ShieldCheck } from 'lucide-react'
 import { useCatalogue, useShortlist } from './intlHooks'
 import { sendEnquiry, trackEnquiry, type Tracked } from '../../lib/intlApi'
 import { ESTIMATE_CLAUSES, STEPS, intlWaLink } from '../../lib/intlContent'
@@ -80,8 +81,8 @@ export function IntlQuote() {
   return (
     <IntlLayout>
       <PageHead kicker="Free quote" title="Tell us what you need" lead="Two minutes. No payment. Your coordinator replies on WhatsApp within 24 hours and asks anything else later." />
-      <Wrap narrow className="py-8">
-        <form onSubmit={submit} className="flex flex-col gap-6">
+      <Wrap className="py-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <form onSubmit={submit} className="min-w-0 max-w-3xl flex flex-col gap-6">
           <Card>
             <p className="font-semibold text-lg mb-3">About you</p>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -164,6 +165,26 @@ export function IntlQuote() {
           </button>
           <p className="text-sm flex items-center gap-2" style={{ color: C.muted }}><Lock className="w-4 h-4" /> Your details are private. We never sell them or send marketing without asking.</p>
         </form>
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-24 self-start">
+          <Card>
+            <p className="font-semibold text-lg mb-3">What happens next</p>
+            <ol className="flex flex-col gap-3">
+              {STEPS.slice(0, 5).map((s, i) => (
+                <li key={s.key} className="flex gap-3">
+                  <span className="w-7 h-7 rounded-full text-white text-sm font-bold flex items-center justify-center shrink-0" style={{ background: C.green }}>{i + 1}</span>
+                  <span><b className="block">{s.label}</b><span className="text-sm" style={{ color: C.muted }}>{s.hint}</span></span>
+                </li>
+              ))}
+            </ol>
+          </Card>
+          <Card>
+            <p className="font-semibold flex items-center gap-2"><ShieldCheck className="w-5 h-5" style={{ color: C.green }} /> You always choose</p>
+            <p className="text-[15px] mt-1" style={{ color: C.muted }}>No hospital pays to appear higher. Your reports go only to the hospitals you choose.</p>
+          </Card>
+          <a href={intlWaLink()} target="_blank" rel="noreferrer" className="rounded-2xl p-5 text-white flex items-center gap-3" style={{ background: '#25D366' }}>
+            <MessageCircle className="w-6 h-6" /><span><b className="block">Prefer to chat?</b><span className="text-sm">Message us on WhatsApp</span></span>
+          </a>
+        </aside>
       </Wrap>
     </IntlLayout>
   )

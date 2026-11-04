@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Clock, Compass, Stethoscope, HeartPulse, ArrowRight, BadgeCheck } from 'lucide-react'
-import IntlLayout, { C, Wrap, Card, CtaButton, useTitle } from './IntlLayout'
+import IntlLayout, { C, Wrap, Card, CtaButton, HelpAside, useTitle } from './IntlLayout'
 import { BottomCta } from './IntlStatic'
 import Markdown from '../../site/Markdown'
 import { loadArticles, loadArticle, type ArticleCard, type Article } from '../../lib/intlApi'
@@ -28,7 +28,8 @@ const minutes = (n: number) => `${Math.max(1, n)} min read`
 
 function Art({ a, className = '' }: { a: Pick<ArticleCard, 'category' | 'image_url'>; className?: string }) {
   const c = CATS[a.category]
-  if (a.image_url) return <img src={a.image_url} alt="" className={`object-cover ${className}`} />
+  // Keep faces in view when a wide banner crops the picture.
+  if (a.image_url) return <img src={a.image_url} alt="" className={`object-cover ${className}`} style={{ objectPosition: 'center 30%' }} />
   return (
     <div className={`relative overflow-hidden ${className}`} style={{ background: `linear-gradient(135deg, ${c.from}, ${c.to})` }} aria-hidden>
       <c.icon className="absolute -right-6 -bottom-6 w-40 h-40 opacity-20 text-white" strokeWidth={1.2} />
@@ -186,14 +187,17 @@ export function IntlArticle() {
   return (
     <IntlLayout>
       <div className="relative">
-        <Art a={a} className="h-56 sm:h-72 w-full" />
+        <Art a={a} className="h-56 sm:h-80 lg:h-[440px] w-full" />
         <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,.45))' }} />
-        <Wrap narrow className="absolute inset-x-0 bottom-0 pb-6 text-white">
+        <div className="absolute inset-x-0 bottom-0 pb-6 text-white">
+          <Wrap narrow>
           <span className="rounded-full bg-white/95 px-3 py-1 text-sm font-semibold" style={{ color: c.from }}>{c.name}</span>
           <h1 className="mt-3 text-3xl sm:text-4xl font-bold leading-tight drop-shadow">{a.title}</h1>
-        </Wrap>
+          </Wrap>
+        </div>
       </div>
-      <Wrap narrow className="py-8">
+      <Wrap className="py-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 max-w-3xl">
         <p className="text-xl leading-relaxed" style={{ color: C.muted }}>{a.summary}</p>
         <p className="mt-3 text-sm flex flex-wrap gap-x-4 gap-y-1" style={{ color: C.muted }}>
           <span className="inline-flex items-center gap-1"><Clock className="w-4 h-4" /> {minutes(a.read_minutes)}</span>
@@ -213,6 +217,34 @@ export function IntlArticle() {
             <CtaButton to="/international/quote" light>Ask us a question</CtaButton>
           </div>
         </Card>
+        </div>
+        <HelpAside>
+          {a.procedure_code && (
+            <div className="rounded-2xl bg-white p-5" style={{ border: `1px solid ${C.border}` }}>
+              <p className="font-semibold">About this treatment</p>
+              <p className="text-[15px] mt-1" style={{ color: C.muted }}>Costs, stay, preparation, life after and the machines used.</p>
+              <div className="mt-3 flex flex-col gap-2">
+                <Link to={`/international/treatments/${a.procedure_code}`} className="font-semibold" style={{ color: C.green }}>Read the treatment guide →</Link>
+                <Link to={`/international/compare?t=${a.procedure_code}`} className="font-semibold" style={{ color: C.green }}>Compare hospitals →</Link>
+              </div>
+            </div>
+          )}
+          {more.length > 1 && (
+            <div className="rounded-2xl bg-white p-5" style={{ border: `1px solid ${C.border}` }}>
+              <p className="font-semibold mb-3">More to read</p>
+              <ul className="flex flex-col gap-3">
+                {rotate(more.filter(x => x.slug !== a.slug)).slice(0, 4).map(x => (
+                  <li key={x.slug}>
+                    <Link to={`/international/articles/${x.slug}`} className="flex gap-3 items-center group">
+                      <Art a={x} className="w-20 h-14 rounded-lg shrink-0" />
+                      <span className="text-[15px] font-medium leading-snug group-hover:underline">{x.title}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </HelpAside>
       </Wrap>
       {related.length > 0 && (
         <Wrap className="pb-6">

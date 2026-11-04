@@ -26,8 +26,16 @@ export function useTitle(title: string) {
   useEffect(() => { document.title = `${title} · Sehatsandhi International` }, [title])
 }
 
+/** The page column. Every page shares one left edge (the logo's): a narrow
+ *  column keeps a comfortable reading width but starts on that same line,
+ *  instead of being centred and stepping in from the headings above it. */
 export function Wrap({ children, narrow = false, className = '' }: { children: React.ReactNode; narrow?: boolean; className?: string }) {
-  return <div className={`mx-auto w-full ${narrow ? 'max-w-3xl' : 'max-w-6xl'} px-4 sm:px-6 ${className}`}>{children}</div>
+  if (!narrow) return <div className={`mx-auto w-full max-w-6xl px-4 sm:px-6 ${className}`}>{children}</div>
+  return (
+    <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+      <div className={`w-full max-w-3xl ${className}`}>{children}</div>
+    </div>
+  )
 }
 
 export function PageHead({ kicker, title, lead }: { kicker?: string; title: string; lead?: string }) {
@@ -66,6 +74,30 @@ export function EstimateNote({ kind = 'hospital', className = '' }: { kind?: 'ho
         {' '}Your final price is in the hospital’s written quote, after a doctor has reviewed your reports.
       </p>
     </div>
+  )
+}
+
+/** The side panel on reading pages — so the page uses its full width with
+ *  something useful beside the text, not empty space. Sticky on wide screens. */
+export function HelpAside({ children }: { children?: React.ReactNode }) {
+  return (
+    <aside className="flex flex-col gap-4 lg:sticky lg:top-24 self-start w-full">
+      {children}
+      <div className="rounded-2xl p-5 text-white" style={{ background: C.green }}>
+        <p className="font-bold text-lg">Get a free quote</p>
+        <p className="mt-1 text-[15px] opacity-90">Tell us what you need. A real person replies within 24 hours.</p>
+        <Link to="/international/quote" className="mt-3 inline-block rounded-full bg-white px-4 py-2 font-semibold" style={{ color: C.green }}>Start now →</Link>
+        <a href={intlWaLink()} target="_blank" rel="noreferrer" className="mt-2 block text-sm underline">or message us on WhatsApp</a>
+      </div>
+      <div className="rounded-2xl bg-white p-5" style={{ border: `1px solid ${C.border}` }}>
+        <p className="font-semibold mb-2">Useful pages</p>
+        <ul className="flex flex-col gap-1.5 text-[15px]">
+          {[['/international/compare', 'Compare hospitals'], ['/international/savings', 'How much could you save?'], ['/international/plan-your-trip', 'Plan your trip'], ['/international/how-we-check', 'How we check hospitals'], ['/international/checklists', 'Patient checklists']].map(([to, l]) => (
+            <li key={to}><Link to={to} className="hover:underline" style={{ color: C.greenDark }}>{l} →</Link></li>
+          ))}
+        </ul>
+      </div>
+    </aside>
   )
 }
 
