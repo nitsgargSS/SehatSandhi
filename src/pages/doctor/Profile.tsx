@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { track } from '../../lib/analytics'
 import { useParams, Link } from 'react-router-dom'
-import { MapPin, Clock, CheckCircle2, ArrowLeft, Share2, Copy, Star } from 'lucide-react'
+import { MapPin, Clock, CheckCircle2, ArrowLeft, Share2, Copy, Star, Globe2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Practitioner, SPECIALITIES, WA_LINK } from '../../types'
 import { useLanguage } from '../../i18n/LanguageContext'
@@ -60,6 +60,8 @@ export default function DoctorProfile() {
   // because the same doctor legitimately charges differently in different
   // places — which a single consultation_fee on one row could never say.
   const [posts, setPosts] = useState<Post[]>([])
+  // 0324: which of these places are listed on Sehatsandhi International.
+  const [intlListed, setIntlListed] = useState<string[]>([])
   const [ratingAgg, setRatingAgg] = useState<RatingAgg | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
@@ -127,6 +129,7 @@ export default function DoctorProfile() {
         // seen. Aggregated across all of them for this doctor's own page.
         const businessIds = (posts ?? []).map(b => b.business_id)
         if (businessIds.length) {
+          supabase.rpc('sehat_intl_listed', { p_ids: businessIds }).then(({ data: ids }) => setIntlListed((ids as string[] | null) ?? []))
           const { data: reviewRows } = await supabase
             .from('ratings')
             .select('id, overall_rating, waiting_time, communication, value_for_money, review_text, created_at')
@@ -323,6 +326,11 @@ export default function DoctorProfile() {
                           )}
                         </p>
                         {b.address && <p className="text-xs text-gray-500">{b.address}</p>}
+                        {intlListed.includes(b.business_id) && (
+                          <Link to={`/international/hospitals/${b.business_id}`} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:underline">
+                            <Globe2 className="w-3.5 h-3.5" /> Treats patients from abroad — see on Sehatsandhi International
+                          </Link>
+                        )}
                         {b.consultation_fee > 0 && (
                           <p className="text-xs text-gray-500">
                             {b.discounted_fee != null && b.discounted_fee < b.consultation_fee

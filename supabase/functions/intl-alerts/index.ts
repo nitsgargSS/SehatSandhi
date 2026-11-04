@@ -3,7 +3,7 @@
 // The intl_alerts queue is filled by a trigger on intl_enquiries: a new
 // request queues a message to each team number; a status change queues one to
 // the patient. Every 2 minutes (cron 'intl-alerts') this sends what is due,
-// from Sehatsandhi's business number with the house templates
+// from Sehatsandhi's main number (+91 70153 99355) with the house templates
 // (_shared/intlTemplates.ts). A failure is retried up to 6 times over about a
 // day — so messages wait while Meta reviews a new template — then marked failed.
 // Emails for the same events go through email_outbox / email-send.
@@ -44,7 +44,10 @@ Deno.serve(async (req) => {
       campaign = 'AISENSY_INTL_UPDATE_CAMPAIGN'
       params = [String(e.name).split(' ')[0], String(text ?? ''), `${site}/international/track/${e.token}`]
     }
-    const r = await sendTemplate({ campaignEnv: campaign, to: a.to_phone, userName: e.name, params, fromClinic: true, source: 'intl-alerts' })
+    // From the main number (+91 70153 99355): the templates are in its
+    // messaging account (WABA 1461510652560252), and it is the number patients
+    // already know. Not fromClinic — that number is in another account.
+    const r = await sendTemplate({ campaignEnv: campaign, to: a.to_phone, userName: e.name, params, source: 'intl-alerts' })
     if (r.ok) { await db.from('intl_alerts').update({ state: 'sent', sent_at: new Date().toISOString(), error: null, attempts: a.attempts + 1 }).eq('id', a.id); sent++; continue }
     const attempts = a.attempts + 1
     if (r.unreachable || attempts >= BACKOFF_MIN.length) {

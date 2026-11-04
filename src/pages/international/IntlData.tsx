@@ -5,6 +5,9 @@ import {
 } from 'lucide-react'
 import IntlLayout, { C, Wrap, PageHead, Card, CtaButton, EstimateNote, useTitle } from './IntlLayout'
 import { BottomCta } from './IntlStatic'
+import { supabase } from '../../lib/supabase'
+import { doctorUrl } from '../../lib/links'
+import { SPECIALITIES } from '../../types'
 import { LegalGate, LegalNotes, hasLegal, legalAccepted } from './IntlLegal'
 import { useCatalogue, useCurrency, useShortlist, priceText, money, rateOf } from './intlHooks'
 import {
@@ -448,6 +451,12 @@ export function IntlHospital() {
   const { cur, setCur } = useCurrency()
   const h = cat?.hospitals.find(x => x.id === id)
   useTitle(h?.name ?? 'Hospital')
+  // 0324: the hospital's doctors, linking to their regular Sehatsandhi profiles.
+  const [docs, setDocs] = useState<{ id: string; name: string; qualification: string | null; speciality: string | null }[]>([])
+  useEffect(() => {
+    if (!id) return
+    Promise.resolve(supabase.rpc('sehat_intl_hospital_doctors', { p_business: id })).then(({ data }) => setDocs((data as typeof docs) ?? []), () => setDocs([]))
+  }, [id])
   if (!cat) return <IntlLayout><Loading err={err} /></IntlLayout>
   if (!h) return <IntlLayout><Wrap className="py-16"><p>This hospital is not listed right now. <Link to="/international/hospitals" className="underline">See all hospitals</Link></p></Wrap></IntlLayout>
   const procName = (c: string) => cat.procedures.find(p => p.code === c)?.name ?? c
@@ -497,6 +506,25 @@ export function IntlHospital() {
           <EstimateNote className="mt-3" />
         </Card>
       </Wrap>
+      {docs.length > 0 && (
+        <Wrap className="pb-10">
+          <h2 className="text-xl font-bold mb-1">Doctors at this hospital</h2>
+          <p className="text-sm mb-4" style={{ color: C.muted }}>Their registered qualifications. Open a doctor’s Sehatsandhi profile for their experience and patient ratings.</p>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+            {docs.map(d => (
+              <Link key={d.id} to={doctorUrl({ id: d.id, name: d.name })} className="rounded-2xl bg-white p-4 hover:shadow-sm transition flex gap-3 items-center" style={{ border: `1px solid ${C.border}` }}>
+                <span className="w-11 h-11 rounded-full flex items-center justify-center font-bold shrink-0" style={{ background: C.soft, color: C.greenDark }}>
+                  {d.name.replace(/^Dr\.?\s*/i, '').split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-semibold">{d.name}</span>
+                  <span className="block text-sm line-clamp-2" style={{ color: C.muted }}>{[SPECIALITIES.find(x => x.id === d.speciality)?.en ?? d.speciality, d.qualification].filter(Boolean).join(' · ')}</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </Wrap>
+      )}
     </IntlLayout>
   )
 }
