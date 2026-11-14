@@ -19,6 +19,20 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- For anything that reads the page without running JavaScript (company
+         checks such as AWS Activate or Meta business verification): the app
+         itself renders nothing until JS runs. Fuller text is on the prerendered
+         /about and /contact pages. Keep the address identical to About.tsx. -->
+    <noscript>
+      <h1>Sehatsandhi — operated by NG Technologies</h1>
+      <p>Sehatsandhi connects patients with verified doctors near them over WhatsApp, and is the
+        software clinics and hospitals run on: appointments, OPD and IPD records, pharmacy, billing
+        and reports. NG Technologies is also building NetraSandhi, an AI assistant that helps eye
+        clinics detect diabetic retinopathy, glaucoma and macular disease early.</p>
+      <p>NG Technologies, 1743 Vishnu Garden, Jagadhri – 135003, Haryana, India ·
+        contact@sehatsandhi.com · +91 87087 18705</p>
+      <p><a href="/about">About us</a> · <a href="/contact">Contact</a></p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
