@@ -1,6 +1,6 @@
 import { MapPin, ShieldCheck, Star, MessageCircle } from 'lucide-react'
 import { useLanguage } from '../i18n/LanguageContext'
-import SiteHeader from '../components/SiteHeader'
+import SiteHeader, { PageShell } from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 import { waLink } from '../lib/firstTouch'
 
@@ -60,7 +60,10 @@ export default function About() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <SiteHeader />
 
-      <div className="w-full max-w-3xl mx-auto px-4 py-10">
+      {/* Same frame as the header and footer (PageShell), so the text starts
+          under the logo; max-w-3xl keeps a comfortable reading width inside it. */}
+      <PageShell style={{ paddingTop: 40, paddingBottom: 40, width: '100%' }}>
+      <div className="max-w-3xl">
         <h1 className="text-3xl font-bold text-navy-700 mb-1">{c.title}</h1>
         <p className="text-teal-600 font-medium mb-8">{c.subtitle}</p>
 
@@ -98,6 +101,7 @@ export default function About() {
           </a>
         </div>
       </div>
+      </PageShell>
 
       <SiteFooter />
     </div>
