@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../i18n/LanguageContext'
-import SiteHeader from '../components/SiteHeader'
+import SiteHeader, { PageShell } from '../components/SiteHeader'
 import SiteFooter from '../components/SiteFooter'
 
 // `link` is optional, so the sections array needs an explicit element type —
@@ -158,7 +158,9 @@ export default function Terms() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <SiteHeader />
 
-      <div className="w-full max-w-3xl mx-auto px-4 py-10">
+      {/* Same frame as the header and footer, so the text starts under the logo. */}
+      <PageShell style={{ paddingTop: 40, paddingBottom: 40, width: '100%' }}>
+      <div className="max-w-3xl">
         <h1 className="text-3xl font-bold text-navy-700 mb-1">{c.title}</h1>
         <p className="text-gray-400 text-sm mb-8">{c.updated}</p>
         <p className="text-gray-600 leading-relaxed mb-8">{c.intro}</p>
@@ -177,6 +179,7 @@ export default function Terms() {
           ))}
         </div>
       </div>
+      </PageShell>
 
       <SiteFooter />
     </div>
