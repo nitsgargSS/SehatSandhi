@@ -18,7 +18,34 @@ const content = {
     p1: 'Sehatsandhi (सेहतसंधि) connects patients with verified doctors and healthcare partners in their own area — you tell us your PIN code, we show you who is available nearby. Right on WhatsApp, with no app to download and no forms to fill.',
     p2: 'We built Sehatsandhi because finding a trustworthy doctor in a smaller town shouldn\'t mean relying on word of mouth alone, or navigating platforms built for metro cities that don\'t understand local needs.',
     p3: 'For clinics and hospitals, Sehatsandhi is also the software they run their day on — appointments for doctors who work at more than one place, OPD and IPD records, the OT register, an in-house pharmacy, billing and reports — so the patient who finds a doctor on WhatsApp is looked after the same way inside the clinic. Pharmacies that deliver medicines and ambulance services join us too, and get patients from their own area.',
-    p4: 'NG Technologies is also building NetraSandhi, an AI assistant for eye clinics. It reads the scans a clinic already takes — retina photos, OCT and visual-field tests — and helps the ophthalmologist spot diabetic retinopathy, glaucoma and macular disease early, then reminds patients when their next check is due. It only suggests; the doctor reviews and signs every report. NetraSandhi is in development, with its first pilot in Jagadhri.',
+    productsTitle: 'Our products',
+    productsSub: 'Both are built and run by NG Technologies.',
+    products: [
+      {
+        name: 'Sehatsandhi',
+        status: 'Live',
+        live: true,
+        forWhom: 'For patients, clinics and hospitals',
+        points: [
+          'Patients find verified doctors near them on WhatsApp — free',
+          'Clinic and hospital software: appointments, OPD and IPD, OT register, pharmacy, billing',
+          'Pharmacies, labs and ambulance services listed by area',
+        ],
+      },
+      {
+        name: 'NetraSandhi',
+        status: 'In development',
+        live: false,
+        forWhom: 'AI assistant for eye clinics',
+        points: [
+          'Reads the scans a clinic already takes — retina photos, OCT and visual-field tests',
+          'Helps spot diabetic retinopathy, glaucoma and macular disease early',
+          'Only suggests — the doctor reviews and signs every report',
+          'Reminds patients when their next eye check is due',
+          'First pilot running in Jagadhri',
+        ],
+      },
+    ],
     legalLine: 'Sehatsandhi is operated by NG Technologies, registered at 1743 Vishnu Garden, Jagadhri – 135003, Haryana, India.',
     valuesTitle: 'What We Stand For',
     values: [
@@ -36,7 +63,34 @@ const content = {
     p1: 'Sehatsandhi (सेहतसंधि) मरीज़ों को उनके अपने इलाके के वेरिफाइड डॉक्टरों और हेल्थकेयर पार्टनर्स से जोड़ता है — आप अपना PIN कोड बताइए, हम आपको पास में उपलब्ध डॉक्टर दिखाते हैं। सीधे WhatsApp पर, कोई ऐप डाउनलोड नहीं, कोई फॉर्म नहीं।',
     p2: 'हमने Sehatsandhi इसलिए बनाया क्योंकि एक छोटे शहर में भरोसेमंद डॉक्टर ढूंढने का मतलब सिर्फ वर्ड ऑफ माउथ पर निर्भर रहना, या मेट्रो शहरों के लिए बने प्लेटफॉर्म इस्तेमाल करना नहीं होना चाहिए जो लोकल ज़रूरतें नहीं समझते।',
     p3: 'क्लिनिक और हॉस्पिटल के लिए Sehatsandhi वह सॉफ्टवेयर भी है जिस पर उनका पूरा दिन चलता है — एक से ज़्यादा जगह काम करने वाले डॉक्टरों की अपॉइंटमेंट, OPD और IPD रिकॉर्ड, OT रजिस्टर, इन-हाउस फार्मेसी, बिलिंग और रिपोर्ट्स — ताकि WhatsApp पर डॉक्टर ढूंढने वाले मरीज़ का क्लिनिक के अंदर भी उसी तरह ध्यान रखा जाए। होम डिलीवरी करने वाली फार्मेसी और एम्बुलेंस सर्विस भी हमसे जुड़ते हैं, और अपने ही इलाके से मरीज़ पाते हैं।',
-    p4: 'NG Technologies आँखों के क्लिनिक के लिए NetraSandhi भी बना रहा है — एक AI असिस्टेंट। यह उन स्कैन को पढ़ता है जो क्लिनिक पहले से करता है — रेटिना फोटो, OCT और विज़ुअल-फ़ील्ड टेस्ट — और नेत्र रोग विशेषज्ञ को डायबिटिक रेटिनोपैथी, ग्लूकोमा और मैक्युलर बीमारी जल्दी पकड़ने में मदद करता है, फिर मरीज़ को अगली जाँच की याद दिलाता है। यह सिर्फ सुझाव देता है; हर रिपोर्ट डॉक्टर खुद देखकर साइन करते हैं। NetraSandhi अभी बन रहा है, और इसका पहला पायलट जगाधरी में है।',
+    productsTitle: 'हमारे प्रोडक्ट',
+    productsSub: 'दोनों NG Technologies द्वारा बनाए और चलाए जाते हैं।',
+    products: [
+      {
+        name: 'Sehatsandhi',
+        status: 'चालू',
+        live: true,
+        forWhom: 'मरीज़ों, क्लिनिक और हॉस्पिटल के लिए',
+        points: [
+          'मरीज़ WhatsApp पर पास के वेरिफाइड डॉक्टर ढूंढते हैं — बिल्कुल फ्री',
+          'क्लिनिक और हॉस्पिटल सॉफ्टवेयर: अपॉइंटमेंट, OPD और IPD, OT रजिस्टर, फार्मेसी, बिलिंग',
+          'फार्मेसी, लैब और एम्बुलेंस सर्विस इलाके के हिसाब से लिस्टेड',
+        ],
+      },
+      {
+        name: 'NetraSandhi',
+        status: 'बन रहा है',
+        live: false,
+        forWhom: 'आँखों के क्लिनिक के लिए AI असिस्टेंट',
+        points: [
+          'क्लिनिक पहले से जो स्कैन करता है उन्हें पढ़ता है — रेटिना फोटो, OCT और विज़ुअल-फ़ील्ड टेस्ट',
+          'डायबिटिक रेटिनोपैथी, ग्लूकोमा और मैक्युलर बीमारी जल्दी पकड़ने में मदद',
+          'सिर्फ सुझाव देता है — हर रिपोर्ट डॉक्टर खुद देखकर साइन करते हैं',
+          'मरीज़ को अगली आँखों की जाँच की याद दिलाता है',
+          'पहला पायलट जगाधरी में चल रहा है',
+        ],
+      },
+    ],
     legalLine: 'Sehatsandhi NG Technologies द्वारा संचालित है, रजिस्टर्ड पता: 1743 Vishnu Garden, Jagadhri – 135003, Haryana, India।',
     valuesTitle: 'हम किस बात के लिए खड़े हैं',
     values: [
@@ -67,10 +121,34 @@ export default function About() {
         <h1 className="text-3xl font-bold text-navy-700 mb-1">{c.title}</h1>
         <p className="text-teal-600 font-medium mb-8">{c.subtitle}</p>
 
-        <p className="text-gray-600 leading-relaxed mb-4">{c.p1}</p>
+        <p className="text-gray-600 leading-relaxed mb-6">{c.p1}</p>
+
+        {/* Two products side by side so the difference is visible at a glance
+            (company checks such as AWS Activate read this page). */}
+        <h2 className="text-xl font-bold text-navy-700 mb-1">{c.productsTitle}</h2>
+        <p className="text-gray-500 text-sm mb-4">{c.productsSub}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+          {c.products.map(pr => (
+            <div key={pr.name} className="card">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                <p className="font-bold text-navy-700 text-lg">{pr.name}</p>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${pr.live ? 'bg-teal-50 text-teal-700' : 'bg-amber-50 text-amber-700'}`}>
+                  {pr.status}
+                </span>
+              </div>
+              <p className="text-teal-600 text-sm font-medium mb-3">{pr.forWhom}</p>
+              <ul className="space-y-1.5">
+                {pr.points.map(pt => (
+                  <li key={pt} className="text-gray-600 text-sm leading-relaxed flex gap-2">
+                    <span className="text-teal-500 mt-0.5">•</span><span>{pt}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
         <p className="text-gray-600 leading-relaxed mb-4">{c.p2}</p>
-        <p className="text-gray-600 leading-relaxed mb-4">{c.p3}</p>
-        <p className="text-gray-600 leading-relaxed mb-6">{c.p4}</p>
+        <p className="text-gray-600 leading-relaxed mb-6">{c.p3}</p>
 
         {/* Legal entity clarity — specifically required by Meta when
             brand name and legal entity name differ */}
