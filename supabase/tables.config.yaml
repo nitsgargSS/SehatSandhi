@@ -208,6 +208,19 @@ tables:
   # bill businesses for their listing under our GSTIN. Every FK here carries an
   # ON DELETE clause, so these sit before the encounters they reference only for
   # tidiness.
+  # 0326 EMI: events/lenders before cases; cases before patient_payments (payment_id).
+  finance_case_events:
+    class: isolated
+    purgeOrder: 83.1
+
+  finance_case_lenders:
+    class: isolated
+    purgeOrder: 83.2
+
+  finance_cases:
+    class: isolated
+    purgeOrder: 83.3
+
   patient_payments:
     class: isolated
     purgeOrder: 84
@@ -547,6 +560,15 @@ tables:
   insurance_leads:
     class: isolated
     purgeOrder: 125
+
+  # 0326 EMI: lender rows reference businesses.
+  lender_hospital_links:
+    class: isolated
+    purgeOrder: 129.1
+
+  lender_profiles:
+    class: isolated
+    purgeOrder: 129.2
 
   businesses:
     class: isolated
