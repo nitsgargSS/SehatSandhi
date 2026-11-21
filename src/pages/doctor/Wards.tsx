@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { BedDouble, Plus, X, LogOut as DischargeIcon } from 'lucide-react'
 import { BIZ } from '../business/shared'
+import type { EmiSource } from '../../lib/financeApi'
 import { supabase } from '../../lib/supabase'
 import { Spinner } from '../../components/Loading'
 import {
@@ -42,13 +43,15 @@ const WARD_KINDS = ['general', 'icu', 'hdu', 'private', 'semi_private', 'materni
 const daysSince = (iso: string) =>
   Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000))
 
-export default function Wards({ businessId, practitionerId, role, onOpenPatient }: {
+export default function Wards({ businessId, practitionerId, role, onOpenPatient, onOfferEmi }: {
   businessId: string
   practitionerId?: string | null
   /** 0284: open the patient on their stay — orders, medicines, deposit, details. */
   onOpenPatient?: (memberId: string) => void
   /** 0269: the owner and a manager set wards and beds up; others only use them. */
   role?: string | null
+  /** 0326: EMI is on here — offer it on this stay. */
+  onOfferEmi?: (src: EmiSource) => void
 }) {
   const canSetUp = role === 'owner' || role === 'manager'
   const isOwner = role === 'owner'
@@ -184,6 +187,15 @@ export default function Wards({ businessId, practitionerId, role, onOpenPatient 
                     )}
                     <button style={{ ...btn(), fontSize: 11.5, padding: '5px 9px' }}
                       onClick={() => setMoving(b)}>Move</button>
+                    {onOfferEmi && b.admission_id && b.patient_member_id && (
+                      <button style={{ ...btn(), fontSize: 11.5, padding: '5px 9px' }}
+                        onClick={() => onOfferEmi({
+                          kind: 'admission', id: b.admission_id!, memberId: b.patient_member_id!, patientName: b.patient_name ?? '',
+                          patientPhone: null, treatment: 'In-patient treatment', amount: null,
+                          plannedOn: b.admitted_at ? b.admitted_at.slice(0, 10) : null, admissionId: b.admission_id!,
+                          label: `Admitted · ${b.patient_name ?? ''} · Bed ${b.bed_label}`,
+                        })}>EMI</button>
+                    )}
                     <button style={{ ...btn(), fontSize: 11.5, padding: '5px 9px' }}
                       onClick={() => discharge(b)}>
                       <DischargeIcon className="w-3 h-3" style={{ display: 'inline', marginRight: 3 }} />

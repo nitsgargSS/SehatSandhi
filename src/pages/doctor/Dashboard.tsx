@@ -1,7 +1,7 @@
 import { useInsuranceEnabled } from '../../hooks/useInsurance'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package, Ambulance, ShieldCheck, Globe, Megaphone } from 'lucide-react'
+import { Calendar, MapPin, LogOut, User, Star, Clock, Plus, X, Users, TrendingUp, FileText, UserSearch, BedDouble, ListOrdered, MessageCircle, Pill, IndianRupee, FlaskConical, Package, Ambulance, ShieldCheck, Globe, Megaphone, HandCoins } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import StatusBadge from '../../components/StatusBadge'
 import { Spinner } from '../../components/Loading'
@@ -38,6 +38,8 @@ import WebsitePanel from './WebsitePanel'
 import InternationalPanel from './InternationalPanel'
 import IntlInvite from './IntlInvite'
 import SocialPostsPanel from './SocialPostsPanel'
+import EmiPanel from './EmiPanel'
+import { financeEnabled, type EmiSource } from '../../lib/financeApi'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
 import { usePublicAreas } from '../../hooks/useServiceAreas'
@@ -147,7 +149,7 @@ export default function DoctorDashboard() {
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
   // 0280: a billing message links straight to ?tab=plan.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages' | 'website' | 'social' | 'international'>(
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages' | 'website' | 'social' | 'international' | 'emi'>(
     () => (['plan', 'whatsapp', 'bills', 'website', 'social', 'international'].includes(new URLSearchParams(window.location.search).get('tab') ?? '')
       ? new URLSearchParams(window.location.search).get('tab') as 'plan' : 'today'))
 
@@ -1077,6 +1079,16 @@ export default function DoctorDashboard() {
       .then(({ data }) => { if (!cancelled) setSocialOn(!!data?.enabled) })
     return () => { cancelled = true }
   }, [doctor?.id, isOwner])
+  // 0326: Treatment on EMI — hospitals and clinics, only while the site-wide
+  // switch is on. Owner and manager see the tab to switch it on; everyone else
+  // once it is on. The database refuses every write while the switch is off.
+  const [financeOn, setFinanceOn] = useState(false)
+  useEffect(() => { let live = true; financeEnabled().then(v => { if (live) setFinanceOn(v) }); return () => { live = false } }, [])
+  const [emiModule, setEmiModule] = useState(false)
+  useEffect(() => { setEmiModule(!!(doctor as { finance_module?: boolean } | null)?.finance_module) }, [doctor])
+  const [emiPrefill, setEmiPrefill] = useState<EmiSource | null>(null)
+  const handlesEmi = financeOn && !!doctor && (myVertical === 'clinic' || myVertical === 'hospital')
+    && (emiModule ? !['delivery', 'driver', 'lab_technician'].includes(role.role ?? '') : businessRole)
   const plans = usePlansLive(doctor?.id)
   const ROLE_WORD: Record<string, string> = { owner: 'Owner', doctor: 'Doctor', nurse: 'Nurse', receptionist: 'Reception', manager: 'Manager' }
   const whoIsIn = `${myName || signedInAs || 'Signed in'}${role.role ? ` · ${ROLE_WORD[role.role] ?? role.role}` : ''}`
@@ -1196,6 +1208,9 @@ export default function DoctorDashboard() {
       ...(doctor && (doctor.vertical === 'hospital' || (doctor as { ipd_module?: boolean }).ipd_module) && (!role.enforced || ['owner', 'manager'].includes(role.role ?? '')) ? [
         { id: 'international', label: 'International', icon: <Globe className="w-4 h-4" /> },
       ] : []),
+    ] : []),
+    ...(handlesEmi ? [
+      { id: 'emi', label: 'EMI', icon: <HandCoins className="w-4 h-4" /> },
     ] : []),
     // Reports sits with the clinicians, not the business cluster. How the
     // practice is actually doing — reach, bookings, conversion — is for the
@@ -1887,7 +1902,8 @@ export default function DoctorDashboard() {
         {/* ══════════ BEDS — the ward board ══════════ */}
         {tab === 'beds' && emr && access.ipd && doctor && (
           <Wards businessId={doctor.id} practitionerId={myPractitionerId} role={isOwner ? 'owner' : role.role}
-            onOpenPatient={m => openPatient(m, null, 'ipd')} />
+            onOpenPatient={m => openPatient(m, null, 'ipd')}
+            onOfferEmi={handlesEmi && emiModule ? (src => { setEmiPrefill(src); setTab('emi') }) : undefined} />
         )}
 
         {/* ══════════ PHARMACY — in-house dispensing (0158) ══════════ */}
@@ -1998,6 +2014,11 @@ export default function DoctorDashboard() {
 
         {tab === 'international' && doctor && (
           <InternationalPanel businessId={doctor.id} />
+        )}
+
+        {tab === 'emi' && doctor && handlesEmi && (
+          <EmiPanel businessId={doctor.id} moduleOn={emiModule} canManage={businessRole}
+            prefill={emiPrefill} onPrefillUsed={() => setEmiPrefill(null)} onModuleChanged={setEmiModule} />
         )}
 
         {tab === 'social' && doctor && socialOn && (

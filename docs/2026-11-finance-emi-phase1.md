@@ -1,6 +1,9 @@
 # Treatment on EMI — Phase 1 plan
 
-Status: 16 Nov 2026 — step 1 (database, 0326) built and applied to SANDBOX only, tested end to end. Not on prod. No lender signed yet — build on staging/sandbox
+Status: 16 Nov 2026 — step 1 (database, 0326) built and applied to SANDBOX only, tested end to end. Not on prod.
+21 Nov 2026 — step 2 (hospital EMI panel) built: `src/pages/doctor/EmiPanel.tsx`, `src/lib/financeApi.ts`, EMI tab in the
+business dashboard (hospitals/clinics, only while `finance_enabled` is on), "EMI" button on occupied beds. No migration.
+Tested as a hospital owner on sandbox in a rolled-back transaction. No lender signed yet — build on staging/sandbox
 with a test lender; turn on in production only after the first real lender agreement.
 
 ## Goal
