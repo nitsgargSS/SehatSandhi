@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
 
   let event: {
     event?: string
-    payload?: { payment?: { entity?: { id?: string; order_id?: string; status?: string } } }
+    payload?: { payment?: { entity?: { id?: string; order_id?: string; status?: string; notes?: Record<string, unknown> | unknown[] } } }
   }
   try {
     event = JSON.parse(raw)
@@ -80,6 +80,19 @@ Deno.serve(async (req) => {
   }
 
   const entity = event.payload?.payment?.entity
+
+  // ONE RAZORPAY ACCOUNT, SEVERAL PRODUCTS
+  // Razorpay sends every webhook URL on the account every payment. Other products
+  // on this account (AImazing Labs: notes.product = "aimazing") tag their payments;
+  // they are not ours, so 200 "ignored". Without this, fulfilPayment finds no row,
+  // we answer 500, Razorpay retries for a day and then switches this webhook off.
+  // Our own payments carry no product note (or "sehatsandhi") and go on as before.
+  const notes = entity?.notes && !Array.isArray(entity.notes) ? entity.notes : {}
+  const product = typeof notes.product === 'string' ? notes.product : ''
+  if (product && product !== 'sehatsandhi') {
+    return json({ ok: true, ignored: `other product: ${product}` })
+  }
+
   const paymentId = entity?.id
   const orderId = entity?.order_id
   if (!paymentId || !orderId) {
