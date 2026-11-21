@@ -33,6 +33,7 @@ const CheckinPage = lazy(() => import('./pages/CheckinPage'))
 const AmbulanceTrack = lazy(() => import('./pages/AmbulanceTrack'))
 const InsuranceTrack = lazy(() => import('./pages/InsuranceTrack'))
 const EmiTrack = lazy(() => import('./pages/EmiTrack'))
+const MyEmi = lazy(() => import('./pages/my/MyEmi'))
 const LabFilePage = lazy(() => import('./pages/LabFilePage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 // 0282: a business's website, at /s/<slug> until <slug>.sehatsandhi.com is wired.
@@ -323,6 +324,7 @@ export default function App() {
           <Route path="/my/order" element={<MyOrder />} />
           <Route path="/my/ambulance" element={<MyAmbulance />} />
           <Route path="/my/insurance" element={<MyInsurance />} />
+          <Route path="/my/emi" element={<MyEmi />} />
           <Route path="/my/rate" element={<MyRate />} />
           <Route path="/my/book" element={<MyBook />} />
           <Route path="/camps" element={<CampsPage />} />

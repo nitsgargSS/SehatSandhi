@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 
 // Treatment on EMI, hospital side (0326). Reads go straight to the tables —
@@ -310,4 +311,41 @@ export function patientEmiWhatsApp(c: Pick<FinanceCase, 'patient_name' | 'patien
     + `Hello ${c.patient_name}, ${hospital} has set up an EMI request for your treatment (${c.treatment}). Open this link to give consent and choose a lender:\n`
     + `${patientEmiUrl(c.public_token)}\n\nSehatsandhi is not a lender and charges you nothing.`
   return `https://wa.me/91${phone}?text=${encodeURIComponent(text)}`
+}
+
+// ── Patient, signed in (My Sehatsandhi) — 0327 ──────────────────────────────
+
+export interface EmiHospital { id: string; name: string; vertical: string; town: string | null; address: string | null }
+export interface MyEmiCase {
+  case_no: string; status: CaseStatus; treatment: string; hospital: string; requested_amount: number
+  planned_on: string | null; public_token: string; created_at: string; updated_at: string
+}
+
+export async function emiHospitals(query: string): Promise<EmiHospital[]> {
+  const { data, error } = await supabase.rpc('sehat_finance_hospitals', { p_query: query || null })
+  oops(error)
+  return (data ?? []) as EmiHospital[]
+}
+
+export async function myEmiCases(): Promise<MyEmiCase[]> {
+  const { data, error } = await supabase.rpc('sehat_finance_my_cases')
+  oops(error)
+  return (data ?? []) as MyEmiCase[]
+}
+
+/** The patient asks a hospital for EMI. Their phone comes from their login, not from here. */
+export async function requestEmi(p: { hospitalId: string; name: string; treatment: string; amount: number; plannedOn?: string | null }) {
+  const { data, error } = await supabase.rpc('sehat_finance_case_request', {
+    p_business: p.hospitalId, p_patient_name: p.name, p_patient_phone: '', p_treatment: p.treatment,
+    p_amount: p.amount, p_planned_on: p.plannedOn || null, p_channel: 'web',
+  })
+  oops(error)
+  return data as FinanceCase
+}
+
+/** The same switch as the hospital side, as a hook. */
+export function useFinanceEnabled(): boolean | null {
+  const [on, setOn] = useState<boolean | null>(null)
+  useEffect(() => { let live = true; financeEnabled().then(v => { if (live) setOn(v) }); return () => { live = false } }, [])
+  return on
 }

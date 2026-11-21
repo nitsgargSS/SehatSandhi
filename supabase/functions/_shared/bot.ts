@@ -64,7 +64,7 @@ export interface Vars {
   /** Clinic line: they asked for all of Sehatsandhi — do not steer back to a clinic this conversation. */
   general?: boolean
   /** 0243: a request being put together — which one, what was just asked, and the answers so far. */
-  req?: { what: 'ambulance' | 'medicine' | 'insurance' | 'demo'; ask: string; f: Record<string, string> }
+  req?: { what: 'ambulance' | 'medicine' | 'insurance' | 'demo' | 'emi'; ask: string; f: Record<string, string> }
   /** 0245: the kind of test being looked for ('pathology' | 'radiology' | '' for any), and its name as chosen ("MRI"). */
   labKind?: string
   labWant?: string
@@ -173,7 +173,16 @@ const MAIN_MENU_NO_INSURANCE: Reply = {
   body: (MAIN_MENU as { body: string }).body.replace('लैब, एम्बुलेंस और इंश्योरेंस', 'लैब और एम्बुलेंस'),
   rows: (MAIN_MENU as { rows: { id: string }[] }).rows.filter(r => r.id !== 'menu:insurance'),
 } as Reply
-const mainMenu = (): Reply => insuranceOn ? MAIN_MENU : MAIN_MENU_NO_INSURANCE
+// 0328: Treatment on EMI — a menu row only while site_settings 'finance_enabled' is on.
+let financeOn = false
+const EMI_ROW = { id: 'menu:emi', title: '🏦 इलाज EMI पर', description: 'Treatment on EMI — loan paid to the hospital' }
+const withEmi = (r: Reply): Reply => {
+  if (!financeOn || r.kind !== 'list') return r
+  const rows = [...r.rows]
+  rows.splice(Math.max(0, rows.findIndex(x => x.id === 'menu:camps')), 0, EMI_ROW)
+  return { ...r, rows }
+}
+const mainMenu = (): Reply => withEmi(insuranceOn ? MAIN_MENU : MAIN_MENU_NO_INSURANCE)
 const INSURANCE_OFF = 'इंश्योरेंस (बीमा) की सहायता अभी उपलब्ध नहीं है। 🙏\nHelp with health insurance is not available right now.\n\nआप नीचे से चुन सकते हैं:'
 
 const TEST_TYPE_MENU: Reply = {
@@ -597,12 +606,29 @@ const INS_TIME: Reply = {
 
 // 0300: a doctor asking for a demo of Sehatsandhi itself — the number in every
 // post and video. One question, then it is a lead in Admin → Leads and an email.
+// 0328: Treatment on EMI — three questions: hospital, treatment, amount. The
+// rest (estimate, date, lender) is the hospital's and the patient's link's.
+const EMI_WORDS = /\bemi\b|\bloan\b|लोन|ईएमआई|क़िस्त|किस्त/i
+const EMI_OFF = 'इलाज EMI पर अभी उपलब्ध नहीं है। 🙏\nTreatment on EMI is not available yet.\n\nआप नीचे से चुन सकते हैं:'
+const EMI_WHERE = '🏦 *इलाज EMI पर* — ₹10,000 या ज़्यादा के इलाज के लिए बैंक/NBFC से लोन, सीधे अस्पताल को।\nA loan for treatment of ₹10,000 or more, paid to the hospital.\n\nकिस अस्पताल में इलाज है? नाम या शहर लिखें।\nWhich hospital? Type its name or town.'
+const EMI_WHAT = 'कौनसा इलाज / ऑपरेशन है? जैसे: घुटने का ऑपरेशन\nWhat is the treatment?'
+const EMI_AMOUNT = 'कितना लोन चाहिए? (रुपये में, जैसे 80000 या 1.5 लाख)\nHow much loan do you need?'
+/** "1.5 लाख", "80,000", "80 hazar" → rupees as digits, or '' if it does not read as an amount. */
+export function emiAmount(t: string): string {
+  const x = t.toLowerCase().replace(/,/g, '').replace(/₹|rs\.?|rupees?|रुपये|रुपए/g, ' ')
+  const n = parseFloat(x.match(/\d+(\.\d+)?/)?.[0] ?? '')
+  if (!isFinite(n)) return ''
+  const mult = /lakh|lac|लाख/.test(x) ? 100000 : /hazar|hajar|thousand|हज़ार|हजार|\bk\b/.test(x) ? 1000 : 1
+  return String(Math.round(n * mult))
+}
+
 const DEMO = /\bdemo\b|डेमो|\bsoftware\b|सॉफ़्टवेयर|सॉफ्टवेयर/i
 const DEMO_ASK = '🙏 सेहतसंधि का फ़्री डेमो — हमारी टीम आपको कॉल करेगी।\nअपना नाम, क्लिनिक / हॉस्पिटल और शहर एक मैसेज में लिखें — जैसे: Dr. Sharma, Sharma Clinic, Karnal\n\nFree demo: write your name, clinic and town in one message.'
 
 /** The first question of a request. `pin`: an area already known for it. */
 function requestStart(what: Req['what'], v: Vars, pin = ''): Step {
   if (what === 'insurance' && !insuranceOn) return menu(v, INSURANCE_OFF)
+  if (what === 'emi') return financeOn ? asking(v, { what, ask: 'hospital', f: {} }, { kind: 'text', body: EMI_WHERE }) : menu(v, EMI_OFF)
   const f: Record<string, string> = pin ? { pin } : {}
   if (what === 'demo') return asking(v, { what, ask: 'who', f }, { kind: 'text', body: DEMO_ASK })
   if (what === 'ambulance') {
@@ -618,7 +644,9 @@ function requestStart(what: Req['what'], v: Vars, pin = ''): Step {
 /** The request itself, and what the database says back (which names the page to follow it on). */
 async function requestSend(v: Vars, req: Req, m: Inbound, phone: string, rpc: Rpc): Promise<Step> {
   const f = req.f, name = (m.name ?? '').trim() || (v.lastPatient ?? '').split(',')[0].trim()
-  const r = req.what === 'demo'
+  const r = req.what === 'emi'
+    ? await rpc('bot_emi_request_json', { p_phone: phone, p_name: name, p_hospital: f.hospital ?? '', p_treatment: f.treatment ?? '', p_amount: f.amount ?? '' })
+    : req.what === 'demo'
     ? await rpc('bot_demo_request_json', { p_phone: phone, p_name: (m.name ?? '').trim(), p_details: f.who ?? '' })
     : req.what === 'ambulance'
     ? await rpc('bot_ambulance_request_json', { p_phone: phone, p_pin: f.pin ?? '', p_name: name, p_kind: f.kind ?? 'emergency', p_address: f.address ?? '', p_need: f.need ?? '', p_lat: f.lat ?? '', p_lng: f.lng ?? '' })
@@ -634,6 +662,10 @@ async function requestSend(v: Vars, req: Req, m: Inbound, phone: string, rpc: Rp
   const lastPin = /^\d{6}$/.test(f.pin ?? '') ? f.pin : v.lastPin
   const sent: Step = { session: { state: 'idle', vars: carry({ ...v, ...(lastPin ? { lastPin } : {}) }) }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON] }] }
   // 0250: the app, after an order or a request — not after an ambulance call.
+  // An EMI request that did not go through (below the minimum, hospital stopped offering it): ask the amount again once.
+  if (req.what === 'emi' && r?.ok !== true && !f.retried) {
+    return asking(v, { ...req, ask: 'amount', f: { ...f, retried: '1' } }, { kind: 'text', body: `${text}\n\n${EMI_AMOUNT}` })
+  }
   return r?.ok === true && req.what !== 'ambulance' && req.what !== 'demo' ? invited(sent, phone, rpc) : sent
 }
 
@@ -679,6 +711,30 @@ async function requestStep(v: Vars, m: Inbound, phone: string, rpc: Rpc): Promis
       return send()
     }
     if (req.ask === 'need') { if (text) f.need = text.slice(0, 300); return send() }
+  }
+
+  if (req.what === 'emi') {
+    if (!financeOn) return menu(v, EMI_OFF)
+    if (req.ask === 'hospital') {
+      const picked = id.match(/^req:hosp:([0-9a-f-]{36})$/)?.[1]
+      if (picked) { f.hospital = picked; return next('treatment', { kind: 'text', body: EMI_WHAT }) }
+      if (text.length < 2) return again({ kind: 'text', body: EMI_WHERE })
+      const r = await rpc('bot_emi_hospitals_json', { p_query: text.slice(0, 60) })
+      const rows = Array.isArray(r?.rows) ? r!.rows as { id: string; title: string; description?: string }[] : []
+      if (!rows.length) return again({ kind: 'buttons', body: str(r?.text) || EMI_WHERE, buttons: [MENU_BUTTON] })
+      return again({ kind: 'list', header: '🏦 इलाज EMI पर', body: str(r?.text), sectionTitle: 'अस्पताल / Hospital', rows })
+    }
+    if (req.ask === 'treatment') {
+      if (text.length < 3) return again({ kind: 'text', body: EMI_WHAT })
+      f.treatment = text.slice(0, 200)
+      return next('amount', { kind: 'text', body: EMI_AMOUNT })
+    }
+    if (req.ask === 'amount') {
+      const amt = emiAmount(text)
+      if (!amt) return again({ kind: 'text', body: EMI_AMOUNT })
+      f.amount = amt
+      return send()
+    }
   }
 
   if (req.what === 'demo') {
@@ -1000,6 +1056,7 @@ function tapped(id: string, s: Session, m: Inbound): Step | null {
  */
 export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Promise<Step> {
   insuranceOn = (await rpc('sehat_insurance_enabled', {})) as unknown === true
+  financeOn = (await rpc('sehat_finance_enabled', {})) as unknown === true
   const vars = { ...s.vars }
   // "All of Sehatsandhi" lasts the conversation it was asked in.
   if (m.fresh) delete vars.general
@@ -1011,11 +1068,14 @@ export async function step(s: Session, m: Inbound, phone: string, rpc: Rpc): Pro
   // 0243: an ambulance, medicines, an insurance advisor — asked for as in the app.
   const asks = (m.replyId ?? '').match(/^menu:(ambulance|pharmacy|insurance)$/)?.[1]
   if (asks) return requestStart(asks === 'pharmacy' ? 'medicine' : asks as 'ambulance' | 'insurance', vars)
+  if (m.replyId === 'menu:emi') return requestStart('emi', vars)
   if (state === 'req') {
     const r = vars.req ? await requestStep(vars, m, phone, rpc) : null
     if (r) return r
     delete vars.req; state = 'idle'; s = { state, vars }
   }
+  // 0328: "EMI", "loan", "लोन" typed — the EMI request, while EMI is on.
+  if (typed && financeOn && text.length <= 60 && EMI_WORDS.test(text)) return requestStart('emi', vars)
   // 0245: a lab tapped in the list of labs.
   const lab = (m.replyId ?? '').match(/^lab:b:([0-9a-f-]{36})$/)?.[1]
   if (lab) return (await labStart({ ...vars, selection: lab }, rpc)) ?? menu(vars)

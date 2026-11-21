@@ -8,7 +8,12 @@ Tested as a hospital owner on sandbox in a rolled-back transaction.
 tracking, withdraw; Hindi + English), hospital "Send on WhatsApp" / "Copy link" in the EMI panel, and the five EMI
 templates in `docs/whatsapp-templates.md` (names: emi_request_link, emi_status, emi_hospital_action, emi_new_case,
 emi_disbursed). Part 2 still to do: patient asks for EMI in My Sehatsandhi and the WhatsApp bot (needs a small
-migration: hospitals offering EMI, my cases), and automatic sends once Meta approves the templates. No lender signed yet — build on staging/sandbox
+migration: hospitals offering EMI, my cases), and automatic sends once Meta approves the templates.
+21 Nov 2026 — step 3, part 2: My Sehatsandhi → Treatment on EMI (`/my/emi`, `src/pages/my/MyEmi.tsx`: ask a
+hospital — hospital, treatment, amount — and list my requests; tile only while EMI is on); WhatsApp bot: "🏦 इलाज EMI पर"
+menu row and typed "EMI" / "loan" / "लोन" (same three questions, then the patient's link). Migrations 0327
+(sehat_finance_hospitals, sehat_finance_my_cases) and 0328 (bot_emi_hospitals_json, bot_emi_request_json), applied to
+SANDBOX only. Left in step 3: automatic WhatsApp sends once Meta approves the templates. No lender signed yet — build on staging/sandbox
 with a test lender; turn on in production only after the first real lender agreement.
 
 ## Goal
