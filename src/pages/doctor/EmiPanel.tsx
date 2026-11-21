@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp, IndianRupee, Plus, RefreshCw, X } from 'lucide-react'
 import {
   listCases, listLenders, caseEvents, setFinanceModule, createCase, confirmCase, confirmAdmission, markReceived,
-  withdrawCase, emiSources, caseScope, CASE_STATUS, LENDER_STATUS, CASE_EVENT, MIN_EMI_AMOUNT,
+  withdrawCase, emiSources, caseScope, patientEmiUrl, patientEmiWhatsApp, CASE_STATUS, LENDER_STATUS, CASE_EVENT, MIN_EMI_AMOUNT,
   type FinanceCase, type LenderOption, type CaseEvent, type EmiSource, type CaseScope,
 } from '../../lib/financeApi'
 import { isoDate, shortDate } from '../../lib/format'
@@ -25,8 +25,9 @@ const STATUS_TONE: Record<string, string> = {
   declined: 'bg-gray-100 text-gray-600', withdrawn: 'bg-gray-100 text-gray-600', expired: 'bg-gray-100 text-gray-600',
 }
 
-export default function EmiPanel({ businessId, moduleOn, canManage, prefill, onPrefillUsed, onModuleChanged }: {
+export default function EmiPanel({ businessId, businessName, moduleOn, canManage, prefill, onPrefillUsed, onModuleChanged }: {
   businessId: string
+  businessName: string
   moduleOn: boolean
   /** Owner or manager: may switch EMI on or off. */
   canManage: boolean
@@ -144,7 +145,7 @@ export default function EmiPanel({ businessId, moduleOn, canManage, prefill, onP
           ? <div className="card shadow-sm text-sm text-gray-500">
               {loading ? 'Loading…' : view === 'action' ? 'Nothing waiting for you.' : view === 'active' ? 'No cases in progress.' : 'No finished cases yet.'}
             </div>
-          : shown.map(c => <CaseCard key={c.id} c={c} busy={busy} run={run} />)}
+          : shown.map(c => <CaseCard key={c.id} c={c} hospital={businessName} busy={busy} run={run} />)}
     </div>
   )
 }
@@ -273,8 +274,9 @@ function NewCaseForm({ businessId, prefill, busy, onCancel, onSubmit }: {
 
 // ── One case ────────────────────────────────────────────────────────────────
 
-function CaseCard({ c, busy, run }: {
+function CaseCard({ c, hospital, busy, run }: {
   c: FinanceCase
+  hospital: string
   busy: string | null
   run: (id: string, fn: () => Promise<unknown>, done?: string) => Promise<void>
 }) {
@@ -372,9 +374,16 @@ function CaseCard({ c, busy, run }: {
           )}
 
           {c.status === 'hospital_confirmed' && (
-            <p className="bg-blue-50 text-blue-900 rounded-lg p-3">
-              Waiting for the patient to give consent and choose a lender. Nothing has been shared with any lender yet.
-            </p>
+            <div className="bg-blue-50 text-blue-900 rounded-lg p-3 space-y-2">
+              <p>Waiting for the patient to give consent and choose a lender. Nothing has been shared with any lender yet.
+                Send them their link — they can open it on any phone, no login.</p>
+              <PatientLink c={c} hospital={hospital} />
+            </div>
+          )}
+          {['requested', 'shared', 'offered', 'sanctioned', 'disbursed'].includes(c.status) && (
+            <div className="flex items-center gap-2 flex-wrap text-xs text-gray-500">
+              <span>Patient’s tracking link:</span><PatientLink c={c} hospital={hospital} small />
+            </div>
           )}
 
           {needsAdmission && (
@@ -449,6 +458,22 @@ function CaseCard({ c, busy, run }: {
         </div>
       )}
     </div>
+  )
+}
+
+function PatientLink({ c, hospital, small }: { c: FinanceCase; hospital: string; small?: boolean }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(patientEmiUrl(c.public_token)); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { /* no clipboard */ }
+  }
+  return (
+    <span className="inline-flex gap-2 flex-wrap">
+      <a href={patientEmiWhatsApp(c, hospital)} target="_blank" rel="noopener noreferrer"
+        className={small ? 'text-teal-700 underline' : 'btn-teal text-sm py-2 px-4'}>Send on WhatsApp</a>
+      <button onClick={copy} className={small ? 'text-teal-700 underline' : 'text-sm py-2 px-3 rounded-lg border border-blue-200 bg-white'}>
+        {copied ? 'Copied' : 'Copy link'}
+      </button>
+    </span>
   )
 }
 

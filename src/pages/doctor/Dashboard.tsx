@@ -2017,7 +2017,7 @@ export default function DoctorDashboard() {
         )}
 
         {tab === 'emi' && doctor && handlesEmi && (
-          <EmiPanel businessId={doctor.id} moduleOn={emiModule} canManage={businessRole}
+          <EmiPanel businessId={doctor.id} businessName={doctor.name} moduleOn={emiModule} canManage={businessRole}
             prefill={emiPrefill} onPrefillUsed={() => setEmiPrefill(null)} onModuleChanged={setEmiModule} />
         )}
 

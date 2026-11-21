@@ -3,7 +3,12 @@
 Status: 16 Nov 2026 — step 1 (database, 0326) built and applied to SANDBOX only, tested end to end. Not on prod.
 21 Nov 2026 — step 2 (hospital EMI panel) built: `src/pages/doctor/EmiPanel.tsx`, `src/lib/financeApi.ts`, EMI tab in the
 business dashboard (hospitals/clinics, only while `finance_enabled` is on), "EMI" button on occupied beds. No migration.
-Tested as a hospital owner on sandbox in a rolled-back transaction. No lender signed yet — build on staging/sandbox
+Tested as a hospital owner on sandbox in a rolled-back transaction.
+21 Nov 2026 — step 3, part 1: patient page `/emi/<token>` (`src/pages/EmiTrack.tsx`: consent, choose 1–2 lenders,
+tracking, withdraw; Hindi + English), hospital "Send on WhatsApp" / "Copy link" in the EMI panel, and the five EMI
+templates in `docs/whatsapp-templates.md` (names: emi_request_link, emi_status, emi_hospital_action, emi_new_case,
+emi_disbursed). Part 2 still to do: patient asks for EMI in My Sehatsandhi and the WhatsApp bot (needs a small
+migration: hospitals offering EMI, my cases), and automatic sends once Meta approves the templates. No lender signed yet — build on staging/sandbox
 with a test lender; turn on in production only after the first real lender agreement.
 
 ## Goal

@@ -32,6 +32,7 @@ const OrderTrack = lazy(() => import('./pages/OrderTrack'))
 const CheckinPage = lazy(() => import('./pages/CheckinPage'))
 const AmbulanceTrack = lazy(() => import('./pages/AmbulanceTrack'))
 const InsuranceTrack = lazy(() => import('./pages/InsuranceTrack'))
+const EmiTrack = lazy(() => import('./pages/EmiTrack'))
 const LabFilePage = lazy(() => import('./pages/LabFilePage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 // 0282: a business's website, at /s/<slug> until <slug>.sehatsandhi.com is wired.
@@ -275,6 +276,8 @@ export default function App() {
           <Route path="/c/:code" element={<CheckinPage />} />
           <Route path="/a/:token" element={<AmbulanceTrack />} />
           <Route path="/i/:token" element={<InsuranceTrack />} />
+          {/* 0326: Treatment on EMI — the patient's consent and tracking page. */}
+          <Route path="/emi/:token" element={<EmiTrack />} />
 
           {/* The discharge summary, same no-login token pattern. Its link lasts
               a year rather than 90 days: this is the document patients are told

@@ -176,6 +176,95 @@ the library (for example "Thank you.") and resubmit.
 A variable cannot hold a line break; the sender joins a clinic's text into one
 line before it goes.
 
+## Treatment on EMI templates (0326) — submit early, not used until EMI is live
+
+Utility. All sent from the **main number** (+91 70153 99355). Language English;
+no header or footer. Where it says **Button**, add one button of type
+"Visit website", URL type **Dynamic**, base URL `https://www.sehatsandhi.com/emi/`
+with the variable `{{1}}` (sample `3f9c0a1b2c3d4e5f60718293a4b5c6d7`). Each is a reply to a
+request the person made or a step in a case they are part of; none is promotional.
+Nothing in the code sends these yet: the sends are wired once they are approved.
+
+### `emi_request_link` (to the patient)
+
+Sent when a hospital sets up an EMI request for the patient, or confirms one the patient made.
+
+```
+Hello {{1}}, {{2}} has confirmed the estimate for your treatment ({{3}}) for an EMI request of {{4}}.
+
+Open your link to see what will be shared, choose a lender and give consent. Your documents go only to the lender you choose.
+
+Sehatsandhi is not a lender and charges you nothing.
+```
+
+Samples: `{{1}}` `Ramesh` · `{{2}}` `Yamuna City Hospital` · `{{3}}` `Knee replacement` · `{{4}}` `₹1,20,000`
+**Button:** "Open request" → `https://www.sehatsandhi.com/emi/{{1}}`
+
+Secret: `META_EMI_LINK_TEMPLATE=emi_request_link`
+
+### `emi_status` (to the patient)
+
+Sent when the case moves: sent to lender, offer made, sanctioned, declined, paid to hospital.
+
+```
+Update on your EMI request {{1}} for treatment at {{2}}:
+
+{{3}}
+
+Open your link for details.
+```
+
+Samples: `{{1}}` `EMI-000041` · `{{2}}` `Yamuna City Hospital` · `{{3}}` `Test Finance Ltd has sanctioned your loan. They will pay the hospital once your admission date is confirmed.`
+**Button:** "View status" → `https://www.sehatsandhi.com/emi/{{1}}`
+
+Secret: `META_EMI_STATUS_TEMPLATE=emi_status`
+
+### `emi_hospital_action` (to hospital staff)
+
+Sent when a patient asks for EMI (confirm the estimate), when a lender has the
+case (confirm admission), and when the lender says it has paid (confirm receipt).
+
+```
+EMI case {{1}} for {{2}} ({{3}}) needs you: {{4}}
+
+Open Sehatsandhi → EMI to act on it.
+```
+
+Samples: `{{1}}` `EMI-000041` · `{{2}}` `Ramesh Kumar` · `{{3}}` `Knee replacement` · `{{4}}` `please confirm the estimate.`
+No button (staff open their dashboard).
+
+Secret: `META_EMI_HOSPITAL_TEMPLATE=emi_hospital_action`
+
+### `emi_new_case` (to the lender)
+
+Sent when a patient consents and shares a case with the lender.
+
+```
+New EMI case {{1}} shared with you on Sehatsandhi: {{2}} at {{3}}, loan requested {{4}}.
+
+The patient has given consent. Open your Sehatsandhi dashboard to view it.
+```
+
+Samples: `{{1}}` `EMI-000041` · `{{2}}` `Knee replacement` · `{{3}}` `Yamuna City Hospital, Yamunanagar` · `{{4}}` `₹1,20,000`
+No button.
+
+Secret: `META_EMI_LENDER_TEMPLATE=emi_new_case`
+
+### `emi_disbursed` (to the patient)
+
+Sent when the lender marks the loan as paid to the hospital. (The hospital gets `emi_hospital_action` asking it to confirm receipt.)
+
+```
+EMI case {{1}}: {{2}} has paid {{3}} to {{4}} (reference {{5}}).
+
+Your EMIs are paid to the lender, not to Sehatsandhi.
+```
+
+Samples: `{{1}}` `EMI-000041` · `{{2}}` `Test Finance Ltd` · `{{3}}` `₹1,20,000` · `{{4}}` `Yamuna City Hospital` · `{{5}}` `UTR 412345678901`
+No button.
+
+Secret: `META_EMI_DISBURSED_TEMPLATE=emi_disbursed`
+
 ## Switching the sends to Meta
 
 With the templates approved and their secrets set, these two secrets move every

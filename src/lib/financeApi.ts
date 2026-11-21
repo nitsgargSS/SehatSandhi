@@ -261,3 +261,53 @@ export async function emiSources(businessId: string): Promise<EmiSource[]> {
   }
   return out
 }
+
+// ── Patient, by link (no login) — /emi/<public_token> ───────────────────────
+
+export const EMI_TOKEN_RE = /^[0-9a-f]{32}$/
+/** Bump when the consent wording below changes; the version is stored with the consent. */
+export const CONSENT_VERSION = 'emi-consent-v1'
+
+export interface PublicLenderShared {
+  lender_id: string; name: string; status: LenderCaseStatus; journey_url: string | null
+  grievance_email: string | null; grievance_phone: string | null
+  offer_amount: number | null; offer_tenure_months: number | null; offer_emi: number | null
+}
+export interface PublicLenderAvailable {
+  lender_id: string; name: string; entity_type: 'bank' | 'nbfc'; terms: string | null; tenures: string | null
+  pays_to: 'hospital' | 'patient'; no_cost_emi: boolean
+}
+export interface PublicCase {
+  case_no: string; status: CaseStatus; treatment: string; estimate: number; requested: number; planned_on: string | null
+  patient_name: string; hospital: string; hospital_address: string | null
+  hospital_confirmed: boolean; consent_at: string | null; received: boolean
+  lenders_shared: PublicLenderShared[]; lenders_available: PublicLenderAvailable[]
+}
+
+export async function getPublicCase(token: string): Promise<PublicCase | null> {
+  const { data, error } = await supabase.rpc('sehat_finance_case_by_token', { p_token: token })
+  oops(error)
+  return (data ?? null) as PublicCase | null
+}
+
+export async function shareWithLenders(token: string, lenderIds: string[], channel: 'web' | 'whatsapp' | 'app' = 'web') {
+  const { error } = await supabase.rpc('sehat_finance_case_share', {
+    p_token: token, p_lenders: lenderIds, p_consent_version: CONSENT_VERSION, p_channel: channel,
+  })
+  oops(error)
+}
+
+export async function withdrawByToken(token: string, reason: string) {
+  const { error } = await supabase.rpc('sehat_finance_case_withdraw', { p_case: null, p_token: token, p_reason: reason || null })
+  oops(error)
+}
+
+/** The patient's link, and a WhatsApp message the hospital can send from its own phone. */
+export const patientEmiUrl = (token: string) => `${window.location.origin}/emi/${token}`
+export function patientEmiWhatsApp(c: Pick<FinanceCase, 'patient_name' | 'patient_phone' | 'treatment' | 'public_token'>, hospital: string) {
+  const phone = c.patient_phone.replace(/\D/g, '').slice(-10)
+  const text = `नमस्ते ${c.patient_name}, ${hospital} ने आपके इलाज (${c.treatment}) के लिए EMI का अनुरोध तैयार किया है। सहमति देने और बैंक/NBFC चुनने के लिए यह लिंक खोलें:\n\n`
+    + `Hello ${c.patient_name}, ${hospital} has set up an EMI request for your treatment (${c.treatment}). Open this link to give consent and choose a lender:\n`
+    + `${patientEmiUrl(c.public_token)}\n\nSehatsandhi is not a lender and charges you nothing.`
+  return `https://wa.me/91${phone}?text=${encodeURIComponent(text)}`
+}
