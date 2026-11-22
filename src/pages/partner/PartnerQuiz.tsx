@@ -37,7 +37,10 @@ export function PartnerRefresher() {
 
 function QuizFor({ slug, refresher = false }: { slug: string | null; refresher?: boolean }) {
   const { tx } = useTx()
-  const { reload } = usePartnerMe()
+  const { me, reload } = usePartnerMe()
+  // 0338: the refresher also reactivates an ID paused for having no paying business in time.
+  const [reactivating] = useState(() => refresher && me.partner?.status === 'paused' && (me.partner.status_reason ?? '').startsWith('Inactive:'))
+  const back = refresher ? (reactivating ? '/partner/dashboard' : '/partner/renew') : '/partner/learn'
   const [mod, setMod] = useState<CareModule | null | undefined>(slug ? undefined : null)
   const [attempt, setAttempt] = useState<QuizAttempt | null>(null)
   const [answers, setAnswers] = useState<Record<string, string[]>>({})
@@ -82,7 +85,10 @@ function QuizFor({ slug, refresher = false }: { slug: string | null; refresher?:
           {result.passed && result.kind === 'final' && (
             <p className="text-gray-700 mt-1">{tx('Congratulations. Next, pay the certification fee to get your Partner ID and badge.', 'बधाई हो। अब अपना Partner ID और बैज पाने के लिए सर्टिफ़िकेशन फ़ीस दें।')}</p>
           )}
-          {result.passed && result.kind === 'refresher' && (
+          {result.passed && result.reactivated && (
+            <p className="text-gray-700 mt-1">{tx('Well done. Your Partner ID is active again.', 'शाबाश। आपका Partner ID फिर से चालू है।')}</p>
+          )}
+          {result.passed && result.kind === 'refresher' && !result.reactivated && (
             <p className="text-gray-700 mt-1">{tx('Well done. Next, pay the renewal fee to renew your Partner ID for 12 months.', 'शाबाश। अब अपना Partner ID 12 महीने के लिए रिन्यू करने के लिए रिन्यूअल फ़ीस दें।')}</p>
           )}
         </div>
@@ -108,7 +114,7 @@ function QuizFor({ slug, refresher = false }: { slug: string | null; refresher?:
           </div>
         ))}
         {result.passed && result.kind === 'final' ? <Link to="/partner/certify" className="btn-teal py-3 px-6 w-fit">{tx('Get your Partner ID', 'अपना Partner ID पाएँ')}</Link>
-          : result.kind === 'refresher' ? <Link to="/partner/renew" className="btn-teal py-3 px-6 w-fit">{tx('Back to renewal', 'रिन्यूअल पर वापस')}</Link>
+          : result.kind === 'refresher' ? <Link to={back} className="btn-teal py-3 px-6 w-fit">{reactivating ? tx('Go to your dashboard', 'अपने डैशबोर्ड पर जाएँ') : tx('Back to renewal', 'रिन्यूअल पर वापस')}</Link>
           : <Link to="/partner/learn" className="btn-teal py-3 px-6 w-fit">{tx('Back to Learn', 'सीखें पर वापस')}</Link>}
       </div>
     )
@@ -120,7 +126,9 @@ function QuizFor({ slug, refresher = false }: { slug: string | null; refresher?:
       <div className="card space-y-3">
         {mod && <p className="font-semibold text-navy-700">{tx(mod.title_en, mod.title_hi)}</p>}
         <ul className="list-disc pl-5 text-gray-700 text-[15px] space-y-1">
-          {refresher && <li>{tx('Your yearly check before renewal: a short set of questions from all the modules. It keeps every Partner ID current.', 'रिन्यूअल से पहले सालाना जाँच: सभी मॉड्यूल से कुछ सवाल। इससे हर Partner ID सही बना रहता है।')}</li>}
+          {refresher && (reactivating
+            ? <li>{tx('Pass this short quiz from all the modules to reactivate your paused Partner ID.', 'अपना रुका हुआ Partner ID फिर चालू करने के लिए सभी मॉड्यूल से यह छोटा क्विज़ पास करें।')}</li>
+            : <li>{tx('Your yearly check before renewal: a short set of questions from all the modules. It keeps every Partner ID current.', 'रिन्यूअल से पहले सालाना जाँच: सभी मॉड्यूल से कुछ सवाल। इससे हर Partner ID सही बना रहता है।')}</li>)}
           <li>{slug ? tx('A few questions from this module\'s video and PDF.', 'इस मॉड्यूल के वीडियो और PDF से कुछ सवाल।') : tx('Questions from all the modules.', 'सभी मॉड्यूल से सवाल।')}</li>
           <li>{tx('Some questions have more than one right answer — they say so.', 'कुछ सवालों के एक से ज़्यादा सही जवाब होते हैं — उनमें लिखा होता है।')}</li>
           <li>{tx('Once you start, finish within the time shown. Leaving it unfinished counts as not passed.', 'शुरू करने के बाद दिए गए समय में पूरा करें। अधूरा छोड़ने पर पास नहीं माना जाएगा।')}</li>
@@ -128,7 +136,7 @@ function QuizFor({ slug, refresher = false }: { slug: string | null; refresher?:
         {err && <p className="text-red-600">{err}</p>}
         <div className="flex gap-3 flex-wrap">
           <button disabled={busy} onClick={start} className="btn-teal py-3 px-6">{busy ? tx('Starting…', 'शुरू हो रहा है…') : slug || refresher ? tx('Start the quiz', 'क्विज़ शुरू करें') : tx('Start the exam', 'परीक्षा शुरू करें')}</button>
-          <Link to={refresher ? '/partner/renew' : '/partner/learn'} className="py-3 px-4 text-gray-600">{tx('Not now', 'अभी नहीं')}</Link>
+          <Link to={back} className="py-3 px-4 text-gray-600">{tx('Not now', 'अभी नहीं')}</Link>
         </div>
       </div>
     )

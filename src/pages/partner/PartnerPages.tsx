@@ -217,7 +217,7 @@ function RegisterForm() {
         </label>
       </div>
       {field('occupation', 'What do you do now? (optional)', 'अभी आप क्या करते हैं? (वैकल्पिक)')}
-      {field('email', 'Email (optional, for receipts)', 'ईमेल (वैकल्पिक, रसीद के लिए)', { type: 'email', autoComplete: 'email' })}
+      {field('email', 'Email (receipts and updates are sent here)', 'ईमेल (रसीद और सूचनाएँ यहीं भेजी जाती हैं)', { type: 'email', autoComplete: 'email', required: true })}
       <label className="text-sm text-gray-700 block">{tx('Preferred language', 'पसंदीदा भाषा')}
         <select className="input-field mt-1" value={f.language} onChange={e => setF({ ...f, language: e.target.value as 'hi' | 'en' })}>
           <option value="hi">हिंदी</option><option value="en">English</option>

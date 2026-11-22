@@ -5,7 +5,7 @@ import PartnerShell, { usePartnerMe, useTx } from './PartnerShell'
 import {
   acceptContracts, careFileUrl, careSettings, createTicket, myFeeInvoices, myTickets, type FeeInvoice, partnerFeeOrder, pendingContracts,
   replyTicket, requestPartnerCode, ticketMessages, verifyPartner, whenIST, STATUS_LABEL, TICKET_CATEGORY,
-  addLead, myLeads, releaseLead, type CareLeads, myMoney, submitKyc, type MyMoney,
+  addLead, myLeads, releaseLead, setPartnerEmail, type CareLeads, myMoney, submitKyc, type MyMoney,
   type CareContract, type CareTicket, type TicketCategory, type TicketMessage, type VerifiedPartner,
 } from '../../lib/careApi'
 import { loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
@@ -241,6 +241,28 @@ export function PartnerDashboard() {
   return <PartnerShell title="My partner dashboard" titleHi="मेरा पार्टनर डैशबोर्ड" needs="registered"><Dashboard /></PartnerShell>
 }
 
+// 0339: partners who registered before email became required are asked once.
+function AddEmail() {
+  const { tx } = useTx()
+  const { reload } = usePartnerMe()
+  const [v, setV] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault(); setBusy(true); setErr('')
+    try { await setPartnerEmail(v); await reload() } catch (x) { setErr((x as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <form onSubmit={save} className="card border-2 border-amber-300 space-y-2">
+      <p className="font-semibold text-navy-700">{tx('Add your email address', 'अपना ईमेल पता जोड़ें')}</p>
+      <p className="text-sm text-gray-600">{tx('Receipts, renewal reminders and our replies are sent by email.', 'रसीदें, रिन्यूअल रिमाइंडर और हमारे जवाब ईमेल से भेजे जाते हैं।')}</p>
+      <input type="email" required autoComplete="email" className="input-field" value={v} onChange={e => setV(e.target.value)} />
+      {err && <p className="text-red-600 text-sm">{err}</p>}
+      <button disabled={busy} className="btn-teal py-2.5 px-5 w-fit">{busy ? tx('Saving…', 'सेव हो रहा है…') : tx('Save', 'सेव करें')}</button>
+    </form>
+  )
+}
+
 function Dashboard() {
   const { tx } = useTx()
   const { me } = usePartnerMe()
@@ -249,6 +271,7 @@ function Dashboard() {
   useEffect(() => { myFeeInvoices().then(setInvs) }, [])
   const r = me.renewal
   return (<>
+    {!p.email && <AddEmail />}
     <div className="card">
       <div className="text-xs text-gray-500">{tx('Status', 'स्थिति')}</div>
       <div className="text-lg font-bold text-navy-700">{tx(STATUS_LABEL[p.status].en, STATUS_LABEL[p.status].hi)}</div>
@@ -256,6 +279,8 @@ function Dashboard() {
         ? <p className="text-gray-700 mt-1">{tx('Partner ID', 'Partner ID')}: <b className="text-xl tracking-wide">{p.partner_code}</b>{p.valid_until ? ` · ${tx('valid until', 'मान्य')} ${day(p.valid_until)}` : ''}</p>
         : <p className="text-gray-600 text-sm mt-1">{tx('Your Partner ID is issued after the final exam and the certification fee.', 'फ़ाइनल परीक्षा और सर्टिफ़िकेशन फ़ीस के बाद आपका Partner ID जारी होता है।')}</p>}
       {p.status_reason && ['paused', 'suspended', 'terminated'].includes(p.status) && <p className="text-sm text-amber-800 mt-1">{p.status_reason}</p>}
+      {p.status === 'paused' && (p.status_reason ?? '').startsWith('Inactive:') &&
+        <Link to="/partner/refresher" className="btn-teal py-2.5 px-5 w-fit mt-2 inline-block">{tx('Take the refresher quiz', 'रिफ़्रेशर क्विज़ दें')}</Link>}
     </div>
     {r?.open && <div className={`card ${r.expired ? 'border-2 border-amber-400' : 'border-2 border-teal-200'}`}>
       <p className="font-semibold text-navy-700">{r.expired

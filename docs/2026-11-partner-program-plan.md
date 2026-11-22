@@ -56,6 +56,10 @@ certification AND each yearly renewal. Renewal opens 30 days before valid_until 
 quiz (kind 'refresher', 10 questions from all modules) → pay → same ID, +12 months from the old expiry. Expired = no leads,
 no rewards. Not renewed within 30 days after expiry (partner_id_grace_days) → nightly care-renewals-nightly terminates.
 Pages /partner/renew and /partner/refresher; renewal email in fulfilment.ts (redeploy razorpay-verify + razorpay-webhook).
+0338: inactivity pause as the brief/Module 10 say — nightly, an active partner with no paying business (approved credit +
+paid subscription) within partner_inactive_days (90) of becoming active → paused 'Inactive: …'; passing the refresher quiz
+reactivates (clock restarts). Admin/complaint pauses untouched. Razorpay TEST keys + webhook on sandbox via
+scripts/razorpay-test-mode.sh (Nitin runs it; shares the AImazing test key pair; checked: ₹118 rzp_test order).
 Decisions (Nitin, 22 Nov): 1 fix online refunds — yes; 2 confirmed Care Partner credit approved automatically, admin can override; 3 new Care Partners tab for operations, money in Partners — OK; 6 active = paid term not ended — OK. Not answered yet: 4 (active field/agency partners — needed before Phase 4), 5 (production order vs EMI — default: partner migrations independent of 0330), 7 (who uploads videos/PDFs — CMS built either way). Brief: https://claude.ai/artifact/Wc4MJ5dGZBzQeATsbtyJKj
 (v2, consolidated; `Sehatsandhi_Partner_Program_Claude_Code_Brief.md` + `Sehatsandhi_Partner_FAQ_Seed.csv`).
 Built on staging / sandbox only, behind `site_settings` switch `partner_program_enabled` (off).

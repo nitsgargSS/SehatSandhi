@@ -119,6 +119,12 @@ export async function registerPartner(p: {
 }
 
 // ── Learning ────────────────────────────────────────────────────────────────
+/** 0339: add or correct the partner's email (required; receipts and updates go there). */
+export async function setPartnerEmail(email: string): Promise<string> {
+  const { data, error } = await supabase.rpc('sehat_care_set_email', { p_email: email })
+  oops(error)
+  return data as string
+}
 export async function careModules(): Promise<CareModule[]> {
   const { data, error } = await supabase.from('care_partner_modules').select('*').order('sort_order')
   oops(error)
@@ -297,7 +303,7 @@ export interface QuizOption { id: string; text_en: string; text_hi: string }
 export interface QuizQuestion { id: string; qtype: 'single' | 'multi' | 'truefalse'; text_en: string; text_hi: string; options: QuizOption[] }
 export interface QuizAttempt { attempt_id: string; kind: 'module' | 'final' | 'refresher'; module_id: string | null; expires_at: string; questions: QuizQuestion[] }
 export interface QuizResult {
-  passed: boolean; score_pct: number; correct: number; total: number; pass_mark: number; next_allowed_at: string | null; kind: string
+  passed: boolean; score_pct: number; correct: number; total: number; pass_mark: number; next_allowed_at: string | null; kind: string; reactivated?: boolean
   review: { id: string; text_en: string; text_hi: string; options: QuizOption[]; correct: string[]; chosen: string[]; explain_en: string | null; explain_hi: string | null }[] | null
   revise: { slug: string; title_en: string; title_hi: string }[] | null
 }
