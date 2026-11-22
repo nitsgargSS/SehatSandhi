@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // partner-training — build the Care Partner module PDFs (English and Hindi) from
-// docs/partner-training/content.mjs, and optionally load them into sandbox.
+// docs/partner-training/content.mjs and the contract/policy PDFs from
+// docs/partner-training/contracts.mjs, and optionally load them into sandbox.
 //
 //   node scripts/partner-training.mjs              PDFs into docs/partner-training/pdf/
 //   node scripts/partner-training.mjs --sandbox    also: upload the PDFs to the
 //        partner-content bucket, set each module's PDF paths, add the quiz
 //        questions (once — a question already there by its English text is
-//        skipped) and publish every module that has enough questions.
+//        skipped) and publish every module that has enough questions; upload
+//        the five contracts and make that version current.
 //
 // Sandbox only: it refuses any database or URL that is not the sandbox project.
 // PDFs are printed by the local Google Chrome (headless), so Devanagari renders
@@ -19,6 +21,7 @@ import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 import dotenv from 'dotenv'
 import { MODULES, VERSION } from '../docs/partner-training/content.mjs'
+import { CONTRACTS, CONTRACT_VERSION, CONTRACT_DATE } from '../docs/partner-training/contracts.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(ROOT, 'docs/partner-training/pdf')
@@ -29,7 +32,7 @@ dotenv.config({ path: join(ROOT, '.env.supabase'), quiet: true })
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-function html(mod, n, lang) {
+function html(mod, n, lang, contract = false) {
   const t = mod[lang]
   const hi = lang === 'hi'
   const sections = t.sections.map(([h, items]) => `
@@ -47,11 +50,13 @@ function html(mod, n, lang) {
   ul { margin: 0; padding-left: 20px; } li { margin: 3px 0; } p { margin: 0; }
   .foot { margin-top: 26px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 8.5pt; color: #64748b; }
 </style></head><body>
-  <div class="top"><span>Sehatsandhi · ${hi ? 'केयर पार्टनर प्रोग्राम' : 'Care Partner Program'}</span><span>${hi ? 'मॉड्यूल' : 'Module'} ${n}</span></div>
+  <div class="top"><span>Sehatsandhi · ${hi ? 'केयर पार्टनर प्रोग्राम' : 'Care Partner Program'}</span><span>${contract ? (hi ? 'ड्राफ़्ट — वकील की समीक्षा बाकी' : 'DRAFT — for legal review') : `${hi ? 'मॉड्यूल' : 'Module'} ${n}`}</span></div>
   <h1>${esc(t.title)}</h1>
-  <div class="sub">${hi ? 'पढ़ने की सामग्री' : 'Reading'} · ${esc(VERSION)}</div>
+  <div class="sub">${contract ? `${hi ? 'संस्करण' : 'Version'} ${esc(CONTRACT_VERSION)} · ${esc(CONTRACT_DATE)}` : `${hi ? 'पढ़ने की सामग्री' : 'Reading'} · ${esc(VERSION)}`}</div>
   ${sections}
-  <div class="foot">${hi
+  <div class="foot">${contract ? (hi
+    ? 'यह अंग्रेज़ी दस्तावेज़ का हिंदी अनुवाद है; अंतर होने पर अंग्रेज़ी मान्य होगी। NG Technologies (सेहतसंधि), जगाधरी, हरियाणा।'
+    : 'NG Technologies (Sehatsandhi), Jagadhri, Haryana. A Hindi translation is provided; if it differs, this English version prevails.') : hi
     ? 'यह सामग्री सेहतसंधि केयर पार्टनर ट्रेनिंग के लिए है। इसमें बताए नंबर (कीमतें, दिन, राशि) बदल सकते हैं — नवीनतम जानकारी सहायता केंद्र और sehatsandhi.com/business पर है। इसमें कोई कमाई का वादा नहीं है।'
     : 'This material is for Sehatsandhi Care Partner training. Numbers in it (prices, days, amounts) can change — the latest are in the Help Center and on sehatsandhi.com/business. Nothing here promises any income.'}</div>
 </body></html>`
@@ -69,7 +74,16 @@ function buildPdfs() {
       files.push({ slug: m.slug, lang, pdf })
     }
   })
-  console.log(`✓ ${files.length} PDFs in docs/partner-training/pdf/`)
+  const cdir = join(OUT, 'contracts'); mkdirSync(cdir, { recursive: true })
+  for (const ct of CONTRACTS) {
+    for (const lang of ['en', 'hi']) {
+      const h = join(TMP, `${ct.kind}-${lang}.html`), pdf = join(cdir, `${ct.kind}-${CONTRACT_VERSION}-${lang}.pdf`)
+      writeFileSync(h, html(ct, 0, lang, true))
+      execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--no-pdf-header-footer', `--print-to-pdf=${pdf}`, `file://${h}`], { stdio: 'ignore' })
+      files.push({ kind: ct.kind, lang, pdf })
+    }
+  }
+  console.log(`✓ ${files.length} PDFs in docs/partner-training/pdf/ (modules + contracts/)`)
   return files
 }
 
@@ -79,7 +93,7 @@ async function loadSandbox(files) {
   if (!url.includes(SANDBOX_REF) || !dbUrl.includes(SANDBOX_REF)) throw new Error('Refusing: this is not the sandbox project.')
 
   for (const f of files) {
-    const path = `modules/${f.slug}-${f.lang}.pdf`
+    const path = f.kind ? `contracts/${f.kind}-${CONTRACT_VERSION}-${f.lang}.pdf` : `modules/${f.slug}-${f.lang}.pdf`
     const r = await fetch(`${url.replace(/\/$/, '')}/storage/v1/object/partner-content/${path}`, {
       method: 'POST', body: readFileSync(f.pdf),
       headers: { Authorization: `Bearer ${key}`, apikey: key, 'Content-Type': 'application/pdf', 'x-upsert': 'true' },
@@ -87,7 +101,7 @@ async function loadSandbox(files) {
     if (!r.ok) throw new Error(`Upload ${path} failed: ${r.status} ${await r.text()}`)
     f.path = path
   }
-  console.log(`✓ uploaded ${files.length} PDFs to partner-content/modules/`)
+  console.log(`✓ uploaded ${files.length} PDFs to partner-content/`)
 
   const c = new pg.Client({ connectionString: dbUrl }); await c.connect()
   try {
@@ -111,6 +125,17 @@ async function loadSandbox(files) {
       const { rows: [{ n }] } = await c.query('select count(*)::int n from care_partner_questions where module_id = $1 and is_active', [mod.id])
       if (n >= need) { await c.query('update care_partner_modules set is_published = true, updated_at = now() where id = $1', [mod.id]); published++ }
     }
+    for (const ct of CONTRACTS) {
+      const pe = files.find(f => f.kind === ct.kind && f.lang === 'en').path, ph = files.find(f => f.kind === ct.kind && f.lang === 'hi').path
+      const { rows: [row] } = await c.query(`insert into care_partner_contracts (kind, version, title_en, title_hi, pdf_path_en, pdf_path_hi, effective_from)
+        values ($1, $2, $3, $4, $5, $6, current_date)
+        on conflict (kind, version) do update set title_en = excluded.title_en, title_hi = excluded.title_hi,
+          pdf_path_en = excluded.pdf_path_en, pdf_path_hi = excluded.pdf_path_hi returning id`,
+        [ct.kind, CONTRACT_VERSION, ct.en.title, ct.hi.title, pe, ph])
+      await c.query('update care_partner_contracts set is_current = false where kind = $1 and id <> $2 and is_current', [ct.kind, row.id])
+      await c.query('update care_partner_contracts set is_current = true where id = $1', [row.id])
+    }
+    console.log(`✓ ${CONTRACTS.length} contracts (${CONTRACT_VERSION}) uploaded and made current`)
     await c.query('commit')
     console.log(`✓ ${added} questions added, ${published} of ${MODULES.length} modules published (need ${need} questions each)`)
   } catch (e) { await c.query('rollback'); throw e } finally { await c.end() }
