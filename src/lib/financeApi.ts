@@ -436,3 +436,60 @@ export async function payeeLinks(lenderId: string): Promise<PayeeLink[]> {
 export const LENDER_ACTION: Record<LenderCaseStatus, string> = {
   shared: 'New — review', offered: 'Offer made', sanctioned: 'Sanctioned — pay out', disbursed: 'Paid', declined: 'Declined', withdrawn: 'Withdrawn',
 }
+
+// ── Sehatsandhi admin (0329) — step 5 ───────────────────────────────────────
+
+export interface AdminLender extends LenderProfile {
+  business: { name: string; phone: string | null; email: string | null; status: string } | null
+}
+export interface AdminCase extends FinanceCase { hospital_name: string }
+export interface CommissionRow { lender_id: string; legal_name: string; commission_pct: number | null; loans: number; paid_value: number; commission: number }
+
+export async function adminLenders(): Promise<AdminLender[]> {
+  const { data, error } = await supabase.from('lender_profiles')
+    .select('*, business:businesses!lender_profiles_business_id_fkey(name, phone, email, status)').order('created_at', { ascending: false })
+  oops(error)
+  return (data ?? []) as AdminLender[]
+}
+
+export async function adminCreateLender(p: { name: string; phone: string; email: string; legalName: string; entityType: 'bank' | 'nbfc' }) {
+  const { data, error } = await supabase.rpc('sehat_admin_lender_create', {
+    p_name: p.name, p_phone: p.phone, p_email: p.email, p_legal_name: p.legalName, p_entity_type: p.entityType,
+  })
+  oops(error)
+  return data as string
+}
+
+export async function adminSetLender(lenderId: string, status: 'pending' | 'approved' | 'suspended', commissionPct?: number | null, lspOn?: string | null) {
+  const { error } = await supabase.rpc('sehat_admin_lender_set', {
+    p_lender: lenderId, p_status: status, p_commission_pct: commissionPct ?? null, p_lsp_agreement_on: lspOn || null,
+  })
+  oops(error)
+}
+
+export async function adminFinanceSwitch(on: boolean) {
+  const { error } = await supabase.rpc('sehat_admin_finance_switch', { p_on: on })
+  oops(error)
+  enabledP = Promise.resolve(on)
+}
+
+export async function adminCases(): Promise<AdminCase[]> {
+  const { data, error } = await supabase.from('finance_cases')
+    .select('*, hospital:businesses!finance_cases_business_id_fkey(name), lenders:finance_case_lenders(id, lender_id, status, shared_at, lender_ref, offer_amount, offer_tenure_months, offer_emi, decline_reason, disbursed_amount, disbursed_on, utr)')
+    .order('updated_at', { ascending: false }).limit(500)
+  oops(error)
+  const rows = (data ?? []) as (FinanceCase & { hospital: { name: string } | null })[]
+  const ids = [...new Set(rows.flatMap(c => (c.lenders ?? []).map(l => l.lender_id)))]
+  const names = new Map<string, string>()
+  if (ids.length) {
+    const { data: lp } = await supabase.from('lender_profiles').select('business_id, legal_name').in('business_id', ids)
+    for (const n of (lp ?? []) as { business_id: string; legal_name: string }[]) names.set(n.business_id, n.legal_name)
+  }
+  return rows.map(c => ({ ...c, hospital_name: c.hospital?.name ?? '—', lenders: (c.lenders ?? []).map(l => ({ ...l, lender_name: names.get(l.lender_id) ?? 'Lender' })) }))
+}
+
+export async function adminCommission(from: string, to: string): Promise<CommissionRow[]> {
+  const { data, error } = await supabase.rpc('sehat_admin_finance_commission', { p_from: from, p_to: to })
+  oops(error)
+  return (data ?? []) as CommissionRow[]
+}

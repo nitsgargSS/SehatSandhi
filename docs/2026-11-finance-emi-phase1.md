@@ -19,7 +19,15 @@ SANDBOX only. Left in step 3: automatic WhatsApp sends once Meta approves the te
 sanction, decline with reason, paid with amount/date/UTR (refused until payee approved and admission confirmed),
 approve hospital as payee (agreement date, no-cost EMI), Hospitals list, Profile (sent back for review if legal
 details change), Reports (shared, sanctioned, approval rate, paid value, commission). No migration. Tested on
-sandbox in a rolled-back transaction. Lender accounts are created by admin in step 5. No lender signed yet — build on staging/sandbox
+sandbox in a rolled-back transaction. Lender accounts are created by admin in step 5.
+22 Nov 2026 — step 5 (admin) built: Admin → EMI (`src/pages/admin/FinanceAdminPanel.tsx`, admins only): Overview
+(site switch with confirmation, counts, stuck 5+ days), Lenders (add a lender = business vertical 'lender' + draft
+profile, logs in by WhatsApp code; approve needs the LSP agreement date; commission %; suspend), Cases (all, stuck,
+search, history, CSV), Commission (per month per lender, CSV). Migration 0329 (sehat_admin_lender_create,
+sehat_admin_finance_switch, sehat_finance_expire_stale + daily cron 'finance-expiry', sehat_admin_finance_commission),
+SANDBOX only. Step 6 (finance payment on the bill) is already done by sehat_finance_case_received (step 1/2).
+Open: GST invoice to lenders from the commission figures (today: CSV), automatic WhatsApp sends (templates),
+step 7 end-to-end test on staging. No lender signed yet — build on staging/sandbox
 with a test lender; turn on in production only after the first real lender agreement.
 
 ## Goal
