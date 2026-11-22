@@ -285,3 +285,46 @@ export function parseCsv(text: string): Record<string, string>[] {
   const [head, ...rest] = rows
   return rest.map(r => Object.fromEntries((head ?? []).map((h, i) => [h.trim(), r[i] ?? ''])))
 }
+
+// ── Quizzes and the final exam (0332) ───────────────────────────────────────
+
+export interface QuizOption { id: string; text_en: string; text_hi: string }
+export interface QuizQuestion { id: string; qtype: 'single' | 'multi' | 'truefalse'; text_en: string; text_hi: string; options: QuizOption[] }
+export interface QuizAttempt { attempt_id: string; kind: 'module' | 'final'; module_id: string | null; expires_at: string; questions: QuizQuestion[] }
+export interface QuizResult {
+  passed: boolean; score_pct: number; correct: number; total: number; pass_mark: number; next_allowed_at: string | null; kind: string
+  review: { id: string; text_en: string; text_hi: string; options: QuizOption[]; correct: string[]; chosen: string[]; explain_en: string | null; explain_hi: string | null }[] | null
+  revise: { slug: string; title_en: string; title_hi: string }[] | null
+}
+export type QuizState = Record<string, { wait_until: string | null; open: boolean; passed?: boolean }>
+export interface AdminQuestion {
+  id: string; module_id: string | null; qtype: 'single' | 'multi' | 'truefalse'; text_en: string; text_hi: string
+  options: QuizOption[]; correct: string[]; explain_en: string | null; explain_hi: string | null; is_active: boolean
+}
+
+export async function quizStart(moduleId: string | null): Promise<QuizAttempt> {
+  const { data, error } = await supabase.rpc('sehat_care_quiz_start', { p_module: moduleId })
+  oops(error)
+  return data as QuizAttempt
+}
+export async function quizSubmit(attemptId: string, answers: Record<string, string[]>): Promise<QuizResult> {
+  const { data, error } = await supabase.rpc('sehat_care_quiz_submit', { p_attempt: attemptId, p_answers: answers })
+  oops(error)
+  return data as QuizResult
+}
+export async function quizState(): Promise<QuizState> {
+  const { data, error } = await supabase.rpc('sehat_care_quiz_state')
+  oops(error)
+  return (data ?? {}) as QuizState
+}
+export async function adminQuestions(): Promise<AdminQuestion[]> {
+  const { data, error } = await supabase.from('care_partner_questions').select('*').order('created_at')
+  oops(error)
+  return (data ?? []) as AdminQuestion[]
+}
+export async function adminSaveQuestion(q: Partial<AdminQuestion>) {
+  const { data, error } = await supabase.rpc('sehat_admin_care_question_save', { p: q })
+  oops(error)
+  return data as string
+}
+export const whenIST = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })

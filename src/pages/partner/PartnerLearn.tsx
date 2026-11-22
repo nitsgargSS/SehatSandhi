@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { CheckCircle2, Circle, Download, FileText, PlayCircle } from 'lucide-react'
 import PartnerShell, { usePartnerMe, useTx } from './PartnerShell'
 import {
-  careContracts, careFileUrl, careModules, careProgress, careSettings, careStep,
-  type CareContract, type CareModule, type CareProgress,
+  careContracts, careFileUrl, careModules, careProgress, careSettings, careStep, quizState, whenIST,
+  type CareContract, type CareModule, type CareProgress, type QuizState,
 } from '../../lib/careApi'
 
 // /partner/learn — the self-learning page (brief §4.2), Phase 1:
@@ -47,11 +48,13 @@ function Learn() {
   const [progress, setProgress] = useState<Record<string, CareProgress>>({})
   const [contracts, setContracts] = useState<CareContract[]>([])
   const [minSec, setMinSec] = useState(60)
+  const [qs, setQs] = useState<QuizState>({})
   const [err, setErr] = useState('')
 
   const load = useCallback(async () => {
     try {
-      const [m, p, c, s] = await Promise.all([careModules(), careProgress(), careContracts(), careSettings()])
+      const [m, p, c, s, q] = await Promise.all([careModules(), careProgress(), careContracts(), careSettings(), quizState()])
+      setQs(q)
       setModules(m.filter(x => x.is_published))
       setProgress(Object.fromEntries(p.map(x => [x.module_id, x])))
       setContracts(c.filter(x => x.is_current))
@@ -67,15 +70,17 @@ function Learn() {
 
   if (err) return <p className="text-red-600">{err}</p>
   if (!modules) return <p className="text-gray-400">{tx('Loading…', 'लोड हो रहा है…')}</p>
-  const done = modules.filter(m => progress[m.id]?.video_completed_at && progress[m.id]?.doc_read_at).length
+  const done = modules.filter(m => progress[m.id]?.quiz_passed_at).length
+  const allPassed = modules.length > 0 && done === modules.length
 
   return (<>
     <p className="text-sm text-gray-600">
-      {tx(`${done} of ${modules.length} modules done. Watch each video to the end and read each PDF. Quizzes open soon.`,
-          `${modules.length} में से ${done} मॉड्यूल पूरे। हर वीडियो अंत तक देखें और हर PDF पढ़ें। क्विज़ जल्द खुलेंगे।`)}
+      {tx(`${done} of ${modules.length} modules done. For each: watch the video to the end, read the PDF, then pass the short quiz.`,
+          `${modules.length} में से ${done} मॉड्यूल पूरे। हर मॉड्यूल में: वीडियो अंत तक देखें, PDF पढ़ें, फिर छोटा क्विज़ पास करें।`)}
     </p>
     {modules.length === 0 && <div className="card text-gray-600">{tx('The modules are being prepared. Please check back soon.', 'मॉड्यूल तैयार हो रहे हैं। कृपया जल्द फिर देखें।')}</div>}
-    {modules.map((m, i) => <ModuleCard key={m.id} m={m} n={i + 1} p={progress[m.id]} minSec={minSec} onStep={onStep} />)}
+    {modules.map((m, i) => <ModuleCard key={m.id} m={m} n={i + 1} p={progress[m.id]} q={qs[m.id]} minSec={minSec} onStep={onStep} />)}
+    {modules.length > 0 && <FinalCard ready={allPassed} q={qs.final} />}
 
     <div className="card" id="contracts">
       <h2 className="font-bold text-navy-700 mb-2">{tx('Contracts & policies', 'अनुबंध और नीतियाँ')}</h2>
@@ -86,7 +91,7 @@ function Learn() {
   </>)
 }
 
-function ModuleCard({ m, n, p, minSec, onStep }: { m: CareModule; n: number; p?: CareProgress; minSec: number; onStep: (p: CareProgress) => void }) {
+function ModuleCard({ m, n, p, q, minSec, onStep }: { m: CareModule; n: number; p?: CareProgress; q?: QuizState[string]; minSec: number; onStep: (p: CareProgress) => void }) {
   const { tx, lang } = useTx()
   const [err, setErr] = useState('')
   const videoDone = !!p?.video_completed_at, docDone = !!p?.doc_read_at
@@ -104,7 +109,7 @@ function ModuleCard({ m, n, p, minSec, onStep }: { m: CareModule; n: number; p?:
           <h2 className="font-bold text-navy-700 text-lg leading-snug">{tx(m.title_en, m.title_hi)}</h2>
           {(m.desc_en || m.desc_hi) && <p className="text-sm text-gray-600 mt-0.5">{tx(m.desc_en ?? '', m.desc_hi ?? '')}</p>}
         </div>
-        {videoDone && docDone && <CheckCircle2 className="w-7 h-7 text-teal-600 shrink-0" aria-label={tx('Done', 'पूरा')} />}
+        {p?.quiz_passed_at && <CheckCircle2 className="w-7 h-7 text-teal-600 shrink-0" aria-label={tx('Done', 'पूरा')} />}
       </div>
 
       <ul className="text-sm mt-3 space-y-1">
@@ -112,7 +117,13 @@ function ModuleCard({ m, n, p, minSec, onStep }: { m: CareModule; n: number; p?:
           {tx('Video watched', 'वीडियो देखा')}{!videoDone && p?.video_max_pct ? ` (${p.video_max_pct}%)` : ''}</li>
         <li className="flex items-center gap-2">{docDone ? <CheckCircle2 className="w-4 h-4 text-teal-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
           {tx('PDF read', 'PDF पढ़ा')}</li>
-        <li className="flex items-center gap-2 text-gray-400"><Circle className="w-4 h-4" /> {tx('Module quiz — opens soon', 'मॉड्यूल क्विज़ — जल्द खुलेगा')}</li>
+        <li className="flex items-center gap-2 flex-wrap">
+          {p?.quiz_passed_at ? <CheckCircle2 className="w-4 h-4 text-teal-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
+          {p?.quiz_passed_at ? tx('Quiz passed', 'क्विज़ पास')
+            : !(videoDone && docDone) ? <span className="text-gray-400">{tx('Quiz — opens after the video and PDF', 'क्विज़ — वीडियो और PDF के बाद खुलेगा')}</span>
+            : q?.wait_until ? <span className="text-amber-700">{tx(`Quiz — try again after ${whenIST(q.wait_until)}`, `क्विज़ — ${whenIST(q.wait_until)} के बाद फिर कोशिश करें`)}</span>
+            : <Link to={`/partner/quiz/${m.slug}`} className="btn-teal py-1.5 px-4 text-sm">{q?.open ? tx('Continue the quiz', 'क्विज़ जारी रखें') : tx('Take the quiz', 'क्विज़ दें')}</Link>}
+        </li>
       </ul>
 
       {ytId && <Video id={ytId} startPct={p?.video_max_pct ?? 0} onPct={pct => step('video', pct)} />}
@@ -207,6 +218,24 @@ function Pdf({ path, opened, read, minSec, onOpen, onRead }: {
         </button>
       )}
     </div>
+  )
+}
+
+function FinalCard({ ready, q }: { ready: boolean; q?: QuizState[string] }) {
+  const { tx } = useTx()
+  return (
+    <section className={`card ${ready && !q?.passed ? 'border-2 border-teal-500' : ''}`}>
+      <h2 className="font-bold text-navy-700 text-lg">{tx('Final exam', 'फ़ाइनल परीक्षा')}</h2>
+      <p className="text-sm text-gray-600 mt-1">
+        {q?.passed ? tx('Passed. The certification step opens soon.', 'पास। सर्टिफ़िकेशन का कदम जल्द खुलेगा।')
+          : !ready ? tx('Opens when every module quiz is passed.', 'हर मॉड्यूल का क्विज़ पास होने पर खुलेगी।')
+          : q?.wait_until ? tx(`You can try again after ${whenIST(q.wait_until)}.`, `आप ${whenIST(q.wait_until)} के बाद फिर कोशिश कर सकते हैं।`)
+          : tx('Questions from all the modules. Pass it to get certified.', 'सभी मॉड्यूल से सवाल। सर्टिफ़िकेट के लिए इसे पास करें।')}
+      </p>
+      {ready && !q?.passed && !q?.wait_until && (
+        <Link to="/partner/exam" className="btn-teal py-3 px-6 mt-3 inline-block">{q?.open ? tx('Continue the exam', 'परीक्षा जारी रखें') : tx('Take the final exam', 'फ़ाइनल परीक्षा दें')}</Link>
+      )}
+    </section>
   )
 }
 

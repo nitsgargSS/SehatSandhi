@@ -1,0 +1,156 @@
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { CheckCircle2, XCircle } from 'lucide-react'
+import PartnerShell, { usePartnerMe, useTx } from './PartnerShell'
+import { careModules, quizStart, quizSubmit, whenIST, type CareModule, type QuizAttempt, type QuizResult } from '../../lib/careApi'
+
+// /partner/quiz/:slug (a module's quiz) and /partner/exam (the final exam) —
+// brief §4.4, Phase 2. The questions come from the server with their options
+// already shuffled and no answers; grading happens there too. A started
+// attempt resumes if the page is reopened; walking away counts as a fail.
+
+export function PartnerModuleQuiz() {
+  const { slug } = useParams()
+  return (
+    <PartnerShell title="Module quiz" titleHi="मॉड्यूल क्विज़" needs="registered">
+      <QuizFor slug={slug ?? ''} />
+    </PartnerShell>
+  )
+}
+
+export function PartnerFinalExam() {
+  return (
+    <PartnerShell title="Final exam" titleHi="फ़ाइनल परीक्षा" needs="registered">
+      <QuizFor slug={null} />
+    </PartnerShell>
+  )
+}
+
+function QuizFor({ slug }: { slug: string | null }) {
+  const { tx } = useTx()
+  const { reload } = usePartnerMe()
+  const [mod, setMod] = useState<CareModule | null | undefined>(slug ? undefined : null)
+  const [attempt, setAttempt] = useState<QuizAttempt | null>(null)
+  const [answers, setAnswers] = useState<Record<string, string[]>>({})
+  const [result, setResult] = useState<QuizResult | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    if (slug) careModules().then(ms => setMod(ms.find(m => m.slug === slug && m.is_published) ?? null), () => setMod(null))
+  }, [slug])
+
+  const start = async () => {
+    setBusy(true); setErr('')
+    try { setAttempt(await quizStart(mod?.id ?? null)); setAnswers({}) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  const submit = async () => {
+    if (!attempt) return
+    setBusy(true); setErr('')
+    try { setResult(await quizSubmit(attempt.attempt_id, answers)); await reload() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  const pick = (qid: string, oid: string, multi: boolean) =>
+    setAnswers(a => ({ ...a, [qid]: multi ? (a[qid]?.includes(oid) ? a[qid].filter(x => x !== oid) : [...(a[qid] ?? []), oid]) : [oid] }))
+
+  if (slug && mod === undefined) return <p className="text-gray-400">{tx('Loading…', 'लोड हो रहा है…')}</p>
+  if (slug && !mod) return <p className="card text-gray-600">{tx('This quiz was not found.', 'यह क्विज़ नहीं मिला।')} <Link to="/partner/learn" className="text-teal-700 underline">{tx('Back to Learn', 'सीखें पर वापस')}</Link></p>
+
+  // ── Result ──
+  if (result) {
+    return (
+      <div className="space-y-3">
+        <div className={`card ${result.passed ? 'border-2 border-teal-500' : 'border-2 border-amber-400'}`}>
+          <p className="text-xl font-bold text-navy-700 flex items-center gap-2">
+            {result.passed ? <CheckCircle2 className="w-7 h-7 text-teal-600" /> : <XCircle className="w-7 h-7 text-amber-600" />}
+            {result.passed ? tx('Passed!', 'पास!') : tx('Not passed this time', 'इस बार पास नहीं हुए')}
+          </p>
+          <p className="text-gray-700 mt-1">{tx(`You scored ${result.correct} of ${result.total} (${Math.round(result.score_pct)}%). The pass mark is ${result.pass_mark}%.`,
+            `आपके ${result.total} में से ${result.correct} सही (${Math.round(result.score_pct)}%)। पास होने के लिए ${result.pass_mark}% चाहिए।`)}</p>
+          {!result.passed && result.next_allowed_at && (
+            <p className="text-gray-700 mt-1">{tx(`You can try again after ${whenIST(result.next_allowed_at)}. Use the time to watch the videos and read the PDFs again.`,
+              `आप ${whenIST(result.next_allowed_at)} के बाद फिर से कोशिश कर सकते हैं। तब तक वीडियो फिर देखें और PDF फिर पढ़ें।`)}</p>
+          )}
+          {result.passed && result.kind === 'final' && (
+            <p className="text-gray-700 mt-1">{tx('Congratulations. The certification step (fee, Partner ID and badge) opens soon.', 'बधाई हो। सर्टिफ़िकेशन का कदम (फ़ीस, Partner ID और बैज) जल्द खुलेगा।')}</p>
+          )}
+        </div>
+        {!result.passed && result.revise && result.revise.length > 0 && (
+          <div className="card">
+            <p className="font-semibold text-navy-700 mb-1">{tx('Revise these topics', 'इन विषयों को दोहराएँ')}</p>
+            <ul className="list-disc pl-5 text-gray-700">
+              {result.revise.map(t => <li key={t.slug}><Link to={`/partner/learn#${t.slug}`} className="text-teal-700 underline">{tx(t.title_en, t.title_hi)}</Link></li>)}
+            </ul>
+          </div>
+        )}
+        {result.passed && result.review?.map((q, i) => (
+          <div key={q.id} className="card text-[15px]">
+            <p className="font-semibold text-gray-800">{i + 1}. {tx(q.text_en, q.text_hi)}</p>
+            <ul className="mt-2 space-y-1">
+              {q.options.map(o => {
+                const right = q.correct.includes(o.id), chose = q.chosen.includes(o.id)
+                return <li key={o.id} className={`rounded-lg px-3 py-1.5 ${right ? 'bg-teal-50 text-teal-900' : chose ? 'bg-red-50 text-red-800' : 'text-gray-600'}`}>
+                  {right ? '✓ ' : chose ? '✗ ' : ''}{tx(o.text_en, o.text_hi)}</li>
+              })}
+            </ul>
+            {(q.explain_en || q.explain_hi) && <p className="text-sm text-gray-600 mt-2">{tx(q.explain_en ?? '', q.explain_hi ?? '')}</p>}
+          </div>
+        ))}
+        <Link to="/partner/learn" className="btn-teal py-3 px-6 w-fit">{tx('Back to Learn', 'सीखें पर वापस')}</Link>
+      </div>
+    )
+  }
+
+  // ── Before starting ──
+  if (!attempt) {
+    return (
+      <div className="card space-y-3">
+        {mod && <p className="font-semibold text-navy-700">{tx(mod.title_en, mod.title_hi)}</p>}
+        <ul className="list-disc pl-5 text-gray-700 text-[15px] space-y-1">
+          <li>{slug ? tx('A few questions from this module\'s video and PDF.', 'इस मॉड्यूल के वीडियो और PDF से कुछ सवाल।') : tx('Questions from all the modules.', 'सभी मॉड्यूल से सवाल।')}</li>
+          <li>{tx('Some questions have more than one right answer — they say so.', 'कुछ सवालों के एक से ज़्यादा सही जवाब होते हैं — उनमें लिखा होता है।')}</li>
+          <li>{tx('Once you start, finish within the time shown. Leaving it unfinished counts as not passed.', 'शुरू करने के बाद दिए गए समय में पूरा करें। अधूरा छोड़ने पर पास नहीं माना जाएगा।')}</li>
+        </ul>
+        {err && <p className="text-red-600">{err}</p>}
+        <div className="flex gap-3 flex-wrap">
+          <button disabled={busy} onClick={start} className="btn-teal py-3 px-6">{busy ? tx('Starting…', 'शुरू हो रहा है…') : slug ? tx('Start the quiz', 'क्विज़ शुरू करें') : tx('Start the exam', 'परीक्षा शुरू करें')}</button>
+          <Link to="/partner/learn" className="py-3 px-4 text-gray-600">{tx('Not now', 'अभी नहीं')}</Link>
+        </div>
+      </div>
+    )
+  }
+
+  // ── The questions ──
+  const answered = attempt.questions.filter(q => (answers[q.id] ?? []).length > 0).length
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-600">{tx(`Finish by ${whenIST(attempt.expires_at)}.`, `${whenIST(attempt.expires_at)} तक पूरा करें।`)}</p>
+      {attempt.questions.map((q, i) => {
+        const multi = q.qtype === 'multi'
+        return (
+          <fieldset key={q.id} className="card">
+            <legend className="sr-only">{i + 1}</legend>
+            <p className="font-semibold text-gray-800 text-[16px]">{i + 1}. {tx(q.text_en, q.text_hi)}</p>
+            {multi && <p className="text-xs text-teal-700 mt-0.5">{tx('Choose all that are right.', 'सभी सही जवाब चुनें।')}</p>}
+            <div className="mt-2 space-y-2">
+              {q.options.map(o => {
+                const on = (answers[q.id] ?? []).includes(o.id)
+                return (
+                  <label key={o.id} className={`flex items-center gap-3 rounded-xl border-2 px-3 min-h-[52px] cursor-pointer ${on ? 'border-teal-600 bg-teal-50' : 'border-gray-200 bg-white'}`}>
+                    <input type={multi ? 'checkbox' : 'radio'} name={q.id} checked={on} onChange={() => pick(q.id, o.id, multi)} className="w-5 h-5" />
+                    <span className="text-[15px]">{tx(o.text_en, o.text_hi)}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </fieldset>
+        )
+      })}
+      {err && <p className="text-red-600">{err}</p>}
+      <button disabled={busy || answered < attempt.questions.length} onClick={submit} className="btn-teal py-3 px-6 w-full disabled:opacity-50">
+        {answered < attempt.questions.length
+          ? tx(`Answer all questions (${answered}/${attempt.questions.length})`, `सभी सवालों के जवाब दें (${answered}/${attempt.questions.length})`)
+          : busy ? tx('Checking…', 'जाँच रहे हैं…') : tx('Submit', 'जमा करें')}
+      </button>
+    </div>
+  )
+}

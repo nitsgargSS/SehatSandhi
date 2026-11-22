@@ -11,7 +11,7 @@ import { CATEGORY_HI, careFaq, careFaqSynonyms, careSettings, faqHelpful, fillVa
 // synonyms. No phone number anywhere: the fallback is email.
 
 // Partner pages that exist so far; links to later ones (pay, dashboard, tickets, exam) stay hidden until built.
-const BUILT = ['/partner', '/partner/how-it-works', '/partner/login', '/partner/register', '/partner/learn', '/partner/help']
+const BUILT = ['/partner', '/partner/how-it-works', '/partner/login', '/partner/register', '/partner/learn', '/partner/help', '/partner/exam']
 
 const ORDER = ['Training & Quiz', 'Fee & ID', 'Rewards & Payouts', 'Doctors & Leads', 'Rules', 'Account & Support']
 

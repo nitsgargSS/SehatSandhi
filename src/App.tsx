@@ -41,6 +41,8 @@ const PartnerLogin = lazy(() => import('./pages/partner/PartnerPages').then(m =>
 const PartnerRegister = lazy(() => import('./pages/partner/PartnerPages').then(m => ({ default: m.PartnerRegister })))
 const PartnerLearn = lazy(() => import('./pages/partner/PartnerLearn'))
 const PartnerHelp = lazy(() => import('./pages/partner/PartnerHelp'))
+const PartnerModuleQuiz = lazy(() => import('./pages/partner/PartnerQuiz').then(m => ({ default: m.PartnerModuleQuiz })))
+const PartnerFinalExam = lazy(() => import('./pages/partner/PartnerQuiz').then(m => ({ default: m.PartnerFinalExam })))
 const LabFilePage = lazy(() => import('./pages/LabFilePage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 // 0282: a business's website, at /s/<slug> until <slug>.sehatsandhi.com is wired.
@@ -340,6 +342,8 @@ export default function App() {
           <Route path="/partner/register" element={<PartnerRegister />} />
           <Route path="/partner/learn" element={<PartnerLearn />} />
           <Route path="/partner/help" element={<PartnerHelp />} />
+          <Route path="/partner/quiz/:slug" element={<PartnerModuleQuiz />} />
+          <Route path="/partner/exam" element={<PartnerFinalExam />} />
           <Route path="/my/rate" element={<MyRate />} />
           <Route path="/my/book" element={<MyBook />} />
           <Route path="/camps" element={<CampsPage />} />

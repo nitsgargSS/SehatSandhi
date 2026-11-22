@@ -5,7 +5,13 @@ Phase 1 = migration 0331 (applied to SANDBOX only) + function partner-otp (not d
 /partner/how-it-works, /partner/login, /partner/register, /partner/learn, /partner/help + Admin → Care Partners
 (Partners, Modules, FAQ, Contracts, Settings). Tables are named care_partner_* (care_modules already exists: it is
 the clinic's OPD/IPD module list). For Phase 2's migration: revoke anon on care_partner* tables (anon gets 0 rows
-today, not an error), and change synonym 'paisa' from fee to payout.
+today, not an error), and change synonym 'paisa' from fee to payout. (Both done in 0332.)
+Phase 2 built 22 Nov: 0332 (sandbox only) — care_partner_questions (answer key readable by admins only), care_partner_attempts,
+sehat_care_quiz_start/submit/state, server grading, waits (48 h; 7 days after every 3rd fail), an attempt left open past
+60 min counts as a fail, module publish needs enough active questions, final pass → quiz_passed. Pages /partner/quiz/:slug,
+/partner/exam; Learn shows quiz state and the final exam; Admin → Care Partners → Questions (editor + CSV import,
+template docs/partner-quiz-questions-template.csv). For Phase 3's migration: in sehat_care_quiz_wait order the last attempt
+by started_at, not submitted_at (robustness; real use is already correct).
 Decisions (Nitin, 22 Nov): 1 fix online refunds — yes; 2 confirmed Care Partner credit approved automatically, admin can override; 3 new Care Partners tab for operations, money in Partners — OK; 6 active = paid term not ended — OK. Not answered yet: 4 (active field/agency partners — needed before Phase 4), 5 (production order vs EMI — default: partner migrations independent of 0330), 7 (who uploads videos/PDFs — CMS built either way). Brief: https://claude.ai/artifact/Wc4MJ5dGZBzQeATsbtyJKj
 (v2, consolidated; `Sehatsandhi_Partner_Program_Claude_Code_Brief.md` + `Sehatsandhi_Partner_FAQ_Seed.csv`).
 Built on staging / sandbox only, behind `site_settings` switch `partner_program_enabled` (off).

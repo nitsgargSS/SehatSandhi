@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   adminCarePartners, adminCarePartnerStatus, adminSaveModule, adminSaveFaq, adminSaveContract, adminSaveSettings,
   adminCareSettings, adminUploadPdf, careModules, careContracts, careFaq, careFileUrl, parseCsv, STATUS_LABEL,
-  type AdminPartnerRow, type CareModule, type CareFaq, type CareContract, type PartnerStatus,
+  adminQuestions, adminSaveQuestion,
+  type AdminPartnerRow, type CareModule, type CareFaq, type CareContract, type PartnerStatus, type AdminQuestion, type QuizOption,
 } from '../../lib/careApi'
 
 // Admin → Care Partners (0331, Phase 1): program operations. Money (rewards,
@@ -14,7 +15,7 @@ import {
 //   Settings   the program switch and every OPEN value of the brief
 // Admins only (owner/admin roles); every save is written to the staff action log.
 
-type View = 'partners' | 'modules' | 'faq' | 'contracts' | 'settings'
+type View = 'partners' | 'modules' | 'questions' | 'faq' | 'contracts' | 'settings'
 const day = (s: string) => new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
 export default function CarePartnersPanel() {
@@ -25,7 +26,7 @@ export default function CarePartnersPanel() {
         <h2 className="font-bold text-navy-700 text-lg">Care Partner Program</h2>
         <p className="text-sm text-gray-500">Partners learn, pass the exam, get a Partner ID and introduce businesses. Rewards and payouts are in the Partners tab.</p>
         <div className="flex gap-2 mt-3 overflow-x-auto">
-          {(['partners', 'modules', 'faq', 'contracts', 'settings'] as View[]).map(v => (
+          {(['partners', 'modules', 'questions', 'faq', 'contracts', 'settings'] as View[]).map(v => (
             <button key={v} onClick={() => setView(v)}
               className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap border capitalize ${view === v ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-200'}`}>
               {v === 'faq' ? 'FAQ' : v}
@@ -35,6 +36,7 @@ export default function CarePartnersPanel() {
       </div>
       {view === 'partners' && <Partners />}
       {view === 'modules' && <Modules />}
+      {view === 'questions' && <Questions />}
       {view === 'faq' && <Faq />}
       {view === 'contracts' && <Contracts />}
       {view === 'settings' && <Settings />}
@@ -182,6 +184,120 @@ function Modules() {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Quiz questions (0332) ───────────────────────────────────────────────────
+const LETTERS = ['a', 'b', 'c', 'd', 'e', 'f']
+const blankQ = (module_id: string | null): Partial<AdminQuestion> => ({ module_id, qtype: 'single', text_en: '', text_hi: '', is_active: true, correct: [],
+  options: LETTERS.slice(0, 4).map(id => ({ id, text_en: '', text_hi: '' })) })
+
+function Questions() {
+  const [mods, setMods] = useState<CareModule[]>([])
+  const [qs, setQs] = useState<AdminQuestion[] | null>(null)
+  const [edit, setEdit] = useState<Partial<AdminQuestion> | null>(null)
+  const { busy, run, notes } = useRun()
+  const load = useCallback(() => {
+    Promise.all([careModules(), adminQuestions()]).then(([m, q]) => { setMods(m); setQs(q) }, () => setQs([]))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const importCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file) return
+    await run('import', async () => {
+      const rows = parseCsv(await file.text())
+      if (!rows.length || !('text_en' in rows[0])) throw new Error('Needs columns module_slug, qtype, text_en, text_hi, a_en, a_hi, b_en, b_hi…, correct, explain_en, explain_hi.')
+      for (const [i, r] of rows.entries()) {
+        const mod = r.module_slug ? mods.find(m => m.slug === r.module_slug.trim()) : null
+        if (r.module_slug && !mod) throw new Error(`Row ${i + 2}: no module "${r.module_slug}".`)
+        const options = LETTERS.filter(l => (r[`${l}_en`] ?? '').trim()).map(l => ({ id: l, text_en: r[`${l}_en`].trim(), text_hi: (r[`${l}_hi`] ?? '').trim() }))
+        try {
+          await adminSaveQuestion({ module_id: mod?.id ?? null, qtype: (r.qtype || 'single').trim() as AdminQuestion['qtype'], text_en: r.text_en, text_hi: r.text_hi,
+            options, correct: (r.correct ?? '').split(/[|,; ]+/).map(x => x.trim().toLowerCase()).filter(Boolean), explain_en: r.explain_en, explain_hi: r.explain_hi, is_active: true })
+        } catch (e2) { throw new Error(`Row ${i + 2}: ${(e2 as Error).message}`) }
+      }
+      load()
+    }, 'Questions imported.')
+  }
+
+  const setOpt = (i: number, k: keyof QuizOption, v: string) => setEdit(x => ({ ...x, options: (x?.options ?? []).map((o, j) => j === i ? { ...o, [k]: v } : o) }))
+  const toggleCorrect = (id: string) => setEdit(x => {
+    const multi = x?.qtype === 'multi'
+    const cur = x?.correct ?? []
+    return { ...x, correct: multi ? (cur.includes(id) ? cur.filter(c => c !== id) : [...cur, id]) : [id] }
+  })
+  const setType = (t: AdminQuestion['qtype']) => setEdit(x => ({ ...x, qtype: t, correct: [],
+    options: t === 'truefalse' ? [{ id: 't', text_en: 'True', text_hi: 'सही' }, { id: 'f', text_en: 'False', text_hi: 'गलत' }]
+      : (x?.qtype === 'truefalse' ? LETTERS.slice(0, 4).map(id => ({ id, text_en: '', text_hi: '' })) : x?.options) }))
+
+  const groups: [string | null, string][] = [...mods.map(m => [m.id, `${m.sort_order}. ${m.title_en}`] as [string, string]), [null, 'Final exam only']]
+  return (
+    <div className="space-y-3">
+      <div className="card shadow-sm flex gap-3 flex-wrap items-center text-sm">
+        <button onClick={() => setEdit(blankQ(mods[0]?.id ?? null))} className="btn-teal text-sm py-2 px-4">Add a question</button>
+        <label className="text-teal-700 underline cursor-pointer">Import CSV<input type="file" accept=".csv,text/csv" className="hidden" disabled={busy === 'import'} onChange={importCsv} /></label>
+        <span className="text-xs text-gray-500">CSV columns: module_slug (empty = final only), qtype (single / multi / truefalse), text_en, text_hi, a_en, a_hi … f_en, f_hi, correct (e.g. a or a|c), explain_en, explain_hi. A module needs at least the quiz size in active questions before it can be published; about 3× is better.</span>
+      </div>
+      {notes}
+      {edit && (
+        <div className="card shadow-sm space-y-3 text-sm">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="text-xs text-gray-600">Module
+              <select className="input-field mt-1" value={edit.module_id ?? ''} onChange={e => setEdit(x => ({ ...x, module_id: e.target.value || null }))}>
+                {groups.map(([id, l]) => <option key={id ?? 'final'} value={id ?? ''}>{l}</option>)}
+              </select></label>
+            <label className="text-xs text-gray-600">Type
+              <select className="input-field mt-1" value={edit.qtype} onChange={e => setType(e.target.value as AdminQuestion['qtype'])}>
+                <option value="single">One right answer</option><option value="multi">More than one right answer</option><option value="truefalse">True / false</option>
+              </select></label>
+            <label className="text-xs text-gray-600 sm:col-span-2">Question (English)<textarea className="input-field mt-1" rows={2} value={edit.text_en ?? ''} onChange={e => setEdit(x => ({ ...x, text_en: e.target.value }))} /></label>
+            <label className="text-xs text-gray-600 sm:col-span-2">Question (Hindi)<textarea className="input-field mt-1" rows={2} value={edit.text_hi ?? ''} onChange={e => setEdit(x => ({ ...x, text_hi: e.target.value }))} /></label>
+          </div>
+          <div className="space-y-2">
+            <div className="text-xs text-gray-600">Options — tick the right one{edit.qtype === 'multi' ? 's' : ''}</div>
+            {(edit.options ?? []).map((o, i) => (
+              <div key={o.id} className="flex gap-2 items-center">
+                <input type={edit.qtype === 'multi' ? 'checkbox' : 'radio'} name="correct" checked={(edit.correct ?? []).includes(o.id)} onChange={() => toggleCorrect(o.id)} className="w-5 h-5" />
+                <span className="w-4 text-gray-500">{o.id}</span>
+                <input className="input-field flex-1" placeholder="English" value={o.text_en} disabled={edit.qtype === 'truefalse'} onChange={e => setOpt(i, 'text_en', e.target.value)} />
+                <input className="input-field flex-1" placeholder="Hindi" value={o.text_hi} disabled={edit.qtype === 'truefalse'} onChange={e => setOpt(i, 'text_hi', e.target.value)} />
+              </div>
+            ))}
+            {edit.qtype !== 'truefalse' && (
+              <div className="flex gap-3 text-xs">
+                {(edit.options?.length ?? 0) < 6 && <button className="text-teal-700 underline" onClick={() => setEdit(x => ({ ...x, options: [...(x?.options ?? []), { id: LETTERS[x?.options?.length ?? 0], text_en: '', text_hi: '' }] }))}>Add option</button>}
+                {(edit.options?.length ?? 0) > 2 && <button className="text-gray-500 underline" onClick={() => setEdit(x => { const opts = (x?.options ?? []).slice(0, -1); return { ...x, options: opts, correct: (x?.correct ?? []).filter(c => opts.some(o => o.id === c)) } })}>Remove last</button>}
+              </div>
+            )}
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="text-xs text-gray-600">Explanation (English, shown after a pass)<textarea className="input-field mt-1" rows={2} value={edit.explain_en ?? ''} onChange={e => setEdit(x => ({ ...x, explain_en: e.target.value }))} /></label>
+            <label className="text-xs text-gray-600">Explanation (Hindi)<textarea className="input-field mt-1" rows={2} value={edit.explain_hi ?? ''} onChange={e => setEdit(x => ({ ...x, explain_hi: e.target.value }))} /></label>
+          </div>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={edit.is_active !== false} onChange={e => setEdit(x => ({ ...x, is_active: e.target.checked }))} /> Active</label>
+          <div className="flex gap-2">
+            <button disabled={busy === 'save'} className="btn-teal text-sm py-2 px-4" onClick={() => run('save', async () => { await adminSaveQuestion(edit); setEdit(null); load() }, 'Question saved.')}>Save</button>
+            <button onClick={() => setEdit(null)} className="text-sm text-gray-600 px-2">Cancel</button>
+          </div>
+        </div>
+      )}
+      {qs === null ? <p className="text-sm text-gray-400">Loading…</p> : groups.map(([id, label]) => {
+        const list = qs.filter(q => q.module_id === id)
+        const active = list.filter(q => q.is_active).length
+        return (
+          <div key={id ?? 'final'} className="card shadow-sm text-sm">
+            <div className="font-semibold text-navy-700">{label} <span className="text-xs text-gray-500 font-normal">· {active} active</span></div>
+            {list.map(q => (
+              <div key={q.id} className="flex items-start justify-between gap-2 border-t border-gray-100 mt-2 pt-2">
+                <span className={q.is_active ? '' : 'text-gray-400'}>{q.text_en} <span className="text-xs text-gray-400">· {q.qtype} · answer {q.correct.join(', ')}</span></span>
+                <button onClick={() => setEdit(q)} className="text-teal-700 underline text-xs shrink-0">Edit</button>
+              </div>
+            ))}
+          </div>
+        )
+      })}
     </div>
   )
 }
