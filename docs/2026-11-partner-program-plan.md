@@ -11,7 +11,16 @@ sehat_care_quiz_start/submit/state, server grading, waits (48 h; 7 days after ev
 60 min counts as a fail, module publish needs enough active questions, final pass → quiz_passed. Pages /partner/quiz/:slug,
 /partner/exam; Learn shows quiz state and the final exam; Admin → Care Partners → Questions (editor + CSV import,
 template docs/partner-quiz-questions-template.csv). For Phase 3's migration: in sehat_care_quiz_wait order the last attempt
-by started_at, not submitted_at (robustness; real use is already correct).
+by started_at, not submitted_at (robustness; real use is already correct). (Done in 0333.)
+Phase 3 built 22 Nov: 0333 (sandbox only) — payments.type 'partner_fee' + care_partner_id; marketing_partners kind 'care';
+sehat_care_fee_prepare (₹ fee all-taxes-included, GST backed out, IGST across states) → function partner-fee-order →
+razorpay-verify/webhook → fulfilPayment (new partner_fee branch) → sehat_care_fee_paid: Partner ID SP-XXXXXX, the
+marketing_partners row, the fee invoice (same series, B2C, SAC setting partner_fee_sac 999293 — CHECK with CA), valid 12 months,
+receipt email. /verify/<ID> (public). care_partner_acceptances + sehat_care_accept (all current contracts, WhatsApp code) →
+active; a new current version asks again. Tickets (care_partner_tickets/_messages) for partner and admin.
+Pages: /partner/certify (+ /partner/pay), /partner/agreement, /partner/dashboard (badge PNG with QR), /partner/tickets,
+/verify/:code. Admin → Care Partners → Tickets. Deploy to sandbox: partner-otp, partner-fee-order, razorpay-verify,
+razorpay-webhook (fulfilment changed).
 Decisions (Nitin, 22 Nov): 1 fix online refunds — yes; 2 confirmed Care Partner credit approved automatically, admin can override; 3 new Care Partners tab for operations, money in Partners — OK; 6 active = paid term not ended — OK. Not answered yet: 4 (active field/agency partners — needed before Phase 4), 5 (production order vs EMI — default: partner migrations independent of 0330), 7 (who uploads videos/PDFs — CMS built either way). Brief: https://claude.ai/artifact/Wc4MJ5dGZBzQeATsbtyJKj
 (v2, consolidated; `Sehatsandhi_Partner_Program_Claude_Code_Brief.md` + `Sehatsandhi_Partner_FAQ_Seed.csv`).
 Built on staging / sandbox only, behind `site_settings` switch `partner_program_enabled` (off).

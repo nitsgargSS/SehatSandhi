@@ -928,6 +928,22 @@ tables:
   # Partners and their progress are user data. Modules, FAQ, synonyms and
   # contract versions are content edited in Admin → Care Partners, synced
   # prod -> sandbox like other reference data.
+  care_partner_ticket_messages:
+    class: isolated
+    purgeOrder: 129.21
+
+  care_partner_tickets:
+    class: isolated
+    purgeOrder: 129.22
+
+  care_partner_acceptances:
+    class: isolated
+    purgeOrder: 129.23
+
+  care_partner_attempts:
+    class: isolated
+    purgeOrder: 129.24
+
   care_partner_progress:
     class: isolated
     purgeOrder: 129.3
@@ -959,6 +975,12 @@ tables:
     class: sync
     key: [term, canonical]
     syncOrder: 940
+
+  # Questions have no natural key (an id); content edited in Admin → Care Partners → Questions.
+  care_partner_questions:
+    class: sync
+    key: [id]
+    syncOrder: 950
 
   # ── Infrastructure ──────────────────────────────────────────────────────
 

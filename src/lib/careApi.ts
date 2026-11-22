@@ -13,7 +13,9 @@ export interface NextStep { key: string; path: string; en: string; hi: string; d
 export interface CareMe {
   signed_in: boolean; phone?: string; registered?: boolean; program_enabled?: boolean
   partner?: { id: string; full_name: string; city: string; state: string; language: 'hi' | 'en'; status: PartnerStatus
-              status_reason: string | null; level: string; partner_code: string | null; created_at: string } | null
+              status_reason: string | null; level: string; partner_code: string | null; created_at: string
+              email?: string | null; certified_at?: string | null; valid_until?: string | null; agreement_signed_at?: string | null } | null
+  pending_contracts?: number
   next?: NextStep
 }
 export interface CareModule {
@@ -328,3 +330,74 @@ export async function adminSaveQuestion(q: Partial<AdminQuestion>) {
   return data as string
 }
 export const whenIST = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })
+
+// ── Certification, agreement, verify, tickets (0333) ────────────────────────
+
+export interface FeeOrder { orderId: string; amount: number; currency: string; keyId: string; paymentRowId: string; name: string; phone: string; email: string | null }
+export async function partnerFeeOrder(): Promise<FeeOrder> {
+  const { url, anon } = activeConfig()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Please sign in first.')
+  const r = await fetch(`${url}/functions/v1/partner-fee-order`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: anon, Authorization: `Bearer ${session.access_token}` },
+    body: '{}',
+  })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(j.error ?? 'Could not start the payment. Please try again.')
+  return j as FeeOrder
+}
+export async function myFeeInvoice(): Promise<{ invoice_number: string; invoice_token: string; total: number; date: string } | null> {
+  const { data } = await supabase.rpc('sehat_care_my_fee_invoice')
+  return (data ?? null) as { invoice_number: string; invoice_token: string; total: number; date: string } | null
+}
+export async function pendingContracts(): Promise<CareContract[]> {
+  const { data, error } = await supabase.rpc('sehat_care_pending_contracts')
+  oops(error)
+  return (data ?? []) as CareContract[]
+}
+export async function acceptContracts(code: string) {
+  const { data, error } = await supabase.rpc('sehat_care_accept', { p_code: code, p_user_agent: navigator.userAgent })
+  oops(error)
+  return data as { accepted: number; status: PartnerStatus }
+}
+export interface VerifiedPartner { partner_code: string; full_name: string; city: string; state: string; status: string; certified_at: string; valid_until: string }
+export async function verifyPartner(code: string): Promise<VerifiedPartner | null> {
+  const { data, error } = await supabase.rpc('sehat_care_verify', { p_code: code })
+  oops(error)
+  return (data ?? null) as VerifiedPartner | null
+}
+
+export type TicketCategory = 'training' | 'payment' | 'technical' | 'complaint' | 'other'
+export const TICKET_CATEGORY: Record<TicketCategory, { en: string; hi: string }> = {
+  training: { en: 'Training & quiz', hi: 'ट्रेनिंग और क्विज़' }, payment: { en: 'Payment', hi: 'भुगतान' },
+  technical: { en: 'Technical problem', hi: 'तकनीकी समस्या' }, complaint: { en: 'Complaint', hi: 'शिकायत' }, other: { en: 'Something else', hi: 'कुछ और' },
+}
+export interface CareTicket { id: string; ticket_no: string; category: TicketCategory; subject: string; status: 'open' | 'answered' | 'closed'; priority: string; created_at: string; updated_at: string }
+export interface TicketMessage { id: number; ticket_id: string; author: 'partner' | 'admin'; author_name: string | null; body: string; created_at: string }
+export interface AdminTicketRow extends CareTicket { partner_id: string; partner_name: string; partner_code: string | null; partner_phone: string; last_author: string; messages: number }
+
+export async function myTickets(): Promise<CareTicket[]> {
+  const { data, error } = await supabase.from('care_partner_tickets').select('*').order('updated_at', { ascending: false })
+  oops(error)
+  return (data ?? []) as CareTicket[]
+}
+export async function ticketMessages(ticketId: string): Promise<TicketMessage[]> {
+  const { data, error } = await supabase.from('care_partner_ticket_messages').select('*').eq('ticket_id', ticketId).order('created_at')
+  oops(error)
+  return (data ?? []) as TicketMessage[]
+}
+export async function createTicket(category: TicketCategory, subject: string, body: string) {
+  const { data, error } = await supabase.rpc('sehat_care_ticket_create', { p_category: category, p_subject: subject, p_body: body })
+  oops(error)
+  return data as string
+}
+export async function replyTicket(ticketId: string, body: string, close = false) {
+  const { error } = await supabase.rpc('sehat_care_ticket_reply', { p_ticket: ticketId, p_body: body, p_close: close })
+  oops(error)
+}
+export async function adminTickets(status?: string): Promise<AdminTicketRow[]> {
+  const { data, error } = await supabase.rpc('sehat_admin_care_tickets', { p_status: status || null })
+  oops(error)
+  return (data ?? []) as AdminTicketRow[]
+}

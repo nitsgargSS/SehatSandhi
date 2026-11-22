@@ -43,6 +43,11 @@ const PartnerLearn = lazy(() => import('./pages/partner/PartnerLearn'))
 const PartnerHelp = lazy(() => import('./pages/partner/PartnerHelp'))
 const PartnerModuleQuiz = lazy(() => import('./pages/partner/PartnerQuiz').then(m => ({ default: m.PartnerModuleQuiz })))
 const PartnerFinalExam = lazy(() => import('./pages/partner/PartnerQuiz').then(m => ({ default: m.PartnerFinalExam })))
+const PartnerCertify = lazy(() => import('./pages/partner/PartnerAccount').then(m => ({ default: m.PartnerCertify })))
+const PartnerAgreement = lazy(() => import('./pages/partner/PartnerAccount').then(m => ({ default: m.PartnerAgreement })))
+const PartnerDashboard = lazy(() => import('./pages/partner/PartnerAccount').then(m => ({ default: m.PartnerDashboard })))
+const PartnerTickets = lazy(() => import('./pages/partner/PartnerAccount').then(m => ({ default: m.PartnerTickets })))
+const VerifyPartnerPage = lazy(() => import('./pages/partner/PartnerAccount').then(m => ({ default: m.VerifyPartnerPage })))
 const LabFilePage = lazy(() => import('./pages/LabFilePage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 // 0282: a business's website, at /s/<slug> until <slug>.sehatsandhi.com is wired.
@@ -206,7 +211,7 @@ const WhatsAppFloat = () => {
   const { pathname } = useLocation()
   // A clinic's website (/s/…) books with that clinic, not Sehatsandhi's assistant.
   // /international has its own button, to the international coordinator's number.
-  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/') || pathname.startsWith('/business/print/') || pathname.startsWith('/international') || pathname.startsWith('/audit/') || pathname.startsWith('/partner')) return null
+  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/') || pathname.startsWith('/business/print/') || pathname.startsWith('/international') || pathname.startsWith('/audit/') || pathname.startsWith('/partner') || pathname.startsWith('/verify/')) return null
   return (
     <a href={waLink()}
        target="_blank" rel="noreferrer"
@@ -344,6 +349,12 @@ export default function App() {
           <Route path="/partner/help" element={<PartnerHelp />} />
           <Route path="/partner/quiz/:slug" element={<PartnerModuleQuiz />} />
           <Route path="/partner/exam" element={<PartnerFinalExam />} />
+          <Route path="/partner/certify" element={<PartnerCertify />} />
+          <Route path="/partner/pay" element={<PartnerCertify />} />
+          <Route path="/partner/agreement" element={<PartnerAgreement />} />
+          <Route path="/partner/dashboard" element={<PartnerDashboard />} />
+          <Route path="/partner/tickets" element={<PartnerTickets />} />
+          <Route path="/verify/:code" element={<VerifyPartnerPage />} />
           <Route path="/my/rate" element={<MyRate />} />
           <Route path="/my/book" element={<MyBook />} />
           <Route path="/camps" element={<CampsPage />} />

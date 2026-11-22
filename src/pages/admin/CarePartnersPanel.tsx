@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   adminCarePartners, adminCarePartnerStatus, adminSaveModule, adminSaveFaq, adminSaveContract, adminSaveSettings,
   adminCareSettings, adminUploadPdf, careModules, careContracts, careFaq, careFileUrl, parseCsv, STATUS_LABEL,
-  adminQuestions, adminSaveQuestion,
-  type AdminPartnerRow, type CareModule, type CareFaq, type CareContract, type PartnerStatus, type AdminQuestion, type QuizOption,
+  adminQuestions, adminSaveQuestion, adminTickets, ticketMessages, replyTicket, whenIST, TICKET_CATEGORY,
+  type AdminPartnerRow, type CareModule, type CareFaq, type CareContract, type PartnerStatus, type AdminQuestion, type QuizOption, type AdminTicketRow, type TicketMessage,
 } from '../../lib/careApi'
 
 // Admin → Care Partners (0331, Phase 1): program operations. Money (rewards,
@@ -15,7 +15,7 @@ import {
 //   Settings   the program switch and every OPEN value of the brief
 // Admins only (owner/admin roles); every save is written to the staff action log.
 
-type View = 'partners' | 'modules' | 'questions' | 'faq' | 'contracts' | 'settings'
+type View = 'partners' | 'tickets' | 'modules' | 'questions' | 'faq' | 'contracts' | 'settings'
 const day = (s: string) => new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
 export default function CarePartnersPanel() {
@@ -26,7 +26,7 @@ export default function CarePartnersPanel() {
         <h2 className="font-bold text-navy-700 text-lg">Care Partner Program</h2>
         <p className="text-sm text-gray-500">Partners learn, pass the exam, get a Partner ID and introduce businesses. Rewards and payouts are in the Partners tab.</p>
         <div className="flex gap-2 mt-3 overflow-x-auto">
-          {(['partners', 'modules', 'questions', 'faq', 'contracts', 'settings'] as View[]).map(v => (
+          {(['partners', 'tickets', 'modules', 'questions', 'faq', 'contracts', 'settings'] as View[]).map(v => (
             <button key={v} onClick={() => setView(v)}
               className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap border capitalize ${view === v ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-200'}`}>
               {v === 'faq' ? 'FAQ' : v}
@@ -35,6 +35,7 @@ export default function CarePartnersPanel() {
         </div>
       </div>
       {view === 'partners' && <Partners />}
+      {view === 'tickets' && <Tickets />}
       {view === 'modules' && <Modules />}
       {view === 'questions' && <Questions />}
       {view === 'faq' && <Faq />}
@@ -109,6 +110,63 @@ function Partners() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Tickets (0333) ──────────────────────────────────────────────────────────
+function Tickets() {
+  const [status, setStatus] = useState('open')
+  const [rows, setRows] = useState<AdminTicketRow[] | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [sla, setSla] = useState(48)
+  const load = useCallback(() => { adminTickets(status === 'all' ? '' : status).then(setRows, () => setRows([])) }, [status])
+  useEffect(() => { load(); adminCareSettings().then(s => setSla(Number(s.ticket_sla_hours) || 48)) }, [load])
+  const late = (r: AdminTicketRow) => r.status !== 'closed' && r.last_author === 'partner' && Date.now() - new Date(r.updated_at).getTime() > sla * 3600_000
+  return (
+    <div className="space-y-3">
+      <div className="card shadow-sm flex gap-2 flex-wrap items-center">
+        {['open', 'answered', 'closed', 'all'].map(s => (
+          <button key={s} onClick={() => setStatus(s)} className={`px-3 py-1.5 rounded-full text-sm border capitalize ${status === s ? 'bg-navy-700 text-white border-navy-700' : 'bg-white text-gray-600 border-gray-200'}`}>{s}</button>
+        ))}
+        <span className="text-xs text-gray-500">Reply target {sla} h · red = waiting longer</span>
+      </div>
+      {rows === null ? <p className="text-sm text-gray-400">Loading…</p> : rows.length === 0 ? <p className="text-sm text-gray-500">No tickets.</p> : rows.map(r => (
+        <div key={r.id} className={`card shadow-sm text-sm ${late(r) ? 'border border-red-300' : ''}`}>
+          <button onClick={() => setOpenId(openId === r.id ? null : r.id)} className="w-full text-left">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="font-semibold text-navy-700">{r.subject}</span>
+              <span className="text-xs">{r.priority === 'high' && <span className="text-red-700 font-semibold mr-2">HIGH</span>}{r.status}{r.last_author === 'partner' && r.status !== 'closed' ? ' · waiting for us' : ''}</span>
+            </div>
+            <div className="text-xs text-gray-500">{r.ticket_no} · {TICKET_CATEGORY[r.category as keyof typeof TICKET_CATEGORY]?.en ?? r.category} · {r.partner_name}{r.partner_code ? ` (${r.partner_code})` : ''} · +{r.partner_phone} · {whenIST(r.updated_at)} · {r.messages} message{r.messages === 1 ? '' : 's'}</div>
+          </button>
+          {openId === r.id && <AdminThread t={r} onChanged={load} />}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AdminThread({ t, onChanged }: { t: AdminTicketRow; onChanged: () => void }) {
+  const [msgs, setMsgs] = useState<TicketMessage[] | null>(null)
+  const [reply, setReply] = useState('')
+  const { busy, run, notes } = useRun()
+  useEffect(() => { ticketMessages(t.id).then(setMsgs, () => setMsgs([])) }, [t.id])
+  return (
+    <div className="mt-3 space-y-2">
+      {msgs?.map(m => (
+        <div key={m.id} className={`rounded-lg p-2.5 whitespace-pre-line ${m.author === 'admin' ? 'bg-teal-50' : 'bg-gray-50'}`}>
+          <div className="text-xs text-gray-500 mb-0.5">{m.author === 'admin' ? 'Sehatsandhi' : m.author_name} · {whenIST(m.created_at)}</div>{m.body}
+        </div>
+      ))}
+      {notes}
+      <textarea className="input-field" rows={3} placeholder="Reply (the partner sees it on their Tickets page)" value={reply} onChange={e => setReply(e.target.value)} />
+      <div className="flex gap-2 flex-wrap">
+        <button disabled={busy === 'r' || !reply.trim()} className="btn-teal text-sm py-2 px-4 disabled:opacity-50"
+          onClick={() => run('r', async () => { await replyTicket(t.id, reply); setReply(''); setMsgs(await ticketMessages(t.id)); onChanged() }, 'Reply sent.')}>Reply</button>
+        <button disabled={busy === 'c'} className="text-sm py-2 px-4 rounded-lg border border-gray-200"
+          onClick={() => run('c', async () => { await replyTicket(t.id, reply, true); setReply(''); onChanged() }, 'Closed.')}>{reply.trim() ? 'Reply and close' : 'Close'}</button>
+      </div>
     </div>
   )
 }

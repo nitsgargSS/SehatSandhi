@@ -78,6 +78,30 @@ export async function fulfilPayment(
     }
   }
 
+  // 0333: a Care Partner's certification fee. No listing: issue the Partner ID,
+  // its money-system row and the fee invoice (sehat_care_fee_paid is idempotent),
+  // send the receipt once, and stop.
+  if (pay.type === 'partner_fee') {
+    const { data: done, error: fErr } = await supabase.rpc('sehat_care_fee_paid', { p_payment: pay.id })
+    const r = done as { partner_code?: string; already?: boolean; invoice_number?: string; invoice_token?: string; email?: string | null; name?: string } | null
+    if (!fErr && r && !r.already && r.email) {
+      const site = (Deno.env.get('SITE_URL') ?? 'https://www.sehatsandhi.com').replace(/\/$/, '')
+      await sendEmail({
+        to: r.email, toName: r.name, subject: `Your Sehatsandhi Partner ID ${r.partner_code}`,
+        html: layout('Welcome, Care Partner', `<p>Namaste ${esc(r.name ?? '')},</p>
+<p>Your certification fee is received. Your Partner ID is <b>${esc(r.partner_code ?? '')}</b>.</p>
+<p>Next: read and accept the Partner Agreement to activate it: <a href="${site}/partner/agreement">${site}/partner/agreement</a></p>
+${r.invoice_token ? `<p>Your tax invoice ${esc(r.invoice_number ?? '')}: <a href="${site}/invoice/${r.invoice_token}">${site}/invoice/${r.invoice_token}</a></p>` : ''}
+<p>आपकी सर्टिफ़िकेशन फ़ीस मिल गई है। आपका Partner ID <b>${esc(r.partner_code ?? '')}</b> है। इसे चालू करने के लिए पार्टनर एग्रीमेंट पढ़कर स्वीकार करें।</p>`),
+      }).catch(() => undefined)
+    }
+    return {
+      ok: !fErr, alreadyPaid, businessId: null,
+      invoiceNumber: r?.invoice_number ?? null, invoiceToken: r?.invoice_token ?? null, invoiceError: null,
+      ...(fErr ? { error: `partner fee: ${fErr.message}` } : {}),
+    }
+  }
+
   // A wallet top-up buys credit, not a listing: no plan lock, no listing
   // invoice. Credit it — once, however many times this runs — and stop.
   if (pay.type === 'wallet_topup') {
