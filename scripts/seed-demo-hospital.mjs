@@ -537,7 +537,7 @@ async function dischargeDone(who, label, spec, reason, dx, days, procedure, find
 await dischargeDone('Anita Bhatia', 'P-103', 'SURG', 'Recurrent pain in right upper abdomen', 'Symptomatic cholelithiasis', 4,
   'Laparoscopic cholecystectomy', 'Multiple gall stones, thick-walled gall bladder.', 'major', 'general', 'upi')
 await dischargeDone('Rekha Rani', 'M-1', 'GYN', 'Labour pains at term', 'Term pregnancy, previous LSCS', 3,
-  'Lower segment caesarean section (LSCS)', 'Live male baby, 3.1 kg, cried at birth.', 'major', 'spinal', 'insurance')
+  'Lower segment caesarean section (LSCS)', 'Live male baby, 3.1 kg, cried at birth.', 'major', 'spinal', 'card')   // not 'insurance': switched off since 2 Nov 2026
 log('IPD: 5 admitted (2 operated), 2 discharged with surgery, summary and paid bill')
 
 // ── 11. Lab orders ──────────────────────────────────────────────────────────

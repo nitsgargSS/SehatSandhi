@@ -22,6 +22,13 @@ import pg from 'pg'
 import dotenv from 'dotenv'
 import { MODULES, VERSION } from '../docs/partner-training/content.mjs'
 import { CONTRACTS, CONTRACT_VERSION, CONTRACT_DATE } from '../docs/partner-training/contracts.mjs'
+import { PRODUCT_MODULES, PRODUCT_VERSION } from '../docs/partner-training/product.mjs'
+
+// Course order: Module 1, the product track (replaces 'product-demo'), then the rest.
+const COURSE = ['what-is-sehatsandhi', ...PRODUCT_MODULES.map(m => m.slug),
+  'plans-and-rewards', 'approaching-a-doctor', 'dos-and-donts', 'using-the-partner-app', 'payments-and-tax',
+  'ethics-and-privacy', 'communication-rules', 'code-of-conduct']
+const SHOTS = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs/partner-training/shots')
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(ROOT, 'docs/partner-training/pdf')
@@ -35,9 +42,11 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 function html(mod, n, lang, contract = false) {
   const t = mod[lang]
   const hi = lang === 'hi'
+  const item = (i) => typeof i === 'string' ? `<li>${esc(i)}</li>`
+    : `</ul><figure class="${i.phone ? 'phone' : ''}"><img src="file://${SHOTS}/${i.img}.png"><figcaption>${esc(i.cap)}</figcaption></figure><ul>`
   const sections = t.sections.map(([h, items]) => `
     <h2>${esc(h)}</h2>
-    ${items.length === 1 ? `<p>${esc(items[0])}</p>` : `<ul>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`}`).join('')
+    ${items.length === 1 && typeof items[0] === 'string' ? `<p>${esc(items[0])}</p>` : `<ul>${items.map(item).join('')}</ul>`}`).join('')
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>${esc(t.title)}</title>
 <style>
   @page { size: A4; margin: 18mm 16mm 20mm; }
@@ -48,11 +57,16 @@ function html(mod, n, lang, contract = false) {
   .sub { color: #64748b; font-size: 9.5pt; margin-bottom: 16px; }
   h2 { font-size: 13pt; color: #0f766e; margin: 18px 0 6px; }
   ul { margin: 0; padding-left: 20px; } li { margin: 3px 0; } p { margin: 0; }
+  figure { margin: 10px 0 14px; padding: 0; break-inside: avoid; text-align: center; }
+  figure img { max-width: 100%; max-height: 120mm; border: 1px solid #d9e2ec; border-radius: 6px; }
+  figure.phone img { max-width: 62mm; max-height: 130mm; }
+  figcaption { font-size: 9.5pt; color: #475569; margin-top: 4px; }
+  ul:empty { display: none; }
   .foot { margin-top: 26px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 8.5pt; color: #64748b; }
 </style></head><body>
-  <div class="top"><span>Sehatsandhi · ${hi ? 'केयर पार्टनर प्रोग्राम' : 'Care Partner Program'}</span><span>${contract ? (hi ? 'ड्राफ़्ट — वकील की समीक्षा बाकी' : 'DRAFT — for legal review') : `${hi ? 'मॉड्यूल' : 'Module'} ${n}`}</span></div>
+  <div class="top"><span>Sehatsandhi · ${hi ? 'केयर पार्टनर प्रोग्राम' : 'Care Partner Program'}</span><span>${contract ? (hi ? 'ड्राफ़्ट — वकील की समीक्षा बाकी' : 'DRAFT — for legal review') : `${hi ? 'मॉड्यूल' : 'Module'} ${n}${mod.product ? ' · Product' : ''}`}</span></div>
   <h1>${esc(t.title)}</h1>
-  <div class="sub">${contract ? `${hi ? 'संस्करण' : 'Version'} ${esc(CONTRACT_VERSION)} · ${esc(CONTRACT_DATE)}` : `${hi ? 'पढ़ने की सामग्री' : 'Reading'} · ${esc(VERSION)}`}</div>
+  <div class="sub">${contract ? `${hi ? 'संस्करण' : 'Version'} ${esc(CONTRACT_VERSION)} · ${esc(CONTRACT_DATE)}` : `${hi ? 'पढ़ने की सामग्री' : 'Reading'} · ${esc(mod.product ? PRODUCT_VERSION : VERSION)}${mod.product ? ' · screenshots from a demo hospital with made-up patients' : ''}`}</div>
   ${sections}
   <div class="foot">${contract ? (hi
     ? 'यह अंग्रेज़ी दस्तावेज़ का हिंदी अनुवाद है; अंतर होने पर अंग्रेज़ी मान्य होगी। NG Technologies (सेहतसंधि), जगाधरी, हरियाणा।'
@@ -66,14 +80,21 @@ function buildPdfs() {
   if (!existsSync(CHROME)) throw new Error('Google Chrome not found at ' + CHROME)
   mkdirSync(OUT, { recursive: true }); mkdirSync(TMP, { recursive: true })
   const files = []
-  MODULES.forEach((m, i) => {
+  MODULES.filter(m => COURSE.includes(m.slug)).forEach((m, i) => {
     for (const lang of ['en', 'hi']) {
       const h = join(TMP, `${m.slug}-${lang}.html`), pdf = join(OUT, `${m.slug}-${lang}.pdf`)
-      writeFileSync(h, html(m, i + 1, lang))
+      writeFileSync(h, html(m, COURSE.indexOf(m.slug) + 1, lang))
       execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--no-pdf-header-footer', `--print-to-pdf=${pdf}`, `file://${h}`], { stdio: 'ignore' })
       files.push({ slug: m.slug, lang, pdf })
     }
   })
+  for (const pm of PRODUCT_MODULES) {
+    const mod = { product: true, en: { title: pm.title_en, sections: pm.sections } }
+    const h = join(TMP, `${pm.slug}-en.html`), pdf = join(OUT, `${pm.slug}-en.pdf`)
+    writeFileSync(h, html(mod, COURSE.indexOf(pm.slug) + 1, 'en'))
+    execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--no-pdf-header-footer', '--allow-file-access-from-files', `--print-to-pdf=${pdf}`, `file://${h}`], { stdio: 'ignore' })
+    files.push({ slug: pm.slug, lang: 'en', pdf, product: true })
+  }
   const cdir = join(OUT, 'contracts'); mkdirSync(cdir, { recursive: true })
   for (const ct of CONTRACTS) {
     for (const lang of ['en', 'hi']) {
@@ -108,7 +129,7 @@ async function loadSandbox(files) {
     await c.query('begin')
     const need = Number((await c.query("select value from site_settings where key = 'partner_module_questions'")).rows[0]?.value ?? 5)
     let added = 0, published = 0
-    for (const m of MODULES) {
+    for (const m of MODULES.filter(x => COURSE.includes(x.slug))) {
       const en = files.find(f => f.slug === m.slug && f.lang === 'en').path, hi = files.find(f => f.slug === m.slug && f.lang === 'hi').path
       const { rows: [mod] } = await c.query('update care_partner_modules set pdf_path_en = $2, pdf_path_hi = $3, updated_at = now() where slug = $1 returning id', [m.slug, en, hi])
       if (!mod) throw new Error(`No module with slug ${m.slug} in sandbox`)
@@ -131,6 +152,34 @@ async function loadSandbox(files) {
       const { rows: [{ n }] } = await c.query('select count(*)::int n from care_partner_questions where module_id = $1 and is_active', [mod.id])
       if (n >= need) { await c.query('update care_partner_modules set is_published = true, updated_at = now() where id = $1', [mod.id]); published++ }
     }
+    // Product track: create/update the modules, their English PDF and questions (Hindi follows after review).
+    for (const pm of PRODUCT_MODULES) {
+      const en = files.find(f => f.slug === pm.slug && f.lang === 'en').path
+      const { rows: [mod] } = await c.query(`insert into care_partner_modules (slug, sort_order, title_en, title_hi, pdf_path_en, est_minutes, is_published)
+          values ($1, $2, $3, $4, $5, 15, false)
+        on conflict (slug) do update set title_en = excluded.title_en, title_hi = excluded.title_hi, pdf_path_en = excluded.pdf_path_en, updated_at = now()
+        returning id`, [pm.slug, (COURSE.indexOf(pm.slug) + 1) * 10, pm.title_en, pm.title_hi, en])
+      for (const [type, qEn, opts, correct, xEn] of pm.questions) {
+        const options = type === 'truefalse'
+          ? [{ id: 't', text_en: 'True', text_hi: 'सही' }, { id: 'f', text_en: 'False', text_hi: 'गलत' }]
+          : opts[0].map((o, i) => ({ id: 'abcdef'[i], text_en: o, text_hi: o }))
+        const r = await c.query(`insert into care_partner_questions (module_id, qtype, text_en, text_hi, options, correct, explain_en, explain_hi)
+          select $1, $2, $3, $3, $4::jsonb, $5::jsonb, $6, $6
+           where not exists (select 1 from care_partner_questions where module_id = $1 and text_en = $3)`,
+          [mod.id, type, qEn, JSON.stringify(options), JSON.stringify(correct), xEn])
+        added += r.rowCount
+        if (!r.rowCount) await c.query(`update care_partner_questions set qtype = $2, options = $4::jsonb, correct = $5::jsonb, explain_en = $6
+            where module_id = $1 and text_en = $3`, [mod.id, type, qEn, JSON.stringify(options), JSON.stringify(correct), xEn])
+      }
+      await c.query('update care_partner_questions set is_active = false where module_id = $1 and is_active and not (text_en = any($2::text[]))',
+        [mod.id, pm.questions.map(q => q[1])])
+      const { rows: [{ n }] } = await c.query('select count(*)::int n from care_partner_questions where module_id = $1 and is_active', [mod.id])
+      if (n >= need) { await c.query('update care_partner_modules set is_published = true, updated_at = now() where id = $1', [mod.id]); published++ }
+    }
+    for (const [i, slug] of COURSE.entries()) await c.query('update care_partner_modules set sort_order = $2 where slug = $1', [slug, (i + 1) * 10])
+    await c.query("update care_partner_modules set is_published = false, sort_order = 999, updated_at = now() where slug = 'product-demo'")
+    console.log(`✓ product track: ${PRODUCT_MODULES.length} modules; 'product-demo' unpublished; course order set`)
+
     for (const ct of CONTRACTS) {
       const pe = files.find(f => f.kind === ct.kind && f.lang === 'en').path, ph = files.find(f => f.kind === ct.kind && f.lang === 'hi').path
       const { rows: [row] } = await c.query(`insert into care_partner_contracts (kind, version, title_en, title_hi, pdf_path_en, pdf_path_hi, effective_from)
@@ -143,7 +192,7 @@ async function loadSandbox(files) {
     }
     console.log(`✓ ${CONTRACTS.length} contracts (${CONTRACT_VERSION}) uploaded and made current`)
     await c.query('commit')
-    console.log(`✓ ${added} questions added, ${published} of ${MODULES.length} modules published (need ${need} questions each)`)
+    console.log(`✓ ${added} questions added, ${published} modules published (each needs ${need} active questions)`)
   } catch (e) { await c.query('rollback'); throw e } finally { await c.end() }
 }
 

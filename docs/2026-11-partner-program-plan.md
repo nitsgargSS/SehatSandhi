@@ -114,3 +114,12 @@ New Edge Functions: `partner-otp`, `partner-fee-order` (verification reuses `raz
 5. Production order: will EMI (0326–0330) go to production before the Partner Program? If not sure, I keep the partner migrations independent of 0330 (the fee invoice then uses the existing invoice columns only).
 6. Level "active businesses" = businesses with a paid term that has not ended. OK?
 7. Videos: hosted on a Sehatsandhi YouTube channel as unlisted videos? Who uploads them and the PDFs (admin CMS is built either way)?
+
+
+Product track (22 Nov 2026, Nitin: 'reading material is too small … module training on how the system works'):
+docs/partner-training/product.mjs — 11 English modules with screenshots replacing 'product-demo' (unpublished, sort 999):
+WhatsApp booking, reviews & ranking, patient app & website, patient journey, OPD, billing, IPD, labs, pharmacy,
+plans & team & add-ons, international. Written from code (docs/partner-training/research/). Screenshots from staging:
+scripts/training-shots.mjs signs in as the owner of the sandbox demo 'Sehatsandhi Training Hospital' (made by
+seed-demo-hospital.mjs --create … --phone 9000000077 --range 3; login in .env.supabase TRAINING_DEMO_*).
+Hindi after Nitin's review (product questions carry English in text_hi until then).
