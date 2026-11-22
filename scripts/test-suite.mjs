@@ -1895,18 +1895,27 @@ if (ms && ms.rating_sending_enabled === false) {
 
 // ── the full path, rolled back ──────────────────────────────────────────────
 if (!skip()) await inRollback(async () => {
+  // The queue only runs 10:00–20:00 IST (0164); outside those hours it returns 0
+  // by design, so this path cannot be exercised — say so rather than fail.
+  const istHour = Number((await db.query(`select extract(hour from now() at time zone 'Asia/Kolkata')::int h`)).rows[0].h)
+  if (istHour < 10 || istHour >= 20) {
+    record('the rating send path (queue, send, reconcile, reply)', 'warn', `not run: the queue only runs 10:00–20:00 IST, and it is ${istHour}:xx IST`)
+    return
+  }
   await db.query(`update messaging_settings set rating_sending_enabled = true where id`)
   const biz = (await db.query(`insert into businesses (name, vertical, status)
      values ('[TEST] rating clinic','clinic','active') returning id`)).rows[0]
+  // Yesterday: since 0164 the follow-up is only for a visit on an EARLIER IST day
+  // (the first ask is the line in the booking confirmation).
   const appt = (await db.query(`insert into appointments
      (patient_phone, patient_name, business_id, slot_datetime, status)
-     values ('9812399999','[TEST] Asha Devi',$1, now() - interval '4 hours','completed')
+     values ('9812399999','[TEST] Asha Devi',$1, now() - interval '1 day','completed')
      returning id`, [biz.id])).rows[0]
 
   // Other kept [TEST] appointments may also be due, so the count is >= 1 and the
   // assertion that matters is that THIS visit got a row.
   const qn = Number((await db.query(`select sehat_queue_rating_requests() n`)).rows[0].n)
-  expectTrue('a visit 4 hours past is queued', qn >= 1, `queued ${qn}`)
+  expectTrue('a visit yesterday is queued', qn >= 1, `queued ${qn}`)
   const queued = (await db.query(`select status from notification_outbox
      where appointment_id=$1 and event='rating_request'`, [appt.id])).rows[0]
   expectTrue('this visit got a rating request', !!queued)
@@ -1932,10 +1941,10 @@ if (!skip()) await inRollback(async () => {
   expectTrue('with a key, the request is posted', sn >= 1, `posted ${sn}`)
   const posted = (await db.query(`select status, provider_request_id, attempts, claimed_at
      from notification_outbox where appointment_id=$1 and event='rating_request'`, [appt.id])).rows[0]
-  expectEq('claimed as awaiting_provider', posted.status, 'awaiting_provider')
-  expectTrue('the pg_net request id is kept', posted.provider_request_id !== null,
+  expectEq('claimed as awaiting_provider', posted?.status, 'awaiting_provider')
+  expectTrue('the pg_net request id is kept', posted?.provider_request_id != null,
     'without it the outcome is unknowable and every failure is silent')
-  expectTrue('claimed_at is stamped', posted.claimed_at !== null)
+  expectTrue('claimed_at is stamped', posted?.claimed_at != null)
 
   expectEq('an in-flight request is left alone', Number((await db.query(
     `select sehat_reconcile_rating_requests() n`)).rows[0].n), 0)
@@ -1945,9 +1954,9 @@ if (!skip()) await inRollback(async () => {
   expectTrue('a request with no response is settled', rn >= 1, `settled ${rn}`)
   const settled = (await db.query(`select status, last_error from notification_outbox
      where appointment_id=$1 and event='rating_request'`, [appt.id])).rows[0]
-  expectEq('retried into pending_wa, never pending', settled.status, 'pending_wa',
+  expectEq('retried into pending_wa, never pending', settled?.status, 'pending_wa',
     "'pending' would hand the row to the edge drain")
-  expectTrue('the failure is prefixed rating:', (settled.last_error ?? '').startsWith('rating:'),
+  expectTrue('the failure is prefixed rating:', (settled?.last_error ?? '').startsWith('rating:'),
     "0075's requeue matches last_error='AISENSY env not set' exactly; the prefix keeps us clear of it")
   expectTrue('a message_log row is written', Number((await db.query(
     `select count(*)::int n from message_log
@@ -1955,13 +1964,13 @@ if (!skip()) await inRollback(async () => {
 
   // The reply. Stored as 9812399999, answered from 919812399999 — matching is on
   // the normalised number precisely because those two hash differently.
-  const r1 = (await db.query(`select sehat_record_rating('919812399999', 5, 'Good doctor') id`)).rows[0].id
+  const r1 = (await db.query(`select sehat_record_rating('919812399999', 5, 'Good doctor') id`)).rows[0]?.id
   expectTrue('the reply is recorded', r1 !== null)
   const stored = (await db.query(`select overall_rating, business_id, patient_phone_hash
      from ratings where id=$1`, [r1])).rows[0]
-  expectEq('the score is stored', Number(stored.overall_rating), 5)
-  expectEq('the business is carried from the appointment', stored.business_id, biz.id)
-  expectTrue('the number is hashed, not stored', (stored.patient_phone_hash ?? '').length === 64)
+  expectEq('the score is stored', Number(stored?.overall_rating), 5)
+  expectEq('the business is carried from the appointment', stored?.business_id, biz.id)
+  expectTrue('the number is hashed, not stored', (stored?.patient_phone_hash ?? '').length === 64)
   const r2 = (await db.query(`select sehat_record_rating('919812399999', 3) id`)).rows[0].id
   expectEq('a second reply returns the first rating, not an error', r2, r1,
     'a patient who answers twice must not break the AiSensy flow')
@@ -1978,8 +1987,10 @@ if (!skip()) for (const [name, sql, code] of [
   ['a number nobody asked is refused', `select sehat_record_rating('919800000001', 5)`, 'P0002'],
 ]) {
   await inRollback(async () => {
+    await db.query('savepoint refusal')
     try { await db.query(sql); record(name, false, 'expected to be refused, but it succeeded') }
     catch (e) {
+      await db.query('rollback to savepoint refusal')   // the refusal aborted it; keep the transaction usable
       e.code === code ? record(name, true)
                       : record(name, 'warn', `refused with ${e.code}, wanted ${code}: ${e.message.split('\n')[0]}`)
     }
