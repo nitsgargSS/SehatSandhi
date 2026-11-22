@@ -1894,7 +1894,7 @@ if (ms && ms.rating_sending_enabled === false) {
 }
 
 // ── the full path, rolled back ──────────────────────────────────────────────
-await inRollback(async () => {
+if (!skip()) await inRollback(async () => {
   await db.query(`update messaging_settings set rating_sending_enabled = true where id`)
   const biz = (await db.query(`insert into businesses (name, vertical, status)
      values ('[TEST] rating clinic','clinic','active') returning id`)).rows[0]
@@ -1971,7 +1971,7 @@ await inRollback(async () => {
 
 // Refusals, each in its own savepoint — a raised exception aborts the
 // transaction it was raised in.
-for (const [name, sql, code] of [
+if (!skip()) for (const [name, sql, code] of [
   ['a landline is refused', `select sehat_record_rating('0132-2255667', 4)`, '22023'],
   ['a score of 0 is refused', `select sehat_record_rating('919812399999', 0)`, '22023'],
   ['a score of 9 is refused', `select sehat_record_rating('919812399999', 9)`, '22023'],
@@ -1982,6 +1982,190 @@ for (const [name, sql, code] of [
     catch (e) {
       e.code === code ? record(name, true)
                       : record(name, 'warn', `refused with ${e.code}, wanted ${code}: ${e.message.split('\n')[0]}`)
+    }
+  })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 0331–0341 — Care Partner Program: registration, reading + one exam, the fee
+// (₹ + GST), yearly renewal, expiry, the inactivity pause, the trial status a
+// partner sees. One transaction, always rolled back: no partner, payment or
+// invoice is left behind, and nothing is sent.
+sec('care partners')
+if (!skip()) {
+  await inRollback(async () => { await db.query('savepoint care_all'); try {
+    const q1 = async (sql, params = []) => (await db.query(sql, params)).rows[0]
+    const asPg = () => db.query('reset role')
+    let n = 0
+    /** A partner login: the synthetic address sehat_care_my_phone() reads the number from. */
+    const login = async () => {
+      const email = `9198123099${String(++n).padStart(2, '0')}@partner.sehatsandhi.in`
+      const id = (await q1(`insert into auth.users (id, instance_id, aud, role, email, email_confirmed_at, created_at, updated_at)
+        values (gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', $1, now(), now(), now()) returning id`, [email])).id
+      return { id, email }
+    }
+    const as = async (u) => {
+      await asPg(); await db.query('set local role authenticated')
+      await db.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: u.id, role: 'authenticated', email: u.email })])
+    }
+    /** One statement that must be refused; the transaction carries on. */
+    const refused = async (name, sql, params, mustMatch) => {
+      await db.query('savepoint care_t')
+      try { await db.query(sql, params); await db.query('release savepoint care_t'); record(name, false, 'expected to be refused, but it succeeded') }
+      catch (e) {
+        await db.query('rollback to savepoint care_t')
+        const m = e.message.split('\n')[0]
+        record(name, mustMatch && !new RegExp(mustMatch, 'i').test(m) ? 'warn' : true, mustMatch && !new RegExp(mustMatch, 'i').test(m) ? `refused, but for: ${m}` : undefined)
+      }
+    }
+    const reg = (name, email) => JSON.stringify({ full_name: name, city: 'Karnal', state: 'Haryana', date_of_birth: '1990-01-01',
+      is_doctor: false, employer_ok: true, consent: true, ...(email !== undefined ? { email } : {}) })
+    const me = async () => (await q1('select sehat_care_me() m')).m
+    const partnerOf = async (u) => { await asPg(); return q1('select * from care_partners where user_id = $1', [u.id]) }
+
+    // The rules these checks are written against.
+    await db.query(`update site_settings set value = v.value from (values ('partner_program_enabled', 'on'), ('partner_module_quizzes', 'off'),
+      ('partner_exam_per_module', '2'), ('partner_renew_window_days', '30'), ('partner_id_grace_days', '30'), ('partner_inactive_days', '90'))
+      as v(key, value) where site_settings.key = v.key`)
+    const mods = (await db.query(`select m.id, m.slug, m.is_rules, (select count(*) from care_partner_questions q where q.module_id = m.id and q.is_active)::int nq
+      from care_partner_modules m where m.is_published order by m.sort_order`)).rows
+    if (!mods.length) { record('there are published modules to learn from', 'warn', 'none — run node scripts/partner-training.mjs --sandbox'); return }
+    expectTrue('every published module has at least 2 active questions', mods.every(m => m.nq >= 2), mods.filter(m => m.nq < 2).map(m => m.slug).join(', '))
+    const qkinds = (await db.query(`select distinct q.qtype, jsonb_array_length(q.options) n from care_partner_questions q
+      join care_partner_modules m on m.id = q.module_id where q.is_active and m.is_published`)).rows
+    expectEq('every active question is choose-one from 4 options', qkinds, [{ qtype: 'single', n: 4 }])
+
+    // ── registration (0339: email required, one partner per email) ──
+    const a = await login(), b = await login()
+    await as(a)
+    await refused('registering without an email is refused', 'select sehat_care_register($1::jsonb)', [reg('Partner A')], 'email')
+    await refused('a malformed email is refused', 'select sehat_care_register($1::jsonb)', [reg('Partner A', 'not-an-email')], 'email')
+    await db.query('select sehat_care_register($1::jsonb)', [reg('Partner A', 'Care.Test.A@Example.com')])
+    expectEq('the email is kept in lower case', (await partnerOf(a)).email, 'care.test.a@example.com')
+    await as(b)
+    await refused('a second partner cannot use the same email', 'select sehat_care_register($1::jsonb)', [reg('Partner B', 'care.test.a@example.com')], 'already used')
+    await db.query('select sehat_care_register($1::jsonb)', [reg('Partner B', 'care.test.b@example.com')])
+
+    // ── learning: read everything, then one exam (0336, 0341) ──
+    await as(a)
+    expectTrue('the next step is to read the first module', /read the PDF/i.test((await me()).next.en), (await me()).next.en)
+    await refused('the exam is closed before every module is read', 'select sehat_care_quiz_start(null)', [], 'Read every module')
+    await refused('there is no quiz per module', 'select sehat_care_quiz_start($1)', [mods[0].id], 'no quiz for each module')
+    const readAll = async (u) => {
+      const p = await partnerOf(u)
+      await db.query(`insert into care_partner_progress (partner_id, module_id, doc_opened_at, doc_read_at, video_completed_at)
+        select $1, id, now() - interval '10 min', now(), now() from care_partner_modules where is_published
+        on conflict (partner_id, module_id) do update set doc_read_at = now(), video_completed_at = now()`, [p.id])
+    }
+    await readAll(a); await readAll(b)
+    await as(a)
+    expectEq('with everything read, the next step is the exam', (await me()).next.key, 'final')
+    const exam = (await q1('select sehat_care_quiz_start(null) a')).a
+    expectEq('the exam has 2 questions from every module', exam.questions.length, mods.reduce((s, m) => s + Math.min(m.nq, 2), 0))
+    await asPg()
+    const key = Object.fromEntries((await db.query(`select q.id, q.correct, m.is_rules from care_partner_questions q
+      join care_partner_modules m on m.id = q.module_id where q.id = any($1::uuid[])`, [exam.questions.map(x => x.id)])).rows.map(r => [r.id, r]))
+    await as(a)
+    const pass = (await q1('select sehat_care_quiz_submit($1, $2::jsonb) r', [exam.attempt_id, JSON.stringify(Object.fromEntries(Object.entries(key).map(([id, r]) => [id, r.correct])))])).r
+    expectEq('all answers right passes the exam', [pass.passed, pass.score_pct], [true, 100])
+    expectEq('passing moves the partner to quiz_passed', (await partnerOf(a)).status, 'quiz_passed')
+
+    await as(b)
+    const exam2 = (await q1('select sehat_care_quiz_start(null) a')).a
+    await asPg()
+    const key2 = Object.fromEntries((await db.query(`select q.id, q.correct, m.is_rules from care_partner_questions q
+      join care_partner_modules m on m.id = q.module_id where q.id = any($1::uuid[])`, [exam2.questions.map(x => x.id)])).rows.map(r => [r.id, r]))
+    const ruleQ = Object.keys(key2).find(id => key2[id].is_rules)
+    if (ruleQ) {
+      const ans = Object.fromEntries(Object.entries(key2).map(([id, r]) => [id, r.correct]))
+      ans[ruleQ] = [['a', 'b', 'c', 'd'].find(o => !key2[ruleQ].correct.includes(o))]
+      await as(b)
+      const fail = (await q1('select sehat_care_quiz_submit($1, $2::jsonb) r', [exam2.attempt_id, JSON.stringify(ans)])).r
+      expectTrue('one rules question wrong fails the exam, even above the pass mark', fail.passed === false && fail.rules_missed === 1 && fail.score_pct >= 80,
+        JSON.stringify({ passed: fail.passed, rules_missed: fail.rules_missed, pct: fail.score_pct }))
+      expectTrue('…and names the module to re-read', (fail.revise ?? []).length > 0)
+    } else record('the exam includes a rules question', 'warn', 'no rules module is published')
+
+    // ── the fee: ₹ + GST, Partner ID, invoice (0333, 0337) ──
+    await asPg()
+    const parts = (await q1('select sehat_care_fee_parts($1) f', ['Haryana'])).f   // staff-only helper
+    await as(a)
+    const fee = (await q1('select sehat_care_fee_prepare() f')).f
+    expectEq('the fee is the price plus GST', Number(fee.amount), Number(parts.total))
+    expectEq('the first fee is not a renewal', fee.renewal, false)
+    await asPg()
+    await db.query(`update payments set status = 'paid' where id = $1`, [fee.payment_id])
+    const issued = (await q1('select sehat_care_fee_paid($1) r', [fee.payment_id])).r
+    expectTrue('a Partner ID is issued', /^SP-[2-9A-HJ-NP-Z]{6}$/.test(issued.partner_code ?? ''), issued.partner_code)
+    const inv = await q1('select taxable_value, tax_total, total_amount from invoices where payment_id = $1', [fee.payment_id])
+    expectEq('the invoice splits price and GST', [Number(inv?.taxable_value), Number(inv?.tax_total), Number(inv?.total_amount)],
+      [Number(parts.fee), Number(parts.gst), Number(parts.total)])
+    expectEq('confirming the same payment again does nothing new', (await q1('select sehat_care_fee_paid($1) r', [fee.payment_id])).r.already, true)
+
+    // ── yearly renewal (0337) ──
+    await db.query(`update care_partners set status = 'active', agreement_signed_at = now(), status_changed_at = now() where user_id = $1`, [a.id])
+    await as(a)
+    await refused('the refresher is closed far from expiry', 'select sehat_care_refresher_start()', [], 'Renewal opens')
+    await asPg(); await db.query(`update care_partners set valid_until = current_date + 10 where user_id = $1`, [a.id])
+    await as(a)
+    expectEq('renewal opens 30 days before expiry', (await me()).renewal.open, true)
+    await refused('renewal payment needs the refresher first', 'select sehat_care_fee_prepare()', [], 'refresher')
+    const ref = (await q1('select sehat_care_refresher_start() a')).a
+    await asPg()
+    const rkey = Object.fromEntries((await db.query('select id, correct from care_partner_questions where id = any($1::uuid[])', [ref.questions.map(x => x.id)])).rows.map(r => [r.id, r.correct]))
+    await as(a)
+    expectEq('the refresher can be passed', (await q1('select sehat_care_quiz_submit($1, $2::jsonb) r', [ref.attempt_id, JSON.stringify(rkey)])).r.passed, true)
+    const ren = (await q1('select sehat_care_fee_prepare() f')).f
+    expectEq('the renewal costs the same as the first fee', [ren.renewal, Number(ren.amount)], [true, Number(parts.total)])
+    await asPg()
+    const before = (await q1(`select valid_until::text d from care_partners where user_id = $1`, [a.id])).d   // dates compared as text, no time zones
+    await db.query(`update payments set status = 'paid' where id = $1`, [ren.payment_id])
+    const rr = (await q1('select sehat_care_fee_paid($1) r', [ren.payment_id])).r
+    expectEq('renewal keeps the same Partner ID', rr.partner_code, issued.partner_code)
+    const after = await q1(`select valid_until::text d, (($2::date + interval '12 months')::date)::text want from care_partners where user_id = $1`, [a.id, before])
+    expectEq('renewal adds 12 months to the old expiry', after.d, after.want)
+
+    // ── expiry and removal ──
+    await db.query(`update care_partners set valid_until = current_date - 5 where user_id = $1`, [a.id])
+    await as(a)
+    expectEq('an expired ID points to renewal', (await me()).next.key, 'renew')
+    await asPg(); await db.query(`update care_partners set valid_until = current_date - 31 where user_id = $1`, [a.id])
+    await db.query('select sehat_care_renewals_nightly()')
+    expectEq('not renewed within the grace days ends the partnership', (await partnerOf(a)).status, 'terminated')
+
+    // ── inactivity pause and reactivation (0338) ──
+    await db.query(`update care_partners set status = 'active', partner_code = 'SP-ZZTEST', agreement_signed_at = now(),
+      valid_until = current_date + 200, status_changed_at = now() - interval '91 days' where user_id = $1`, [b.id])
+    await db.query('select sehat_care_renewals_nightly()')
+    const pb = await partnerOf(b)
+    expectTrue('no paying business in 90 days pauses the partner', pb.status === 'paused' && /^Inactive:/.test(pb.status_reason ?? ''), `${pb.status} ${pb.status_reason}`)
+    await as(b)
+    expectEq('the paused partner is pointed to the refresher', (await me()).next.key, 'reactivate')
+    const rb = (await q1('select sehat_care_refresher_start() a')).a
+    await asPg()
+    const bkey = Object.fromEntries((await db.query('select id, correct from care_partner_questions where id = any($1::uuid[])', [rb.questions.map(x => x.id)])).rows.map(r => [r.id, r.correct]))
+    await as(b)
+    expectEq('passing the refresher reactivates', (await q1('select sehat_care_quiz_submit($1, $2::jsonb) r', [rb.attempt_id, JSON.stringify(bkey)])).r.reactivated, true)
+    expectEq('…and the partner is active again', (await partnerOf(b)).status, 'active')
+    await db.query(`update care_partners set status = 'paused', status_reason = 'Complaint under review.' where user_id = $1`, [b.id])
+    await as(b)
+    await refused('a pause for a complaint cannot be lifted by a quiz', 'select sehat_care_refresher_start()', [], 'not open')
+
+    // ── what a partner sees about a business's plan (0340) ──
+    await asPg()
+    expectEq('a business that never paid shows as not paid', (await q1('select sehat_care_business_plan(gen_random_uuid()) x')).x, { plan: 'not_paid' })
+    const sixOn = (await q1(`select count(*)::int n from vertical_term_prices where months = 6 and is_enabled`)).n
+    expectEq('the 6-month term is not offered', sixOn, 0)
+
+    // ── contracts in force ──
+    const contracts = (await db.query(`select kind, pdf_path_en is not null and pdf_path_hi is not null ok from care_partner_contracts where is_current`)).rows
+    expectTrue('all five contracts have a current version with both PDFs', contracts.length === 5 && contracts.every(c => c.ok),
+      contracts.map(c => c.kind + (c.ok ? '' : ' (PDF missing)')).join(', ') || 'none current')
+    await asPg()
+    } catch (e) {
+      // Report the real error (inRollback would otherwise only see an aborted transaction).
+      record('the care partner checks ran to the end', false, e.message.split('\n')[0])
+      await db.query('rollback to savepoint care_all')   // keep the transaction usable for the rest of the suite
     }
   })
 }
