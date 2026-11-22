@@ -5,6 +5,7 @@ import PartnerShell, { usePartnerMe, useTx } from './PartnerShell'
 import {
   acceptContracts, careFileUrl, careSettings, createTicket, myFeeInvoice, myTickets, partnerFeeOrder, pendingContracts,
   replyTicket, requestPartnerCode, ticketMessages, verifyPartner, whenIST, STATUS_LABEL, TICKET_CATEGORY,
+  addLead, myLeads, releaseLead, type CareLeads,
   type CareContract, type CareTicket, type TicketCategory, type TicketMessage, type VerifiedPartner,
 } from '../../lib/careApi'
 import { loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
@@ -176,9 +177,7 @@ function Dashboard() {
       {p.status_reason && ['paused', 'suspended', 'terminated'].includes(p.status) && <p className="text-sm text-amber-800 mt-1">{p.status_reason}</p>}
     </div>
     {p.partner_code && <Badge code={p.partner_code} name={p.full_name} city={p.city} validUntil={p.valid_until ?? null} />}
-    {p.status === 'active' && (
-      <div className="card text-gray-700">{tx('Adding doctors and tracking your rewards opens soon. Until then, keep reading the modules and the Rules.', 'डॉक्टर जोड़ना और रिवॉर्ड देखना जल्द शुरू होगा। तब तक मॉड्यूल और नियम पढ़ते रहें।')}</div>
-    )}
+    {p.status === 'active' && <Leads />}
     <div className="card text-sm space-y-2">
       <Link to="/partner/learn" className="block text-teal-700 underline">{tx('Training and contracts', 'ट्रेनिंग और अनुबंध')}</Link>
       <Link to="/partner/tickets" className="block text-teal-700 underline">{tx('My tickets', 'मेरे टिकट')}</Link>
@@ -333,4 +332,70 @@ function Verify() {
       <p className="text-xs text-gray-500 pt-2">{tx('Partners introduce Sehatsandhi. They never collect money — businesses always pay Sehatsandhi directly.', 'पार्टनर सेहतसंधि का परिचय देते हैं। वे कभी पैसे नहीं लेते — व्यवसाय हमेशा सीधे सेहतसंधि को भुगतान करते हैं।')}</p>
     </div>
   )
+}
+
+// ── Reserved doctors and credited businesses (0334) ─────────────────────────
+function Leads() {
+  const { tx } = useTx()
+  const [d, setD] = useState<CareLeads | null>(null)
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [days, setDays] = useState('90')
+  const load = useCallback(() => { myLeads().then(setD, e => setErr((e as Error).message)) }, [])
+  useEffect(() => { load(); careSettings().then(s => { if (s.lead_lock_days) setDays(s.lead_lock_days) }) }, [load])
+  const add = async () => {
+    setBusy(true); setErr('')
+    try { await addLead(name, phone); setName(''); setPhone(''); load() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  const LABEL: Record<string, [string, string]> = {
+    locked: ['Reserved', 'रिज़र्व'], matched: ['Signed up — waiting for their answer', 'साइन अप हुआ — उनके जवाब का इंतज़ार'],
+    confirmed: ['Confirmed your referral', 'आपके रेफ़रल की पुष्टि की'], declined: ['Said you did not refer them', 'कहा आपने नहीं बताया'],
+    expired: ['Reservation ended', 'रिज़र्वेशन खत्म'], released: ['Released', 'छोड़ दिया'],
+  }
+  const left = (iso: string) => Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000))
+  return (<>
+    <div className="card space-y-3" id="leads">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="font-bold text-navy-700">{tx('Reserved doctors', 'रिज़र्व डॉक्टर')}</h2>
+        {d && <span className="text-xs text-gray-500">{tx(`${d.open} of ${d.cap >= 100000 ? 'no limit' : d.cap}`, `${d.cap >= 100000 ? 'कोई सीमा नहीं' : d.cap} में से ${d.open}`)}</span>}
+      </div>
+      <p className="text-sm text-gray-600">{tx(`Add a doctor you are talking to. Their number is kept for you for ${days} days. Nothing is sent to them — when they sign up, the app asks them whether you introduced Sehatsandhi.`,
+        `जिस डॉक्टर से आप बात कर रहे हैं, उन्हें जोड़ें। उनका नंबर ${days} दिन आपके नाम रहेगा। उन्हें कुछ नहीं भेजा जाता — साइन अप करते समय ऐप उनसे पूछता है कि क्या आपने बताया।`)}</p>
+      <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2">
+        <input className="input-field" placeholder={tx("Doctor's name", 'डॉक्टर का नाम')} value={name} onChange={e => setName(e.target.value)} />
+        <input className="input-field" inputMode="tel" placeholder={tx('Mobile number', 'मोबाइल नंबर')} value={phone} onChange={e => setPhone(e.target.value)} />
+        <button disabled={busy || name.trim().length < 3 || phone.replace(/\D/g, '').length < 10} onClick={add} className="btn-teal py-2.5 px-5 disabled:opacity-50">{tx('Reserve', 'रिज़र्व करें')}</button>
+      </div>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {d && d.leads.length > 0 && (
+        <ul className="divide-y divide-gray-100 text-sm">
+          {d.leads.map(l => (
+            <li key={l.id} className="py-2 flex items-center justify-between gap-2 flex-wrap">
+              <span>
+                <span className="font-semibold text-gray-800">{l.doctor_name ?? tx('(ended)', '(समाप्त)')}</span>
+                {l.phone_last2 && <span className="text-gray-400"> · ••••••••{l.phone_last2}</span>}
+                {l.business_name && <span className="text-gray-500"> · {l.business_name}</span>}
+                <span className="block text-xs text-gray-500">{tx(...(LABEL[l.status] ?? [l.status, l.status]))}{l.status === 'locked' ? ` · ${tx(`${left(l.locked_until)} days left`, `${left(l.locked_until)} दिन बाकी`)}` : ''}</span>
+              </span>
+              {l.status === 'locked' && <button className="text-xs text-gray-500 underline" onClick={async () => { await releaseLead(l.id).catch(() => undefined); load() }}>{tx('Release', 'छोड़ें')}</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+    {d && d.businesses.length > 0 && (
+      <div className="card text-sm">
+        <h2 className="font-bold text-navy-700 mb-2">{tx('Businesses you introduced', 'आपके जोड़े व्यवसाय')}</h2>
+        <ul className="divide-y divide-gray-100">
+          {d.businesses.map((b, i) => (
+            <li key={i} className="py-2 flex justify-between gap-2"><span>{b.name}{b.city ? `, ${b.city}` : ''}</span>
+              <span className={`text-xs ${b.paying ? 'text-teal-700' : 'text-gray-500'}`}>{b.paying ? tx('Paying', 'भुगतान कर रहे') : tx('Not paying yet', 'अभी भुगतान नहीं')}</span></li>
+          ))}
+        </ul>
+        <p className="text-xs text-gray-500 mt-2">{tx('Partner Rewards and payouts appear here soon.', 'पार्टनर रिवॉर्ड और भुगतान जल्द यहाँ दिखेंगे।')}</p>
+      </div>
+    )}
+  </>)
 }

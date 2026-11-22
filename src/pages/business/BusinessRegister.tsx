@@ -38,6 +38,8 @@ import { getLeadFee } from '../../lib/insuranceApi'
 import { setNewDoctorSpecialities } from '../../lib/specialitiesApi'
 import SpecialityChooser from '../../components/SpecialityChooser'
 import { usePlanCatalogue } from '../../hooks/usePlanCatalogue'
+import { PartnerIdField, ReferralQuestion } from './PartnerReferral'
+import { attributeByCode, businessReferral } from '../../lib/careApi'
 
 // Design 2b — 3-step onboarding wizard.
 // Layout: desktop = dark left step-rail + content pane; tablet (<900px) =
@@ -256,6 +258,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
   const proDigits = phoneKey(proNumber)
   const proNumberOk = /^[6-9]\d{9}$/.test(proDigits)
   const [couponInput, setCouponInput] = useState('')
+  // 0334: Care Partner referral — a typed Partner ID, and the question when the number was reserved.
+  const [partnerCode, setPartnerCode] = useState('')
+  const [referralAsk, setReferralAsk] = useState<{ id: string; first_name: string; city: string } | null>(null)
   const [couponCode, setCouponCode] = useState('')
 
   // The clinical systems on offer, and which ones they have ticked. Priced by
@@ -714,6 +719,22 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
         setError(`${price.couponError} Remove the coupon to continue without it.`)
         setSubmitting(false)
         return
+      }
+      // 0334: Care Partner referral. A partner's reserved number asks the owner
+      // first (Yes / No); a typed Partner ID counts as a yes. businessReferral
+      // never throws, so a database without the Partner Program changes nothing.
+      const ref = await businessReferral(id)
+      if (ref.state === 'pending') {
+        setReferralAsk({ id, first_name: ref.first_name, city: ref.city })
+        setSubmitting(false)
+        return
+      }
+      if (partnerCode.trim() && ref.state === 'none') {
+        try { await attributeByCode(id, partnerCode.trim()) } catch (e) {
+          setError(`${(e as Error).message} Clear the Partner ID box to continue without it.`)
+          setSubmitting(false)
+          return
+        }
       }
       const order = await createRazorpayOrder(zips, id, months, tiered ? [] : modules, {
         planAddons: tiered && coreVertical ? planAddons : undefined,
@@ -1613,6 +1634,9 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                         </div>
                       )}
 
+                      {/* 0334: introduced by a Care Partner? Optional; hidden while the program is off. */}
+                      {typePriced && (price.subscriptionTotal ?? 0) > 0 && <PartnerIdField value={partnerCode} onChange={setPartnerCode} />}
+
                       {/* Clinical systems. Bought per month per business and
                           switched on the moment the payment clears — 0060.
                           NOT multiplied by consultant headcount: a ward system
@@ -1798,6 +1822,10 @@ export default function BusinessRegister({ mode = 'business' }: { mode?: Registe
                         </>
                       ) : (
                         <>
+                          {referralAsk && (
+                            <ReferralQuestion businessId={referralAsk.id} who={referralAsk}
+                              onDone={() => { setReferralAsk(null); payWithRazorpay() }} />
+                          )}
                           <div className="grid gap-3 sm:grid-cols-2" style={{ marginTop: 20 }}>
                             <button onClick={activateOnWhatsApp} disabled={submitting} style={{ ...btnWhatsApp, opacity: submitting ? 0.6 : 1 }}>
                               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <WaGlyph />} Activate on WhatsApp

@@ -928,6 +928,14 @@ tables:
   # Partners and their progress are user data. Modules, FAQ, synonyms and
   # contract versions are content edited in Admin → Care Partners, synced
   # prod -> sandbox like other reference data.
+  care_partner_reports:
+    class: isolated
+    purgeOrder: 129.19
+
+  care_partner_leads:
+    class: isolated
+    purgeOrder: 129.2
+
   care_partner_ticket_messages:
     class: isolated
     purgeOrder: 129.21

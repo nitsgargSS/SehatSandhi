@@ -21,6 +21,15 @@ active; a new current version asks again. Tickets (care_partner_tickets/_message
 Pages: /partner/certify (+ /partner/pay), /partner/agreement, /partner/dashboard (badge PNG with QR), /partner/tickets,
 /verify/:code. Admin → Care Partners → Tickets. Deploy to sandbox: partner-otp, partner-fee-order, razorpay-verify,
 razorpay-webhook (fulfilment changed).
+Phase 4 built 22 Nov: 0334 (sandbox only) — care_partner_leads (keyed phone hash, key in Vault 'care_lead_pepper'; name +
+last 2 digits wiped when the lock ends), lead cap (10 → 25 → 50 → none at Senior), lockable = not a business/practitioner/
+partner number (generic refusal), 0255 credits: status 'care_pending' + care_* columns, trigger: an active lock on a new
+business's number → care_pending (agency kept as fallback), Yes → approved (automatic), No/expiry → 0255 rule, typed Partner ID
+before first payment (self-referral refused), admin claim within partner_claim_days, care_partner_reports, nightly cron
+'care-leads-expiry'. Wizard: Partner ID box + Referred-by question before payment (quiet on any failure); dashboard card
+(question / introduced by / Report). Partner dashboard: reserved doctors + businesses introduced. Admin: Reports + Claim.
+Fixed before commit: sehat_care_owner_only let a stranger through (null-unsafe check) — now coalesce(...); sandbox ledger
+checksum for 0334 updated to the fixed file.
 Decisions (Nitin, 22 Nov): 1 fix online refunds — yes; 2 confirmed Care Partner credit approved automatically, admin can override; 3 new Care Partners tab for operations, money in Partners — OK; 6 active = paid term not ended — OK. Not answered yet: 4 (active field/agency partners — needed before Phase 4), 5 (production order vs EMI — default: partner migrations independent of 0330), 7 (who uploads videos/PDFs — CMS built either way). Brief: https://claude.ai/artifact/Wc4MJ5dGZBzQeATsbtyJKj
 (v2, consolidated; `Sehatsandhi_Partner_Program_Claude_Code_Brief.md` + `Sehatsandhi_Partner_FAQ_Seed.csv`).
 Built on staging / sandbox only, behind `site_settings` switch `partner_program_enabled` (off).

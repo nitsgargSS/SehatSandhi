@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
+import { supabase } from '../../lib/supabase'
 import {
   adminCarePartners, adminCarePartnerStatus, adminSaveModule, adminSaveFaq, adminSaveContract, adminSaveSettings,
   adminCareSettings, adminUploadPdf, careModules, careContracts, careFaq, careFileUrl, parseCsv, STATUS_LABEL,
   adminQuestions, adminSaveQuestion, adminTickets, ticketMessages, replyTicket, whenIST, TICKET_CATEGORY,
+  adminReports, adminCloseReport, adminClaim, type AdminReport,
   type AdminPartnerRow, type CareModule, type CareFaq, type CareContract, type PartnerStatus, type AdminQuestion, type QuizOption, type AdminTicketRow, type TicketMessage,
 } from '../../lib/careApi'
 
@@ -15,7 +17,7 @@ import {
 //   Settings   the program switch and every OPEN value of the brief
 // Admins only (owner/admin roles); every save is written to the staff action log.
 
-type View = 'partners' | 'tickets' | 'modules' | 'questions' | 'faq' | 'contracts' | 'settings'
+type View = 'partners' | 'tickets' | 'reports' | 'modules' | 'questions' | 'faq' | 'contracts' | 'settings'
 const day = (s: string) => new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
 export default function CarePartnersPanel() {
@@ -26,7 +28,7 @@ export default function CarePartnersPanel() {
         <h2 className="font-bold text-navy-700 text-lg">Care Partner Program</h2>
         <p className="text-sm text-gray-500">Partners learn, pass the exam, get a Partner ID and introduce businesses. Rewards and payouts are in the Partners tab.</p>
         <div className="flex gap-2 mt-3 overflow-x-auto">
-          {(['partners', 'tickets', 'modules', 'questions', 'faq', 'contracts', 'settings'] as View[]).map(v => (
+          {(['partners', 'tickets', 'reports', 'modules', 'questions', 'faq', 'contracts', 'settings'] as View[]).map(v => (
             <button key={v} onClick={() => setView(v)}
               className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap border capitalize ${view === v ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-200'}`}>
               {v === 'faq' ? 'FAQ' : v}
@@ -36,6 +38,7 @@ export default function CarePartnersPanel() {
       </div>
       {view === 'partners' && <Partners />}
       {view === 'tickets' && <Tickets />}
+      {view === 'reports' && <Reports />}
       {view === 'modules' && <Modules />}
       {view === 'questions' && <Questions />}
       {view === 'faq' && <Faq />}
@@ -110,6 +113,74 @@ function Partners() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Reports and claims (0334) ───────────────────────────────────────────────
+function Reports() {
+  const [status, setStatus] = useState('open')
+  const [rows, setRows] = useState<AdminReport[] | null>(null)
+  const [note, setNote] = useState<Record<string, string>>({})
+  const { busy, run, notes } = useRun()
+  const load = useCallback(() => { adminReports(status).then(setRows, () => setRows([])) }, [status])
+  useEffect(() => { load() }, [load])
+  return (
+    <div className="space-y-3">
+      <Claim />
+      <div className="card shadow-sm flex gap-2 items-center">
+        <span className="font-semibold text-navy-700 text-sm mr-2">Reports from businesses</span>
+        {['open', 'closed', 'all'].map(s => <button key={s} onClick={() => setStatus(s)} className={`px-3 py-1.5 rounded-full text-sm border capitalize ${status === s ? 'bg-navy-700 text-white border-navy-700' : 'bg-white text-gray-600 border-gray-200'}`}>{s}</button>)}
+      </div>
+      {notes}
+      {rows === null ? <p className="text-sm text-gray-400">Loading…</p> : rows.length === 0 ? <p className="text-sm text-gray-500">No reports.</p> : rows.map(r => (
+        <div key={r.id} className="card shadow-sm text-sm space-y-1">
+          <div className="flex justify-between gap-2 flex-wrap"><span className="font-semibold text-navy-700">{r.partner_name} · {r.partner_code}</span><span className="text-xs text-gray-500">{whenIST(r.created_at)} · partner {r.partner_status}</span></div>
+          <div className="text-gray-600">From {r.business_name} (+{r.business_phone})</div>
+          <p className="whitespace-pre-line text-gray-800">{r.reason}</p>
+          {r.status === 'open' ? (
+            <div className="flex gap-2 flex-wrap items-center pt-1">
+              <input className="input-field flex-1 min-w-[10rem]" placeholder="What was done (kept with the report)" value={note[r.id] ?? ''} onChange={e => setNote(n => ({ ...n, [r.id]: e.target.value }))} />
+              <button disabled={busy === r.id} className="btn-teal text-xs py-2 px-3" onClick={() => run(r.id, async () => { await adminCloseReport(r.id, note[r.id] ?? ''); load() }, 'Report closed.')}>Close report</button>
+              <span className="text-xs text-gray-500">To pause or suspend the partner, use the Partners section.</span>
+            </div>
+          ) : r.admin_note && <p className="text-xs text-gray-500">Closed: {r.admin_note}</p>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// A partner asks (by ticket) for a business that paid without their ID: propose it; the business confirms in its dashboard.
+function Claim() {
+  const [phone, setPhone] = useState('')
+  const [found, setFound] = useState<{ id: string; name: string; phone: string }[] | null>(null)
+  const [pick, setPick] = useState('')
+  const [code, setCode] = useState('')
+  const { busy, run, notes } = useRun()
+  const search = async () => {
+    const d = phone.replace(/\D/g, '').slice(-10)
+    const { data } = await supabase.from('businesses').select('id, name, phone').ilike('phone', `%${d}%`).limit(10)
+    setFound((data ?? []) as { id: string; name: string; phone: string }[]); setPick('')
+  }
+  return (
+    <div className="card shadow-sm space-y-2 text-sm">
+      <div className="font-semibold text-navy-700">Claim after payment</div>
+      <p className="text-xs text-gray-500">Within the claim window after a business's first payment. The business is then asked "Referred by …? Yes / No" on its dashboard; nothing is credited until it says Yes.</p>
+      <div className="flex gap-2 flex-wrap">
+        <input className="input-field flex-1 min-w-[10rem]" placeholder="Business phone" value={phone} onChange={e => setPhone(e.target.value)} />
+        <button className="text-sm py-2 px-3 rounded-lg border border-gray-200" onClick={search}>Find</button>
+      </div>
+      {found && (found.length === 0 ? <p className="text-xs text-gray-500">No business with that number.</p> : (
+        <div className="flex gap-2 flex-wrap items-center">
+          <select className="input-field w-auto" value={pick} onChange={e => setPick(e.target.value)}>
+            <option value="">Choose the business</option>{found.map(b => <option key={b.id} value={b.id}>{b.name} · {b.phone}</option>)}
+          </select>
+          <input className="input-field w-36 uppercase" placeholder="SP-XXXXXX" value={code} onChange={e => setCode(e.target.value.toUpperCase())} />
+          <button disabled={!pick || code.length < 9 || busy === 'claim'} className="btn-teal text-sm py-2 px-3" onClick={() => run('claim', () => adminClaim(pick, code), 'Claim recorded. The business will be asked to confirm.')}>Propose</button>
+        </div>
+      ))}
+      {notes}
     </div>
   )
 }

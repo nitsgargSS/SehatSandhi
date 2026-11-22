@@ -401,3 +401,62 @@ export async function adminTickets(status?: string): Promise<AdminTicketRow[]> {
   oops(error)
   return (data ?? []) as AdminTicketRow[]
 }
+
+// ── Attribution (0334) ──────────────────────────────────────────────────────
+
+export interface CareLead { id: string; doctor_name: string | null; phone_last2: string | null; locked_until: string; status: 'locked' | 'matched' | 'confirmed' | 'declined' | 'expired' | 'released'; business_name: string | null; created_at: string }
+export interface CareLeads { cap: number; open: number; leads: CareLead[]; businesses: { name: string; city: string | null; since: string | null; paying: boolean }[] }
+export type Referral = { state: 'none' } | { state: 'pending' | 'confirmed'; first_name: string; city: string; partner_code: string }
+
+export async function myLeads(): Promise<CareLeads> {
+  const { data, error } = await supabase.rpc('sehat_care_leads')
+  oops(error)
+  return data as CareLeads
+}
+export async function addLead(name: string, phone: string) {
+  const { data, error } = await supabase.rpc('sehat_care_lead_add', { p_name: name, p_phone: phone })
+  oops(error)
+  return data as { id: string; open: number; cap: number }
+}
+export async function releaseLead(id: string) {
+  const { error } = await supabase.rpc('sehat_care_lead_release', { p_lead: id })
+  oops(error)
+}
+/** First name and city of an active partner, for the sign-up field. null if not valid. */
+export async function lookupPartner(code: string): Promise<{ first_name: string; city: string; partner_code: string } | null> {
+  const { data } = await supabase.rpc('sehat_care_partner_lookup', { p_code: code })
+  return (data ?? null) as { first_name: string; city: string; partner_code: string } | null
+}
+/** The business's referral state. Never throws: a database without 0334 answers 'none'. */
+export async function businessReferral(businessId: string): Promise<Referral> {
+  const { data, error } = await supabase.rpc('sehat_care_referral', { p_business: businessId })
+  return error || !data ? { state: 'none' } : (data as Referral)
+}
+export async function answerReferral(businessId: string, yes: boolean): Promise<Referral> {
+  const { data, error } = await supabase.rpc('sehat_care_referral_answer', { p_business: businessId, p_yes: yes })
+  oops(error)
+  return data as Referral
+}
+export async function attributeByCode(businessId: string, code: string): Promise<Referral> {
+  const { data, error } = await supabase.rpc('sehat_care_attribute_by_code', { p_business: businessId, p_code: code })
+  oops(error)
+  return data as Referral
+}
+export async function reportPartner(businessId: string, reason: string) {
+  const { error } = await supabase.rpc('sehat_care_report_partner', { p_business: businessId, p_reason: reason })
+  oops(error)
+}
+export interface AdminReport { id: string; business_name: string; business_phone: string; partner_name: string; partner_code: string; partner_status: string; reason: string; status: string; admin_note: string | null; created_at: string }
+export async function adminReports(status = 'open'): Promise<AdminReport[]> {
+  const { data, error } = await supabase.rpc('sehat_admin_care_reports', { p_status: status === 'all' ? null : status })
+  oops(error)
+  return (data ?? []) as AdminReport[]
+}
+export async function adminCloseReport(id: string, note: string) {
+  const { error } = await supabase.rpc('sehat_admin_care_report_close', { p_report: id, p_note: note })
+  oops(error)
+}
+export async function adminClaim(businessId: string, partnerCode: string) {
+  const { error } = await supabase.rpc('sehat_admin_care_claim', { p_business: businessId, p_partner_code: partnerCode })
+  oops(error)
+}

@@ -40,6 +40,7 @@ import IntlInvite from './IntlInvite'
 import SocialPostsPanel from './SocialPostsPanel'
 import EmiPanel from './EmiPanel'
 import LenderPanel from './LenderPanel'
+import { BusinessPartnerCard } from '../business/PartnerReferral'
 import { financeEnabled, type EmiSource } from '../../lib/financeApi'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
@@ -1559,6 +1560,9 @@ export default function DoctorDashboard() {
 
         {/* 0151: clinics that have invited this person to join them. */}
         <MyInvitations onJoined={() => window.location.reload()} />
+
+        {/* 0334: the owner confirms which Care Partner introduced them, or reports one. */}
+        {doctor && isOwner && !isLender && <BusinessPartnerCard businessId={doctor.id} />}
 
         {/* ══════════ TODAY (default) — today's slot grid + recent appointments ══════════ */}
         {tab === 'today' && (
