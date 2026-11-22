@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  emiHospitals, myEmiCases, requestEmi, useFinanceEnabled, MIN_EMI_AMOUNT,
+  emiHospitals, myEmiCases, requestEmi, useFinanceEnabled, MIN_EMI_AMOUNT, bilingual,
   type EmiHospital, type MyEmiCase, type CaseStatus,
 } from '../../lib/financeApi'
 import { Err, MyShell, useMe, day } from './MyShell'
@@ -28,7 +28,7 @@ function Emi() {
   const [asking, setAsking] = useState(false)
   const [sent, setSent] = useState<{ hospital: string } | null>(null)
 
-  const load = useCallback(() => { myEmiCases().then(setCases).catch(e => { setCases([]); setErr((e as Error).message) }) }, [])
+  const load = useCallback(() => { myEmiCases().then(setCases).catch(e => { setCases([]); setErr(bilingual((e as Error).message)) }) }, [])
   useEffect(() => { load() }, [load])
 
   return (
@@ -87,7 +87,7 @@ function AskForm({ defaultName, onCancel, onSent }: { defaultName: string; onCan
 
   useEffect(() => {
     if (hospital) return
-    const t = setTimeout(() => { emiHospitals(q.trim()).then(setList).catch(e => setErr((e as Error).message)) }, 250)
+    const t = setTimeout(() => { emiHospitals(q.trim()).then(setList).catch(e => setErr(bilingual((e as Error).message))) }, 250)
     return () => clearTimeout(t)
   }, [q, hospital])
 
@@ -100,7 +100,7 @@ function AskForm({ defaultName, onCancel, onSent }: { defaultName: string; onCan
     if (!name.trim()) { setErr('मरीज़ का नाम / Patient’s name is needed.'); return }
     setBusy(true); setErr('')
     try { await requestEmi({ hospitalId: hospital.id, name: name.trim(), treatment: treatment.trim(), amount: amt, plannedOn: planned || null }); onSent(hospital.name) }
-    catch (e2) { setErr((e2 as Error).message) } finally { setBusy(false) }
+    catch (e2) { setErr(bilingual((e2 as Error).message)) } finally { setBusy(false) }
   }
 
   return (

@@ -653,7 +653,7 @@ async function requestSend(v: Vars, req: Req, m: Inbound, phone: string, rpc: Rp
     : req.what === 'medicine'
       ? await rpc('bot_medicine_order_json', { p_phone: phone, p_pin: f.pin ?? '', p_name: name, p_address: f.address ?? '', p_medicines: f.meds ?? '', p_rx_url: f.rx ?? '' })
       : await rpc('bot_insurance_lead_json', { p_phone: phone, p_pin: f.pin ?? '', p_name: name, p_cover: f.cover ?? '', p_members: f.members ?? '', p_call_time: f.time ?? '' })
-  const text = str(r?.text)
+  let text = str(r?.text)
   if (!text) return failed(v)
   // The area did not read as one: ask for it again, keeping the rest.
   if (r?.ok !== true && !r?.code && /PIN/.test(text) && !f.pinAsked) {
@@ -663,6 +663,16 @@ async function requestSend(v: Vars, req: Req, m: Inbound, phone: string, rpc: Rp
   const sent: Step = { session: { state: 'idle', vars: carry({ ...v, ...(lastPin ? { lastPin } : {}) }) }, replies: [{ kind: 'buttons', body: text, buttons: [MENU_BUTTON] }] }
   // 0250: the app, after an order or a request — not after an ambulance call.
   // An EMI request that did not go through (below the minimum, hospital stopped offering it): ask the amount again once.
+  // The database answers in English; the bot speaks Hindi first.
+  if (req.what === 'emi' && r?.ok !== true && !/[\u0900-\u097F]/.test(text)) {
+    const hi: Record<string, string> = {
+      'EMI is for treatments of ₹10,000 or more.': 'EMI ₹10,000 या उससे ज़्यादा के इलाज के लिए है।',
+      'Treatment on EMI is not available yet.': 'इलाज EMI पर अभी उपलब्ध नहीं है।',
+      "This hospital doesn't offer EMI through Sehatsandhi yet.": 'यह अस्पताल अभी Sehatsandhi से EMI नहीं देता।',
+      'Name, phone and treatment are needed.': 'नाम, फ़ोन और इलाज ज़रूरी हैं।',
+    }
+    if (hi[text.trim()]) text = `${hi[text.trim()]}\n${text.trim()}`
+  }
   if (req.what === 'emi' && r?.ok !== true && !f.retried) {
     return asking(v, { ...req, ask: 'amount', f: { ...f, retried: '1' } }, { kind: 'text', body: `${text}\n\n${EMI_AMOUNT}` })
   }

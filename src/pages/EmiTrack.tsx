@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  getPublicCase, shareWithLenders, withdrawByToken, EMI_TOKEN_RE,
+  getPublicCase, shareWithLenders, withdrawByToken, EMI_TOKEN_RE, bilingual,
   type PublicCase, type PublicLenderAvailable, type CaseStatus,
 } from '../lib/financeApi'
 import FollowUs from '../components/FollowUs'
@@ -51,7 +51,7 @@ export default function EmiTrack() {
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true); setErr('')
-    try { await fn(); load() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+    try { await fn(); load() } catch (e) { setErr(bilingual((e as Error).message)) } finally { setBusy(false) }
   }
 
   if (!c) return <div className="min-h-screen bg-gray-50 p-6 text-gray-700">{err || 'Loading…'}</div>

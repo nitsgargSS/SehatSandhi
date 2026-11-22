@@ -534,3 +534,28 @@ export async function saveLenderBilling(lenderId: string, b: LenderBilling) {
   })
   oops(error)
 }
+
+// ── Hindi for the database's messages a patient can meet (EmiTrack, MyEmi) ──
+// The checks live in SQL and answer in English; a patient sees both, Hindi first,
+// like the rest of their pages. Unknown messages pass through unchanged.
+const HI: Record<string, string> = {
+  'Treatment on EMI is not available yet.': 'इलाज EMI पर अभी उपलब्ध नहीं है।',
+  'This link is not valid.': 'यह लिंक सही नहीं है।',
+  "This request can't be sent to a lender right now.": 'यह अनुरोध अभी लेंडर को नहीं भेजा जा सकता।',
+  'Choose one or two lenders.': 'एक या दो लेंडर चुनें।',
+  'Consent is needed.': 'आपकी सहमति ज़रूरी है।',
+  'One of the chosen lenders is not available for this request.': 'चुने गए लेंडर में से एक इस अनुरोध के लिए उपलब्ध नहीं है।',
+  'No such EMI case.': 'यह EMI अनुरोध नहीं मिला।',
+  "This case can't be withdrawn now.": 'यह अनुरोध अब वापस नहीं लिया जा सकता।',
+  'Sign in to ask for EMI.': 'EMI के लिए पूछने से पहले साइन इन करें।',
+  'Please sign in with your mobile number.': 'कृपया अपने मोबाइल नंबर से साइन इन करें।',
+  "This hospital doesn't offer EMI through Sehatsandhi yet.": 'यह अस्पताल अभी Sehatsandhi से EMI नहीं देता।',
+  'Name, phone and treatment are needed.': 'नाम, फ़ोन और इलाज ज़रूरी हैं।',
+  'EMI is for treatments of ₹10,000 or more.': 'EMI ₹10,000 या उससे ज़्यादा के इलाज के लिए है।',
+  'Failed to fetch': 'इंटरनेट से जुड़ नहीं पाए, फिर कोशिश करें।',
+}
+export function bilingual(msg: string): string {
+  const hi = HI[msg.trim()]
+  if (hi) return `${hi} / ${msg.trim() === 'Failed to fetch' ? 'Could not connect — please try again.' : msg.trim()}`
+  return msg
+}
