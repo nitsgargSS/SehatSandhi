@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { BadgeCheck, Download, FileText, ShieldAlert } from 'lucide-react'
+import { BadgeCheck, CheckCircle2, Download, FileText, ShieldAlert } from 'lucide-react'
 import PartnerShell, { usePartnerMe, useTx } from './PartnerShell'
 import {
-  acceptContracts, careFileUrl, careSettings, createTicket, myFeeInvoice, myTickets, partnerFeeOrder, pendingContracts,
+  acceptContracts, careFileUrl, careSettings, createTicket, myFeeInvoices, myTickets, type FeeInvoice, partnerFeeOrder, pendingContracts,
   replyTicket, requestPartnerCode, ticketMessages, verifyPartner, whenIST, STATUS_LABEL, TICKET_CATEGORY,
   addLead, myLeads, releaseLead, type CareLeads, myMoney, submitKyc, type MyMoney,
   type CareContract, type CareTicket, type TicketCategory, type TicketMessage, type VerifiedPartner,
@@ -13,6 +13,7 @@ import { qrDataUrl } from '../../lib/qr'
 
 // Care Partner Program, Phase 3 (0333):
 //   /partner/certify    pay the certification fee → Partner ID
+//   /partner/renew      yearly renewal (0337): refresher quiz, then the same fee
 //   /partner/agreement  read and accept every current contract (WhatsApp code)
 //   /partner/dashboard  Partner ID, badge with QR, status, invoice, contracts
 //   /partner/tickets    write to the team; replies arrive here
@@ -25,14 +26,56 @@ export function PartnerCertify() {
   return <PartnerShell title="Get your Partner ID" titleHi="अपना Partner ID पाएँ" needs="registered"><Certify /></PartnerShell>
 }
 
+/** The fee as shown to partners: "₹100 + GST (₹118 in all)" — the numbers come from the server's settings. */
+function useFee() {
+  const [f, setF] = useState({ fee: '100', total: '', gst: '18' })
+  useEffect(() => { careSettings().then(s => setF({ fee: s.cert_fee || '100', total: s.cert_fee_total || '', gst: String(Number(s.cert_fee_gst_rate || 0)) })) }, [])
+  const hasGst = f.total !== '' && f.total !== f.fee
+  return { ...f, hasGst, payable: f.total || f.fee,
+    en: hasGst ? `₹${f.fee} + GST (₹${f.total} in all)` : `₹${f.fee}`,
+    hi: hasGst ? `₹${f.fee} + GST (कुल ₹${f.total})` : `₹${f.fee}` }
+}
+
+/** Razorpay Checkout for the partner fee — the first certification or a yearly renewal. The server decides which. */
+function PayFeeButton({ amount, label, onPaid }: { amount: string; label: [string, string]; onPaid: () => Promise<void> }) {
+  const { tx } = useTx()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const pay = async () => {
+    setBusy(true); setErr('')
+    try {
+      await loadRazorpayCheckout()
+      const o = await partnerFeeOrder()
+      const Rzp = (window as unknown as { Razorpay: new (opts: unknown) => { open(): void; on(ev: string, f: (r: unknown) => void): void } }).Razorpay
+      const rzp = new Rzp({
+        key: o.keyId, order_id: o.orderId, amount: o.amount, currency: o.currency,
+        name: 'Sehatsandhi', description: tx(label[0], label[1]),
+        prefill: { name: o.name, contact: o.phone.slice(-10), email: o.email ?? undefined },
+        theme: { color: '#0f766e' }, remember_customer: false,
+        modal: { ondismiss: () => setBusy(false) },
+        handler: async (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          try {
+            const v = await verifyRazorpayPayment({ orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id, signature: r.razorpay_signature, paymentRowId: o.paymentRowId })
+            if (!v.ok) throw new Error(v.error ?? 'Payment could not be confirmed.')
+            await onPaid()
+          } catch (e) { setErr((e as Error).message + ' ' + tx('If money was taken, it will show here shortly — or open a ticket.', 'अगर पैसे कट गए हैं, तो यह जल्द यहाँ दिखेगा — या टिकट खोलें।')); setBusy(false) }
+        },
+      })
+      rzp.on('payment.failed', () => { setErr(tx('The payment did not go through. You can try again.', 'भुगतान नहीं हुआ। आप फिर से कोशिश कर सकते हैं।')); setBusy(false) })
+      rzp.open()
+    } catch (e) { setErr((e as Error).message); setBusy(false) }
+  }
+  return (<>
+    {err && <p className="text-red-600 text-sm">{err}</p>}
+    <button disabled={busy} onClick={pay} className="btn-teal py-3 px-6 w-full sm:w-auto">{busy ? tx('Opening payment…', 'भुगतान खुल रहा है…') : tx(`Pay ₹${amount}`, `₹${amount} दें`)}</button>
+  </>)
+}
+
 function Certify() {
   const { tx } = useTx()
   const { me, reload } = usePartnerMe()
   const navigate = useNavigate()
-  const [fee, setFee] = useState('100')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-  useEffect(() => { careSettings().then(s => { if (s.cert_fee) setFee(s.cert_fee) }) }, [])
+  const fee = useFee()
   const status = me.partner?.status
 
   if (me.partner?.partner_code) {
@@ -43,41 +86,78 @@ function Certify() {
     return <div className="card text-gray-700">{tx('Pass the final exam first. Then you can pay the certification fee here.', 'पहले फ़ाइनल परीक्षा पास करें। फिर आप यहाँ सर्टिफ़िकेशन फ़ीस दे सकते हैं।')}
       <Link to="/partner/learn" className="block mt-2 text-teal-700 underline">{tx('Back to Learn', 'सीखें पर वापस')}</Link></div>
   }
-
-  const pay = async () => {
-    setBusy(true); setErr('')
-    try {
-      await loadRazorpayCheckout()
-      const o = await partnerFeeOrder()
-      const Rzp = (window as unknown as { Razorpay: new (opts: unknown) => { open(): void; on(ev: string, f: (r: unknown) => void): void } }).Razorpay
-      const rzp = new Rzp({
-        key: o.keyId, order_id: o.orderId, amount: o.amount, currency: o.currency,
-        name: 'Sehatsandhi', description: tx('Care Partner certification', 'केयर पार्टनर सर्टिफ़िकेशन'),
-        prefill: { name: o.name, contact: o.phone.slice(-10), email: o.email ?? undefined },
-        theme: { color: '#0f766e' }, remember_customer: false,
-        modal: { ondismiss: () => setBusy(false) },
-        handler: async (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
-          try {
-            const v = await verifyRazorpayPayment({ orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id, signature: r.razorpay_signature, paymentRowId: o.paymentRowId })
-            if (!v.ok) throw new Error(v.error ?? 'Payment could not be confirmed.')
-            await reload(); navigate('/partner/agreement', { replace: true })
-          } catch (e) { setErr((e as Error).message + ' ' + tx('If money was taken, your ID will appear shortly — or open a ticket.', 'अगर पैसे कट गए हैं, तो आपका ID जल्द दिखेगा — या टिकट खोलें।')); setBusy(false) }
-        },
-      })
-      rzp.on('payment.failed', () => { setErr(tx('The payment did not go through. You can try again.', 'भुगतान नहीं हुआ। आप फिर से कोशिश कर सकते हैं।')); setBusy(false) })
-      rzp.open()
-    } catch (e) { setErr((e as Error).message); setBusy(false) }
-  }
-
   return (
     <div className="card space-y-3">
       <p className="text-lg font-bold text-navy-700">{tx('Congratulations on passing the exam!', 'परीक्षा पास करने पर बधाई!')}</p>
-      <p className="text-gray-700">{tx(`The one-time certification fee is ₹${fee}, all taxes included. You get your Partner ID, your badge and a GST invoice.`,
-        `एक बार की सर्टिफ़िकेशन फ़ीस ₹${fee} है, सभी टैक्स सहित। आपको Partner ID, बैज और GST इनवॉइस मिलेगा।`)}</p>
-      <p className="text-sm text-gray-600">{tx('The fee is not refundable once your Partner ID is issued. It is never a deposit, and no reward is ever paid on it.',
-        'Partner ID जारी होने के बाद फ़ीस वापस नहीं होती। यह कोई जमा राशि नहीं है, और इस पर कभी कोई रिवॉर्ड नहीं मिलता।')}</p>
-      {err && <p className="text-red-600 text-sm">{err}</p>}
-      <button disabled={busy} onClick={pay} className="btn-teal py-3 px-6 w-full sm:w-auto">{busy ? tx('Opening payment…', 'भुगतान खुल रहा है…') : tx(`Pay ₹${fee}`, `₹${fee} दें`)}</button>
+      <p className="text-gray-700">{tx(`The certification fee is ${fee.en}. You get your Partner ID and badge for 12 months, and a GST invoice.`,
+        `सर्टिफ़िकेशन फ़ीस ${fee.hi} है। आपको 12 महीने के लिए Partner ID और बैज, और GST इनवॉइस मिलेगा।`)}</p>
+      <p className="text-sm text-gray-600">{tx('Every year you renew it with a short refresher quiz and the same fee — this keeps every Partner ID current and genuine. The fee is not refundable once your Partner ID is issued. It is never a deposit, and no reward is ever paid on it.',
+        'हर साल आप एक छोटे रिफ़्रेशर क्विज़ और इसी फ़ीस से इसे रिन्यू करते हैं — इससे हर Partner ID सही और असली रहता है। Partner ID जारी होने के बाद फ़ीस वापस नहीं होती। यह कोई जमा राशि नहीं है, और इस पर कभी कोई रिवॉर्ड नहीं मिलता।')}</p>
+      <PayFeeButton amount={fee.payable} label={['Care Partner certification', 'केयर पार्टनर सर्टिफ़िकेशन']}
+        onPaid={async () => { await reload(); navigate('/partner/agreement', { replace: true }) }} />
+    </div>
+  )
+}
+
+// ── Yearly renewal (0337) ───────────────────────────────────────────────────
+export function PartnerRenew() {
+  return <PartnerShell title="Renew your Partner ID" titleHi="अपना Partner ID रिन्यू करें" needs="registered"><Renew /></PartnerShell>
+}
+
+function Renew() {
+  const { tx } = useTx()
+  const { me, reload } = usePartnerMe()
+  const fee = useFee()
+  const [done, setDone] = useState(false)
+  const p = me.partner, r = me.renewal
+  if (!p?.partner_code || !p.valid_until) {
+    return <div className="card text-gray-700">{tx('You do not have a Partner ID yet.', 'आपके पास अभी Partner ID नहीं है।')}
+      <Link to="/partner/learn" className="block mt-2 text-teal-700 underline">{tx('Back to Learn', 'सीखें पर वापस')}</Link></div>
+  }
+  if (done) {
+    return <div className="card border-2 border-teal-500 space-y-2">
+      <p className="text-lg font-bold text-navy-700">{tx('Renewed — thank you!', 'रिन्यू हो गया — धन्यवाद!')}</p>
+      <p className="text-gray-700">{tx(`Your Partner ID ${p.partner_code} is now valid until ${day(p.valid_until)}.`, `आपका Partner ID ${p.partner_code} अब ${day(p.valid_until)} तक मान्य है।`)}</p>
+      <Link to="/partner/dashboard" className="btn-teal py-3 px-6 w-fit">{tx('Go to your dashboard', 'अपने डैशबोर्ड पर जाएँ')}</Link>
+    </div>
+  }
+  if (!r?.open) {
+    return <div className="card text-gray-700 space-y-1">
+      <p>{tx(`Your Partner ID ${p.partner_code} is valid until ${day(p.valid_until)}.`, `आपका Partner ID ${p.partner_code} ${day(p.valid_until)} तक मान्य है।`)}</p>
+      {r?.opens_on && !r.expired && <p>{tx(`Renewal opens on ${day(r.opens_on)}.`, `रिन्यूअल ${day(r.opens_on)} को खुलेगा।`)}</p>}
+      {!['fee_paid', 'active'].includes(p.status) && <p>{tx('Renewal is not open for your account. Please open a ticket.', 'आपके खाते के लिए रिन्यूअल खुला नहीं है। कृपया टिकट खोलें।')}</p>}
+      <Link to="/partner/dashboard" className="block mt-2 text-teal-700 underline">{tx('Go to your dashboard', 'अपने डैशबोर्ड पर जाएँ')}</Link>
+    </div>
+  }
+  const step = (ok: boolean, n: number) => ok ? <CheckCircle2 className="w-6 h-6 text-teal-600 shrink-0" /> : <span className="w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-sm font-bold grid place-items-center shrink-0">{n}</span>
+  return (
+    <div className="space-y-3">
+      <div className={`card ${r.expired ? 'border-2 border-amber-400' : ''}`}>
+        <p className="font-semibold text-navy-700">{r.expired
+          ? tx(`Your Partner ID expired on ${day(p.valid_until)}.`, `आपका Partner ID ${day(p.valid_until)} को खत्म हो गया।`)
+          : tx(`Your Partner ID is valid until ${day(p.valid_until)}.`, `आपका Partner ID ${day(p.valid_until)} तक मान्य है।`)}</p>
+        <p className="text-gray-700 text-[15px] mt-1">{tx(`Renew by ${day(r.last_day!)}. If it is not renewed by then, your partnership ends. While it is expired you cannot reserve doctors, and payments made in that time earn no reward.`,
+          `${day(r.last_day!)} तक रिन्यू करें। तब तक रिन्यू न होने पर साझेदारी समाप्त हो जाएगी। खत्म रहने के दौरान आप डॉक्टर रिज़र्व नहीं कर सकते, और उस समय के भुगतानों पर कोई रिवॉर्ड नहीं मिलता।`)}</p>
+        <p className="text-sm text-gray-600 mt-1">{tx('The yearly renewal keeps every Partner ID current and genuine.', 'सालाना रिन्यूअल से हर Partner ID सही और असली रहता है।')}</p>
+      </div>
+      <div className="card flex gap-3 items-start">
+        {step(!!r.refresher_passed, 1)}
+        <div className="flex-1">
+          <p className="font-semibold text-navy-700">{tx('Pass the refresher quiz', 'रिफ़्रेशर क्विज़ पास करें')}</p>
+          {r.refresher_passed
+            ? <p className="text-sm text-teal-700">{tx('Passed.', 'पास।')}</p>
+            : <><p className="text-sm text-gray-600">{tx('A short set of questions from all the modules. Read the PDFs again first if you like.', 'सभी मॉड्यूल से कुछ सवाल। चाहें तो पहले PDF फिर से पढ़ लें।')}</p>
+                <Link to="/partner/refresher" className="btn-teal py-2.5 px-5 w-fit mt-2 inline-block">{tx('Start the refresher quiz', 'रिफ़्रेशर क्विज़ शुरू करें')}</Link></>}
+        </div>
+      </div>
+      <div className={`card flex gap-3 items-start ${r.refresher_passed ? '' : 'opacity-60'}`}>
+        {step(false, 2)}
+        <div className="flex-1 space-y-2">
+          <p className="font-semibold text-navy-700">{tx(`Pay the renewal fee: ${fee.en}`, `रिन्यूअल फ़ीस दें: ${fee.hi}`)}</p>
+          <p className="text-sm text-gray-600">{tx('Your Partner ID stays the same and runs 12 more months. You get a GST invoice.', 'आपका Partner ID वही रहता है और 12 महीने और चलता है। आपको GST इनवॉइस मिलेगा।')}</p>
+          {r.refresher_passed && <PayFeeButton amount={fee.payable} label={['Care Partner renewal', 'केयर पार्टनर रिन्यूअल']} onPaid={async () => { await reload(); setDone(true) }} />}
+        </div>
+      </div>
     </div>
   )
 }
@@ -165,8 +245,9 @@ function Dashboard() {
   const { tx } = useTx()
   const { me } = usePartnerMe()
   const p = me.partner!
-  const [inv, setInv] = useState<{ invoice_number: string; invoice_token: string } | null>(null)
-  useEffect(() => { myFeeInvoice().then(setInv) }, [])
+  const [invs, setInvs] = useState<FeeInvoice[]>([])
+  useEffect(() => { myFeeInvoices().then(setInvs) }, [])
+  const r = me.renewal
   return (<>
     <div className="card">
       <div className="text-xs text-gray-500">{tx('Status', 'स्थिति')}</div>
@@ -176,13 +257,20 @@ function Dashboard() {
         : <p className="text-gray-600 text-sm mt-1">{tx('Your Partner ID is issued after the final exam and the certification fee.', 'फ़ाइनल परीक्षा और सर्टिफ़िकेशन फ़ीस के बाद आपका Partner ID जारी होता है।')}</p>}
       {p.status_reason && ['paused', 'suspended', 'terminated'].includes(p.status) && <p className="text-sm text-amber-800 mt-1">{p.status_reason}</p>}
     </div>
+    {r?.open && <div className={`card ${r.expired ? 'border-2 border-amber-400' : 'border-2 border-teal-200'}`}>
+      <p className="font-semibold text-navy-700">{r.expired
+        ? tx(`Your Partner ID has expired. Renew by ${day(r.last_day!)} or your partnership ends.`, `आपका Partner ID खत्म हो गया है। ${day(r.last_day!)} तक रिन्यू करें, नहीं तो साझेदारी समाप्त हो जाएगी।`)
+        : tx(`Time to renew: your Partner ID is valid until ${day(p.valid_until!)}.`, `रिन्यू करने का समय: आपका Partner ID ${day(p.valid_until!)} तक मान्य है।`)}</p>
+      <Link to="/partner/renew" className="btn-teal py-2.5 px-5 w-fit mt-2 inline-block">{tx('Renew now', 'अभी रिन्यू करें')}</Link>
+    </div>}
     {p.partner_code && <Badge code={p.partner_code} name={p.full_name} city={p.city} validUntil={p.valid_until ?? null} />}
     {p.status === 'active' && <Leads />}
     {p.partner_code && <Money />}
     <div className="card text-sm space-y-2">
       <Link to="/partner/learn" className="block text-teal-700 underline">{tx('Training and contracts', 'ट्रेनिंग और अनुबंध')}</Link>
       <Link to="/partner/tickets" className="block text-teal-700 underline">{tx('My tickets', 'मेरे टिकट')}</Link>
-      {inv && <a href={`/invoice/${inv.invoice_token}`} target="_blank" rel="noopener noreferrer" className="block text-teal-700 underline">{tx('Certification fee invoice', 'सर्टिफ़िकेशन फ़ीस इनवॉइस')} {inv.invoice_number}</a>}
+      {invs.map(inv => <a key={inv.invoice_token} href={`/invoice/${inv.invoice_token}`} target="_blank" rel="noopener noreferrer" className="block text-teal-700 underline">
+        {inv.renewal ? tx('Renewal fee invoice', 'रिन्यूअल फ़ीस इनवॉइस') : tx('Certification fee invoice', 'सर्टिफ़िकेशन फ़ीस इनवॉइस')} {inv.invoice_number}</a>)}
     </div>
   </>)
 }

@@ -83,8 +83,19 @@ export async function fulfilPayment(
   // send the receipt once, and stop.
   if (pay.type === 'partner_fee') {
     const { data: done, error: fErr } = await supabase.rpc('sehat_care_fee_paid', { p_payment: pay.id })
-    const r = done as { partner_code?: string; already?: boolean; invoice_number?: string; invoice_token?: string; email?: string | null; name?: string } | null
-    if (!fErr && r && !r.already && r.email) {
+    const r = done as { partner_code?: string; already?: boolean; renewed?: boolean; valid_until?: string; invoice_number?: string; invoice_token?: string; email?: string | null; name?: string } | null
+    if (!fErr && r && !r.already && r.renewed && r.email) {
+      // 0337: a yearly renewal — same Partner ID, 12 more months.
+      const site = (Deno.env.get('SITE_URL') ?? 'https://www.sehatsandhi.com').replace(/\/$/, '')
+      const until = r.valid_until ? new Date(r.valid_until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+      await sendEmail({
+        to: r.email, toName: r.name, subject: `Your Sehatsandhi Partner ID ${r.partner_code} is renewed`,
+        html: layout('Partner ID renewed', `<p>Namaste ${esc(r.name ?? '')},</p>
+<p>Thank you. Your Partner ID <b>${esc(r.partner_code ?? '')}</b> is renewed and now valid until <b>${esc(until)}</b>.</p>
+${r.invoice_token ? `<p>Your tax invoice ${esc(r.invoice_number ?? '')}: <a href="${site}/invoice/${r.invoice_token}">${site}/invoice/${r.invoice_token}</a></p>` : ''}
+<p>धन्यवाद। आपका Partner ID <b>${esc(r.partner_code ?? '')}</b> रिन्यू हो गया है और अब <b>${esc(until)}</b> तक मान्य है।</p>`),
+      }).catch(() => undefined)
+    } else if (!fErr && r && !r.already && r.email) {
       const site = (Deno.env.get('SITE_URL') ?? 'https://www.sehatsandhi.com').replace(/\/$/, '')
       await sendEmail({
         to: r.email, toName: r.name, subject: `Your Sehatsandhi Partner ID ${r.partner_code}`,

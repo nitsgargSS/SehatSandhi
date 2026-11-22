@@ -44,6 +44,8 @@ const PartnerHelp = lazy(() => import('./pages/partner/PartnerHelp'))
 const PartnerModuleQuiz = lazy(() => import('./pages/partner/PartnerQuiz').then(m => ({ default: m.PartnerModuleQuiz })))
 const PartnerFinalExam = lazy(() => import('./pages/partner/PartnerQuiz').then(m => ({ default: m.PartnerFinalExam })))
 const PartnerCertify = lazy(() => import('./pages/partner/PartnerAccount').then(m => ({ default: m.PartnerCertify })))
+const PartnerRenew = lazy(() => import('./pages/partner/PartnerAccount').then(m => ({ default: m.PartnerRenew })))
+const PartnerRefresher = lazy(() => import('./pages/partner/PartnerQuiz').then(m => ({ default: m.PartnerRefresher })))
 const PartnerAgreement = lazy(() => import('./pages/partner/PartnerAccount').then(m => ({ default: m.PartnerAgreement })))
 const PartnerDashboard = lazy(() => import('./pages/partner/PartnerAccount').then(m => ({ default: m.PartnerDashboard })))
 const PartnerTickets = lazy(() => import('./pages/partner/PartnerAccount').then(m => ({ default: m.PartnerTickets })))
@@ -351,6 +353,8 @@ export default function App() {
           <Route path="/partner/exam" element={<PartnerFinalExam />} />
           <Route path="/partner/certify" element={<PartnerCertify />} />
           <Route path="/partner/pay" element={<PartnerCertify />} />
+          <Route path="/partner/renew" element={<PartnerRenew />} />
+          <Route path="/partner/refresher" element={<PartnerRefresher />} />
           <Route path="/partner/agreement" element={<PartnerAgreement />} />
           <Route path="/partner/dashboard" element={<PartnerDashboard />} />
           <Route path="/partner/tickets" element={<PartnerTickets />} />

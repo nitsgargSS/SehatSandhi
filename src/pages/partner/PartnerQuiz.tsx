@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CheckCircle2, XCircle } from 'lucide-react'
 import PartnerShell, { usePartnerMe, useTx } from './PartnerShell'
-import { careModules, quizStart, quizSubmit, whenIST, type CareModule, type QuizAttempt, type QuizResult } from '../../lib/careApi'
+import { careModules, quizStart, quizSubmit, refresherStart, whenIST, type CareModule, type QuizAttempt, type QuizResult } from '../../lib/careApi'
 
-// /partner/quiz/:slug (a module's quiz) and /partner/exam (the final exam) —
+// /partner/quiz/:slug (a module's quiz), /partner/exam (the final exam) and
+// /partner/refresher (the yearly renewal quiz, 0337) —
 // brief §4.4, Phase 2. The questions come from the server with their options
 // already shuffled and no answers; grading happens there too. A started
 // attempt resumes if the page is reopened; walking away counts as a fail.
@@ -26,7 +27,15 @@ export function PartnerFinalExam() {
   )
 }
 
-function QuizFor({ slug }: { slug: string | null }) {
+export function PartnerRefresher() {
+  return (
+    <PartnerShell title="Refresher quiz" titleHi="रिफ़्रेशर क्विज़" needs="registered">
+      <QuizFor slug={null} refresher />
+    </PartnerShell>
+  )
+}
+
+function QuizFor({ slug, refresher = false }: { slug: string | null; refresher?: boolean }) {
   const { tx } = useTx()
   const { reload } = usePartnerMe()
   const [mod, setMod] = useState<CareModule | null | undefined>(slug ? undefined : null)
@@ -42,7 +51,7 @@ function QuizFor({ slug }: { slug: string | null }) {
 
   const start = async () => {
     setBusy(true); setErr('')
-    try { setAttempt(await quizStart(mod?.id ?? null)); setAnswers({}) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+    try { setAttempt(refresher ? await refresherStart() : await quizStart(mod?.id ?? null)); setAnswers({}) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
   const submit = async () => {
     if (!attempt) return
@@ -71,7 +80,10 @@ function QuizFor({ slug }: { slug: string | null }) {
               `आप ${whenIST(result.next_allowed_at)} के बाद फिर से कोशिश कर सकते हैं। तब तक वीडियो फिर देखें और PDF फिर पढ़ें।`)}</p>
           )}
           {result.passed && result.kind === 'final' && (
-            <p className="text-gray-700 mt-1">{tx('Congratulations. The certification step (fee, Partner ID and badge) opens soon.', 'बधाई हो। सर्टिफ़िकेशन का कदम (फ़ीस, Partner ID और बैज) जल्द खुलेगा।')}</p>
+            <p className="text-gray-700 mt-1">{tx('Congratulations. Next, pay the certification fee to get your Partner ID and badge.', 'बधाई हो। अब अपना Partner ID और बैज पाने के लिए सर्टिफ़िकेशन फ़ीस दें।')}</p>
+          )}
+          {result.passed && result.kind === 'refresher' && (
+            <p className="text-gray-700 mt-1">{tx('Well done. Next, pay the renewal fee to renew your Partner ID for 12 months.', 'शाबाश। अब अपना Partner ID 12 महीने के लिए रिन्यू करने के लिए रिन्यूअल फ़ीस दें।')}</p>
           )}
         </div>
         {!result.passed && result.revise && result.revise.length > 0 && (
@@ -95,7 +107,9 @@ function QuizFor({ slug }: { slug: string | null }) {
             {(q.explain_en || q.explain_hi) && <p className="text-sm text-gray-600 mt-2">{tx(q.explain_en ?? '', q.explain_hi ?? '')}</p>}
           </div>
         ))}
-        <Link to="/partner/learn" className="btn-teal py-3 px-6 w-fit">{tx('Back to Learn', 'सीखें पर वापस')}</Link>
+        {result.passed && result.kind === 'final' ? <Link to="/partner/certify" className="btn-teal py-3 px-6 w-fit">{tx('Get your Partner ID', 'अपना Partner ID पाएँ')}</Link>
+          : result.kind === 'refresher' ? <Link to="/partner/renew" className="btn-teal py-3 px-6 w-fit">{tx('Back to renewal', 'रिन्यूअल पर वापस')}</Link>
+          : <Link to="/partner/learn" className="btn-teal py-3 px-6 w-fit">{tx('Back to Learn', 'सीखें पर वापस')}</Link>}
       </div>
     )
   }
@@ -106,14 +120,15 @@ function QuizFor({ slug }: { slug: string | null }) {
       <div className="card space-y-3">
         {mod && <p className="font-semibold text-navy-700">{tx(mod.title_en, mod.title_hi)}</p>}
         <ul className="list-disc pl-5 text-gray-700 text-[15px] space-y-1">
+          {refresher && <li>{tx('Your yearly check before renewal: a short set of questions from all the modules. It keeps every Partner ID current.', 'रिन्यूअल से पहले सालाना जाँच: सभी मॉड्यूल से कुछ सवाल। इससे हर Partner ID सही बना रहता है।')}</li>}
           <li>{slug ? tx('A few questions from this module\'s video and PDF.', 'इस मॉड्यूल के वीडियो और PDF से कुछ सवाल।') : tx('Questions from all the modules.', 'सभी मॉड्यूल से सवाल।')}</li>
           <li>{tx('Some questions have more than one right answer — they say so.', 'कुछ सवालों के एक से ज़्यादा सही जवाब होते हैं — उनमें लिखा होता है।')}</li>
           <li>{tx('Once you start, finish within the time shown. Leaving it unfinished counts as not passed.', 'शुरू करने के बाद दिए गए समय में पूरा करें। अधूरा छोड़ने पर पास नहीं माना जाएगा।')}</li>
         </ul>
         {err && <p className="text-red-600">{err}</p>}
         <div className="flex gap-3 flex-wrap">
-          <button disabled={busy} onClick={start} className="btn-teal py-3 px-6">{busy ? tx('Starting…', 'शुरू हो रहा है…') : slug ? tx('Start the quiz', 'क्विज़ शुरू करें') : tx('Start the exam', 'परीक्षा शुरू करें')}</button>
-          <Link to="/partner/learn" className="py-3 px-4 text-gray-600">{tx('Not now', 'अभी नहीं')}</Link>
+          <button disabled={busy} onClick={start} className="btn-teal py-3 px-6">{busy ? tx('Starting…', 'शुरू हो रहा है…') : slug || refresher ? tx('Start the quiz', 'क्विज़ शुरू करें') : tx('Start the exam', 'परीक्षा शुरू करें')}</button>
+          <Link to={refresher ? '/partner/renew' : '/partner/learn'} className="py-3 px-4 text-gray-600">{tx('Not now', 'अभी नहीं')}</Link>
         </div>
       </div>
     )

@@ -6,8 +6,8 @@
 //   node scripts/partner-training.mjs              PDFs into docs/partner-training/pdf/
 //   node scripts/partner-training.mjs --sandbox    also: upload the PDFs to the
 //        partner-content bucket, set each module's PDF paths, add the quiz
-//        questions (once — a question already there by its English text is
-//        skipped) and publish every module that has enough questions; upload
+//        questions (a question already there by its English text is updated
+//        in place) and publish every module that has enough questions; upload
 //        the five contracts and make that version current.
 //
 // Sandbox only: it refuses any database or URL that is not the sandbox project.
@@ -121,6 +121,9 @@ async function loadSandbox(files) {
            where not exists (select 1 from care_partner_questions where module_id = $1 and text_en = $3)`,
           [mod.id, type, qEn, qHi, JSON.stringify(options), JSON.stringify(correct), xEn, xHi])
         added += r.rowCount
+        if (!r.rowCount) await c.query(`update care_partner_questions set qtype = $2, text_hi = $4, options = $5::jsonb, correct = $6::jsonb,
+            explain_en = $7, explain_hi = $8 where module_id = $1 and text_en = $3`,
+          [mod.id, type, qEn, qHi, JSON.stringify(options), JSON.stringify(correct), xEn, xHi])
       }
       const { rows: [{ n }] } = await c.query('select count(*)::int n from care_partner_questions where module_id = $1 and is_active', [mod.id])
       if (n >= need) { await c.query('update care_partner_modules set is_published = true, updated_at = now() where id = $1', [mod.id]); published++ }

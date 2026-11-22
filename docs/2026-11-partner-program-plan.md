@@ -51,6 +51,11 @@ exists (PDF + questions publish it; the quiz opens after the PDF is read). Sandb
 Contracts 22 Nov: docs/partner-training/contracts.mjs — Partner Agreement, Code of Conduct, Rewards Policy, Privacy Notice,
 Fee terms (EN + HI, version draft-1, DRAFT for the lawyer; [LAWYER]/[CA] marks open points). Same script builds
 pdf/contracts/ and, with --sandbox, uploads them and makes draft-1 current. On prod, replace with the lawyer's final text first.
+0337 (22 Nov, Nitin: "renewal fee is yearly … to keep genuine partners"): fee is ₹100 + GST (₹118) for the first
+certification AND each yearly renewal. Renewal opens 30 days before valid_until (partner_renew_window_days): refresher
+quiz (kind 'refresher', 10 questions from all modules) → pay → same ID, +12 months from the old expiry. Expired = no leads,
+no rewards. Not renewed within 30 days after expiry (partner_id_grace_days) → nightly care-renewals-nightly terminates.
+Pages /partner/renew and /partner/refresher; renewal email in fulfilment.ts (redeploy razorpay-verify + razorpay-webhook).
 Decisions (Nitin, 22 Nov): 1 fix online refunds — yes; 2 confirmed Care Partner credit approved automatically, admin can override; 3 new Care Partners tab for operations, money in Partners — OK; 6 active = paid term not ended — OK. Not answered yet: 4 (active field/agency partners — needed before Phase 4), 5 (production order vs EMI — default: partner migrations independent of 0330), 7 (who uploads videos/PDFs — CMS built either way). Brief: https://claude.ai/artifact/Wc4MJ5dGZBzQeATsbtyJKj
 (v2, consolidated; `Sehatsandhi_Partner_Program_Claude_Code_Brief.md` + `Sehatsandhi_Partner_FAQ_Seed.csv`).
 Built on staging / sandbox only, behind `site_settings` switch `partner_program_enabled` (off).

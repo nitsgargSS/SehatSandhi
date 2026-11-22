@@ -16,8 +16,11 @@ export interface CareMe {
               status_reason: string | null; level: string; partner_code: string | null; created_at: string
               email?: string | null; certified_at?: string | null; valid_until?: string | null; agreement_signed_at?: string | null } | null
   pending_contracts?: number
+  renewal?: Renewal
   next?: NextStep
 }
+/** Yearly renewal (0337): opens renew_window_days before valid_until, closes id_grace_days after it. */
+export interface Renewal { open: boolean; opens_on?: string; valid_until?: string; expired?: boolean; last_day?: string; refresher_passed?: boolean }
 export interface CareModule {
   id: string; sort_order: number; slug: string; title_hi: string; title_en: string; desc_hi: string | null; desc_en: string | null
   youtube_id_hi: string | null; youtube_id_en: string | null; video_seconds: number | null
@@ -292,7 +295,7 @@ export function parseCsv(text: string): Record<string, string>[] {
 
 export interface QuizOption { id: string; text_en: string; text_hi: string }
 export interface QuizQuestion { id: string; qtype: 'single' | 'multi' | 'truefalse'; text_en: string; text_hi: string; options: QuizOption[] }
-export interface QuizAttempt { attempt_id: string; kind: 'module' | 'final'; module_id: string | null; expires_at: string; questions: QuizQuestion[] }
+export interface QuizAttempt { attempt_id: string; kind: 'module' | 'final' | 'refresher'; module_id: string | null; expires_at: string; questions: QuizQuestion[] }
 export interface QuizResult {
   passed: boolean; score_pct: number; correct: number; total: number; pass_mark: number; next_allowed_at: string | null; kind: string
   review: { id: string; text_en: string; text_hi: string; options: QuizOption[]; correct: string[]; chosen: string[]; explain_en: string | null; explain_hi: string | null }[] | null
@@ -306,6 +309,11 @@ export interface AdminQuestion {
 
 export async function quizStart(moduleId: string | null): Promise<QuizAttempt> {
   const { data, error } = await supabase.rpc('sehat_care_quiz_start', { p_module: moduleId })
+  oops(error)
+  return data as QuizAttempt
+}
+export async function refresherStart(): Promise<QuizAttempt> {
+  const { data, error } = await supabase.rpc('sehat_care_refresher_start')
   oops(error)
   return data as QuizAttempt
 }
@@ -347,9 +355,11 @@ export async function partnerFeeOrder(): Promise<FeeOrder> {
   if (!r.ok) throw new Error(j.error ?? 'Could not start the payment. Please try again.')
   return j as FeeOrder
 }
-export async function myFeeInvoice(): Promise<{ invoice_number: string; invoice_token: string; total: number; date: string } | null> {
-  const { data } = await supabase.rpc('sehat_care_my_fee_invoice')
-  return (data ?? null) as { invoice_number: string; invoice_token: string; total: number; date: string } | null
+export interface FeeInvoice { invoice_number: string; invoice_token: string; total: number; date: string; renewal: boolean }
+/** Every fee invoice the partner has: the first certification and each yearly renewal, newest first. */
+export async function myFeeInvoices(): Promise<FeeInvoice[]> {
+  const { data } = await supabase.rpc('sehat_care_my_fee_invoices')
+  return (data ?? []) as FeeInvoice[]
 }
 export async function pendingContracts(): Promise<CareContract[]> {
   const { data, error } = await supabase.rpc('sehat_care_pending_contracts')
