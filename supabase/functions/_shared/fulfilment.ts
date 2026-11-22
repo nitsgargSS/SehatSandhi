@@ -195,6 +195,10 @@ ${r.invoice_token ? `<p>Your tax invoice ${esc(r.invoice_number ?? '')}: <a href
   // 0117: count the coupon once, and switch the WhatsApp add-on on for the term.
   // Both idempotent, so the second of verify/webhook changes nothing.
   await supabase.rpc('sehat_redeem_coupon', { p_payment_id: pay.id })
+  // 0335: a Care Partner's reward on this payment (12-month terms of a business
+  // credited to a Care Partner). Idempotent on the payment; never fails a payment,
+  // and a database without the Partner Program simply has no such function.
+  await supabase.rpc('sehat_care_reward_for_payment', { p_payment: pay.id }).then(() => undefined, () => undefined)
   if (pay.whatsapp_addon && pay.business_id) {
     const { data: acct } = await supabase.from('business_wa_accounts')
       .select('subscription_started_at, onboarding_fee_paid_at').eq('business_id', pay.business_id).maybeSingle()

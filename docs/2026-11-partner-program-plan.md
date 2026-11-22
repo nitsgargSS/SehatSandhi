@@ -30,6 +30,20 @@ before first payment (self-referral refused), admin claim within partner_claim_d
 (question / introduced by / Report). Partner dashboard: reserved doctors + businesses introduced. Admin: Reports + Claim.
 Fixed before commit: sehat_care_owner_only let a stranger through (null-unsafe check) — now coalesce(...); sandbox ledger
 checksum for 0334 updated to the fixed file.
+Phase 5 built 22 Nov: 0335 (sandbox only) — payments.refunded_amount/refunded_at/razorpay_refund_ids; refund.processed in
+razorpay-webhook + admin record refund; 0255 agency lines now include online refunds. care_partner_rewards (start 15/20/25 % by
+level within 12 months of confirmation, cap ₹15,000 per business; renewal 10 % unless lapse > grace; only period_months = 12;
+pending → approved nightly after the refund window → paid with the statement; refunds reverse/scale pending, clawback approved).
+Care statements use 0255: lines = approved, unstated rewards (carried forward); BEFORE INSERT checks KYC verified, current
+contracts accepted, min payout, and sets TDS (partner_tds_rate 2 %, threshold ₹20,000 per FY — CHECK with CA); AFTER triggers
+mark rewards on the statement / paid. KYC: PAN + bank JSON in Vault ('care_kyc_<partner id>'), keyed hashes unique (no shared
+PAN/bank), last 4 in the table; full values + payout export only for admin role 'owner', logged. Nightly cron
+'care-rewards-nightly' (approvals + levels: senior 10, elite 30 active businesses; no move up with an open report).
+fulfilPayment calls sehat_care_reward_for_payment. UI: partner dashboard Rewards, PAN/bank, statements; Admin → Care Partners
+→ Payouts (owed, KYC queue, statements, bank CSV, record refund). Razorpay dashboard: subscribe the webhook to refund.processed.
+Payout month (Nitin, 22 Nov): monthly payouts; payment on or before the 15th (partner_payout_cutoff_day) → that month's payout,
+after → next month's; approval 15 days after the payment (Nitin changed 14 → 15 to match the cut-off); clawbacks in the refund's month. care_partner_rewards.payout_month.
+Added to 0335 before commit; sandbox re-run and ledger checksum updated.
 Decisions (Nitin, 22 Nov): 1 fix online refunds — yes; 2 confirmed Care Partner credit approved automatically, admin can override; 3 new Care Partners tab for operations, money in Partners — OK; 6 active = paid term not ended — OK. Not answered yet: 4 (active field/agency partners — needed before Phase 4), 5 (production order vs EMI — default: partner migrations independent of 0330), 7 (who uploads videos/PDFs — CMS built either way). Brief: https://claude.ai/artifact/Wc4MJ5dGZBzQeATsbtyJKj
 (v2, consolidated; `Sehatsandhi_Partner_Program_Claude_Code_Brief.md` + `Sehatsandhi_Partner_FAQ_Seed.csv`).
 Built on staging / sandbox only, behind `site_settings` switch `partner_program_enabled` (off).

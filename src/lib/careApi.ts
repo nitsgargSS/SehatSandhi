@@ -460,3 +460,54 @@ export async function adminClaim(businessId: string, partnerCode: string) {
   const { error } = await supabase.rpc('sehat_admin_care_claim', { p_business: businessId, p_partner_code: partnerCode })
   oops(error)
 }
+
+// ── Rewards, KYC and payouts (0335) ─────────────────────────────────────────
+
+export interface MyMoney {
+  level: 'associate' | 'senior' | 'elite'; kyc_status: 'not_started' | 'submitted' | 'verified' | 'rejected'
+  pan_last4: string | null; bank_last4: string | null; status_reason: string | null; min_payout: number
+  totals: { pending: number; approved: number; paid: number }
+  rewards: { id: string; business: string | null; type: 'start' | 'renewal' | 'clawback'; base: number; rate: number; amount: number; status: string; approve_after: string; created_at: string; note: string | null; payout_month: string | null }[]
+  statements: { month: string; gross: number; tds: number | null; net: number | null; status: string; paid_on: string | null; reference: string | null }[]
+}
+export async function myMoney(): Promise<MyMoney | null> {
+  const { data, error } = await supabase.rpc('sehat_care_my_money')
+  oops(error)
+  return (data ?? null) as MyMoney | null
+}
+export async function submitKyc(pan: string, account: string, ifsc: string, holder: string) {
+  const { error } = await supabase.rpc('sehat_care_kyc_submit', { p_pan: pan, p_account: account, p_ifsc: ifsc, p_holder: holder })
+  oops(error)
+}
+export interface AdminMoney {
+  pending: number; approved_unpaid: number; paid: number
+  kyc_queue: { id: string; full_name: string; partner_code: string; pan_last4: string; bank_last4: string; updated_at: string }[]
+  statements: { partner_code: string; full_name: string; month: string; gross: number; tds: number | null; net: number | null; status: string; paid_on: string | null; reference: string | null }[]
+  partners_with_rewards: { partner_code: string; full_name: string; level: string; kyc_status: string; approved: number | null; pending: number | null }[]
+}
+export async function adminMoney(): Promise<AdminMoney> {
+  const { data, error } = await supabase.rpc('sehat_admin_care_money')
+  oops(error)
+  return data as AdminMoney
+}
+export async function adminKycDetails(partnerId: string): Promise<Record<string, string>> {
+  const { data, error } = await supabase.rpc('sehat_admin_care_kyc_details', { p_partner: partnerId })
+  oops(error)
+  return data as Record<string, string>
+}
+export async function adminKycSet(partnerId: string, verified: boolean, note: string) {
+  const { error } = await supabase.rpc('sehat_admin_care_kyc_set', { p_partner: partnerId, p_verified: verified, p_note: note || null })
+  oops(error)
+}
+export async function adminPayoutExport(month: string) {
+  const { data, error } = await supabase.rpc('sehat_admin_care_payout_export', { p_month: month })
+  oops(error)
+  return (data ?? []) as { partner_code: string; full_name: string; month: string; gross: number; tds: number; net: number; holder: string; account: string; ifsc: string; pan: string }[]
+}
+/** Record a refund made in the Razorpay dashboard, by its pay_… id (when the webhook did not). */
+export async function adminRecordRefund(razorpayPaymentId: string, amount: number, note: string) {
+  const { data: pay } = await supabase.from('payments').select('id').eq('razorpay_payment_id', razorpayPaymentId.trim()).maybeSingle()
+  if (!pay) throw new Error('No payment with that Razorpay payment id.')
+  const { error } = await supabase.rpc('sehat_admin_payment_refund', { p_payment: (pay as { id: string }).id, p_amount: amount, p_note: note || null })
+  oops(error)
+}

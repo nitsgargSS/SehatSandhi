@@ -38,6 +38,7 @@ export const PURGE_TABLES: PurgeTable[] = [
   { name: 'wa_broadcasts', purgeOrder: 32, pk: 'id' },
   { name: 'business_wallet_transactions', purgeOrder: 33, pk: 'id' },
   { name: 'business_wallets', purgeOrder: 34, pk: 'id' },
+  { name: 'care_partner_rewards', purgeOrder: 34.5, pk: 'id' },
   { name: 'invoices', purgeOrder: 35, pk: 'id' },
   { name: 'invoice_counters', purgeOrder: 36, pk: 'fy' },
   { name: 'business_wa_accounts', purgeOrder: 37, pk: 'id' },

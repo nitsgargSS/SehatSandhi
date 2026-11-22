@@ -5,7 +5,7 @@ import PartnerShell, { usePartnerMe, useTx } from './PartnerShell'
 import {
   acceptContracts, careFileUrl, careSettings, createTicket, myFeeInvoice, myTickets, partnerFeeOrder, pendingContracts,
   replyTicket, requestPartnerCode, ticketMessages, verifyPartner, whenIST, STATUS_LABEL, TICKET_CATEGORY,
-  addLead, myLeads, releaseLead, type CareLeads,
+  addLead, myLeads, releaseLead, type CareLeads, myMoney, submitKyc, type MyMoney,
   type CareContract, type CareTicket, type TicketCategory, type TicketMessage, type VerifiedPartner,
 } from '../../lib/careApi'
 import { loadRazorpayCheckout, verifyRazorpayPayment } from '../../lib/businessApi'
@@ -178,6 +178,7 @@ function Dashboard() {
     </div>
     {p.partner_code && <Badge code={p.partner_code} name={p.full_name} city={p.city} validUntil={p.valid_until ?? null} />}
     {p.status === 'active' && <Leads />}
+    {p.partner_code && <Money />}
     <div className="card text-sm space-y-2">
       <Link to="/partner/learn" className="block text-teal-700 underline">{tx('Training and contracts', 'ट्रेनिंग और अनुबंध')}</Link>
       <Link to="/partner/tickets" className="block text-teal-700 underline">{tx('My tickets', 'मेरे टिकट')}</Link>
@@ -394,8 +395,104 @@ function Leads() {
               <span className={`text-xs ${b.paying ? 'text-teal-700' : 'text-gray-500'}`}>{b.paying ? tx('Paying', 'भुगतान कर रहे') : tx('Not paying yet', 'अभी भुगतान नहीं')}</span></li>
           ))}
         </ul>
-        <p className="text-xs text-gray-500 mt-2">{tx('Partner Rewards and payouts appear here soon.', 'पार्टनर रिवॉर्ड और भुगतान जल्द यहाँ दिखेंगे।')}</p>
       </div>
     )}
   </>)
+}
+
+// ── Partner Rewards, PAN and bank, statements (0335) ────────────────────────
+const inr = (n: number | null | undefined) => `₹${Number(n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+
+function Money() {
+  const { tx } = useTx()
+  const [m, setM] = useState<MyMoney | null>(null)
+  const [err, setErr] = useState('')
+  const load = useCallback(() => { myMoney().then(setM, e => setErr((e as Error).message)) }, [])
+  useEffect(() => { load() }, [load])
+  if (err) return <p className="text-sm text-red-600">{err}</p>
+  if (!m) return null
+  const LEVEL: Record<string, [string, string]> = { associate: ['Associate', 'एसोसिएट'], senior: ['Senior', 'सीनियर'], elite: ['Elite', 'एलीट'] }
+  const STATUS: Record<string, [string, string]> = { pending: ['Waiting (refund window)', 'इंतज़ार (रिफ़ंड अवधि)'], approved: ['Approved', 'मंज़ूर'], paid: ['Paid', 'भुगतान हुआ'], reversed: ['Reversed (refund)', 'वापस (रिफ़ंड)'] }
+  const TYPE: Record<string, [string, string]> = { start: ['Start Reward', 'स्टार्ट रिवॉर्ड'], renewal: ['Renewal Reward', 'रिन्यूअल रिवॉर्ड'], clawback: ['Taken back (refund)', 'वापस लिया (रिफ़ंड)'] }
+  return (<>
+    <div className="card space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="font-bold text-navy-700">{tx('Partner Rewards', 'पार्टनर रिवॉर्ड')}</h2>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-800">{tx('Level', 'लेवल')}: {tx(...LEVEL[m.level])}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {([['pending', 'Waiting', 'इंतज़ार'], ['approved', 'Approved', 'मंज़ूर'], ['paid', 'Paid', 'भुगतान']] as const).map(([k, en, hi]) => (
+          <div key={k} className="bg-gray-50 rounded-xl p-2"><div className="text-xs text-gray-500">{tx(en, hi)}</div><div className="font-bold text-navy-700">{inr(m.totals[k])}</div></div>
+        ))}
+      </div>
+      <p className="text-xs text-gray-500">{tx(`Paid monthly. A business that pays on or before the 15th is in that month's payout; after the 15th, in the next month's. Each reward is approved 15 days after the payment, and paid once your PAN and bank are verified and the total is at least ${inr(m.min_payout)}. Tax (TDS) is deducted where the law requires.`,
+        `हर महीने भुगतान। जो व्यवसाय 15 तारीख तक भुगतान करता है, वह उसी महीने के भुगतान में; 15 के बाद, अगले महीने में। हर रिवॉर्ड भुगतान के 15 दिन बाद मंज़ूर होता है, और PAN व बैंक जाँचे जाने तथा कुल कम से कम ${inr(m.min_payout)} होने पर दिया जाता है। जहाँ कानून कहता है, टैक्स (TDS) काटा जाता है।`)}</p>
+      {m.rewards.length > 0 && (
+        <ul className="divide-y divide-gray-100 text-sm">
+          {m.rewards.map(r => (
+            <li key={r.id} className="py-2 flex justify-between gap-2">
+              <span><span className="font-semibold text-gray-800">{r.business ?? '—'}</span><span className="block text-xs text-gray-500">{tx(...TYPE[r.type])} · {r.rate}% {tx('of', 'का')} {inr(r.base)} · {tx(...(STATUS[r.status] ?? [r.status, r.status]))}{r.payout_month && r.status !== 'paid' && r.status !== 'reversed' ? ` · ${tx('in the', '')} ${new Date(r.payout_month + 'T00:00:00').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} ${tx('payout', 'के भुगतान में')}` : ''}{r.note ? ` · ${r.note}` : ''}</span></span>
+              <span className={`font-semibold ${r.amount < 0 ? 'text-red-700' : 'text-navy-700'}`}>{inr(r.amount)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+    <Kyc m={m} onSaved={load} />
+    {m.statements.length > 0 && (
+      <div className="card text-sm">
+        <h2 className="font-bold text-navy-700 mb-2">{tx('Payout statements', 'भुगतान स्टेटमेंट')}</h2>
+        <ul className="divide-y divide-gray-100">
+          {m.statements.map(st => (
+            <li key={st.month} className="py-2 flex justify-between gap-2 flex-wrap">
+              <span>{new Date(st.month).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}<span className="block text-xs text-gray-500">{tx('Total', 'कुल')} {inr(st.gross)} · TDS {inr(st.tds)} · {tx('you get', 'आपको')} {inr(st.net)}</span></span>
+              <span className={`text-xs ${st.status === 'paid' ? 'text-teal-700' : 'text-amber-700'}`}>{st.status === 'paid' ? `${tx('Paid', 'भुगतान')} ${st.paid_on ? day(st.paid_on) : ''}${st.reference ? ` · ${st.reference}` : ''}` : tx('Being paid', 'भुगतान हो रहा है')}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+  </>)
+}
+
+function Kyc({ m, onSaved }: { m: MyMoney; onSaved: () => void }) {
+  const { tx } = useTx()
+  const [f, setF] = useState({ pan: '', account: '', account2: '', ifsc: '', holder: '' })
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  if (m.kyc_status === 'verified' || m.kyc_status === 'submitted') {
+    return (
+      <div className="card text-sm text-gray-700">
+        <span className="font-semibold text-navy-700">{tx('PAN and bank', 'PAN और बैंक')}: </span>
+        PAN ••••••{m.pan_last4} · {tx('account', 'खाता')} ••••{m.bank_last4} · {m.kyc_status === 'verified' ? <span className="text-teal-700">{tx('verified', 'जाँचा गया')}</span> : <span className="text-amber-700">{tx('being checked', 'जाँच हो रही है')}</span>}
+        <p className="text-xs text-gray-500 mt-1">{tx('To change them, open a ticket.', 'बदलने के लिए टिकट खोलें।')}</p>
+      </div>
+    )
+  }
+  const save = async () => {
+    setErr('')
+    if (f.account.replace(/\s/g, '') !== f.account2.replace(/\s/g, '')) { setErr(tx('The two account numbers do not match.', 'दोनों खाता नंबर मेल नहीं खाते।')); return }
+    setBusy(true)
+    try { await submitKyc(f.pan, f.account, f.ifsc, f.holder); onSaved() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  const field = (k: keyof typeof f, en: string, hi: string, extra?: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <label className="text-sm text-gray-700 block">{tx(en, hi)}<input className="input-field mt-1" value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} {...extra} /></label>
+  )
+  return (
+    <div className="card space-y-3">
+      <h2 className="font-bold text-navy-700">{tx('PAN and bank account (for payouts)', 'PAN और बैंक खाता (भुगतान के लिए)')}</h2>
+      {m.kyc_status === 'rejected' && m.status_reason && <p className="text-sm text-red-700">{m.status_reason}</p>}
+      <p className="text-xs text-gray-500">{tx('Your own PAN and your own bank account; the names must match. We keep them encrypted and show only the last 4 digits. We never ask for Aadhaar.',
+        'आपका अपना PAN और अपना बैंक खाता; नाम मेल खाने चाहिए। हम इन्हें एन्क्रिप्ट करके रखते हैं और सिर्फ़ आख़िरी 4 अंक दिखाते हैं। हम कभी आधार नहीं माँगते।')}</p>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {field('pan', 'PAN', 'PAN', { maxLength: 10, style: { textTransform: 'uppercase' }, autoComplete: 'off' })}
+        {field('holder', 'Name on the bank account', 'बैंक खाते पर नाम', { autoComplete: 'off' })}
+        {field('account', 'Account number', 'खाता नंबर', { inputMode: 'numeric', autoComplete: 'off' })}
+        {field('account2', 'Account number again', 'खाता नंबर फिर से', { inputMode: 'numeric', autoComplete: 'off' })}
+        {field('ifsc', 'IFSC code', 'IFSC कोड', { maxLength: 11, style: { textTransform: 'uppercase' }, autoComplete: 'off' })}
+      </div>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      <button disabled={busy} onClick={save} className="btn-teal py-2.5 px-5 w-fit">{busy ? tx('Saving…', 'सेव हो रहा है…') : tx('Submit for checking', 'जाँच के लिए भेजें')}</button>
+    </div>
+  )
 }

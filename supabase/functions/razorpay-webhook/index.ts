@@ -73,6 +73,19 @@ Deno.serve(async (req) => {
     return json({ error: 'invalid JSON' }, 400)
   }
 
+  // 0335: a refund Razorpay processed (made from its dashboard or API). Recorded
+  // on the payment so partner rewards and agency statements take it back.
+  // Subscribe the webhook to refund.processed in the Razorpay dashboard.
+  if (event.event === 'refund.processed') {
+    const rf = (event as { payload?: { refund?: { entity?: { id?: string; payment_id?: string; amount?: number } } } }).payload?.refund?.entity
+    if (!rf?.payment_id || !rf.id) return json({ ok: true, ignored: 'refund without ids' })
+    const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+    const { data, error } = await db.rpc('sehat_payment_refund_record', { p_razorpay_payment_id: rf.payment_id, p_refund_id: rf.id, p_amount_paise: rf.amount ?? 0 })
+    // Another product's payment, or a database without 0335: nothing of ours to record.
+    if (error) return json({ ok: true, ignored: error.message })
+    return json({ ok: true, refund: data })
+  }
+
   // Only captured payments mean money has settled. 'authorized' is a hold, and
   // acting on it would activate a listing that may never be charged.
   if (event.event !== 'payment.captured') {

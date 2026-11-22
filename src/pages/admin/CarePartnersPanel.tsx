@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { downloadCsv } from '../../lib/billingApi'
 import {
   adminCarePartners, adminCarePartnerStatus, adminSaveModule, adminSaveFaq, adminSaveContract, adminSaveSettings,
   adminCareSettings, adminUploadPdf, careModules, careContracts, careFaq, careFileUrl, parseCsv, STATUS_LABEL,
   adminQuestions, adminSaveQuestion, adminTickets, ticketMessages, replyTicket, whenIST, TICKET_CATEGORY,
   adminReports, adminCloseReport, adminClaim, type AdminReport,
+  adminMoney, adminKycDetails, adminKycSet, adminPayoutExport, adminRecordRefund, type AdminMoney,
   type AdminPartnerRow, type CareModule, type CareFaq, type CareContract, type PartnerStatus, type AdminQuestion, type QuizOption, type AdminTicketRow, type TicketMessage,
 } from '../../lib/careApi'
 
@@ -17,7 +19,7 @@ import {
 //   Settings   the program switch and every OPEN value of the brief
 // Admins only (owner/admin roles); every save is written to the staff action log.
 
-type View = 'partners' | 'tickets' | 'reports' | 'modules' | 'questions' | 'faq' | 'contracts' | 'settings'
+type View = 'partners' | 'payouts' | 'tickets' | 'reports' | 'modules' | 'questions' | 'faq' | 'contracts' | 'settings'
 const day = (s: string) => new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 
 export default function CarePartnersPanel() {
@@ -28,7 +30,7 @@ export default function CarePartnersPanel() {
         <h2 className="font-bold text-navy-700 text-lg">Care Partner Program</h2>
         <p className="text-sm text-gray-500">Partners learn, pass the exam, get a Partner ID and introduce businesses. Rewards and payouts are in the Partners tab.</p>
         <div className="flex gap-2 mt-3 overflow-x-auto">
-          {(['partners', 'tickets', 'reports', 'modules', 'questions', 'faq', 'contracts', 'settings'] as View[]).map(v => (
+          {(['partners', 'payouts', 'tickets', 'reports', 'modules', 'questions', 'faq', 'contracts', 'settings'] as View[]).map(v => (
             <button key={v} onClick={() => setView(v)}
               className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap border capitalize ${view === v ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-200'}`}>
               {v === 'faq' ? 'FAQ' : v}
@@ -37,6 +39,7 @@ export default function CarePartnersPanel() {
         </div>
       </div>
       {view === 'partners' && <Partners />}
+      {view === 'payouts' && <Payouts />}
       {view === 'tickets' && <Tickets />}
       {view === 'reports' && <Reports />}
       {view === 'modules' && <Modules />}
@@ -113,6 +116,83 @@ function Partners() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Payouts (0335) ──────────────────────────────────────────────────────────
+const rs = (n: number | null | undefined) => `₹${Number(n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+const lastMonthStart = () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10) }
+
+function Payouts() {
+  const [m, setM] = useState<AdminMoney | null>(null)
+  const [details, setDetails] = useState<Record<string, Record<string, string>>>({})
+  const [note, setNote] = useState<Record<string, string>>({})
+  const [month, setMonth] = useState(lastMonthStart().slice(0, 7))
+  const [ref, setRef] = useState({ pay: '', amount: '', note: '' })
+  const { busy, run, notes } = useRun()
+  const load = useCallback(() => { adminMoney().then(setM, () => setM(null)) }, [])
+  useEffect(() => { load() }, [load])
+  if (!m) return <p className="text-sm text-gray-400">Loading…</p>
+  const exportCsv = () => run('exp', async () => {
+    const rows = await adminPayoutExport(`${month}-01`)
+    if (!rows.length) throw new Error('No finalised, unpaid care statements for that month.')
+    downloadCsv(`care-partner-payouts-${month}.csv`, ['partner_code,name,month,gross,tds,net,account_holder,account,ifsc,pan',
+      ...rows.map(r => [r.partner_code, r.full_name, r.month, r.gross, r.tds, r.net, r.holder, r.account, r.ifsc, r.pan].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))].join('\n'))
+  }, 'Exported. Keep the file safe — it has bank details.')
+  return (
+    <div className="space-y-3">
+      <div className="card shadow-sm grid grid-cols-3 gap-2 text-center text-sm">
+        <div><div className="text-xs text-gray-500">Waiting (refund window)</div><div className="font-bold text-navy-700">{rs(m.pending)}</div></div>
+        <div><div className="text-xs text-gray-500">Owed to partners</div><div className="font-bold text-navy-700">{rs(m.approved_unpaid)}</div></div>
+        <div><div className="text-xs text-gray-500">Paid so far</div><div className="font-bold text-navy-700">{rs(m.paid)}</div></div>
+      </div>
+      {notes}
+      <div className="card shadow-sm text-sm space-y-2">
+        <div className="font-semibold text-navy-700">PAN and bank to check ({m.kyc_queue.length})</div>
+        {m.kyc_queue.length === 0 ? <p className="text-xs text-gray-500">Nothing waiting.</p> : m.kyc_queue.map(k => (
+          <div key={k.id} className="border border-gray-100 rounded-lg p-2.5 space-y-1">
+            <div>{k.full_name} · {k.partner_code} · PAN ••{k.pan_last4} · a/c ••{k.bank_last4}</div>
+            {details[k.id] ? (
+              <div className="text-xs bg-amber-50 rounded p-2">PAN {details[k.id].pan} · {details[k.id].holder} · {details[k.id].account} · {details[k.id].ifsc}
+                <span className="block text-gray-500">Check the name on PAN and bank match the partner (penny-drop through your bank if you can). This view was logged.</span></div>
+            ) : <button className="text-xs text-teal-700 underline" onClick={() => run('d' + k.id, async () => { const d = await adminKycDetails(k.id); setDetails(x => ({ ...x, [k.id]: d })) })}>Show full details (owner only)</button>}
+            <div className="flex gap-2 flex-wrap items-center">
+              <input className="input-field flex-1 min-w-[10rem] py-1.5" placeholder="If not right: what to fix" value={note[k.id] ?? ''} onChange={e => setNote(n => ({ ...n, [k.id]: e.target.value }))} />
+              <button disabled={busy === k.id} className="btn-teal text-xs py-1.5 px-3" onClick={() => run(k.id, async () => { await adminKycSet(k.id, true, ''); load() }, 'Verified.')}>Verified</button>
+              <button disabled={busy === k.id} className="text-xs py-1.5 px-3 rounded-lg border border-red-200 text-red-700" onClick={() => run(k.id, async () => { await adminKycSet(k.id, false, note[k.id] ?? ''); load() }, 'Sent back to the partner.')}>Not right</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="card shadow-sm text-sm space-y-2">
+        <div className="font-semibold text-navy-700">Statements</div>
+        <p className="text-xs text-gray-500">Monthly: a reward whose payment was on or before the 15th (setting payout_cutoff_day) is in that month's statement, later ones in the next month's; each is approved 15 days after the payment (setting refund_window_days). Finalise and mark paid in the Partners tab (Care Partners are listed there with kind "care"). Finalising is refused until PAN and bank are verified, the current agreement is accepted and the total reaches the minimum payout; TDS is worked out then.</p>
+        <div className="flex gap-2 items-center flex-wrap">
+          <input type="month" className="input-field w-auto" value={month} onChange={e => setMonth(e.target.value)} />
+          <button disabled={busy === 'exp'} className="text-sm py-2 px-3 rounded-lg border border-gray-200" onClick={exportCsv}>Bank payout CSV (owner only)</button>
+        </div>
+        {m.statements.length === 0 ? <p className="text-xs text-gray-500">No statements yet.</p> : (
+          <div className="overflow-x-auto"><table className="w-full text-xs min-w-[34rem]">
+            <thead><tr className="text-left text-gray-500"><th className="py-1">Partner</th><th>Month</th><th>Gross</th><th>TDS</th><th>Net</th><th>Status</th></tr></thead>
+            <tbody>{m.statements.map(st => (
+              <tr key={st.partner_code + st.month} className="border-t border-gray-100"><td className="py-1">{st.full_name} · {st.partner_code}</td><td>{st.month.slice(0, 7)}</td><td>{rs(st.gross)}</td><td>{rs(st.tds)}</td><td className="font-semibold">{rs(st.net)}</td>
+                <td>{st.status}{st.paid_on ? ` ${st.paid_on}` : ''}{st.reference ? ` · ${st.reference}` : ''}</td></tr>
+            ))}</tbody>
+          </table></div>
+        )}
+      </div>
+      <div className="card shadow-sm text-sm space-y-2">
+        <div className="font-semibold text-navy-700">Record a refund</div>
+        <p className="text-xs text-gray-500">Refunds made in Razorpay arrive by themselves once the webhook is subscribed to <b>refund.processed</b>. Use this only if one did not. Partner rewards and agency statements take it back.</p>
+        <div className="flex gap-2 flex-wrap">
+          <input className="input-field flex-1 min-w-[10rem]" placeholder="Razorpay payment id (pay_…)" value={ref.pay} onChange={e => setRef({ ...ref, pay: e.target.value })} />
+          <input className="input-field w-32" inputMode="decimal" placeholder="₹ incl. GST" value={ref.amount} onChange={e => setRef({ ...ref, amount: e.target.value.replace(/[^\d.]/g, '') })} />
+          <input className="input-field flex-1 min-w-[10rem]" placeholder="Note" value={ref.note} onChange={e => setRef({ ...ref, note: e.target.value })} />
+          <button disabled={busy === 'refund' || !ref.pay || !Number(ref.amount)} className="btn-teal text-sm py-2 px-3"
+            onClick={() => run('refund', async () => { await adminRecordRefund(ref.pay, Number(ref.amount), ref.note); setRef({ pay: '', amount: '', note: '' }); load() }, 'Refund recorded.')}>Record</button>
+        </div>
+      </div>
     </div>
   )
 }

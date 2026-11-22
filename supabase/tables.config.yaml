@@ -928,6 +928,11 @@ tables:
   # Partners and their progress are user data. Modules, FAQ, synonyms and
   # contract versions are content edited in Admin → Care Partners, synced
   # prod -> sandbox like other reference data.
+  # Before payments (40): rewards reference payments with ON DELETE RESTRICT.
+  care_partner_rewards:
+    class: isolated
+    purgeOrder: 34.5
+
   care_partner_reports:
     class: isolated
     purgeOrder: 129.19
