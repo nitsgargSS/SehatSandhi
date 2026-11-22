@@ -49,6 +49,9 @@ function Learn() {
   const [contracts, setContracts] = useState<CareContract[]>([])
   const [minSec, setMinSec] = useState(60)
   const [qs, setQs] = useState<QuizState>({})
+  // 0341: one final exam after reading every module (module quizzes only when switched on).
+  const [quizzesOn, setQuizzesOn] = useState(false)
+  const [perModule, setPerModule] = useState(2)
   const [err, setErr] = useState('')
 
   const load = useCallback(async () => {
@@ -59,6 +62,8 @@ function Learn() {
       setProgress(Object.fromEntries(p.map(x => [x.module_id, x])))
       setContracts(c.filter(x => x.is_current))
       setMinSec(Number(s.doc_min_seconds) || 60)
+      setQuizzesOn(s.module_quizzes === 'on')
+      setPerModule(Number(s.exam_per_module) || 2)
     } catch (e) { setErr((e as Error).message) }
   }, [])
   useEffect(() => { load() }, [load])
@@ -70,17 +75,20 @@ function Learn() {
 
   if (err) return <p className="text-red-600">{err}</p>
   if (!modules) return <p className="text-gray-400">{tx('Loading…', 'लोड हो रहा है…')}</p>
-  const done = modules.filter(m => progress[m.id]?.quiz_passed_at).length
+  const done = modules.filter(m => moduleDone(m, progress[m.id], quizzesOn)).length
   const allPassed = modules.length > 0 && done === modules.length
 
   return (<>
     <p className="text-sm text-gray-600">
-      {tx(`${done} of ${modules.length} modules done. For each: watch the video (where there is one), read the PDF, then pass the short quiz.`,
-          `${modules.length} में से ${done} मॉड्यूल पूरे। हर मॉड्यूल में: वीडियो देखें (जहाँ हो), PDF पढ़ें, फिर छोटा क्विज़ पास करें।`)}
+      {quizzesOn
+        ? tx(`${done} of ${modules.length} modules done. For each: watch the video (where there is one), read the PDF, then pass the short quiz.`,
+             `${modules.length} में से ${done} मॉड्यूल पूरे। हर मॉड्यूल में: वीडियो देखें (जहाँ हो), PDF पढ़ें, फिर छोटा क्विज़ पास करें।`)
+        : tx(`${done} of ${modules.length} modules read. Read every module (and watch its video, where there is one). Then one final exam opens for all of them.`,
+             `${modules.length} में से ${done} मॉड्यूल पढ़े। हर मॉड्यूल पढ़ें (और जहाँ हो, वीडियो देखें)। फिर सभी मॉड्यूल की एक फ़ाइनल परीक्षा खुलेगी।`)}
     </p>
     {modules.length === 0 && <div className="card text-gray-600">{tx('The modules are being prepared. Please check back soon.', 'मॉड्यूल तैयार हो रहे हैं। कृपया जल्द फिर देखें।')}</div>}
-    {modules.map((m, i) => <ModuleCard key={m.id} m={m} n={i + 1} p={progress[m.id]} q={qs[m.id]} minSec={minSec} onStep={onStep} />)}
-    {modules.length > 0 && <FinalCard ready={allPassed} q={qs.final} />}
+    {modules.map((m, i) => <ModuleCard key={m.id} m={m} n={i + 1} p={progress[m.id]} q={qs[m.id]} minSec={minSec} onStep={onStep} quizzesOn={quizzesOn} />)}
+    {modules.length > 0 && <FinalCard ready={allPassed} q={qs.final} quizzesOn={quizzesOn} total={modules.length * perModule} />}
 
     <div className="card" id="contracts">
       <h2 className="font-bold text-navy-700 mb-2">{tx('Contracts & policies', 'अनुबंध और नीतियाँ')}</h2>
@@ -91,7 +99,14 @@ function Learn() {
   </>)
 }
 
-function ModuleCard({ m, n, p, q, minSec, onStep }: { m: CareModule; n: number; p?: CareProgress; q?: QuizState[string]; minSec: number; onStep: (p: CareProgress) => void }) {
+/** A module is done when read (and its video watched, where it has one) — or, with module quizzes on, when its quiz is passed. */
+function moduleDone(m: CareModule, p: CareProgress | undefined, quizzesOn: boolean) {
+  if (quizzesOn) return !!p?.quiz_passed_at
+  const hasVideo = !!(m.youtube_id_hi || m.youtube_id_en)
+  return !!p?.doc_read_at && (!hasVideo || !!p?.video_completed_at)
+}
+
+function ModuleCard({ m, n, p, q, minSec, onStep, quizzesOn }: { m: CareModule; n: number; p?: CareProgress; q?: QuizState[string]; minSec: number; onStep: (p: CareProgress) => void; quizzesOn: boolean }) {
   const { tx, lang } = useTx()
   const [err, setErr] = useState('')
   const videoDone = !!p?.video_completed_at, docDone = !!p?.doc_read_at
@@ -109,7 +124,7 @@ function ModuleCard({ m, n, p, q, minSec, onStep }: { m: CareModule; n: number; 
           <h2 className="font-bold text-navy-700 text-lg leading-snug">{tx(m.title_en, m.title_hi)}</h2>
           {(m.desc_en || m.desc_hi) && <p className="text-sm text-gray-600 mt-0.5">{tx(m.desc_en ?? '', m.desc_hi ?? '')}</p>}
         </div>
-        {p?.quiz_passed_at && <CheckCircle2 className="w-7 h-7 text-teal-600 shrink-0" aria-label={tx('Done', 'पूरा')} />}
+        {moduleDone(m, p, quizzesOn) && <CheckCircle2 className="w-7 h-7 text-teal-600 shrink-0" aria-label={tx('Done', 'पूरा')} />}
       </div>
 
       <ul className="text-sm mt-3 space-y-1">
@@ -117,13 +132,13 @@ function ModuleCard({ m, n, p, q, minSec, onStep }: { m: CareModule; n: number; 
           {tx('Video watched', 'वीडियो देखा')}{!videoDone && p?.video_max_pct ? ` (${p.video_max_pct}%)` : ''}</li>}
         <li className="flex items-center gap-2">{docDone ? <CheckCircle2 className="w-4 h-4 text-teal-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
           {tx('PDF read', 'PDF पढ़ा')}</li>
-        <li className="flex items-center gap-2 flex-wrap">
+        {quizzesOn && <li className="flex items-center gap-2 flex-wrap">
           {p?.quiz_passed_at ? <CheckCircle2 className="w-4 h-4 text-teal-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
           {p?.quiz_passed_at ? tx('Quiz passed', 'क्विज़ पास')
             : !((videoDone || !ytId) && docDone) ? <span className="text-gray-400">{ytId ? tx('Quiz — opens after the video and PDF', 'क्विज़ — वीडियो और PDF के बाद खुलेगा') : tx('Quiz — opens after you read the PDF', 'क्विज़ — PDF पढ़ने के बाद खुलेगा')}</span>
             : q?.wait_until ? <span className="text-amber-700">{tx(`Quiz — try again after ${whenIST(q.wait_until)}`, `क्विज़ — ${whenIST(q.wait_until)} के बाद फिर कोशिश करें`)}</span>
             : <Link to={`/partner/quiz/${m.slug}`} className="btn-teal py-1.5 px-4 text-sm">{q?.open ? tx('Continue the quiz', 'क्विज़ जारी रखें') : tx('Take the quiz', 'क्विज़ दें')}</Link>}
-        </li>
+        </li>}
       </ul>
 
       {ytId && <Video id={ytId} startPct={p?.video_max_pct ?? 0} onPct={pct => step('video', pct)} />}
@@ -221,16 +236,19 @@ function Pdf({ path, opened, read, minSec, onOpen, onRead }: {
   )
 }
 
-function FinalCard({ ready, q }: { ready: boolean; q?: QuizState[string] }) {
+function FinalCard({ ready, q, quizzesOn, total }: { ready: boolean; q?: QuizState[string]; quizzesOn: boolean; total: number }) {
   const { tx } = useTx()
   return (
     <section className={`card ${ready && !q?.passed ? 'border-2 border-teal-500' : ''}`}>
       <h2 className="font-bold text-navy-700 text-lg">{tx('Final exam', 'फ़ाइनल परीक्षा')}</h2>
       <p className="text-sm text-gray-600 mt-1">
-        {q?.passed ? tx('Passed. The certification step opens soon.', 'पास। सर्टिफ़िकेशन का कदम जल्द खुलेगा।')
-          : !ready ? tx('Opens when every module quiz is passed.', 'हर मॉड्यूल का क्विज़ पास होने पर खुलेगी।')
+        {q?.passed ? tx('Passed. Next: the certification fee and your Partner ID.', 'पास। अगला: सर्टिफ़िकेशन फ़ीस और आपका Partner ID।')
+          : !ready ? (quizzesOn ? tx('Opens when every module quiz is passed.', 'हर मॉड्यूल का क्विज़ पास होने पर खुलेगी।')
+                                : tx('Opens when every module above is read.', 'ऊपर के सभी मॉड्यूल पढ़ने पर खुलेगी।'))
           : q?.wait_until ? tx(`You can try again after ${whenIST(q.wait_until)}.`, `आप ${whenIST(q.wait_until)} के बाद फिर कोशिश कर सकते हैं।`)
-          : tx('Questions from all the modules. Pass it to get certified.', 'सभी मॉड्यूल से सवाल। सर्टिफ़िकेट के लिए इसे पास करें।')}
+          : quizzesOn ? tx('Questions from all the modules. Pass it to get certified.', 'सभी मॉड्यूल से सवाल। सर्टिफ़िकेट के लिए इसे पास करें।')
+          : tx(`About ${total} questions — from every module, each with 4 options and one right answer. Nothing to write.`,
+               `लगभग ${total} सवाल — हर मॉड्यूल से, हर सवाल के 4 विकल्प और एक सही जवाब। कुछ लिखना नहीं।`)}
       </p>
       {ready && !q?.passed && !q?.wait_until && (
         <Link to="/partner/exam" className="btn-teal py-3 px-6 mt-3 inline-block">{q?.open ? tx('Continue the exam', 'परीक्षा जारी रखें') : tx('Take the final exam', 'फ़ाइनल परीक्षा दें')}</Link>

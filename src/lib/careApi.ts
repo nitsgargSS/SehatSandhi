@@ -304,6 +304,8 @@ export interface QuizQuestion { id: string; qtype: 'single' | 'multi' | 'truefal
 export interface QuizAttempt { attempt_id: string; kind: 'module' | 'final' | 'refresher'; module_id: string | null; expires_at: string; questions: QuizQuestion[] }
 export interface QuizResult {
   passed: boolean; score_pct: number; correct: number; total: number; pass_mark: number; next_allowed_at: string | null; kind: string; reactivated?: boolean
+  /** 0341: final exam — rules questions answered wrong (the exam needs all of them right). */
+  rules_missed?: number | null
   review: { id: string; text_en: string; text_hi: string; options: QuizOption[]; correct: string[]; chosen: string[]; explain_en: string | null; explain_hi: string | null }[] | null
   revise: { slug: string; title_en: string; title_hi: string }[] | null
 }

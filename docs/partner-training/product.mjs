@@ -54,10 +54,10 @@ export const PRODUCT_MODULES = [
     ].filter(Boolean),
     questions: [
       ['single', 'How does a patient start a booking on WhatsApp?', [['Downloads a special app first', 'Sends "Hi" to Sehatsandhi\'s WhatsApp number (or scans a clinic QR)', 'Calls the clinic', 'Fills a paper form']], ['b'], 'No download needed.'],
-      ['truefalse', 'A patient can type the problem in their own words, like "knee pain", instead of choosing a speciality.', null, ['t'], 'The bot understands free text in Hindi or English.'],
+      ['single', 'A patient does not know the speciality. What can they do on WhatsApp?', [['Nothing — they must know the speciality', 'Type the problem in their own words, like "knee pain"', 'Call Sehatsandhi first', 'Visit the clinic to ask']], ['b'], 'The bot understands the problem in Hindi or English.'],
       ['single', 'How many doctors does the bot show at most for one search?', [['3', '8', '20', 'All doctors in India']], ['b'], 'Up to 8, nearest first.'],
       ['single', 'Which clinics appear in the WhatsApp bot?', [['Every clinic in the city', 'Only clinics with an active, paid listing', 'Only government hospitals', 'Only clinics with 100 reviews']], ['b'], 'An active listing is needed.'],
-      ['truefalse', 'You can promise a doctor they will be shown first.', null, ['f'], 'Order depends on distance, speciality and reviews.'],
+      ['single', 'A doctor asks: "Will I be shown first on WhatsApp?" What is the right answer?', [['Yes, always', 'Yes, if you pay me', 'The order depends on distance, speciality and patients\' reviews — no one can promise a position', 'Only on Sundays']], ['c'], 'Never promise a position.'],
       ['single', 'What does a clinic\'s Booking QR poster do?', [['Opens that clinic\'s own WhatsApp menu to book', 'Pays the bill', 'Shows the doctor\'s salary', 'Nothing']], ['a'], 'Scan → that clinic\'s menu.'],
     ],
   },
@@ -102,11 +102,11 @@ export const PRODUCT_MODULES = [
     ],
     questions: [
       ['single', 'Who can leave a review for a clinic?', [['Anyone on the internet', 'Only patients who actually visited (booking, QR within 30 days of a visit, or asked by the clinic)', 'Only the doctor\'s friends', 'Only Care Partners']], ['b'], 'Reviews come from real visits.'],
-      ['truefalse', 'A clinic can delete a bad review.', null, ['f'], 'Reviews cannot be edited or deleted by the clinic.'],
+      ['single', 'A clinic gets a bad review. What can the clinic do?', [['Delete it', 'Edit the words', 'Nothing to the review itself — ask happy patients to rate too', 'Ask the partner to remove it']], ['c'], 'Reviews cannot be edited or deleted by the clinic.'],
       ['single', 'What is needed for the "Top Rated" badge?', [['Paying extra', '4.5★ or more with at least 10 reviews', '1 review', 'A government certificate']], ['b'], '4.5★ average and 10+ reviews.'],
-      ['multi', 'What decides the order on the WhatsApp search? (choose all that are right)', [['Nearness to the patient\'s PIN', 'The right speciality', 'Ratings and reviews', 'How much the clinic paid']], ['a', 'b', 'c'], 'There is no paid boost.'],
+      ['single', 'Which of these does NOT affect the order on the WhatsApp search?', [['Nearness to the patient\'s PIN code', 'The right speciality', 'Ratings and reviews', 'How much the clinic paid Sehatsandhi']], ['d'], 'There is no paid boost.'],
       ['single', 'A walk-in patient wants to rate the clinic. What helps?', [['The Review QR poster at reception', 'Calling Sehatsandhi', 'Writing on paper', 'Nothing']], ['a'], 'Scan → rate on WhatsApp.'],
-      ['truefalse', 'You may promise a doctor that they will reach the top of the list.', null, ['f'], 'Never promise a position.'],
+      ['single', 'What may you promise a doctor about ranking?', [['The top position', '100 new patients', 'Nothing — you explain how ranking works', 'Top position within a month']], ['c'], 'Never promise a position or patients.'],
     ],
   },
   // ───────────────────────────────────────────────────────────────────────────
@@ -141,10 +141,10 @@ export const PRODUCT_MODULES = [
     ],
     questions: [
       ['single', 'How does a patient sign in to see their records?', [['With a password', 'With a 6-digit code on WhatsApp', 'With Aadhaar', 'They cannot']], ['b'], 'WhatsApp code, no password.'],
-      ['truefalse', 'One clinic can read another clinic\'s notes about the same patient.', null, ['f'], 'Records stay with each clinic.'],
+      ['single', 'A patient visits two different clinics on Sehatsandhi. Who can read clinic A\'s notes?', [['Clinic B too', 'Any doctor in the city', 'Only clinic A (and the patient their own records)', 'Every partner']], ['c'], 'Records stay with each clinic.'],
       ['single', 'Where does a clinic pay for its plan?', [['In the app', 'On the website', 'In cash to the partner', 'At a bank']], ['b'], 'Payments are on the website.'],
-      ['truefalse', 'The clinic must install special software on its computers.', null, ['f'], 'App or any browser.'],
-      ['multi', 'What can a patient see in "My Sehatsandhi"? (choose all that are right)', [['Prescriptions', 'Lab reports', 'Bills', 'Other patients\' records']], ['a', 'b', 'c'], 'Only their own family\'s records.'],
+      ['single', 'What does a clinic need to install to use Sehatsandhi?', [['A server in the clinic', 'Special software on every computer', 'Nothing — it works in the browser or the app', 'A new internet line']], ['c'], 'App or any browser.'],
+      ['single', 'What can a patient NOT see in "My Sehatsandhi"?', [['Their prescriptions', 'Their lab reports', 'Their bills', 'Other patients\' records']], ['d'], 'Only their own family\'s records.'],
     ],
   },
   // ───────────────────────────────────────────────────────────────────────────
@@ -184,9 +184,9 @@ export const PRODUCT_MODULES = [
     questions: [
       ['single', 'One phone number is used by a whole family. How does Sehatsandhi handle it?', [['Only one person per phone', 'Each family member is kept separately under the same number', 'The family must buy new phones', 'Records are mixed together']], ['b'], 'One phone, many members.'],
       ['single', 'How does a patient receive a prescription?', [['Only on paper', 'As a link that opens on any phone', 'By post', 'They cannot']], ['b'], 'A link by WhatsApp or email.'],
-      ['truefalse', 'Automatic WhatsApp messages are sent at night too.', null, ['f'], 'Quiet hours 9 pm–8 am.'],
+      ['single', 'When are automatic WhatsApp messages NOT sent?', [['Between 9 pm and 8 am', 'On weekdays', 'In the morning', 'After lunch']], ['a'], 'Quiet hours 9 pm–8 am.'],
       ['single', 'Which automatic reminder does WhatsApp Pro send?', [['A reminder the day before the doctor\'s follow-up date', 'A daily health tip forever', 'A payment demand', 'None']], ['a'], 'Follow-up reminder.'],
-      ['truefalse', 'A patient can reply STOP to stop messages from a clinic.', null, ['t'], 'Their choice is respected.'],
+      ['single', 'A patient does not want messages from a clinic any more. What can they do?', [['Nothing', 'Reply STOP', 'Change their phone number', 'Pay a fee']], ['b'], 'Their choice is respected.'],
     ],
   },
   // ───────────────────────────────────────────────────────────────────────────
@@ -230,11 +230,11 @@ export const PRODUCT_MODULES = [
     ],
     questions: [
       ['single', 'What is needed when the OPD fee is reduced?', [['Nothing', 'A reason', 'The patient\'s Aadhaar', 'A partner\'s approval']], ['b'], 'Every discount needs a reason.'],
-      ['truefalse', 'Patients can register themselves by scanning the Reception QR.', null, ['t'], 'They fill in their own details.'],
+      ['single', 'How can patients register themselves at reception?', [['They cannot', 'Scan the Reception QR and fill in their details', 'Write on the wall', 'Call the doctor']], ['b'], 'They fill in their own details on their phone.'],
       ['single', 'Who sees the actual vitals numbers?', [['Everyone', 'Only the doctor and nurse', 'Only reception', 'The patient\'s neighbours']], ['b'], 'Others see "✓ Vitals".'],
-      ['truefalse', 'An issued prescription can be quietly edited later.', null, ['f'], 'Only cancelled and replaced.'],
+      ['single', 'A prescription has been issued and needs a change. What happens?', [['It is quietly edited', 'It is cancelled and a new one is issued', 'It cannot be changed in any way', 'The partner changes it']], ['b'], 'Only cancelled and replaced — the record stays honest.'],
       ['single', 'A doctor works at two clinics. A patient books 10 am at clinic A. What happens at clinic B?', [['10 am stays open there', '10 am is blocked there too', 'Both clinics are closed', 'The doctor is charged twice']], ['b'], 'One calendar across clinics.'],
-      ['multi', 'What can happen in one step when a token is given? (choose all that are right)', [['Token created', 'Fee added to the bill', 'Payment recorded', 'Doctor\'s salary paid']], ['a', 'b', 'c'], 'Token, fee and payment together.'],
+      ['single', 'Which of these does NOT happen when reception gives a token with the fee?', [['The token is created', 'The fee is added to the bill', 'The payment is recorded', 'The doctor\'s salary is paid']], ['d'], 'Token, fee and payment happen together.'],
     ],
   },
   // ───────────────────────────────────────────────────────────────────────────
@@ -277,10 +277,10 @@ export const PRODUCT_MODULES = [
     ],
     questions: [
       ['single', 'Which of these is NOT added to the bill automatically?', [['The OPD fee at token time', 'Lab tests when ordered', 'Bed charges (posted by pressing a button)', 'Medicines issued to an admitted patient']], ['c'], 'Bed charges are posted by pressing "Post bed charge".'],
-      ['truefalse', 'Every payment records the name of the person who took it.', null, ['t'], 'And the method.'],
+      ['single', 'What does every payment record?', [['Only the amount', 'The amount, the method and who took it', 'The patient\'s salary', 'Nothing']], ['b'], 'Every rupee is accounted for.'],
       ['single', 'Who can change or delete a payment?', [['Anyone', 'Only the owner or a manager, and it is logged', 'The patient', 'Nobody ever']], ['b'], 'Changes are logged.'],
       ['single', 'What is the Collections screen for?', [['Booking patients', 'Tallying payments by person and method', 'Writing prescriptions', 'Ordering medicines']], ['b'], 'Cash drawer tally.'],
-      ['truefalse', 'A discount can be given without a reason.', null, ['f'], 'A reason is always needed.'],
+      ['single', 'Reception wants to give a discount. What is needed?', [['Nothing', 'A reason', 'The patient\'s Aadhaar', 'The partner\'s approval']], ['b'], 'A reason is always needed.'],
     ],
   },
   // ───────────────────────────────────────────────────────────────────────────
@@ -319,10 +319,10 @@ export const PRODUCT_MODULES = [
     ],
     questions: [
       ['single', 'Where does a patient get admitted?', [['On paper only', 'From the patient\'s record: Admissions → Admit', 'In the pharmacy', 'On the website\'s home page']], ['b'], 'Admissions → Admit.'],
-      ['truefalse', 'Medicines issued to an admitted patient go straight onto their stay bill.', null, ['t'], 'Issued by the pharmacy, billed to the stay.'],
+      ['single', 'Medicines are issued to an admitted patient. How are they paid?', [['At the pharmacy counter each time', 'They go onto the patient\'s stay bill', 'They are free', 'The partner pays']], ['b'], 'Issued by the pharmacy, billed to the stay.'],
       ['single', 'How are bed charges added?', [['Automatically every hour', 'By pressing "Post bed charge"', 'The patient adds them', 'They are free']], ['b'], 'One button; part day = full day.'],
       ['single', 'How does the patient receive the discharge summary?', [['As a link on the phone', 'Only by post', 'They cannot', 'From a partner']], ['a'], 'Sent as a link.'],
-      ['truefalse', 'The Beds screen warns when a patient\'s deposit is running low.', null, ['t'], 'So the hospital collects in time.'],
+      ['single', 'What does the Beds screen warn about?', [['The weather', 'A patient\'s deposit running low', 'The partner\'s rewards', 'Nothing']], ['b'], 'So the hospital collects in time.'],
     ],
   },
   // ───────────────────────────────────────────────────────────────────────────
@@ -359,9 +359,9 @@ export const PRODUCT_MODULES = [
     ],
     questions: [
       ['single', 'Who can approve and sign a lab report?', [['Any staff member', 'A doctor (e.g. the pathologist)', 'The patient', 'A Care Partner']], ['b'], 'Technicians enter results; a doctor signs.'],
-      ['truefalse', 'Values outside the normal range are flagged High or Low.', null, ['t'], 'And the last value is shown.'],
+      ['single', 'What happens to a lab value outside the normal range?', [['It is hidden', 'It is flagged High or Low', 'It is deleted', 'It is changed to normal']], ['b'], 'And the patient\'s last value is shown.'],
       ['single', 'How does the ordering doctor learn the report is ready?', [['A notification and "Reports ready" on the Today screen', 'They must phone the lab', 'By post', 'They are not told']], ['a'], 'Notification + Reports ready.'],
-      ['truefalse', 'Referral money between a hospital and a lab can be paid to the doctor personally.', null, ['f'], 'Business to business only.'],
+      ['single', 'A hospital sends tests to another lab. Who can receive referral money?', [['The doctor personally', 'The partner', 'Only the businesses (hospital and lab) — never a doctor', 'The patient']], ['c'], 'Business to business only.'],
       ['single', 'Can a patient book a lab test on WhatsApp?', [['No', 'Yes — at the lab or with home collection', 'Only in English', 'Only for ambulances']], ['b'], 'Lab booking is in the bot.'],
     ],
   },
@@ -391,7 +391,7 @@ export const PRODUCT_MODULES = [
     ],
     questions: [
       ['single', 'A doctor issues a prescription in a clinic with a pharmacy. What happens?', [['Nothing', 'It appears in "Prescriptions waiting" at the pharmacy', 'It is posted to the patient', 'The partner is told']], ['b'], 'Pharmacist is notified.'],
-      ['truefalse', 'Counter staff can type any price they like.', null, ['f'], 'The price comes from the batch.'],
+      ['single', 'Where does the price on a pharmacy bill come from?', [['Counter staff type any price', 'The medicine\'s batch (MRP)', 'The patient decides', 'The partner']], ['b'], 'Counter staff cannot type a price.'],
       ['single', 'Which batch is sold first?', [['The newest', 'The one that expires first', 'Any', 'The most expensive']], ['b'], 'Earliest expiry first.'],
       ['single', 'When does a pharmacy bill show GST?', [['Always', 'When the pharmacy has its own GSTIN', 'Never', 'Only on Sundays']], ['b'], 'GST invoice with a GSTIN.'],
       ['single', 'A patient orders medicines on WhatsApp from a standalone pharmacy. When is the order packed?', [['Immediately', 'After the patient approves the price on a link', 'Never', 'When the partner pays']], ['b'], 'The patient approves the quoted price first.'],
@@ -434,7 +434,7 @@ export const PRODUCT_MODULES = [
     ],
     questions: [
       ['single', 'How should a doctor start if they want to try Sehatsandhi first?', [['A free year', 'The 1-month paid trial', 'Pay you in cash', 'Wait for an invitation']], ['b'], 'Then the yearly plan.'],
-      ['truefalse', 'The doctor can type your Partner ID even on the paid trial.', null, ['t'], 'You stay linked.'],
+      ['single', 'A doctor starts with the 1-month paid trial. Can they type your Partner ID?', [['No, only on the yearly plan', 'Yes — you stay linked from day one', 'Only after a year', 'Only by phone']], ['b'], 'You stay linked and can follow up.'],
       ['single', 'Where do you find today\'s prices?', [['From memory', 'On the live pricing page sehatsandhi.com/business', 'From another partner', 'From the doctor']], ['b'], 'Never quote from memory.'],
       ['single', 'What does reception NOT see?', [['The queue', 'Billing', 'Medical notes', 'Appointments']], ['c'], 'Each role sees what their job needs.'],
       ['single', 'What does WhatsApp Pro add?', [['The clinic\'s own WhatsApp number and automatic messages', 'Free medicines', 'Insurance', 'A government licence']], ['a'], 'Own number + automatic messages.'],
@@ -468,9 +468,9 @@ export const PRODUCT_MODULES = [
     ],
     questions: [
       ['single', 'Who can apply for Sehatsandhi International?', [['Any clinic', 'Hospitals (or businesses with IPD)', 'Pharmacies', 'Care Partners']], ['b'], 'Hospitals only.'],
-      ['truefalse', 'Joining International is free for the hospital.', null, ['t'], 'A service fee is added only when a patient comes.'],
+      ['single', 'What does a hospital pay to join Sehatsandhi International?', [['₹1 lakh', 'Nothing — a service fee is added only when a patient comes', 'A monthly fee', '10% of its income']], ['b'], 'Free to join.'],
       ['single', 'Does the hospital see the patient\'s phone number when quoting?', [['Yes', 'No', 'Only on weekends', 'Only for NRIs']], ['b'], 'Contact details stay with Sehatsandhi.'],
-      ['truefalse', 'You may promise a hospital a number of international patients.', null, ['f'], 'Never promise patients.'],
+      ['single', 'A hospital asks how many international patients it will get. What do you say?', [['At least 10 a month', '100 a year', 'No one can promise patients — it depends on patients\' choices', 'As many as you want']], ['c'], 'Never promise patients.'],
       ['single', 'What does the patient\'s quote show?', [['Only one total', 'Hospital price, Sehatsandhi fee, and travel and stay', 'The doctor\'s salary', 'Nothing until they arrive']], ['b'], 'Three clear parts.'],
     ],
   },

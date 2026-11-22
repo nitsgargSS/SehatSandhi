@@ -123,3 +123,8 @@ plans & team & add-ons, international. Written from code (docs/partner-training/
 scripts/training-shots.mjs signs in as the owner of the sandbox demo 'Sehatsandhi Training Hospital' (made by
 seed-demo-hospital.mjs --create … --phone 9000000077 --range 3; login in .env.supabase TRAINING_DEMO_*).
 Hindi after Nitin's review (product questions carry English in text_hi until then).
+
+0341 (22 Nov, Nitin: no quiz one by one; one exam once all modules are read; choose-one only, nothing written):
+partner_module_quizzes 'off' (on = old per-module quizzes); exam opens when every published module is read (+video if any);
+partner_exam_per_module (2) questions from EVERY module (40 with 20 modules); pass = pass_mark AND every question from
+is_rules modules (dos-and-donts, ethics, communication, code-of-conduct) right. All 120 questions rewritten as 4-option single.

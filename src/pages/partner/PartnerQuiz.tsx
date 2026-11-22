@@ -85,6 +85,10 @@ function QuizFor({ slug, refresher = false }: { slug: string | null; refresher?:
           {result.passed && result.kind === 'final' && (
             <p className="text-gray-700 mt-1">{tx('Congratulations. Next, pay the certification fee to get your Partner ID and badge.', 'बधाई हो। अब अपना Partner ID और बैज पाने के लिए सर्टिफ़िकेशन फ़ीस दें।')}</p>
           )}
+          {!result.passed && result.kind === 'final' && (result.rules_missed ?? 0) > 0 && (
+            <p className="text-amber-800 mt-1">{tx(`${result.rules_missed} question(s) on the rules (dos and don'ts, ethics, communication, code of conduct) were wrong. Every rules question must be right to pass — read those modules again.`,
+              `नियमों (क्या करें-न करें, नैतिकता, बातचीत, आचार संहिता) के ${result.rules_missed} सवाल गलत थे। पास होने के लिए नियमों के सभी सवाल सही होने चाहिए — ये मॉड्यूल फिर से पढ़ें।`)}</p>
+          )}
           {result.passed && result.reactivated && (
             <p className="text-gray-700 mt-1">{tx('Well done. Your Partner ID is active again.', 'शाबाश। आपका Partner ID फिर से चालू है।')}</p>
           )}
@@ -129,8 +133,9 @@ function QuizFor({ slug, refresher = false }: { slug: string | null; refresher?:
           {refresher && (reactivating
             ? <li>{tx('Pass this short quiz from all the modules to reactivate your paused Partner ID.', 'अपना रुका हुआ Partner ID फिर चालू करने के लिए सभी मॉड्यूल से यह छोटा क्विज़ पास करें।')}</li>
             : <li>{tx('Your yearly check before renewal: a short set of questions from all the modules. It keeps every Partner ID current.', 'रिन्यूअल से पहले सालाना जाँच: सभी मॉड्यूल से कुछ सवाल। इससे हर Partner ID सही बना रहता है।')}</li>)}
-          <li>{slug ? tx('A few questions from this module\'s video and PDF.', 'इस मॉड्यूल के वीडियो और PDF से कुछ सवाल।') : tx('Questions from all the modules.', 'सभी मॉड्यूल से सवाल।')}</li>
-          <li>{tx('Some questions have more than one right answer — they say so.', 'कुछ सवालों के एक से ज़्यादा सही जवाब होते हैं — उनमें लिखा होता है।')}</li>
+          <li>{slug ? tx('A few questions from this module\'s video and PDF.', 'इस मॉड्यूल के वीडियो और PDF से कुछ सवाल।') : tx('Questions from every module.', 'हर मॉड्यूल से सवाल।')}</li>
+          <li>{tx('Each question has 4 options and one right answer — tap it. Nothing to write.', 'हर सवाल के 4 विकल्प और एक सही जवाब — उस पर टैप करें। कुछ लिखना नहीं।')}</li>
+          {!slug && !refresher && <li>{tx('To pass: the pass mark overall, and every question on the rules right.', 'पास होने के लिए: कुल पास मार्क, और नियमों के सभी सवाल सही।')}</li>}
           <li>{tx('Once you start, finish within the time shown. Leaving it unfinished counts as not passed.', 'शुरू करने के बाद दिए गए समय में पूरा करें। अधूरा छोड़ने पर पास नहीं माना जाएगा।')}</li>
         </ul>
         {err && <p className="text-red-600">{err}</p>}

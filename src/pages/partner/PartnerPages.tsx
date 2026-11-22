@@ -12,7 +12,7 @@ import { careMe, careSettings, registerPartner, requestPartnerCode, usePartnerPr
 
 const STEPS = [
   { en: 'Learn', hi: 'सीखें', den: 'Watch short videos and read the PDFs for each module. Free.', dhi: 'हर मॉड्यूल के छोटे वीडियो देखें और PDF पढ़ें। मुफ़्त।' },
-  { en: 'Pass the exam', hi: 'परीक्षा पास करें', den: 'A short quiz after each module, then a final exam. Free.', dhi: 'हर मॉड्यूल के बाद छोटा क्विज़, फिर फ़ाइनल परीक्षा। मुफ़्त।' },
+  { en: 'Pass the exam', hi: 'परीक्षा पास करें', den: 'One exam after you read all the modules: tap the right answer from 4 options, nothing to write. Free.', dhi: 'सभी मॉड्यूल पढ़ने के बाद एक परीक्षा: 4 विकल्पों में से सही जवाब पर टैप करें, कुछ लिखना नहीं। मुफ़्त।' },
   { en: 'Get certified', hi: 'सर्टिफ़िकेट पाएँ', den: 'Pay the one-time certification fee and get your Partner ID and badge.', dhi: 'एक बार की सर्टिफ़िकेशन फ़ीस दें और अपना Partner ID और बैज पाएँ।' },
   { en: 'Introduce businesses', hi: 'व्यवसायों को जोड़ें', den: 'Tell doctors, clinics, hospitals, labs and pharmacies about Sehatsandhi. They pay Sehatsandhi directly.', dhi: 'डॉक्टरों, क्लिनिक, अस्पताल, लैब और फ़ार्मेसी को सेहतसंधि के बारे में बताएँ। वे सीधे सेहतसंधि को भुगतान करते हैं।' },
   { en: 'Partner Rewards', hi: 'पार्टनर रिवॉर्ड', den: 'When a business you introduced pays for a 12-month plan, you receive a Start Reward, and a Renewal Reward when it renews.', dhi: 'जब आपका जोड़ा हुआ व्यवसाय 12 महीने का प्लान लेता है, तो आपको स्टार्ट रिवॉर्ड मिलता है, और रिन्यू करने पर रिन्यूअल रिवॉर्ड।' },

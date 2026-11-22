@@ -659,7 +659,7 @@ function Contracts() {
 
 // ── Settings ────────────────────────────────────────────────────────────────
 const FIELDS: [string, string][] = [
-  ['cert_fee', 'Certification and yearly renewal fee ₹ (GST is added on top)'], ['renew_window_days', 'Renewal opens this many days before the Partner ID ends'], ['id_grace_days', 'Days after expiry to renew before the partnership ends'], ['refresher_questions', 'Questions in the renewal refresher quiz'], ['pass_mark', 'Pass mark %'], ['module_questions', 'Questions per module quiz'],
+  ['cert_fee', 'Certification and yearly renewal fee ₹ (GST is added on top)'], ['renew_window_days', 'Renewal opens this many days before the Partner ID ends'], ['id_grace_days', 'Days after expiry to renew before the partnership ends'], ['refresher_questions', 'Questions in the renewal refresher quiz'], ['pass_mark', 'Pass mark %'], ['exam_per_module', 'Final exam: questions from each module'], ['module_quizzes', 'Quiz after each module (on/off; off = one final exam)'], ['module_questions', 'Questions per module quiz'],
   ['final_questions', 'Questions in the final exam'], ['retake_hours', 'Wait before a retake (hours)'], ['doc_min_seconds', 'Minimum time before "I have read this" (seconds)'],
   ['video_done_pct', 'Video counts as watched at %'], ['lead_lock_days', 'Days a reserved doctor stays with the partner'], ['lead_cap_new', 'Reserved doctors for a new partner'],
   ['claim_days', 'Days to claim after a payment'], ['refund_window_days', 'Days before a reward is approved'], ['min_payout', 'Minimum payout ₹'],
