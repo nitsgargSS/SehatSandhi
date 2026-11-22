@@ -30,3 +30,4 @@ supabase/.temp/
 .env.production.local
 .env.*.local
 deno.lock
+docs/partner-training/.html/

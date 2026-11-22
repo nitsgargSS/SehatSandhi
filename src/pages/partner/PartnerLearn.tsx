@@ -75,8 +75,8 @@ function Learn() {
 
   return (<>
     <p className="text-sm text-gray-600">
-      {tx(`${done} of ${modules.length} modules done. For each: watch the video to the end, read the PDF, then pass the short quiz.`,
-          `${modules.length} में से ${done} मॉड्यूल पूरे। हर मॉड्यूल में: वीडियो अंत तक देखें, PDF पढ़ें, फिर छोटा क्विज़ पास करें।`)}
+      {tx(`${done} of ${modules.length} modules done. For each: watch the video (where there is one), read the PDF, then pass the short quiz.`,
+          `${modules.length} में से ${done} मॉड्यूल पूरे। हर मॉड्यूल में: वीडियो देखें (जहाँ हो), PDF पढ़ें, फिर छोटा क्विज़ पास करें।`)}
     </p>
     {modules.length === 0 && <div className="card text-gray-600">{tx('The modules are being prepared. Please check back soon.', 'मॉड्यूल तैयार हो रहे हैं। कृपया जल्द फिर देखें।')}</div>}
     {modules.map((m, i) => <ModuleCard key={m.id} m={m} n={i + 1} p={progress[m.id]} q={qs[m.id]} minSec={minSec} onStep={onStep} />)}
@@ -113,14 +113,14 @@ function ModuleCard({ m, n, p, q, minSec, onStep }: { m: CareModule; n: number; 
       </div>
 
       <ul className="text-sm mt-3 space-y-1">
-        <li className="flex items-center gap-2">{videoDone ? <CheckCircle2 className="w-4 h-4 text-teal-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
-          {tx('Video watched', 'वीडियो देखा')}{!videoDone && p?.video_max_pct ? ` (${p.video_max_pct}%)` : ''}</li>
+        {ytId && <li className="flex items-center gap-2">{videoDone ? <CheckCircle2 className="w-4 h-4 text-teal-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
+          {tx('Video watched', 'वीडियो देखा')}{!videoDone && p?.video_max_pct ? ` (${p.video_max_pct}%)` : ''}</li>}
         <li className="flex items-center gap-2">{docDone ? <CheckCircle2 className="w-4 h-4 text-teal-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
           {tx('PDF read', 'PDF पढ़ा')}</li>
         <li className="flex items-center gap-2 flex-wrap">
           {p?.quiz_passed_at ? <CheckCircle2 className="w-4 h-4 text-teal-600" /> : <Circle className="w-4 h-4 text-gray-300" />}
           {p?.quiz_passed_at ? tx('Quiz passed', 'क्विज़ पास')
-            : !(videoDone && docDone) ? <span className="text-gray-400">{tx('Quiz — opens after the video and PDF', 'क्विज़ — वीडियो और PDF के बाद खुलेगा')}</span>
+            : !((videoDone || !ytId) && docDone) ? <span className="text-gray-400">{ytId ? tx('Quiz — opens after the video and PDF', 'क्विज़ — वीडियो और PDF के बाद खुलेगा') : tx('Quiz — opens after you read the PDF', 'क्विज़ — PDF पढ़ने के बाद खुलेगा')}</span>
             : q?.wait_until ? <span className="text-amber-700">{tx(`Quiz — try again after ${whenIST(q.wait_until)}`, `क्विज़ — ${whenIST(q.wait_until)} के बाद फिर कोशिश करें`)}</span>
             : <Link to={`/partner/quiz/${m.slug}`} className="btn-teal py-1.5 px-4 text-sm">{q?.open ? tx('Continue the quiz', 'क्विज़ जारी रखें') : tx('Take the quiz', 'क्विज़ दें')}</Link>}
         </li>

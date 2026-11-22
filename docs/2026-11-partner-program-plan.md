@@ -44,6 +44,10 @@ fulfilPayment calls sehat_care_reward_for_payment. UI: partner dashboard Rewards
 Payout month (Nitin, 22 Nov): monthly payouts; payment on or before the 15th (partner_payout_cutoff_day) → that month's payout,
 after → next month's; approval 15 days after the payment (Nitin changed 14 → 15 to match the cut-off); clawbacks in the refund's month. care_partner_rewards.payout_month.
 Added to 0335 before commit; sandbox re-run and ledger checksum updated.
+Training content 22 Nov: docs/partner-training/content.mjs (Modules 1–10 reading, English + Hindi, 6 questions each — DRAFT for
+Nitin's review; lawyer/CA for 3, 5, 7, 8, 10). scripts/partner-training.mjs builds docs/partner-training/pdf/*.pdf with local
+Chrome and, with --sandbox, uploads them, adds the questions and publishes. 0336: a module's video is optional until it
+exists (PDF + questions publish it; the quiz opens after the PDF is read). Sandbox: program ON, 10 modules published, 60 questions.
 Decisions (Nitin, 22 Nov): 1 fix online refunds — yes; 2 confirmed Care Partner credit approved automatically, admin can override; 3 new Care Partners tab for operations, money in Partners — OK; 6 active = paid term not ended — OK. Not answered yet: 4 (active field/agency partners — needed before Phase 4), 5 (production order vs EMI — default: partner migrations independent of 0330), 7 (who uploads videos/PDFs — CMS built either way). Brief: https://claude.ai/artifact/Wc4MJ5dGZBzQeATsbtyJKj
 (v2, consolidated; `Sehatsandhi_Partner_Program_Claude_Code_Brief.md` + `Sehatsandhi_Partner_FAQ_Seed.csv`).
 Built on staging / sandbox only, behind `site_settings` switch `partner_program_enabled` (off).

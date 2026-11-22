@@ -370,7 +370,7 @@ function Modules() {
               )
             })}
           </div>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!edit.is_published} onChange={e => setEdit(x => ({ ...x, is_published: e.target.checked }))} /> Published (needs a video and a PDF)</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!edit.is_published} onChange={e => setEdit(x => ({ ...x, is_published: e.target.checked }))} /> Published (needs a PDF and enough quiz questions; the video can come later)</label>
           <div className="flex gap-2">
             <button disabled={busy === 'save'} className="btn-teal text-sm py-2 px-4"
               onClick={() => run('save', async () => { await adminSaveModule(edit); setEdit(null); load() }, 'Module saved.')}>Save</button>
