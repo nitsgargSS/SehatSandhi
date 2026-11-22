@@ -222,7 +222,10 @@ function drawInvoice(doc: Doc, inv: Invoice): boolean {
 
   rule(y); y += 6
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); gray(120)
-  doc.text('Amount received in full. This is a computer-generated invoice and does not require a signature.', M, y)
+  const paidLine = inv.invoice_kind !== 'emi_commission' ? 'Amount received in full.'
+    : inv.paid_at ? `Paid on ${new Date(inv.paid_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}.`
+    : inv.due_on ? `Payment due by ${new Date(inv.due_on).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}.` : 'Payment due.'
+  doc.text(`${paidLine} This is a computer-generated invoice and does not require a signature.`, M, y)
   if (!taxed) doc.text('GST is not charged on this invoice.', M, y + 4)
 
   doc.setProperties({ title: t(`Invoice ${inv.invoice_number}`) })

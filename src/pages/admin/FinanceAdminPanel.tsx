@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   adminLenders, adminCreateLender, adminSetLender, adminFinanceSwitch, adminCases, adminCommission, caseEvents,
+  commissionInvoices, issueCommissionInvoice, markCommissionPaid,
   financeEnabled, CASE_STATUS, LENDER_STATUS, CASE_EVENT,
-  type AdminLender, type AdminCase, type CommissionRow, type CaseEvent, type CaseStatus,
+  type AdminLender, type AdminCase, type CommissionRow, type CaseEvent, type CaseStatus, type CommissionInvoice,
 } from '../../lib/financeApi'
 import { downloadCsv } from '../../lib/billingApi'
 
@@ -265,37 +266,73 @@ function AdminCaseRow({ c }: { c: AdminCase }) {
 function Commission() {
   const [month, setMonth] = useState(lastMonth())
   const [rows, setRows] = useState<CommissionRow[] | null>(null)
+  const [invs, setInvs] = useState<CommissionInvoice[]>([])
   const [err, setErr] = useState('')
-  useEffect(() => {
-    const { from, to } = monthRange(month)
-    setRows(null)
-    adminCommission(from, to).then(setRows, e => { setRows([]); setErr((e as Error).message) })
-  }, [month])
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const { from, to } = monthRange(month)
+  const over = to < new Date().toISOString().slice(0, 10)
+
+  const load = useCallback(() => {
+    setRows(null); setErr('')
+    Promise.all([adminCommission(from, to), commissionInvoices(from)])
+      .then(([r, i]) => { setRows(r); setInvs(i) }, e => { setRows([]); setErr((e as Error).message) })
+  }, [from, to])
+  useEffect(() => { load() }, [load])
+
+  const act = async (id: string, fn: () => Promise<unknown>, done: string) => {
+    setBusy(id); setErr(''); setMsg('')
+    try { await fn(); load(); setMsg(done); setTimeout(() => setMsg(''), 4000) } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
+  }
   const total = (rows ?? []).reduce((a, r) => a + Number(r.commission), 0)
   const csv = () => downloadCsv(`emi-commission-${month}.csv`,
-    ['lender,commission_pct,loans,paid_value,commission', ...(rows ?? []).map(r => [r.legal_name, r.commission_pct ?? '', r.loans, r.paid_value, r.commission].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n'))
+    ['lender,commission_pct,loans,paid_value,commission,invoice,invoice_total,paid', ...(rows ?? []).map(r => {
+      const inv = invs.find(i => i.business_id === r.lender_id)
+      return [r.legal_name, r.commission_pct ?? '', r.loans, r.paid_value, r.commission, inv?.invoice_number ?? '', inv?.total_amount ?? '', inv?.paid_at ? inv.paid_at.slice(0, 10) : '']
+        .map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    })].join('\n'))
   return (
     <div className="card shadow-sm space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
         <label className="text-sm text-gray-600">Month <input type="month" className="input-field" value={month} onChange={e => setMonth(e.target.value)} /></label>
         {rows && rows.length > 0 && <button onClick={csv} className="text-sm text-teal-700 underline">CSV</button>}
       </div>
+      {msg && <p className="text-sm text-green-700">{msg}</p>}
       {err && <p className="text-sm text-red-600">{err}</p>}
       {rows === null ? <p className="text-sm text-gray-400">Loading…</p> : rows.length === 0 ? <p className="text-sm text-gray-500">No loans paid out in this month.</p> : (
-        <table className="w-full text-sm">
-          <thead><tr className="text-left text-xs text-gray-500"><th className="py-1">Lender</th><th>Rate</th><th>Loans</th><th>Paid out</th><th>Commission</th></tr></thead>
-          <tbody>
-            {rows.map(r => (
-              <tr key={r.lender_id} className="border-t border-gray-100">
-                <td className="py-1.5">{r.legal_name}</td><td>{r.commission_pct != null ? `${r.commission_pct}%` : <b className="text-amber-700">not set</b>}</td>
-                <td>{r.loans}</td><td>{inr(r.paid_value)}</td><td className="font-semibold">{inr(r.commission)}</td>
-              </tr>
-            ))}
-            <tr className="border-t border-gray-200 font-bold"><td className="py-1.5" colSpan={4}>Total</td><td>{inr(total)}</td></tr>
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[36rem]">
+            <thead><tr className="text-left text-xs text-gray-500"><th className="py-1">Lender</th><th>Rate</th><th>Loans</th><th>Paid out</th><th>Commission</th><th>Invoice</th></tr></thead>
+            <tbody>
+              {rows.map(r => {
+                const inv = invs.find(i => i.business_id === r.lender_id)
+                return (
+                  <tr key={r.lender_id} className="border-t border-gray-100 align-top">
+                    <td className="py-1.5">{r.legal_name}</td><td>{r.commission_pct != null ? `${r.commission_pct}%` : <b className="text-amber-700">not set</b>}</td>
+                    <td>{r.loans}</td><td>{inr(r.paid_value)}</td><td className="font-semibold">{inr(r.commission)}</td>
+                    <td className="py-1.5">
+                      {inv ? (
+                        <div className="space-y-0.5">
+                          <a href={`/invoice/${inv.public_token}`} target="_blank" rel="noopener noreferrer" className="text-teal-700 underline">{inv.invoice_number}</a>
+                          <div className="text-xs text-gray-500">{inr(inv.total_amount)} incl. GST · {inv.paid_at ? `paid ${day(inv.paid_at)}` : `due ${day(inv.due_on)}`}</div>
+                          {inv.paid_at
+                            ? <button disabled={busy === inv.id} onClick={() => act(inv.id, () => markCommissionPaid(inv.id, false), 'Marked unpaid.')} className="text-xs text-gray-500 underline">Mark unpaid</button>
+                            : <button disabled={busy === inv.id} onClick={() => act(inv.id, () => markCommissionPaid(inv.id, true), 'Marked paid.')} className="text-xs text-teal-700 underline">Mark paid</button>}
+                        </div>
+                      ) : over && r.commission_pct != null ? (
+                        <button disabled={busy === r.lender_id} onClick={() => act(r.lender_id, () => issueCommissionInvoice(r.lender_id, from), 'Invoice issued.')}
+                          className="text-sm py-1.5 px-3 rounded-lg border border-teal-300 text-teal-800">Issue invoice</button>
+                      ) : <span className="text-xs text-gray-400">{over ? 'Set a rate first' : 'After the month ends'}</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+              <tr className="border-t border-gray-200 font-bold"><td className="py-1.5" colSpan={4}>Total</td><td>{inr(total)}</td><td /></tr>
+            </tbody>
+          </table>
+        </div>
       )}
-      <p className="text-xs text-gray-500">By date paid out. Raise each lender's invoice from this (GST is added on the invoice). Amounts before GST.</p>
+      <p className="text-xs text-gray-500">By date paid out, before GST. "Issue invoice" makes a GST tax invoice from NG Technologies to the lender (18% GST; IGST if the lender's GSTIN is from another state), due in 15 days, in the same number series and GST filing export as our other invoices.</p>
     </div>
   )
 }

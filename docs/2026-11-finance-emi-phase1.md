@@ -26,8 +26,13 @@ profile, logs in by WhatsApp code; approve needs the LSP agreement date; commiss
 search, history, CSV), Commission (per month per lender, CSV). Migration 0329 (sehat_admin_lender_create,
 sehat_admin_finance_switch, sehat_finance_expire_stale + daily cron 'finance-expiry', sehat_admin_finance_commission),
 SANDBOX only. Step 6 (finance payment on the bill) is already done by sehat_finance_case_received (step 1/2).
-Open: GST invoice to lenders from the commission figures (today: CSV), automatic WhatsApp sends (templates),
-step 7 end-to-end test on staging. No lender signed yet — build on staging/sandbox
+Open: automatic WhatsApp sends (templates), step 7 end-to-end test on staging.
+22 Nov 2026 — GST invoices to lenders: migration 0330 (invoices.invoice_kind 'emi_commission', due_on, paid_at;
+one per lender per month; sehat_gstin_ok, sehat_lender_billing_save, sehat_admin_finance_invoice,
+sehat_admin_finance_invoice_paid; SAC from site_settings 'finance_commission_sac', default 997119 — CHECK with CA),
+SANDBOX only. Same number series, supplier snapshot, /invoice/<token> page and GST export as listing invoices.
+Admin → EMI → Commission: Issue invoice / Mark paid. Lender: Billing details (GSTIN) in Profile, invoices in Reports.
+invoice-view now also returns invoice_kind/due_on/paid_at (falls back if 0330 is missing) — needs redeploying. No lender signed yet — build on staging/sandbox
 with a test lender; turn on in production only after the first real lender agreement.
 
 ## Goal

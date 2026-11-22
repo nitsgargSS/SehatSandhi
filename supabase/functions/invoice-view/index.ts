@@ -45,18 +45,23 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
 
-  const { data, error } = await supabase
-    .from('invoices')
-    .select(`
+  const COLUMNS = `
       invoice_number, invoice_date, fy, status,
       supplier_legal_name, supplier_trade_name, supplier_gstin, supplier_state_code, supplier_address,
       recipient_name, recipient_gstin, recipient_state_code, recipient_address, recipient_phone,
       sac_code, description, period_start, period_end, months, pin_codes,
       taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, tax_total, total_amount,
-      place_of_supply, reverse_charge, currency, line_items
-    `)
-    .eq('public_token', token)
-    .maybeSingle()
+      place_of_supply, reverse_charge, currency, line_items`
+  // 0330: a commission invoice to a lender is issued before it is paid — its
+  // kind, due date and paid date change the footer. Asked for first; a database
+  // without 0330 yet answers without them, so this deploys safely in any order.
+  type Res = { data: Record<string, unknown> | null; error: { message: string } | null }
+  let res: Res = await supabase.from('invoices')
+    .select(`${COLUMNS}, invoice_kind, due_on, paid_at`).eq('public_token', token).maybeSingle() as unknown as Res
+  if (res.error) {
+    res = await supabase.from('invoices').select(COLUMNS).eq('public_token', token).maybeSingle() as unknown as Res
+  }
+  const { data, error } = res
 
   if (error) return json({ error: error.message }, 500)
   if (!data) return json({ error: 'not found' }, 404)

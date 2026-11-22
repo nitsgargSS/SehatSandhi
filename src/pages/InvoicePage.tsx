@@ -171,7 +171,7 @@ export default function InvoicePage() {
         </div>
 
         <div className="mt-8 pt-4 border-t border-gray-200 text-[11px] text-gray-500 leading-relaxed">
-          <p>Amount received in full. This is a computer-generated invoice and does not require a signature.</p>
+          <p>{paymentLine(invoice)} This is a computer-generated invoice and does not require a signature.</p>
           {Number(invoice.tax_total) === 0 && (
             <p className="mt-1">GST is not charged on this invoice.</p>
           )}
@@ -186,6 +186,13 @@ export default function InvoicePage() {
       </div>
     </div>
   )
+}
+
+/** 0330: a lender's commission invoice is issued before it is paid. */
+function paymentLine(inv: { invoice_kind?: string; due_on?: string | null; paid_at?: string | null }): string {
+  if (inv.invoice_kind !== 'emi_commission') return 'Amount received in full.'
+  if (inv.paid_at) return `Paid on ${new Date(inv.paid_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}.`
+  return inv.due_on ? `Payment due by ${new Date(inv.due_on).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}.` : 'Payment due.'
 }
 
 function Row({ label, value }: { label: string; value: string }) {

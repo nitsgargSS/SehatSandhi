@@ -493,3 +493,44 @@ export async function adminCommission(from: string, to: string): Promise<Commiss
   oops(error)
   return (data ?? []) as CommissionRow[]
 }
+
+// ── Commission invoices to lenders (0330) ───────────────────────────────────
+
+export interface CommissionInvoice {
+  id: string; business_id: string; invoice_number: string; invoice_date: string; period_start: string
+  taxable_value: number; tax_total: number; total_amount: number; due_on: string | null; paid_at: string | null; public_token: string
+}
+const INV_COLS = 'id, business_id, invoice_number, invoice_date, period_start, taxable_value, tax_total, total_amount, due_on, paid_at, public_token'
+
+export async function commissionInvoices(monthStart?: string, lenderId?: string): Promise<CommissionInvoice[]> {
+  let q = supabase.from('invoices').select(INV_COLS).eq('invoice_kind', 'emi_commission').order('invoice_date', { ascending: false })
+  if (monthStart) q = q.eq('period_start', monthStart)
+  if (lenderId) q = q.eq('business_id', lenderId)
+  const { data, error } = await q
+  oops(error)
+  return (data ?? []) as CommissionInvoice[]
+}
+
+export async function issueCommissionInvoice(lenderId: string, monthStart: string): Promise<CommissionInvoice> {
+  const { data, error } = await supabase.rpc('sehat_admin_finance_invoice', { p_lender: lenderId, p_month: monthStart })
+  oops(error)
+  return data as CommissionInvoice
+}
+
+export async function markCommissionPaid(invoiceId: string, paid = true) {
+  const { error } = await supabase.rpc('sehat_admin_finance_invoice_paid', { p_invoice: invoiceId, p_paid: paid })
+  oops(error)
+}
+
+export interface LenderBilling { gstin: string | null; gst_legal_name: string | null; billing_address: string | null }
+export async function lenderBilling(lenderId: string): Promise<LenderBilling> {
+  const { data, error } = await supabase.from('businesses').select('gstin, gst_legal_name, billing_address').eq('id', lenderId).maybeSingle()
+  oops(error)
+  return (data ?? { gstin: null, gst_legal_name: null, billing_address: null }) as LenderBilling
+}
+export async function saveLenderBilling(lenderId: string, b: LenderBilling) {
+  const { error } = await supabase.rpc('sehat_lender_billing_save', {
+    p_lender: lenderId, p_gstin: b.gstin ?? '', p_legal_name: b.gst_legal_name ?? '', p_address: b.billing_address ?? '',
+  })
+  oops(error)
+}

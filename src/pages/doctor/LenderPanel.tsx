@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import {
   lenderCases, lenderCaseViewed, lenderCaseUpdate, payeeDecide, lenderProfile, saveLenderProfile, payeeLinks,
-  LENDER_ACTION, CASE_STATUS, MIN_EMI_AMOUNT,
-  type LenderCase, type LenderProfile, type PayeeLink, type LenderUpdate,
+  LENDER_ACTION, CASE_STATUS, MIN_EMI_AMOUNT, lenderBilling, saveLenderBilling, commissionInvoices,
+  type LenderCase, type LenderProfile, type PayeeLink, type LenderUpdate, type LenderBilling, type CommissionInvoice,
 } from '../../lib/financeApi'
 import { isoDate, shortDate } from '../../lib/format'
+import { isValidGstin } from '../../hooks/useTaxSettings'
 
 // Treatment on EMI — the lender's dashboard (0326, step 4).
 //
@@ -93,7 +94,9 @@ export default function LenderPanel({ businessId, canManage }: { businessId: str
       {view === 'hospitals' && <Hospitals links={links} lenderId={businessId} canManage={canManage} busy={busy} run={run} />}
       {view === 'profile' && profile !== undefined && <ProfileForm profile={profile} canManage={canManage} busy={busy === 'profile'}
         onSave={p => run('profile', () => saveLenderProfile(businessId, p), 'Profile saved.')} />}
+      {view === 'profile' && profile && <BillingForm lenderId={businessId} canManage={canManage} />}
       {view === 'reports' && <Reports cases={cases} profile={profile ?? null} />}
+      {view === 'reports' && <Invoices lenderId={businessId} />}
     </div>
   )
 }
@@ -374,6 +377,60 @@ function Reports({ cases, profile }: { cases: LenderCase[]; profile: LenderProfi
         {tile('Commission to Sehatsandhi', commission != null ? inr(Math.round(commission)) : '—', profile?.commission_pct != null ? `${profile.commission_pct}% of value paid, as agreed` : 'Rate set by Sehatsandhi')}
       </div>
       <p className="text-xs text-gray-500">Sehatsandhi raises a monthly invoice for commission on loans paid out. Patients never pay Sehatsandhi.</p>
+    </div>
+  )
+}
+
+// ── Billing details for Sehatsandhi's invoices (0330) ───────────────────────
+
+function BillingForm({ lenderId, canManage }: { lenderId: string; canManage: boolean }) {
+  const [b, setB] = useState<LenderBilling | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
+  useEffect(() => { lenderBilling(lenderId).then(setB, () => setB({ gstin: null, gst_legal_name: null, billing_address: null })) }, [lenderId])
+  if (!b) return null
+  const g = (b.gstin ?? '').trim().toUpperCase()
+  const gBad = g.length === 15 && !isValidGstin(g)
+  const save = async () => {
+    if (g && !isValidGstin(g)) { setNote('That GSTIN doesn’t look right — please check it.'); return }
+    setBusy(true); setNote('')
+    try { await saveLenderBilling(lenderId, { ...b, gstin: g || null }); setNote('Saved.') } catch (e) { setNote((e as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <div className="card shadow-sm space-y-3">
+      <h3 className="font-bold text-navy-700">Billing details</h3>
+      <p className="text-xs text-gray-500">For Sehatsandhi's monthly commission invoice to you. With a GSTIN it is a B2B tax invoice and you can claim the GST.</p>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <label className="text-xs font-medium text-gray-600 block">GSTIN
+          <input className={`input-field mt-1 uppercase ${gBad ? 'border-red-400' : ''}`} disabled={!canManage} maxLength={15} value={b.gstin ?? ''} onChange={e => setB({ ...b, gstin: e.target.value })} /></label>
+        <label className="text-xs font-medium text-gray-600 block">Legal name on the invoice
+          <input className="input-field mt-1" disabled={!canManage} value={b.gst_legal_name ?? ''} onChange={e => setB({ ...b, gst_legal_name: e.target.value })} /></label>
+        <label className="text-xs font-medium text-gray-600 block sm:col-span-2">Billing address
+          <textarea className="input-field mt-1" rows={2} disabled={!canManage} value={b.billing_address ?? ''} onChange={e => setB({ ...b, billing_address: e.target.value })} /></label>
+      </div>
+      {gBad && <p className="text-sm text-red-600">That GSTIN doesn’t look right — please check it.</p>}
+      {note && !gBad && <p className={`text-sm ${note === 'Saved.' ? 'text-green-700' : 'text-red-600'}`}>{note}</p>}
+      {canManage && <button disabled={busy} onClick={save} className="btn-teal text-sm py-2 px-4">{busy ? 'Saving…' : 'Save billing details'}</button>}
+    </div>
+  )
+}
+
+function Invoices({ lenderId }: { lenderId: string }) {
+  const [list, setList] = useState<CommissionInvoice[] | null>(null)
+  useEffect(() => { commissionInvoices(undefined, lenderId).then(setList, () => setList([])) }, [lenderId])
+  if (!list || list.length === 0) return null
+  return (
+    <div className="card shadow-sm space-y-2">
+      <h3 className="font-bold text-navy-700">Invoices from Sehatsandhi</h3>
+      {list.map(i => (
+        <div key={i.id} className="flex items-center justify-between gap-2 flex-wrap text-sm border-t border-gray-100 pt-2">
+          <a href={`/invoice/${i.public_token}`} target="_blank" rel="noopener noreferrer" className="text-teal-700 underline">{i.invoice_number}</a>
+          <span className="text-gray-600">{new Date(i.period_start).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</span>
+          <span className="font-semibold">{inr(i.total_amount)}</span>
+          <span className={`text-xs ${i.paid_at ? 'text-green-700' : 'text-amber-700'}`}>{i.paid_at ? `Paid ${shortDate(new Date(i.paid_at))}` : i.due_on ? `Due ${shortDate(new Date(i.due_on))}` : 'Due'}</span>
+        </div>
+      ))}
+      <p className="text-xs text-gray-500">Only the owner login sees invoices.</p>
     </div>
   )
 }

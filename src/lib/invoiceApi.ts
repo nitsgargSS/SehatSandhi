@@ -7,6 +7,10 @@ import { activeConfig } from './env'
 export interface Invoice {
   /** 0117: [{label, amount}] pre-GST — subscription, WhatsApp, coupon. Null on older invoices. */
   line_items?: { label: string; amount: number }[] | null
+  /** 0330: 'emi_commission' — our invoice to a lender, issued before it is paid. */
+  invoice_kind?: 'listing' | 'emi_commission'
+  due_on?: string | null
+  paid_at?: string | null
   invoice_number: string
   invoice_date: string
   fy: string
