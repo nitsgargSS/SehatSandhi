@@ -39,6 +39,7 @@ import InternationalPanel from './InternationalPanel'
 import IntlInvite from './IntlInvite'
 import SocialPostsPanel from './SocialPostsPanel'
 import EmiPanel from './EmiPanel'
+import LenderPanel from './LenderPanel'
 import { financeEnabled, type EmiSource } from '../../lib/financeApi'
 import { usePricing, monthlyAppliesTo } from '../../hooks/usePricing'
 import { Business, Appointment, PracticeLocation, SPECIALITIES } from '../../types'
@@ -149,7 +150,7 @@ export default function DoctorDashboard() {
   // (today's patients) instead of having to figure out which of
   // six tabs has what they need.
   // 0280: a billing message links straight to ?tab=plan.
-  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages' | 'website' | 'social' | 'international' | 'emi'>(
+  const [tab, setTab] = useState<'today' | 'queue' | 'appointments' | 'patients' | 'beds' | 'schedule' | 'clinic' | 'bills' | 'plan' | 'whatsapp' | 'reports' | 'mypractice' | 'myaccount' | 'doctors' | 'pharmacy' | 'collections' | 'patientreport' | 'lab' | 'orders' | 'trips' | 'leads' | 'messages' | 'website' | 'social' | 'international' | 'emi' | 'lender'>(
     () => (['plan', 'whatsapp', 'bills', 'website', 'social', 'international'].includes(new URLSearchParams(window.location.search).get('tab') ?? '')
       ? new URLSearchParams(window.location.search).get('tab') as 'plan' : 'today'))
 
@@ -1225,7 +1226,11 @@ export default function DoctorDashboard() {
       { id: 'myaccount', label: 'My account', icon: <User className="w-4 h-4" /> },
     ] : []),
   ]
-  const tabs = labOnly ? allTabs.filter(tb => tb.id === 'lab' || tb.id === 'myaccount') : allTabs
+  // 0326 step 4: a lender (bank / NBFC) sees its EMI cases and nothing of a clinic's.
+  const isLender = (doctor?.vertical as string | undefined) === 'lender'
+  const tabs = isLender
+    ? [{ id: 'lender', label: 'EMI cases', icon: <HandCoins className="w-4 h-4" /> }, ...allTabs.filter(tb => tb.id === 'myaccount')]
+    : labOnly ? allTabs.filter(tb => tb.id === 'lab' || tb.id === 'myaccount') : allTabs
 
   // Keep the open tab one that exists.
   //
@@ -2014,6 +2019,10 @@ export default function DoctorDashboard() {
 
         {tab === 'international' && doctor && (
           <InternationalPanel businessId={doctor.id} />
+        )}
+
+        {tab === 'lender' && doctor && isLender && (
+          <LenderPanel businessId={doctor.id} canManage={businessRole} />
         )}
 
         {tab === 'emi' && doctor && handlesEmi && (

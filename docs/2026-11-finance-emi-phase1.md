@@ -13,7 +13,13 @@ migration: hospitals offering EMI, my cases), and automatic sends once Meta appr
 hospital — hospital, treatment, amount — and list my requests; tile only while EMI is on); WhatsApp bot: "🏦 इलाज EMI पर"
 menu row and typed "EMI" / "loan" / "लोन" (same three questions, then the patient's link). Migrations 0327
 (sehat_finance_hospitals, sehat_finance_my_cases) and 0328 (bot_emi_hospitals_json, bot_emi_request_json), applied to
-SANDBOX only. Left in step 3: automatic WhatsApp sends once Meta approves the templates. No lender signed yet — build on staging/sandbox
+SANDBOX only. Left in step 3: automatic WhatsApp sends once Meta approves the templates.
+21–22 Nov 2026 — step 4 (lender dashboard) built: `src/pages/doctor/LenderPanel.tsx` — a business with vertical
+`lender` sees only an "EMI cases" tab (+ My account): New / In progress / Done inbox (opening logs a view), offer,
+sanction, decline with reason, paid with amount/date/UTR (refused until payee approved and admission confirmed),
+approve hospital as payee (agreement date, no-cost EMI), Hospitals list, Profile (sent back for review if legal
+details change), Reports (shared, sanctioned, approval rate, paid value, commission). No migration. Tested on
+sandbox in a rolled-back transaction. Lender accounts are created by admin in step 5. No lender signed yet — build on staging/sandbox
 with a test lender; turn on in production only after the first real lender agreement.
 
 ## Goal

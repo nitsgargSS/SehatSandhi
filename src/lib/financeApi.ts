@@ -349,3 +349,90 @@ export function useFinanceEnabled(): boolean | null {
   useEffect(() => { let live = true; financeEnabled().then(v => { if (live) setOn(v) }); return () => { live = false } }, [])
   return on
 }
+
+// ── Lender (vertical 'lender') — step 4 ─────────────────────────────────────
+
+export interface LenderCase {
+  case_lender_id: string; case_id: string; case_no: string
+  lender_status: LenderCaseStatus; case_status: CaseStatus
+  patient_name: string; patient_phone: string; treatment: string; treatment_category: string | null
+  estimate_amount: number; requested_amount: number; planned_on: string | null
+  hospital_id: string; hospital_name: string; hospital_address: string | null; hospital_gstin: string | null; hospital_reg_no: string | null
+  hospital_confirmed_at: string | null; admission_confirmed_at: string | null; payee_status: 'requested' | 'approved' | 'rejected' | null
+  shared_at: string; lender_ref: string | null; offer_amount: number | null; offer_tenure_months: number | null; offer_emi: number | null
+  disbursed_amount: number | null; disbursed_on: string | null; utr: string | null; received: boolean
+}
+
+export interface LenderProfile {
+  business_id: string; legal_name: string; entity_type: 'bank' | 'nbfc'; rbi_reg_no: string | null
+  grievance_name: string | null; grievance_email: string | null; grievance_phone: string | null
+  terms_summary: string | null; min_amount: number; max_amount: number | null; tenures: string | null
+  pays_to: 'hospital' | 'patient'; journey_url: string | null; commission_pct: number | null
+  status: 'pending' | 'approved' | 'suspended'; approved_at: string | null; lsp_agreement_on: string | null
+}
+
+export interface PayeeLink {
+  hospital_id: string; status: 'requested' | 'approved' | 'rejected'; requested_at: string; decided_at: string | null
+  decision_note: string | null; no_cost_emi: boolean; subvention_note: string | null; agreement_done_on: string | null
+  hospital_name?: string; hospital_address?: string | null
+}
+
+export async function lenderCases(lenderId: string): Promise<LenderCase[]> {
+  const { data, error } = await supabase.rpc('sehat_lender_cases', { p_lender: lenderId })
+  oops(error)
+  return (data ?? []) as LenderCase[]
+}
+
+export async function lenderCaseViewed(caseLenderId: string) {
+  await supabase.rpc('sehat_lender_case_viewed', { p_case_lender: caseLenderId })
+}
+
+export type LenderUpdate =
+  | { status: 'offered'; offer_amount?: number; offer_tenure_months?: number; offer_emi?: number; lender_ref?: string }
+  | { status: 'sanctioned'; offer_amount?: number; offer_tenure_months?: number; offer_emi?: number; lender_ref?: string }
+  | { status: 'disbursed'; disbursed_amount: number; disbursed_on: string; utr: string }
+  | { status: 'declined'; reason: string }
+
+export async function lenderCaseUpdate(caseLenderId: string, u: LenderUpdate) {
+  const { status, ...p } = u
+  const clean = Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== '' && !(typeof v === 'number' && isNaN(v))))
+  const { error } = await supabase.rpc('sehat_lender_case_update', { p_case_lender: caseLenderId, p_status: status, p: clean })
+  oops(error)
+}
+
+export async function payeeDecide(lenderId: string, hospitalId: string, approve: boolean, o: { note?: string; noCostEmi?: boolean; agreementOn?: string | null } = {}) {
+  const { error } = await supabase.rpc('sehat_lender_payee_decide', {
+    p_lender: lenderId, p_hospital: hospitalId, p_approve: approve, p_note: o.note ?? null,
+    p_no_cost_emi: o.noCostEmi ?? null, p_agreement_on: o.agreementOn || null,
+  })
+  oops(error)
+}
+
+export async function lenderProfile(lenderId: string): Promise<LenderProfile | null> {
+  const { data, error } = await supabase.from('lender_profiles').select('*').eq('business_id', lenderId).maybeSingle()
+  oops(error)
+  return (data ?? null) as LenderProfile | null
+}
+
+export async function saveLenderProfile(lenderId: string, p: Partial<LenderProfile>) {
+  const { error } = await supabase.rpc('sehat_lender_profile_save', { p_lender: lenderId, p })
+  oops(error)
+}
+
+export async function payeeLinks(lenderId: string): Promise<PayeeLink[]> {
+  const { data, error } = await supabase.from('lender_hospital_links')
+    .select('hospital_id, status, requested_at, decided_at, decision_note, no_cost_emi, subvention_note, agreement_done_on')
+    .eq('lender_id', lenderId).order('requested_at', { ascending: false })
+  oops(error)
+  const links = (data ?? []) as PayeeLink[]
+  if (links.length) {
+    const { data: hs } = await supabase.from('businesses').select('id, name, address').in('id', links.map(l => l.hospital_id))
+    const byId = new Map((hs ?? []).map((h: { id: string; name: string; address: string | null }) => [h.id, h]))
+    for (const l of links) { const h = byId.get(l.hospital_id); l.hospital_name = h?.name ?? 'Hospital'; l.hospital_address = h?.address ?? null }
+  }
+  return links
+}
+
+export const LENDER_ACTION: Record<LenderCaseStatus, string> = {
+  shared: 'New — review', offered: 'Offer made', sanctioned: 'Sanctioned — pay out', disbursed: 'Paid', declined: 'Declined', withdrawn: 'Withdrawn',
+}
