@@ -125,6 +125,9 @@ async function loadSandbox(files) {
             explain_en = $7, explain_hi = $8 where module_id = $1 and text_en = $3`,
           [mod.id, type, qEn, qHi, JSON.stringify(options), JSON.stringify(correct), xEn, xHi])
       }
+      // A question taken out of content.mjs is switched off (kept for past attempts).
+      await c.query('update care_partner_questions set is_active = false where module_id = $1 and is_active and not (text_en = any($2::text[]))',
+        [mod.id, m.questions.map(q => q[1])])
       const { rows: [{ n }] } = await c.query('select count(*)::int n from care_partner_questions where module_id = $1 and is_active', [mod.id])
       if (n >= need) { await c.query('update care_partner_modules set is_published = true, updated_at = now() where id = $1', [mod.id]); published++ }
     }

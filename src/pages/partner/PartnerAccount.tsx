@@ -501,11 +501,16 @@ function Leads() {
     </div>
     {d && d.businesses.length > 0 && (
       <div className="card text-sm">
-        <h2 className="font-bold text-navy-700 mb-2">{tx('Businesses you introduced', 'आपके जोड़े व्यवसाय')}</h2>
+        <h2 className="font-bold text-navy-700 mb-1">{tx('Businesses you introduced', 'आपके जोड़े व्यवसाय')}</h2>
+        <p className="text-xs text-gray-500 mb-2">{tx('Rewards start when a business takes the yearly (12-month) plan. Businesses on the paid trial are the ones to follow up.', 'रिवॉर्ड तब शुरू होते हैं जब व्यवसाय सालाना (12 महीने) प्लान लेता है। पेड ट्रायल वाले व्यवसायों से संपर्क में रहें।')}</p>
         <ul className="divide-y divide-gray-100">
           {d.businesses.map((b, i) => (
             <li key={i} className="py-2 flex justify-between gap-2"><span>{b.name}{b.city ? `, ${b.city}` : ''}</span>
-              <span className={`text-xs ${b.paying ? 'text-teal-700' : 'text-gray-500'}`}>{b.paying ? tx('Paying', 'भुगतान कर रहे') : tx('Not paying yet', 'अभी भुगतान नहीं')}</span></li>
+              <span className={`text-xs text-right ${b.plan === 'yearly' ? 'text-teal-700' : b.plan === 'trial' ? 'text-amber-700 font-semibold' : 'text-gray-500'}`}>{
+                b.plan === 'yearly' ? tx(`Yearly plan · until ${day(b.until!)}`, `सालाना प्लान · ${day(b.until!)} तक`)
+                : b.plan === 'trial' ? tx(`Paid trial · ends ${day(b.until!)} — talk to them about the yearly plan`, `पेड ट्रायल · ${day(b.until!)} को खत्म — सालाना प्लान के बारे में बात करें`)
+                : b.plan === 'ended' ? tx(`Plan ended ${day(b.until!)}`, `प्लान ${day(b.until!)} को खत्म`)
+                : tx('Not paid yet', 'अभी भुगतान नहीं')}</span></li>
           ))}
         </ul>
       </div>

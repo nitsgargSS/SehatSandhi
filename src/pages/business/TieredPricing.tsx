@@ -133,7 +133,7 @@ export default function TieredPricing({ catalogue, gstNote, ambulancePrice }: {
       )}
 
       <p style={{ fontSize: 13.5, color: BIZ.mutedWarm, textAlign: 'center', marginTop: 30, maxWidth: 680, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
-        6 months for the price of {Number(s.months6_factor)}; 12 months for the price of {Number(s.months12_factor)}.
+        Start with a 1-month paid trial, then go yearly: 12 months for the price of {Number(s.months12_factor)}.
         {' '}Your price is held for the term you pay for, and you see the total before you pay.
         {gstNote && ` Prices are ${gstNote.startsWith('incl') ? gstNote : `shown before GST; ${gstNote.replace(/^\+ /, '')} is added`}, with a tax invoice for every payment.`}
         {ambulancePrice !== null && ` Ambulance services: ${money(ambulancePrice)}/month listing fee.`}

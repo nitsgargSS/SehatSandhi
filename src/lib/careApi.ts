@@ -421,7 +421,9 @@ export async function adminTickets(status?: string): Promise<AdminTicketRow[]> {
 // ── Attribution (0334) ──────────────────────────────────────────────────────
 
 export interface CareLead { id: string; doctor_name: string | null; phone_last2: string | null; locked_until: string; status: 'locked' | 'matched' | 'confirmed' | 'declined' | 'expired' | 'released'; business_name: string | null; created_at: string }
-export interface CareLeads { cap: number; open: number; leads: CareLead[]; businesses: { name: string; city: string | null; since: string | null; paying: boolean }[] }
+export interface CareLeads { cap: number; open: number; leads: CareLead[]; businesses: { name: string; city: string | null; since: string | null; paying: boolean
+  /** 0340: where the business's plan stands, so the partner knows whom to follow up. */
+  plan?: 'not_paid' | 'trial' | 'yearly' | 'ended'; until?: string | null; months?: number | null }[] }
 export type Referral = { state: 'none' } | { state: 'pending' | 'confirmed'; first_name: string; city: string; partner_code: string }
 
 export async function myLeads(): Promise<CareLeads> {
