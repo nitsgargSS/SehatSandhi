@@ -295,8 +295,8 @@ export default function BillPage() {
 
         <footer style={{ marginTop: 30, paddingTop: 14, borderTop: '1px solid #ece5d7' }}>
           <div style={{ fontSize: 12.5, color: '#8a8172', lineHeight: 1.5 }}>
-            Issued through Sehatsandhi. Keep this for your insurance claim or
-            reimbursement. If anything on it looks wrong, take it up with the
+            Issued through Sehatsandhi. Keep it for your records. If anything
+            on it looks wrong, take it up with the
             clinic before paying — a corrected bill replaces this one rather than
             changing it.
           </div>

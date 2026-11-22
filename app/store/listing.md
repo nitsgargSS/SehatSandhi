@@ -14,15 +14,14 @@ Package: `com.sehatsandhi.app` · Icon: `store/icon-512.png` · Bundle: the late
 
 **Full description (English)**
 
-Sehatsandhi connects patients with verified doctors, clinics, labs, pharmacies, ambulances and insurance advisors near them — and gives clinics one place to run their day.
+Sehatsandhi connects patients with verified doctors, clinics, labs, pharmacies and ambulances near them — and gives clinics one place to run their day.
 
 FOR PATIENTS
 • Find a doctor by speciality or by describing your problem in your own words, in Hindi or English
-• Book an appointment at a time the doctor has open, and get reminders
+• Book an appointment at a time the doctor has open
 • Book lab tests at the lab or as a home collection
 • Order medicines with a photo of your prescription — a pharmacy tells you the total before anything is sent
 • Alert ambulances near you in an emergency (always call 108 first)
-• Ask a licensed insurance advisor to call you back
 • Keep your prescriptions, bills and reports in one place, for the whole family
 • Free health camps and offers near you
 
@@ -38,15 +37,14 @@ Sehatsandhi does not give medical advice and is not a substitute for a doctor. I
 
 **Full description (Hindi)**
 
-Sehatsandhi मरीज़ों को उनके पास के वेरिफ़ाइड डॉक्टर, क्लिनिक, लैब, फ़ार्मेसी, एम्बुलेंस और बीमा सलाहकार से जोड़ता है — और क्लिनिक को अपना पूरा काम एक जगह चलाने देता है।
+Sehatsandhi मरीज़ों को उनके पास के वेरिफ़ाइड डॉक्टर, क्लिनिक, लैब, फ़ार्मेसी और एम्बुलेंस से जोड़ता है — और क्लिनिक को अपना पूरा काम एक जगह चलाने देता है।
 
 मरीज़ों के लिए
 • बीमारी या तकलीफ़ अपने शब्दों में लिखकर सही डॉक्टर खोजें
-• डॉक्टर के खाली समय पर अपॉइंटमेंट बुक करें और रिमाइंडर पाएं
+• डॉक्टर के खाली समय पर अपॉइंटमेंट बुक करें
 • लैब टेस्ट बुक करें — लैब पर या घर से सैंपल
 • पर्ची की फ़ोटो भेजकर दवाई मंगवाएं — फ़ार्मेसी पहले कुल कीमत बताती है
 • इमरजेंसी में पास की एम्बुलेंस को अलर्ट करें (पहले 108 पर कॉल करें)
-• लाइसेंस वाले बीमा सलाहकार से कॉल-बैक लें
 • पूरे परिवार के पर्चे, बिल और रिपोर्ट एक जगह
 • पास के मुफ़्त हेल्थ कैंप और ऑफ़र
 
@@ -56,6 +54,7 @@ Sehatsandhi मरीज़ों को उनके पास के वेर
 • भुगतान लें, बिल बनाएं, दिन की वसूली देखें
 • भर्ती मरीज़ और बेड
 • लैब ऑर्डर और रिपोर्ट अपलोड
+• मरीज़ को पर्ची, बिल या रिपोर्ट WhatsApp पर भेजें
 
 Sehatsandhi कोई चिकित्सा सलाह नहीं देता और डॉक्टर का विकल्प नहीं है। इमरजेंसी में 108 पर कॉल करें।
 
