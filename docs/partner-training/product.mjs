@@ -1,6 +1,6 @@
 // Care Partner Program — PRODUCT TRACK: how Sehatsandhi works, with screenshots.
-// Replaces Module 2 ("Product demo"). DRAFT, English first (22 Nov 2026): Nitin
-// reviews the English, then it is translated to Hindi.
+// Replaces Module 2 ("Product demo"). DRAFT (22 Nov 2026). Hindi: product-hi/<slug>.json
+// (translated 22 Nov 2026; the build checks it has the same shape as the English).
 //
 // Written from the code (docs/partner-training/research/*.md), not from plans.
 // Screenshots: docs/partner-training/shots/<name>.png, taken on STAGING from the
@@ -11,7 +11,7 @@
 //
 // A section item is a sentence, or { img, cap, phone } for a screenshot.
 
-export const PRODUCT_VERSION = 'draft-1 (English) · 22 Nov 2026'
+export const PRODUCT_VERSION = 'draft-1 · 22 Nov 2026'
 
 const shot = (img, cap, phone = false) => ({ img, cap, phone })
 
@@ -437,7 +437,7 @@ export const PRODUCT_MODULES = [
       ['single', 'A doctor starts with the 1-month paid trial. Can they type your Partner ID?', [['No, only on the yearly plan', 'Yes — you stay linked from day one', 'Only after a year', 'Only by phone']], ['b'], 'You stay linked and can follow up.'],
       ['single', 'Where do you find today\'s prices?', [['From memory', 'On the live pricing page sehatsandhi.com/business', 'From another partner', 'From the doctor']], ['b'], 'Never quote from memory.'],
       ['single', 'What does reception NOT see?', [['The queue', 'Billing', 'Medical notes', 'Appointments']], ['c'], 'Each role sees what their job needs.'],
-      ['single', 'What does WhatsApp Pro add?', [['The clinic\'s own WhatsApp number and automatic messages', 'Free medicines', 'Insurance', 'A government licence']], ['a'], 'Own number + automatic messages.'],
+      ['single', 'What does WhatsApp Pro add?', [['The clinic\'s own WhatsApp number and automatic messages', 'Free medicines', 'Free ambulance', 'A government licence']], ['a'], 'Own number + automatic messages.'],
     ],
   },
   // ───────────────────────────────────────────────────────────────────────────

@@ -14,7 +14,7 @@
 // PDFs are printed by the local Google Chrome (headless), so Devanagari renders
 // with the system's fonts. Credentials come from .env.supabase.
 
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -29,6 +29,28 @@ const COURSE = ['what-is-sehatsandhi', ...PRODUCT_MODULES.map(m => m.slug),
   'plans-and-rewards', 'approaching-a-doctor', 'dos-and-donts', 'using-the-partner-app', 'payments-and-tax',
   'ethics-and-privacy', 'communication-rules', 'code-of-conduct']
 const SHOTS = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs/partner-training/shots')
+
+// Hindi of the product track: docs/partner-training/product-hi/<slug>.json, checked
+// against the English shape (same sections, items, pictures, questions and options).
+const HI_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs/partner-training/product-hi')
+const PRODUCT_HI = {}
+if (existsSync(HI_DIR)) for (const f of readdirSync(HI_DIR).filter(f => f.endsWith('.json'))) {
+  const h = JSON.parse(readFileSync(join(HI_DIR, f), 'utf8'))
+  const en = PRODUCT_MODULES.find(m => m.slug === h.slug)
+  if (!en) throw new Error(`${f}: no English module ${h.slug}`)
+  const bad = (why) => { throw new Error(`${f}: ${why}`) }
+  if (h.sections.length !== en.sections.length) bad(`sections ${h.sections.length} ≠ ${en.sections.length}`)
+  en.sections.forEach(([, items], i) => {
+    const hi = h.sections[i][1]
+    if (hi.length !== items.length) bad(`section ${i + 1}: items ${hi.length} ≠ ${items.length}`)
+    items.forEach((it, j) => {
+      if (typeof it === 'string' ? typeof hi[j] !== 'string' : (hi[j]?.img !== it.img || !!hi[j]?.phone !== !!it.phone)) bad(`section ${i + 1} item ${j + 1}: not the same kind/picture`)
+    })
+  })
+  if (h.questions.length !== en.questions.length) bad(`questions ${h.questions.length} ≠ ${en.questions.length}`)
+  h.questions.forEach((q, i) => { if (!q[0] || q[1]?.length !== 4 || !q[2]) bad(`question ${i + 1}: needs text, 4 options, explanation`) })
+  PRODUCT_HI[h.slug] = h
+}
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(ROOT, 'docs/partner-training/pdf')
@@ -64,9 +86,9 @@ function html(mod, n, lang, contract = false) {
   ul:empty { display: none; }
   .foot { margin-top: 26px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 8.5pt; color: #64748b; }
 </style></head><body>
-  <div class="top"><span>Sehatsandhi · ${hi ? 'केयर पार्टनर प्रोग्राम' : 'Care Partner Program'}</span><span>${contract ? (hi ? 'ड्राफ़्ट — वकील की समीक्षा बाकी' : 'DRAFT — for legal review') : `${hi ? 'मॉड्यूल' : 'Module'} ${n}${mod.product ? ' · Product' : ''}`}</span></div>
+  <div class="top"><span>Sehatsandhi · ${hi ? 'केयर पार्टनर प्रोग्राम' : 'Care Partner Program'}</span><span>${contract ? (hi ? 'ड्राफ़्ट — वकील की समीक्षा बाकी' : 'DRAFT — for legal review') : `${hi ? 'मॉड्यूल' : 'Module'} ${n}${mod.product ? (hi ? ' · प्रोडक्ट' : ' · Product') : ''}`}</span></div>
   <h1>${esc(t.title)}</h1>
-  <div class="sub">${contract ? `${hi ? 'संस्करण' : 'Version'} ${esc(CONTRACT_VERSION)} · ${esc(CONTRACT_DATE)}` : `${hi ? 'पढ़ने की सामग्री' : 'Reading'} · ${esc(mod.product ? PRODUCT_VERSION : VERSION)}${mod.product ? ' · screenshots from a demo hospital with made-up patients' : ''}`}</div>
+  <div class="sub">${contract ? `${hi ? 'संस्करण' : 'Version'} ${esc(CONTRACT_VERSION)} · ${esc(CONTRACT_DATE)}` : `${hi ? 'पढ़ने की सामग्री' : 'Reading'} · ${esc(mod.product ? PRODUCT_VERSION : VERSION)}${mod.product ? (hi ? ' · स्क्रीनशॉट एक डेमो अस्पताल के हैं, मरीज़ काल्पनिक हैं' : ' · screenshots from a demo hospital with made-up patients') : ''}`}</div>
   ${sections}
   <div class="foot">${contract ? (hi
     ? 'यह अंग्रेज़ी दस्तावेज़ का हिंदी अनुवाद है; अंतर होने पर अंग्रेज़ी मान्य होगी। NG Technologies (सेहतसंधि), जगाधरी, हरियाणा।'
@@ -94,6 +116,13 @@ function buildPdfs() {
     writeFileSync(h, html(mod, COURSE.indexOf(pm.slug) + 1, 'en'))
     execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--no-pdf-header-footer', '--allow-file-access-from-files', `--print-to-pdf=${pdf}`, `file://${h}`], { stdio: 'ignore' })
     files.push({ slug: pm.slug, lang: 'en', pdf, product: true })
+    const hi = PRODUCT_HI[pm.slug]
+    if (hi) {
+      const hh = join(TMP, `${pm.slug}-hi.html`), hpdf = join(OUT, `${pm.slug}-hi.pdf`)
+      writeFileSync(hh, html({ product: true, hi: { title: hi.title, sections: hi.sections } }, COURSE.indexOf(pm.slug) + 1, 'hi'))
+      execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--no-pdf-header-footer', '--allow-file-access-from-files', `--print-to-pdf=${hpdf}`, `file://${hh}`], { stdio: 'ignore' })
+      files.push({ slug: pm.slug, lang: 'hi', pdf: hpdf, product: true })
+    }
   }
   const cdir = join(OUT, 'contracts'); mkdirSync(cdir, { recursive: true })
   for (const ct of CONTRACTS) {
@@ -155,21 +184,27 @@ async function loadSandbox(files) {
     // Product track: create/update the modules, their English PDF and questions (Hindi follows after review).
     for (const pm of PRODUCT_MODULES) {
       const en = files.find(f => f.slug === pm.slug && f.lang === 'en').path
-      const { rows: [mod] } = await c.query(`insert into care_partner_modules (slug, sort_order, title_en, title_hi, pdf_path_en, est_minutes, is_published)
-          values ($1, $2, $3, $4, $5, 15, false)
-        on conflict (slug) do update set title_en = excluded.title_en, title_hi = excluded.title_hi, pdf_path_en = excluded.pdf_path_en, updated_at = now()
-        returning id`, [pm.slug, (COURSE.indexOf(pm.slug) + 1) * 10, pm.title_en, pm.title_hi, en])
-      for (const [type, qEn, opts, correct, xEn] of pm.questions) {
+      const hiPdf = files.find(f => f.slug === pm.slug && f.lang === 'hi')?.path ?? null
+      const hi = PRODUCT_HI[pm.slug]
+      const { rows: [mod] } = await c.query(`insert into care_partner_modules (slug, sort_order, title_en, title_hi, pdf_path_en, pdf_path_hi, est_minutes, is_published)
+          values ($1, $2, $3, $4, $5, $6, 15, false)
+        on conflict (slug) do update set title_en = excluded.title_en, title_hi = excluded.title_hi, pdf_path_en = excluded.pdf_path_en,
+          pdf_path_hi = excluded.pdf_path_hi, updated_at = now()
+        returning id`, [pm.slug, (COURSE.indexOf(pm.slug) + 1) * 10, pm.title_en, hi?.title ?? pm.title_hi, en, hiPdf])
+      for (const [qi, [type, qEn, opts, correct, xEn]] of pm.questions.entries()) {
+        const h = hi?.questions[qi]   // [text_hi, [4 options], explain_hi] — same order as the English
         const options = type === 'truefalse'
           ? [{ id: 't', text_en: 'True', text_hi: 'सही' }, { id: 'f', text_en: 'False', text_hi: 'गलत' }]
-          : opts[0].map((o, i) => ({ id: 'abcdef'[i], text_en: o, text_hi: o }))
+          : opts[0].map((o, i) => ({ id: 'abcdef'[i], text_en: o, text_hi: h?.[1][i] ?? o }))
+        const qHi = h?.[0] ?? qEn, xHi = h?.[2] ?? xEn
         const r = await c.query(`insert into care_partner_questions (module_id, qtype, text_en, text_hi, options, correct, explain_en, explain_hi)
-          select $1, $2, $3, $3, $4::jsonb, $5::jsonb, $6, $6
+          select $1, $2, $3, $7, $4::jsonb, $5::jsonb, $6, $8
            where not exists (select 1 from care_partner_questions where module_id = $1 and text_en = $3)`,
-          [mod.id, type, qEn, JSON.stringify(options), JSON.stringify(correct), xEn])
+          [mod.id, type, qEn, JSON.stringify(options), JSON.stringify(correct), xEn, qHi, xHi])
         added += r.rowCount
-        if (!r.rowCount) await c.query(`update care_partner_questions set qtype = $2, options = $4::jsonb, correct = $5::jsonb, explain_en = $6
-            where module_id = $1 and text_en = $3`, [mod.id, type, qEn, JSON.stringify(options), JSON.stringify(correct), xEn])
+        if (!r.rowCount) await c.query(`update care_partner_questions set qtype = $2, text_hi = $7, options = $4::jsonb, correct = $5::jsonb,
+            explain_en = $6, explain_hi = $8 where module_id = $1 and text_en = $3`,
+          [mod.id, type, qEn, JSON.stringify(options), JSON.stringify(correct), xEn, qHi, xHi])
       }
       await c.query('update care_partner_questions set is_active = false where module_id = $1 and is_active and not (text_en = any($2::text[]))',
         [mod.id, pm.questions.map(q => q[1])])
@@ -178,7 +213,7 @@ async function loadSandbox(files) {
     }
     for (const [i, slug] of COURSE.entries()) await c.query('update care_partner_modules set sort_order = $2 where slug = $1', [slug, (i + 1) * 10])
     await c.query("update care_partner_modules set is_published = false, sort_order = 999, updated_at = now() where slug = 'product-demo'")
-    console.log(`✓ product track: ${PRODUCT_MODULES.length} modules; 'product-demo' unpublished; course order set`)
+    console.log(`✓ product track: ${PRODUCT_MODULES.length} modules (${Object.keys(PRODUCT_HI).length} with Hindi); 'product-demo' unpublished; course order set`)
 
     for (const ct of CONTRACTS) {
       const pe = files.find(f => f.kind === ct.kind && f.lang === 'en').path, ph = files.find(f => f.kind === ct.kind && f.lang === 'hi').path

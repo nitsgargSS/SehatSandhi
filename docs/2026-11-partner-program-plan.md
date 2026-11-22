@@ -128,3 +128,7 @@ Hindi after Nitin's review (product questions carry English in text_hi until the
 partner_module_quizzes 'off' (on = old per-module quizzes); exam opens when every published module is read (+video if any);
 partner_exam_per_module (2) questions from EVERY module (40 with 20 modules); pass = pass_mark AND every question from
 is_rules modules (dos-and-donts, ethics, communication, code-of-conduct) right. All 120 questions rewritten as 4-option single.
+
+Hindi product track (22 Nov): docs/partner-training/product-hi/<slug>.json (11 files; shape-checked against the English by
+partner-training.mjs); p-*-hi.pdf built and on sandbox; product questions' text_hi/options/explain_hi in Hindi. Translators' choices
+to review: walk-in = 'बिना बुकिंग आए (walk-in) मरीज़', diagnosis = 'डायग्नोसिस (बीमारी)', leakage = 'पैसे की लीकेज'.
