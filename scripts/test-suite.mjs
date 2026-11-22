@@ -182,7 +182,7 @@ expectEq('sehat_is_admin false for a doctor', await tryProbe('doctor', 'select s
 // The two predicates 0067 split apart.
 for (const [who, clinical, prescribe] of [
   ['owner', true, true], ['doctor', true, true], ['nurse', true, false],
-  ['reception', false, false], ['manager', false, false]]) {
+  ['reception', false, false], ['manager', true, false]]) {   // 0180: a manager does what nurses do
   expectEq(`is_clinical(${who})=${clinical}`, await tryProbe(who, 'select sehat_caller_is_clinical($1)', [BIZ.id]), clinical)
   expectEq(`may_prescribe(${who})=${prescribe}`, await tryProbe(who, 'select sehat_caller_may_prescribe($1)', [BIZ.id]), prescribe)
 }
@@ -628,7 +628,19 @@ if (MULTI && !skip()) {
     // As service_role and as a logged-in clinic user. The guard used to be
     // SECURITY INVOKER, so RLS hid the other business's rows from it and it
     // fired for the first and not the second — the bug that let this through.
-    for (const who of ['service_role', 'authenticated']) {
+    // Since 0153 a signed-in user cannot insert an appointment at all (bookings go
+    // through the booking functions), so the overlap guard is exercised as
+    // service_role, and for a signed-in user only the refusal itself is checked.
+    await db.query('savepoint dbk_auth')
+    let authErr = null
+    try {
+      await db.query(`select set_config('request.jwt.claims',$1,true)`, [JSON.stringify({ sub: uid.owner, role: 'authenticated' })])
+      await db.query(`set local role authenticated`)
+      await book(AWAY, await at(12, 0))
+    } catch (e) { authErr = e.message.split('\n')[0] }
+    finally { await db.query('rollback to savepoint dbk_auth'); await db.query('reset role') }
+    expectTrue('a signed-in user cannot insert a booking directly (0153)', /permission denied/i.test(authErr ?? ''), authErr ?? 'it was accepted')
+    for (const who of ['service_role']) {
       for (const [label, h, m, shouldRefuse] of [
         ['the same minute', 10, 0, true],
         ['an overlapping 10:15', 10, 15, true],
@@ -838,12 +850,15 @@ if (!skip()) {
     }
 
     // And what stays editable, because a profile is not a claim.
+    // Numbers built from the run's stamp: a fixed one collided with a seeded doctor
+    // (one number is one person, 0151).
+    const freshPhone = (k) => '7' + STAMP.slice(2, 10) + k
     await expectAllow("a manager can fix a consultant's phone number",
-      () => change('manager', TARGET.id, 'phone', '9000000123'))
+      () => change('manager', TARGET.id, 'phone', freshPhone(1)))
     await expectAllow('a doctor can fix their own phone number',
-      () => change('doctor', SELF.id, 'phone', '9000000124'))
+      () => change('doctor', SELF.id, 'phone', freshPhone(2)))
     await expectDeny("a doctor cannot touch another doctor's phone number",
-      () => change('doctor', TARGET.id, 'phone', '9000000125'))
+      () => change('doctor', TARGET.id, 'phone', freshPhone(3)))
     await expectDeny("reception cannot touch a consultant's phone number",
       () => change('reception', TARGET.id, 'phone', '9000000126'))
     // admin/Dashboard.tsx:204 is the only UPDATE against this table in src/.
@@ -900,7 +915,7 @@ if (!skip()) {
   const mgrAff = await affOf('manager'), mgrPrac = await pracOf('manager')
   if (mgrAff && mgrPrac) {
     await expectDeny('a manager cannot make themselves a doctor by table update',
-      () => setRole('manager', mgrAff, 'doctor'), 'your own')
+      () => setRole('manager', mgrAff, 'doctor'), 'your own|needs the code')
     await expectDeny('a manager cannot make themselves a doctor through the RPC',
       () => attach('manager', mgrPrac, 'doctor'), 'your own')
     await expectDeny('a manager cannot change their own status or web-login flag',
@@ -915,9 +930,10 @@ if (!skip()) {
       () => mustChange('manager', `with u as (update business_practitioners set consultation_fee = 555
              where id = $1 returning 1) select count(*)::int from u`, [docAff]))
     await expectDeny('a manager cannot make somebody else an owner',
-      () => setRole('manager', docAff, 'owner'), 'owner')
-    await expectAllow('an owner can make somebody else an owner',
-      () => setRole('owner', docAff, 'owner'))
+      () => setRole('manager', docAff, 'owner'), 'owner|needs the code')
+    // 0147: even the owner promotes only with the code emailed to them.
+    await expectDeny('an owner cannot make somebody else an owner without the emailed code',
+      () => setRole('owner', docAff, 'owner'), 'needs the code')
     for (const who of ['reception', 'nurse', 'doctor']) {
       await expectDeny(`${who} cannot edit an affiliation at all`,
         () => mustChange(who, `with u as (update business_practitioners set consultation_fee = 1
@@ -926,8 +942,8 @@ if (!skip()) {
     await expectDeny('reception cannot suspend a doctor through detach',
       () => probe('reception', `select sehat_detach_practitioner($1,$2)`, [BIZ.id, docPrac]),
       'not authorised')
-    await expectAllow('a manager still can',
-      () => probe('manager', `select sehat_detach_practitioner($1,$2)`, [BIZ.id, docPrac]))
+    await expectDeny('a manager needs the emailed code to detach a doctor (0147)',
+      () => probe('manager', `select sehat_detach_practitioner($1,$2)`, [BIZ.id, docPrac]), 'needs the code')
   }
 
   // The guard is skipped inside SECURITY DEFINER functions — deliberately, or
@@ -935,8 +951,8 @@ if (!skip()) {
   // why the RPCs carry their own check, and why this has to keep working.
   const unattached = (await raw(`select id from practitioners where auth_uid is null limit 1`))[0]?.id
   if (unattached) {
-    await expectAllow('a manager can still attach a new doctor',
-      () => attach('manager', unattached, 'doctor'))
+    await expectDeny('a manager needs the emailed code to attach a new doctor (0147)',
+      () => attach('manager', unattached, 'doctor'), 'needs the code')
   }
   await db.query('begin')
   try {
@@ -1032,14 +1048,14 @@ if (!skip()) {
     // Stored normalised, so the login lookup and the registration agree about
     // who is who however the address was typed.
     const norm = await reg({
-      email: `  MiXeD${STAMP}@Test.INVALID `, phone: '+91 98123-45001',
+      email: `  MiXeD${STAMP}@Test.INVALID `, phone: '+91 98123-45011',   // not 45001: kept above, and 0129 allows one listing per number
       doctors: [{ name: '[TEST] Dr N', phone: '9812345003',
                   email: `docn${STAMP}@test.invalid`, reg_number: `REGN${STAMP}` }],
     }, true)
     if (norm.id) {
       const row = (await raw(`select email, phone from businesses where id=$1`, [norm.id]))[0]
       expectEq('an email is stored lower-cased and trimmed', row.email, `mixed${STAMP}@test.invalid`)
-      expectEq('a phone number is stored as ten digits', row.phone, '9812345001')
+      expectEq('a phone number is stored as ten digits', row.phone, '9812345011')
     } else record('the normalisation case registered', false, norm.err)
 
     // The index, not the function — an application rule is a rule until
@@ -1205,8 +1221,10 @@ if (!skip()) {
     expectEq('an unexpired admin is an admin', await probe('admin', `select sehat_is_admin()`), true)
     await expire(uid.admin)
     expectEq('an expired admin is not', await probe('admin', `select sehat_is_admin()`), false)
-    expectEq('and reads no row from admin_users',
-      await probe('admin', `select count(*)::int from admin_users`), 0)
+    // 0145: everyone may read their OWN admin_users row (the login screen needs
+    // the role); what an expired admin must not see is anybody else's.
+    expectEq("and reads no other admin's row from admin_users",
+      await probe('admin', `select count(*)::int from admin_users where auth_uid is distinct from auth.uid()`), 0)
     expectEq('but can still see their own password state',
       await probe('admin', `select expired from sehat_password_state()`), true)
     await restore(uid.admin)
@@ -1235,7 +1253,13 @@ if (!skip()) {
 sec('modules')
 // Entitlement: a clinic that stopped paying must not be able to admit.
 const PAID = (await raw(`select id from businesses where name='[SEED] Paid Multi-Speciality'`))[0]
-if (PAID && !skip()) {
+const PAID_LIVE = PAID && (await raw(`select exists (select 1 from payments where business_id = $1 and status = 'paid'
+   and term_end >= (now() at time zone 'Asia/Kolkata')::date) ok`, [PAID.id]))[0]?.ok
+if (PAID && !PAID_LIVE && !skip()) {
+  record('the seeded paid hospital is still paid up', 'warn',
+    "its paid term has ended, so it rightly has no OPD/IPD — re-run node scripts/seed-sandbox-accounts.mjs")
+}
+if (PAID && PAID_LIVE && !skip()) {
   for (const code of ['opd', 'ipd']) {
     const got = await tryProbe('owner', `select sehat_business_has_module($1,$2)`, [PAID.id, code])
     expectTrue(`the paid hospital has the ${code} module`, got === true, `got ${JSON.stringify(got)}`)
@@ -1446,9 +1470,23 @@ const stillOwner = (await raw(`select c.relname from pg_class c join pg_namespac
    where n.nspname='public' and c.relkind='v'
      and not coalesce(array_to_string(c.reloptions,',') like '%security_invoker%', false)
    order by 1`)).map(r => r.relname)
-expectEq('only the two documented views still run as their owner', stillOwner,
-  ['patient_summary', 'purge_job_history'],
-  'a new view without security_invoker skips the RLS on everything it reads')
+// Owner-run views nobody but the service role can select from (the admin
+// metrics, 0209/0214) are harmless; what must not happen is an owner-run view
+// that anon or a signed-in user can read, unless it is one of the documented few.
+const OWNER_RUN_OK = {
+  patient_summary: 'documented in 0074',
+  purge_job_history: 'documented in 0074',
+  public_business_doctors: 'public directory: active doctors, public columns only; as invoker anon would need grants on practitioners',
+  public_practitioner_businesses: 'public directory, same as public_business_doctors',
+}
+const readableOwnerRun = (await raw(`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'v'
+     and not coalesce(array_to_string(c.reloptions, ',') like '%security_invoker%', false)
+     and (has_table_privilege('anon', c.oid, 'select') or has_table_privilege('authenticated', c.oid, 'select'))
+   order by 1`)).map(r => r.relname).filter(v => !OWNER_RUN_OK[v])
+expectEq('no view readable by anon or signed-in users runs as its owner, bar the documented ones', readableOwnerRun, [],
+  'a view without security_invoker skips the RLS on everything it reads')
+expectTrue('stillOwner is listed for reference', Array.isArray(stillOwner))
 // Cross-tenant: the other clinic must not see this clinic's admission.
 if (admissionId) {
   const cross = await tryProbe('other', `select count(*)::int from admission_detail where id=$1`, [admissionId])
@@ -1647,7 +1685,9 @@ if (!skip()) {
   r = await q(1, ['pathology', 'pharmacy'], 'clinic', 4, 6, 0, null)
   expectEq('two add-ons: 10% off them', Number(r.monthly), 3000 + Math.round(2500 * 0.9))
   r = await q(1, ['ipd', 'pathology', 'diagnostics', 'pharmacy'], 'hospital', 15, 25, 30, null)
-  expectEq('Hospital, all four add-ons, 30 beds: 20% off, 10 beds × ₹100', Number(r.monthly), 8000 + Math.round((2000 + 1000 + 1500 + 3000 + 1000) * 0.8))
+  // 0286: IPD + Pharmacy is one add-on, so the pharmacy is not charged again; the
+  // 10 extra beds (₹1,000) sit inside the 20% bundle discount.
+  expectEq('Hospital, all four add-ons, 30 beds: pharmacy inside IPD, 20% off, 10 beds × ₹100', Number(r.monthly), 8000 + Math.round((2000 + 1500 + 3000 + 1000) * 0.8))
   r = await q(1, [], 'hospital', 18, 40, 0, null)
   expectEq('18 doctors: 3 × ₹500; 40 staff: 15 over → 3 packs × ₹250', Number(r.monthly), 8000 + 1500 + 750)
   r = await q(1, ['pathology'], 'clinic', 2, 5, 0, null)
@@ -1706,7 +1746,8 @@ if (!skip()) {
     await db.query(`update businesses set next_addons_from = (now() at time zone 'Asia/Kolkata')::date where id = $1`, [BIZ.id])
     await db.query(`select sehat_apply_due_plan_addons()`)
     b = (await db.query(`select pharmacy_module, ipd_module from businesses where id = $1`, [BIZ.id])).rows[0]
-    expectEq('…and goes when it does (the tab hides, nothing is deleted)', [b.pharmacy_module, b.ipd_module], [false, true])
+    // 0286: IPD switches the pharmacy on with it, so a renewal with IPD keeps it.
+    expectEq('…and when it does, IPD keeps the pharmacy (0286)', [b.pharmacy_module, b.ipd_module], [true, true])
 
     // 0278: free add-ons cost nothing, are on at once, and don't count in the bundle.
     await db.query(`update businesses set free_addons = '{}' where id = $1`, [BIZ.id])
