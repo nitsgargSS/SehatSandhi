@@ -42,7 +42,8 @@ export const SOCIALS = [
 ]
 
 
-export default function SiteFooter() {
+/** emailOnly: the Partner Program shows no phone number or WhatsApp anywhere (brief §14). */
+export default function SiteFooter({ emailOnly = false }: { emailOnly?: boolean } = {}) {
   const { lang } = useLanguage()
   const hi = lang === 'hi'
 
@@ -85,6 +86,7 @@ export default function SiteFooter() {
           <a href="mailto:contact@sehatsandhi.com" style={{ color: HEADER.green, fontWeight: 700 }}>
             contact@sehatsandhi.com
           </a>
+          {!emailOnly && (<>
           <span style={{ opacity: .5 }}>{'  ·  '}</span>
           {/* The WhatsApp number is the booking bot's, so it is linked, never
               shown: a number on the page gets called, and it takes no calls. */}
@@ -97,6 +99,7 @@ export default function SiteFooter() {
           <a href={`tel:+${CALL_NUMBER}`} style={{ color: HEADER.green, fontWeight: 700 }}>
             {prettyPhone(CALL_NUMBER)}
           </a>
+          </>)}
         </p>
 
         {/* Named, not icons alone: people follow what they can read. Each link

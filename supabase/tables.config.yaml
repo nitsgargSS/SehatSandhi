@@ -924,6 +924,42 @@ tables:
   # with our pipeline status and notes left behind in seed_clinics.
   findable_clinics:       { class: view }
 
+  # ── Care Partner Program (0331) ─────────────────────────────────────────
+  # Partners and their progress are user data. Modules, FAQ, synonyms and
+  # contract versions are content edited in Admin → Care Partners, synced
+  # prod -> sandbox like other reference data.
+  care_partner_progress:
+    class: isolated
+    purgeOrder: 129.3
+
+  care_partner_login_codes:
+    class: isolated
+    purgeOrder: 129.4
+
+  care_partners:
+    class: isolated
+    purgeOrder: 129.5
+
+  care_partner_modules:
+    class: sync
+    key: [slug]
+    syncOrder: 910
+
+  care_partner_contracts:
+    class: sync
+    key: [kind, version]
+    syncOrder: 920
+
+  care_partner_faq:
+    class: sync
+    key: [id]
+    syncOrder: 930
+
+  care_partner_faq_synonyms:
+    class: sync
+    key: [term, canonical]
+    syncOrder: 940
+
   # ── Infrastructure ──────────────────────────────────────────────────────
 
   schema_migrations:

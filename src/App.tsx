@@ -34,6 +34,13 @@ const AmbulanceTrack = lazy(() => import('./pages/AmbulanceTrack'))
 const InsuranceTrack = lazy(() => import('./pages/InsuranceTrack'))
 const EmiTrack = lazy(() => import('./pages/EmiTrack'))
 const MyEmi = lazy(() => import('./pages/my/MyEmi'))
+// 0331: Care Partner Program.
+const PartnerLanding = lazy(() => import('./pages/partner/PartnerPages').then(m => ({ default: m.PartnerLanding })))
+const PartnerHowItWorks = lazy(() => import('./pages/partner/PartnerPages').then(m => ({ default: m.PartnerHowItWorks })))
+const PartnerLogin = lazy(() => import('./pages/partner/PartnerPages').then(m => ({ default: m.PartnerLogin })))
+const PartnerRegister = lazy(() => import('./pages/partner/PartnerPages').then(m => ({ default: m.PartnerRegister })))
+const PartnerLearn = lazy(() => import('./pages/partner/PartnerLearn'))
+const PartnerHelp = lazy(() => import('./pages/partner/PartnerHelp'))
 const LabFilePage = lazy(() => import('./pages/LabFilePage'))
 const DoctorProfile = lazy(() => import('./pages/doctor/Profile'))
 // 0282: a business's website, at /s/<slug> until <slug>.sehatsandhi.com is wired.
@@ -164,7 +171,8 @@ const FLOAT_HIDDEN_PATHS = ['/business/register', '/doctor/register', '/business
 // so tracking these would hand every one of them to Google Analytics, where
 // anyone with report access could open a patient's medicines, their hospital
 // stay, or what they were charged for it.
-const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/', '/ds/', '/bill/', '/lab/', '/my', '/c/']
+// /emi/ (0326) is a patient's EMI case link; /partner/ pages are a partner's own (0331).
+const TRACK_EXCLUDED = [`/${ADMIN_PATH}`, '/invoice/', '/rx/', '/ds/', '/bill/', '/lab/', '/my', '/c/', '/emi/', '/partner/']
 
 const PageViewTracker = () => {
   const { pathname } = useLocation()
@@ -196,7 +204,7 @@ const WhatsAppFloat = () => {
   const { pathname } = useLocation()
   // A clinic's website (/s/…) books with that clinic, not Sehatsandhi's assistant.
   // /international has its own button, to the international coordinator's number.
-  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/') || pathname.startsWith('/business/print/') || pathname.startsWith('/international') || pathname.startsWith('/audit/')) return null
+  if (FLOAT_HIDDEN_PATHS.includes(pathname) || pathname.startsWith('/s/') || pathname.startsWith('/business/print/') || pathname.startsWith('/international') || pathname.startsWith('/audit/') || pathname.startsWith('/partner')) return null
   return (
     <a href={waLink()}
        target="_blank" rel="noreferrer"
@@ -325,6 +333,13 @@ export default function App() {
           <Route path="/my/ambulance" element={<MyAmbulance />} />
           <Route path="/my/insurance" element={<MyInsurance />} />
           <Route path="/my/emi" element={<MyEmi />} />
+          {/* 0331: Care Partner Program (behind site_settings partner_program_enabled). */}
+          <Route path="/partner" element={<PartnerLanding />} />
+          <Route path="/partner/how-it-works" element={<PartnerHowItWorks />} />
+          <Route path="/partner/login" element={<PartnerLogin />} />
+          <Route path="/partner/register" element={<PartnerRegister />} />
+          <Route path="/partner/learn" element={<PartnerLearn />} />
+          <Route path="/partner/help" element={<PartnerHelp />} />
           <Route path="/my/rate" element={<MyRate />} />
           <Route path="/my/book" element={<MyBook />} />
           <Route path="/camps" element={<CampsPage />} />
