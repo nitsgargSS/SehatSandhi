@@ -698,45 +698,90 @@ function DuesSection({ businessId, canManage, onStockChanged }: { businessId: st
 const blankItem: Partial<PharmacyItem> = { name: '', generic_name: '', strength: '', form: 'tablet', unit: 'tablet', pack_size: 10, hsn_code: '3004', gst_rate: 12, reorder_level: 0 }
 
 // 0184: stock in plain units — "10 bottles, MRP ₹250 each". Used when a
-// medicine is added (opening stock) and from Add stock on any item.
+// medicine is added (opening stock), from Add stock, and on Record a purchase.
 // A medicine sold loose from strips (pack_size > 1, 0253) is entered the way it
-// is bought — strips, with the MRP and cost printed for the strip — and stored
-// per tablet: 10 strips of 10 at ₹20 = 100 tablets at ₹2.
-interface StockIn { units: string; mrp: string; cost: string; batch: string; expiry: string }
-const blankStockIn: StockIn = { units: '', mrp: '', cost: '', batch: '', expiry: '' }
-const addStock = (businessId: string, itemId: string, st: StockIn, packSize = 1, supplier = 'Opening stock') => {
+// is bought — strips or boxes of strips, with the MRP printed on the strip —
+// and stored per tablet: 1 box of 10 strips of 10 at ₹20 = 100 tablets at ₹2.
+// 25 Nov 2026: one stock form for all three screens (the purchase form asked
+// for a per-tablet MRP, so a strip MRP typed there billed 10× over); quantity
+// in boxes or strips; "cost" is now "purchase price", optional.
+interface StockIn { units: string; free: string; inBoxes: boolean; perBox: string; mrp: string; cost: string; batch: string; expiry: string }
+const blankStockIn: StockIn = { units: '', free: '', inBoxes: false, perBox: '10', mrp: '', cost: '', batch: '', expiry: '' }
+/** What one MRP is printed on: a strip of tablets, a pack of masks, or the item itself (a bottle). */
+const packWord = (unit: string, packSize: number) =>
+  packSize > 1 ? (/tablet|capsule/i.test(unit) ? 'strip' : 'pack') : (unit || 'unit')
+const plural = (w: string, k: number) => k === 1 ? w : /x$/.test(w) ? `${w}es` : `${w}s`
+/** The entry counted in single units (tablets, pieces, bottles) — what stock and bills use. */
+function stockCount(st: StockIn, packSize: number) {
   const n = Math.max(1, Math.floor(packSize) || 1)
-  return recordPurchase(businessId, supplier, '', today(), [{
-    item_id: itemId, batch_no: st.batch, expiry_date: st.expiry,
-    units: (Number(st.units) || 0) * n, free_units: 0,
-    unit_cost: (Number(st.cost) || 0) / n, unit_mrp: (Number(st.mrp) || 0) / n,
-  }])
+  const box = st.inBoxes ? Math.max(0, Math.floor(Number(st.perBox)) || 0) : 1
+  const qty = Number(st.units) || 0
+  const free = Number(st.free) || 0
+  return { n, box, qty, free, units: qty * box * n, freeUnits: free * box * n,
+    unitMrp: (Number(st.mrp) || 0) / n, unitCost: (Number(st.cost) || 0) / n }
 }
+const stockLine = (itemId: string, st: StockIn, packSize: number) => {
+  const c = stockCount(st, packSize)
+  return { item_id: itemId, batch_no: st.batch, expiry_date: st.expiry,
+    units: c.units, free_units: c.freeUnits, unit_cost: c.unitCost, unit_mrp: c.unitMrp }
+}
+/** Why this entry cannot be saved yet, or '' when it can. */
+const stockProblem = (st: StockIn, label = '') => {
+  const of = label ? ` for ${label}` : ''
+  if (st.inBoxes && !(Number(st.perBox) >= 1)) return `Say how many are in one box${of}.`
+  if (!(Number(st.mrp) > 0) || !st.batch.trim() || !st.expiry) return `Give the MRP, batch number and expiry${of}.`
+  return ''
+}
+const addStock = (businessId: string, itemId: string, st: StockIn, packSize = 1, supplier = 'Opening stock') =>
+  recordPurchase(businessId, supplier, '', today(), [stockLine(itemId, st, packSize)])
 
-function StockInFields({ unit, packSize = 1, st, set }: { unit: string; packSize?: number; st: StockIn; set: (s: StockIn) => void }) {
+function StockInFields({ unit, packSize = 1, st, set, withFree = false }: {
+  unit: string; packSize?: number; st: StockIn; set: (s: StockIn) => void; withFree?: boolean
+}) {
   const u = unit || 'unit'
-  const n = Math.max(1, Math.floor(packSize) || 1)
-  const by = n > 1 ? 'strip' : u
-  const mrp = Number(st.mrp) || 0
+  const c = stockCount(st, packSize)
+  const by = packWord(u, c.n)
+  const counted = st.inBoxes ? 'box' : by
   return (
     <div className="space-y-1">
       {/* items-end: a label that wraps to two lines must not push its box out of line with the others. */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
-        <label className="text-xs text-gray-500">{n > 1 ? 'Strips' : `Quantity (${u}s)`}
-          <input className="input-field mt-1" type="number" min={0} value={st.units} onChange={e => set({ ...st, units: e.target.value })} placeholder="e.g. 10" /></label>
-        <label className="text-xs text-gray-500">MRP per {by} (₹)
-          <input className="input-field mt-1" type="number" min={0} step="0.01" value={st.mrp} onChange={e => set({ ...st, mrp: e.target.value })} /></label>
-        <label className="text-xs text-gray-500">Cost per {by} (₹) <span className="text-gray-400">optional</span>
-          <input className="input-field mt-1" type="number" min={0} step="0.01" value={st.cost} onChange={e => set({ ...st, cost: e.target.value })} /></label>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+        <label className="text-xs text-gray-500">Quantity
+          <div className="flex gap-1 mt-1">
+            <input className="input-field min-w-0" type="number" min={0} value={st.units} onChange={e => set({ ...st, units: e.target.value })} placeholder="e.g. 10" />
+            <select className="input-field w-auto" value={st.inBoxes ? 'box' : 'pack'} onChange={e => set({ ...st, inBoxes: e.target.value === 'box' })} aria-label="Counted in">
+              <option value="pack">{by}s</option><option value="box">boxes</option>
+            </select>
+          </div></label>
+        {st.inBoxes && (
+          <label className="text-xs text-gray-500">{by[0].toUpperCase() + by.slice(1)}s in one box
+            <input className="input-field mt-1" type="number" min={1} value={st.perBox} onChange={e => set({ ...st, perBox: e.target.value })} placeholder="e.g. 10" /></label>
+        )}
+        {withFree && (
+          <label className="text-xs text-gray-500">Free ({plural(counted, 2)}) <span className="text-gray-400">optional</span>
+            <input className="input-field mt-1" type="number" min={0} value={st.free} onChange={e => set({ ...st, free: e.target.value })} /></label>
+        )}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-start">
+        <label className="text-xs text-gray-500">MRP of one {by} (₹)
+          <input className="input-field mt-1" type="number" min={0} step="0.01" value={st.mrp} onChange={e => set({ ...st, mrp: e.target.value })} placeholder="as printed" />
+          {c.n > 1 && c.unitMrp > 0 && <span className="block mt-1 text-teal-700">= {moneyExact(c.unitMrp)} a {u}</span>}</label>
+        <label className="text-xs text-gray-500">Purchase price of one {by} (₹) <span className="text-gray-400">optional</span>
+          <input className="input-field mt-1" type="number" min={0} step="0.01" value={st.cost} onChange={e => set({ ...st, cost: e.target.value })} placeholder="what you paid" /></label>
         <label className="text-xs text-gray-500">Batch no.
           <input className="input-field mt-1" value={st.batch} onChange={e => set({ ...st, batch: e.target.value })} placeholder="on the strip / box" /></label>
         <label className="text-xs text-gray-500">Expiry
           <input className="input-field mt-1" type="date" min={plusDays(today(), 1)} value={st.expiry} onChange={e => set({ ...st, expiry: e.target.value })} /></label>
       </div>
-      {n > 1 && Number(st.units) > 0 && (
+      {c.qty > 0 && (st.inBoxes || c.n > 1) && (
         <p className="text-xs text-teal-700">
-          = {Number(st.units) * n} {u}s{mrp > 0 ? ` at ₹${(mrp / n).toFixed(2)} each` : ''} · {n} {u}s in a strip
+          {c.qty} {plural(counted, c.qty)}
+          {st.inBoxes ? ` × ${c.box} ${plural(by, c.box)}` : ''}{c.n > 1 ? ` × ${c.n} ${plural(u, c.n)}` : ''} = <b>{c.units} {plural(u, c.units)}</b>
+          {c.freeUnits > 0 ? ` + ${c.freeUnits} free` : ''}{c.unitMrp > 0 ? `, sold at ${moneyExact(c.unitMrp)} each` : ''}
         </p>
+      )}
+      {c.qty > 0 && !st.inBoxes && c.n === 1 && c.freeUnits > 0 && (
+        <p className="text-xs text-teal-700">{c.units + c.freeUnits} {plural(u, c.units + c.freeUnits)} into stock</p>
       )}
     </div>
   )
@@ -757,6 +802,8 @@ function AddStockForm({ businessId, item, onDone, onCancel }: { businessId: stri
       <div className="flex gap-2 justify-end">
         <button onClick={onCancel} className="btn-outline text-xs">Cancel</button>
         <button disabled={busy} className="btn-teal text-xs disabled:opacity-50" onClick={async () => {
+          const problem = Number(st.units) > 0 ? stockProblem(st) : 'Enter the quantity.'
+          if (problem) { setErr(problem); return }
           setBusy(true); setErr('')
           try { await addStock(businessId, item.id, st, item.pack_size, supplier.trim() || 'Stock added'); onDone() }
           catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
@@ -782,9 +829,8 @@ function ItemForm({ businessId, item, onSaved, onCancel }: {
     const brand = (f.name ?? '').trim()
     if (!generic && !brand) { setErr('Enter the medicine name.'); return }
     const withStock = !f.id && Number(opening.units) > 0
-    if (withStock && (!(Number(opening.mrp) > 0) || !opening.batch.trim() || !opening.expiry)) {
-      setErr('For the stock you have, give the MRP, batch number and expiry — or leave the quantity empty and add stock later.'); return
-    }
+    const problem = withStock ? stockProblem(opening) : ''
+    if (problem) { setErr(`${problem} Or leave the quantity empty and add stock later.`); return }
     setBusy(true); setErr('')
     try {
       // The stored name is the brand, or the medicine itself when sold without one.
@@ -1128,11 +1174,9 @@ function BatchRow({ b, unit, canManage, onDone }: { b: Batch; unit: string; canM
 
 // ── Purchases ───────────────────────────────────────────────────────────────
 
-// 0184: purchases in plain units — "10 bottles at ₹250 each" — not packs.
-interface PLine {
-  key: string; item_id: string; label: string; unit: string
-  batch_no: string; expiry_date: string; units: string; free_units: string; unit_cost: string; unit_mrp: string
-}
+// 0184: purchases in plain units — "10 bottles at ₹250 each". 25 Nov 2026: a
+// medicine in strips is entered in strips or boxes at the strip's MRP, like Add stock.
+interface PLine { key: string; item_id: string; label: string; unit: string; pack_size: number; st: StockIn }
 
 function PurchasesSection({ businessId, stock, reload }: { businessId: string; stock: StockRow[]; reload: () => void }) {
   const [list, setList] = useState<Purchase[]>([])
@@ -1153,19 +1197,18 @@ function PurchasesSection({ businessId, stock, reload }: { businessId: string; s
 
   const add = (s: StockRow) => setLines(ls => [...ls, {
     key: `${s.id}-${Date.now()}`, item_id: s.id, label: itemLabel(s), unit: s.unit || 'unit',
-    batch_no: '', expiry_date: '', units: '', free_units: '', unit_cost: '', unit_mrp: '',
+    pack_size: Number(s.pack_size) || 1, st: blankStockIn,
   }])
-  const upd = (key: string, k: keyof PLine, v: string) => setLines(ls => ls.map(l => l.key === key ? { ...l, [k]: v } : l))
-  const total = lines.reduce((s, l) => s + (Number(l.units) || 0) * (Number(l.unit_cost) || 0), 0)
+  const upd = (key: string, st: StockIn) => setLines(ls => ls.map(l => l.key === key ? { ...l, st } : l))
+  const total = lines.reduce((sum, l) => { const c = stockCount(l.st, l.pack_size); return sum + c.units * c.unitCost }, 0)
 
   const save = async () => {
+    const problem = lines.map(l => Number(l.st.units) > 0 || Number(l.st.free) > 0
+      ? stockProblem(l.st, l.label) : `Enter the quantity for ${l.label}.`).find(Boolean)
+    if (problem) { setErr(problem); return }
     setBusy(true); setErr('')
     try {
-      await recordPurchase(businessId, supplier, invoice, date, lines.map(l => ({
-        item_id: l.item_id, batch_no: l.batch_no, expiry_date: l.expiry_date,
-        units: Number(l.units) || 0, free_units: Number(l.free_units) || 0,
-        unit_cost: Number(l.unit_cost) || 0, unit_mrp: Number(l.unit_mrp) || 0,
-      })))
+      await recordPurchase(businessId, supplier, invoice, date, lines.map(l => stockLine(l.item_id, l.st, l.pack_size)))
       setAdding(false); setLines([]); setSupplier(''); setInvoice(''); setDate(today())
       load(); reload()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
@@ -1209,18 +1252,10 @@ function PurchasesSection({ businessId, stock, reload }: { businessId: string; s
           <div className="flex justify-between text-sm"><b>{l.label}</b>
             <button onClick={() => setLines(ls => ls.filter(x => x.key !== l.key))} className="text-gray-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
-            <input className="input-field" placeholder="Batch no." value={l.batch_no} onChange={e => upd(l.key, 'batch_no', e.target.value)} />
-            <input className="input-field" type="date" min={plusDays(today(), 1)} value={l.expiry_date} onChange={e => upd(l.key, 'expiry_date', e.target.value)} title="Expiry" />
-            <input className="input-field" type="number" min={0} placeholder={`Quantity (${l.unit}s)`} value={l.units} onChange={e => upd(l.key, 'units', e.target.value)} />
-            <input className="input-field" type="number" min={0} placeholder="Free" value={l.free_units} onChange={e => upd(l.key, 'free_units', e.target.value)} />
-            <input className="input-field" type="number" min={0} step="0.01" placeholder={`Cost per ${l.unit}`} value={l.unit_cost} onChange={e => upd(l.key, 'unit_cost', e.target.value)} />
-            <input className="input-field" type="number" min={0} step="0.01" placeholder={`MRP per ${l.unit}`} value={l.unit_mrp} onChange={e => upd(l.key, 'unit_mrp', e.target.value)} />
-          </div>
-          {Number(l.units) > 0 && <p className="text-xs text-gray-500">{(Number(l.units) || 0) + (Number(l.free_units) || 0)} {l.unit}{(Number(l.units) || 0) + (Number(l.free_units) || 0) === 1 ? '' : 's'} into stock{Number(l.unit_mrp) > 0 ? `, sold at ${moneyExact(Number(l.unit_mrp))} each` : ''}</p>}
+          <StockInFields unit={l.unit} packSize={l.pack_size} st={l.st} set={st => upd(l.key, st)} withFree />
         </div>
       ))}
-      <p className="text-sm text-right">Total cost {moneyExact(total)}</p>
+      {total > 0 && <p className="text-sm text-right">Total purchase price {moneyExact(total)}</p>}
       <Err msg={err} />
       <div className="flex gap-2 justify-end">
         <button onClick={() => { setAdding(false); setLines([]) }} className="btn-outline text-sm">Cancel</button>
