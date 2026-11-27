@@ -16,5 +16,5 @@ NOJWT=" $(curl -s "https://api.supabase.com/v1/projects/$REF/functions" -H "Auth
 for f in $FNS; do
   flag=(); [[ $NOJWT == *" $f "* ]] && flag=(--no-verify-jwt)
   printf '%-28s %s … ' $f "${flag:-jwt}"
-  npx -y supabase@latest functions deploy $f --project-ref $REF --use-api $flag 2>&1 | grep -q "Deployed Functions" && echo ok || { echo FAILED; exit 1; }
+  npx -y supabase@latest functions deploy $f --project-ref $REF --use-api --yes $flag 2>&1 | grep -q "Deployed Functions" && echo ok || { echo FAILED; exit 1; }
 done

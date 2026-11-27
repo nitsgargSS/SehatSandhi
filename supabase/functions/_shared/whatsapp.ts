@@ -101,6 +101,9 @@ const AUTO_TEMPLATE: Record<string, string> = {
   AISENSY_PLAN_CHANGE_CAMPAIGN: 'plan_change_update',
   // 0323: Sehatsandhi International (_shared/intlTemplates.ts). Meta only.
   AISENSY_INTL_UPDATE_CAMPAIGN: 'intl_request_update', AISENSY_INTL_TEAM_CAMPAIGN: 'intl_team_new_request',
+  // 0344: Treatment on EMI (_shared/financeTemplates.ts). Meta only.
+  AISENSY_EMI_LINK_CAMPAIGN: 'emi_request_link', AISENSY_EMI_STATUS_CAMPAIGN: 'emi_status',
+  AISENSY_EMI_HOSPITAL_CAMPAIGN: 'emi_hospital_update', AISENSY_EMI_LENDER_CAMPAIGN: 'emi_lender_update',
 }
 
 function metaTemplate(t: TemplateSend): { name: string; lang: string } | null {

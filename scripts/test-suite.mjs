@@ -2223,6 +2223,143 @@ if (!skip()) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 0326–0330 + 0344 — Treatment on EMI, end to end: the hospital offers EMI,
+// the patient (by link, no login) consents and shares with a lender, the
+// lender offers, sanctions and pays out, the hospital confirms the admission
+// and the money; and a patient-started request the hospital withdraws. Each
+// step's status, and the WhatsApp alerts it queues (0344). One transaction,
+// always rolled back: no case, lender or alert is left behind, nothing is sent
+// (finance-alerts only reads committed rows).
+sec('emi')
+if (!skip()) {
+  await inRollback(async () => { await db.query('savepoint emi_all'); try {
+    const q1 = async (sql, params = []) => (await db.query(sql, params)).rows[0]
+    const asPg = () => db.query('reset role')
+    const as = async (who) => {
+      await asPg()
+      if (who === 'pg') return
+      if (who === 'service') {
+        await db.query('set local role service_role')
+        await db.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ role: 'service_role' })])
+        return
+      }
+      await db.query(`set local role ${who === 'anon' ? 'anon' : 'authenticated'}`)
+      await db.query(`select set_config('request.jwt.claims', $1, true)`,
+        [who === 'anon' ? '' : JSON.stringify({ sub: uid[who], role: 'authenticated', email: emails[who] })])
+    }
+    /** Alerts queued for a case since the last look: "audience:event" strings, sorted. */
+    let seen = new Set()
+    const newAlerts = async (caseId) => {
+      await asPg()
+      const rows = (await db.query(`select id, audience, event, to_phone from finance_alerts where case_id = $1 order by created_at, audience`, [caseId])).rows
+      const fresh = rows.filter(r => !seen.has(r.id)); fresh.forEach(r => seen.add(r.id))
+      return { list: fresh.map(r => `${r.audience}:${r.event}`).sort(), rows: fresh }
+    }
+
+    // ── setup (as postgres) ──
+    await as('owner')
+    const hosp = (await q1(`select id from businesses where vertical in ('clinic','hospital') and sehat_caller_role(id) is not null order by created_at limit 1`))?.id
+    if (!hosp) { record('the owner persona has a clinic to test with', false, 'none found'); return }
+    await as('pg')
+    await db.query(`insert into site_settings (key, value) values ('finance_enabled', 'on') on conflict (key) do update set value = 'on'`)
+    await db.query(`update businesses set finance_module = true, phone = '9000011111' where id = $1`, [hosp])
+    await as('admin')
+    const lender = (await q1(`select sehat_admin_lender_create('[TEST] EMI Lender', '9000022222', null, '[TEST] EMI Finance Ltd', 'nbfc') id`)).id
+    await as('pg')
+    await db.query(`update lender_profiles set status = 'approved', min_amount = 10000, max_amount = 500000, journey_url = 'https://lender.example/apply' where business_id = $1`, [lender])
+
+    expectEq('0344: phones become WhatsApp numbers',
+      [(await q1(`select sehat_finance_wa_number('98765 43210') n`)).n, (await q1(`select sehat_finance_wa_number('+91 98765-43210') n`)).n,
+       (await q1(`select sehat_finance_wa_number('09876543210') n`)).n, (await q1(`select sehat_finance_wa_number('12345') n`)).n],
+      ['919876543210', '919876543210', '919876543210', null])
+    const job = (await q1(`select count(*)::int n from cron.job where jobname = 'finance-alerts' and active`)).n
+    expectEq('0344: the finance-alerts job is scheduled', job, 1)
+
+    // ── 1. hospital offers EMI ──
+    await as('owner')
+    const c = await q1(`select * from sehat_finance_case_create($1, null, '[TEST] Ramesh Kumar', '9000033333', 'Knee replacement', 'ortho', 150000, 120000, current_date + 10)`, [hosp])
+    expectEq('hospital offers EMI → case confirmed at once', c?.status, 'hospital_confirmed')
+    let a = await newAlerts(c.id)
+    expectEq('… and the patient is sent the link', a.list, ['patient:created'])
+    expectEq('… to their number with 91 in front', a.rows[0]?.to_phone, '919000033333')
+
+    // ── 2. patient, by link, consents and shares with the lender ──
+    await as('anon')
+    const page = (await q1(`select sehat_finance_case_by_token($1) v`, [c.public_token])).v
+    expectTrue('the patient\'s link lists the lender', (page?.lenders_available ?? []).some(l => l.lender_id === lender),
+      JSON.stringify(page?.lenders_available))
+    await db.query(`select sehat_finance_case_share($1, array[$2]::uuid[], 'emi-consent-v1', 'web')`, [c.public_token, lender])
+    await as('pg')
+    expectEq('patient shares → case shared', (await q1(`select status from finance_cases where id = $1`, [c.id])).status, 'shared')
+    a = await newAlerts(c.id)
+    expectEq('… and the lender is told of the new case', a.list, ['lender:shared_with_lender'])
+    const cl = (await q1(`select id from finance_case_lenders where case_id = $1 and lender_id = $2`, [c.id, lender])).id
+
+    // ── 3. lender offers, then sanctions ──
+    await as('admin')
+    await db.query(`select sehat_lender_case_update($1, 'offered', '{"offer_amount":120000,"offer_tenure_months":9,"offer_emi":13900,"lender_ref":"LN-1"}'::jsonb)`, [cl])
+    a = await newAlerts(c.id)
+    expectEq('lender offers → the patient hears', a.list, ['patient:offered'])
+    await as('admin')
+    await db.query(`select sehat_lender_case_update($1, 'sanctioned', '{}'::jsonb)`, [cl])
+    a = await newAlerts(c.id)
+    expectEq('lender sanctions → patient hears, hospital asked to confirm admission', a.list, ['hospital:sanctioned', 'patient:sanctioned'])
+
+    // ── 4. payout is refused until payee + admission are in place ──
+    await as('admin')
+    await db.query('savepoint emi_t')
+    try { await db.query(`select sehat_lender_case_update($1, 'disbursed', '{"disbursed_amount":120000,"utr":"UTR1"}'::jsonb)`, [cl]); record('payout before the hospital is an approved payee is refused', false, 'it went through') }
+    catch (e) { await db.query('rollback to savepoint emi_t'); record('payout before the hospital is an approved payee is refused', /payee/i.test(e.message) ? true : 'warn', /payee/i.test(e.message) ? undefined : e.message) }
+    await db.query(`select sehat_lender_payee_decide($1, $2, true, null, null, current_date)`, [lender, hosp])
+    await db.query('savepoint emi_t')
+    try { await db.query(`select sehat_lender_case_update($1, 'disbursed', '{"disbursed_amount":120000,"utr":"UTR1"}'::jsonb)`, [cl]); record('payout before the admission is confirmed is refused', false, 'it went through') }
+    catch (e) { await db.query('rollback to savepoint emi_t'); record('payout before the admission is confirmed is refused', /admission/i.test(e.message) ? true : 'warn', /admission/i.test(e.message) ? undefined : e.message) }
+
+    // ── 5. hospital confirms admission → lender hears ──
+    await as('owner')
+    await db.query(`select sehat_finance_case_admission_confirm($1, current_date + 10, null)`, [c.id])
+    a = await newAlerts(c.id)
+    expectEq('hospital confirms admission → the lender hears', a.list, ['lender:admission_confirmed'])
+
+    // ── 6. lender pays out → patient and hospital hear ──
+    await as('admin')
+    await db.query(`select sehat_lender_case_update($1, 'disbursed', '{"disbursed_amount":120000,"utr":"UTR412345678901"}'::jsonb)`, [cl])
+    await as('pg')
+    expectEq('lender pays out → case disbursed', (await q1(`select status from finance_cases where id = $1`, [c.id])).status, 'disbursed')
+    a = await newAlerts(c.id)
+    expectEq('… patient and hospital hear', a.list, ['hospital:disbursed', 'patient:disbursed'])
+
+    // ── 7. hospital confirms the money → case closed ──
+    await as('owner')
+    await db.query(`select sehat_finance_case_received($1, 120000, current_date)`, [c.id])
+    await as('pg')
+    const done = await q1(`select status, closed_reason, received_at is not null got from finance_cases where id = $1`, [c.id])
+    expectEq('hospital confirms the money → case closed as paid', [done.status, done.closed_reason, done.got], ['closed', 'paid', true])
+    a = await newAlerts(c.id)
+    expectEq('… patient and the paying lender hear', a.list, ['lender:money_received', 'patient:money_received'])
+
+    // ── 8. patient-started request (bot) → hospital asked; hospital withdraws ──
+    await as('service')
+    const p = await q1(`select * from sehat_finance_case_request($1, '[TEST] Sunita Devi', '9000044444', 'Cataract surgery', 40000, null, 'whatsapp')`, [hosp])
+    expectEq('patient asks on WhatsApp → case requested', p?.status, 'requested')
+    a = await newAlerts(p.id)
+    expectEq('… and the hospital is asked to confirm the estimate', a.list, ['hospital:requested'])
+    expectEq('… at its business phone', a.rows[0]?.to_phone, '919000011111')
+    await as('owner')
+    await db.query(`select sehat_finance_case_withdraw($1, null, 'Patient will pay cash')`, [p.id])
+    a = await newAlerts(p.id)
+    expectEq('hospital withdraws → the patient hears (not the hospital itself)', a.list, ['patient:withdrawn'])
+
+    // ── 9. an alert problem never blocks the step ──
+    await as('pg')
+    await db.query(`update businesses set phone = null where id = $1`, [hosp])
+    await as('service')
+    const p2 = await q1(`select * from sehat_finance_case_request($1, '[TEST] No Phone Hospital', '9000055555', 'Cataract surgery', 40000, null, 'whatsapp')`, [hosp])
+    expectEq('a hospital with no phone still gets the request (no alert queued)', [p2?.status, (await newAlerts(p2.id)).list], ['requested', []])
+  } finally { await db.query('rollback to savepoint emi_all') } })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 sec('integrity')
 const orphanStays = (await raw(`select count(*)::int n from admission_bed_stays s
   left join admissions a on a.id=s.admission_id where a.id is null`))[0].n

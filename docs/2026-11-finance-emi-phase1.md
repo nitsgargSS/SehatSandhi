@@ -140,6 +140,11 @@ search the patient base.
 `emi_hospital_confirm` (to hospital staff), `emi_new_case` (to lender), `emi_disbursed` (to
 hospital + patient). Sent from the main number.
 
+**Built 27 Nov 2026 (0344):** four templates instead — `emi_request_link`, `emi_status`,
+`emi_hospital_update`, `emi_lender_update` — sent automatically by `finance-alerts` from a
+queue filled by a trigger on `finance_case_events`. Details: docs/whatsapp-templates.md.
+End-to-end test: `node scripts/test-suite.mjs --env sandbox --only emi` (22 checks, rolled back).
+
 ## Compliance built in
 
 - No pass-through: lender pays hospital (or patient, for `pays_to = patient` lenders, shown as a
